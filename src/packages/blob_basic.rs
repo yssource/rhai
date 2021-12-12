@@ -189,13 +189,13 @@ mod blob_functions {
             *blob = replace;
             return;
         }
+        let blob_len = blob.len();
 
         let start = if start < 0 {
-            let blob_len = blob.len();
             start
                 .checked_abs()
                 .map_or(0, |n| blob_len - (n as usize).min(blob_len))
-        } else if start as usize >= blob.len() {
+        } else if start as usize >= blob_len {
             blob.extend(replace.into_iter());
             return;
         } else {
@@ -204,8 +204,8 @@ mod blob_functions {
 
         let len = if len < 0 {
             0
-        } else if len as usize > blob.len() - start {
-            blob.len() - start
+        } else if len as usize > blob_len - start {
+            blob_len - start
         } else {
             len as usize
         };
@@ -216,50 +216,29 @@ mod blob_functions {
         if blob.is_empty() || len <= 0 {
             return Blob::new();
         }
+        let blob_len = blob.len();
 
         let start = if start < 0 {
-            let blob_len = blob.len();
             start
                 .checked_abs()
                 .map_or(0, |n| blob_len - (n as usize).min(blob_len))
-        } else if start as usize >= blob.len() {
+        } else if start as usize >= blob_len {
             return Blob::new();
         } else {
             start as usize
         };
 
-        let len = if len <= 0 {
-            0
-        } else if len as usize > blob.len() - start {
-            blob.len() - start
+        let len = if len as usize > blob_len - start {
+            blob_len - start
         } else {
             len as usize
         };
 
-        if len == 0 {
-            Blob::new()
-        } else {
-            blob[start..start + len].to_vec()
-        }
+        blob[start..start + len].to_vec()
     }
     #[rhai_fn(name = "extract")]
     pub fn extract_tail(blob: &mut Blob, start: INT) -> Blob {
-        if blob.is_empty() {
-            return Blob::new();
-        }
-
-        let start = if start < 0 {
-            let blob_len = blob.len();
-            start
-                .checked_abs()
-                .map_or(0, |n| blob_len - (n as usize).min(blob_len))
-        } else if start as usize >= blob.len() {
-            return Blob::new();
-        } else {
-            start as usize
-        };
-
-        blob[start..].to_vec()
+        extract(blob, start, INT::MAX)
     }
     #[rhai_fn(name = "split")]
     pub fn split_at(blob: &mut Blob, start: INT) -> Blob {
@@ -289,22 +268,20 @@ mod blob_functions {
         if blob.is_empty() || len <= 0 {
             return Blob::new();
         }
+        let blob_len = blob.len();
 
         let start = if start < 0 {
-            let blob_len = blob.len();
             start
                 .checked_abs()
                 .map_or(0, |n| blob_len - (n as usize).min(blob_len))
-        } else if start as usize >= blob.len() {
+        } else if start as usize >= blob_len {
             return Blob::new();
         } else {
             start as usize
         };
 
-        let len = if len <= 0 {
-            0
-        } else if len as usize > blob.len() - start {
-            blob.len() - start
+        let len = if len as usize > blob_len - start {
+            blob_len - start
         } else {
             len as usize
         };
@@ -315,22 +292,20 @@ mod blob_functions {
         if blob.is_empty() || len <= 0 {
             return Blob::new();
         }
+        let blob_len = blob.len();
 
         let start = if start < 0 {
-            let blob_len = blob.len();
             start
                 .checked_abs()
                 .map_or(0, |n| blob_len - (n as usize).min(blob_len))
-        } else if start as usize >= blob.len() {
+        } else if start as usize >= blob_len {
             return mem::take(blob);
         } else {
             start as usize
         };
 
-        let len = if len < 0 {
-            0
-        } else if len as usize > blob.len() - start {
-            blob.len() - start
+        let len = if len as usize > blob_len - start {
+            blob_len - start
         } else {
             len as usize
         };
@@ -340,19 +315,25 @@ mod blob_functions {
 
         drained
     }
+    pub fn contains(blob: &mut Blob, value: Dynamic) -> bool {
+        if blob.is_empty() {
+            return false;
+        }
+
+        let value = match value.as_int() {
+            Ok(value) => value as u8,
+            _ => return false,
+        };
+
+        blob.contains(&value)
+    }
     #[rhai_fn(name = "==", pure)]
     pub fn equals(blob1: &mut Blob, blob2: Blob) -> bool {
-        if blob1.len() != blob2.len() {
-            false
-        } else if blob1.is_empty() {
-            true
-        } else {
-            blob1.iter().zip(blob2.iter()).all(|(&v1, &v2)| v1 == v2)
-        }
+        &*blob1 == &blob2
     }
     #[rhai_fn(name = "!=", pure)]
     pub fn not_equals(blob1: &mut Blob, blob2: Blob) -> bool {
-        !equals(blob1, blob2)
+        &*blob1 != &blob2
     }
 
     #[inline]

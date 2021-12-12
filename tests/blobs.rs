@@ -75,6 +75,7 @@ fn test_blobs() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
+#[cfg(not(feature = "only_i32"))]
 #[test]
 fn test_blobs_parse() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
@@ -125,7 +126,71 @@ fn test_blobs_parse() -> Result<(), Box<EvalAltResult>> {
         engine.eval::<INT>(
             "let x = blob(16, 0); for n in range(0, 16) { x[n] = n; } write_be(x, 3, 3, -98765432); parse_be_int(x, 3, 3)"
         )?,
-        0xffffff0000000000_u64 as i64
+        0xffffff0000000000_u64 as INT
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "let x = blob(16, 0); for n in range(0, 16) { x[n] = n; } write_le(x, 3, 3, -98765432); parse_le_int(x, 3, 3)"
+        )?,
+        0x1cf588
+    );
+
+    Ok(())
+}
+
+#[cfg(feature = "only_i32")]
+#[test]
+fn test_blobs_parse() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "let x = blob(16, 0); for n in range(0, 16) { x[n] = n; } parse_le_int(x,2,0)"
+        )?,
+        0
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "let x = blob(16, 0); for n in range(0, 16) { x[n] = n; } parse_le_int(x,2,9)"
+        )?,
+        0x05040302
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "let x = blob(16, 0); for n in range(0, 16) { x[n] = n; } parse_be_int(x,2,10)"
+        )?,
+        0x02030405
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "let x = blob(16, 0); for n in range(0, 16) { x[n] = n; } parse_le_int(x,-5,99)"
+        )?,
+        0x0e0d0c0b
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "let x = blob(16, 0); for n in range(0, 16) { x[n] = n; } parse_le_int(x,-5,2)"
+        )?,
+        0x0c0b
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "let x = blob(16, 0); for n in range(0, 16) { x[n] = n; } parse_le_int(x,-99,99)"
+        )?,
+        0x03020100
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "let x = blob(16, 0); for n in range(0, 16) { x[n] = n; } write_be(x, 3, 3, -98765432); parse_be_int(x, 3, 3)"
+        )?,
+        0xfa1cf500_u32 as INT
     );
 
     assert_eq!(
