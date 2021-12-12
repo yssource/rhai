@@ -205,22 +205,7 @@ mod array_functions {
     }
     #[rhai_fn(name = "extract")]
     pub fn extract_tail(array: &mut Array, start: INT) -> Array {
-        if array.is_empty() {
-            return Array::new();
-        }
-
-        let start = if start < 0 {
-            let arr_len = array.len();
-            start
-                .checked_abs()
-                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
-        } else if start as usize >= array.len() {
-            return Array::new();
-        } else {
-            start as usize
-        };
-
-        array[start..].to_vec()
+        extract(array, start, INT::MAX)
     }
     #[rhai_fn(name = "split")]
     pub fn split_at(array: &mut Array, start: INT) -> Array {

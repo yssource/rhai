@@ -1,6 +1,7 @@
 //! Module defining the AST (abstract syntax tree).
 
 use crate::calc_fn_hash;
+use crate::func::hashing::ALT_ZERO_HASH;
 use crate::module::NamespaceRef;
 use crate::tokenizer::Token;
 use crate::types::dynamic::Union;
@@ -25,13 +26,7 @@ use std::{
 use std::str::FromStr;
 
 #[cfg(not(feature = "no_float"))]
-use crate::FLOAT;
-
-#[cfg(not(feature = "no_float"))]
 use num_traits::Float;
-
-#[cfg(not(feature = "no_index"))]
-use crate::Array;
 
 /// A type representing the access mode of a function.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -1799,9 +1794,9 @@ impl OpAssignment<'_> {
 ///   to possible function overloading for different parameter types.
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Default)]
 pub struct FnCallHashes {
-    /// Pre-calculated hash for a script-defined function ([`None`] if native functions only).
+    /// Pre-calculated hash for a script-defined function (zero if native functions only).
     #[cfg(not(feature = "no_function"))]
-    pub script: Option<u64>,
+    pub script: u64,
     /// Pre-calculated hash for a native Rust function with no parameter types.
     pub native: u64,
 }
@@ -1809,11 +1804,11 @@ pub struct FnCallHashes {
 impl fmt::Debug for FnCallHashes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         #[cfg(not(feature = "no_function"))]
-        if let Some(script) = self.script {
-            return if script == self.native {
+        if self.script != 0 {
+            return if self.script == self.native {
                 fmt::Debug::fmt(&self.native, f)
             } else {
-                write!(f, "({}, {})", script, self.native)
+                write!(f, "({}, {})", self.script, self.native)
             };
         }
 
@@ -1824,9 +1819,11 @@ impl fmt::Debug for FnCallHashes {
 impl From<u64> for FnCallHashes {
     #[inline(always)]
     fn from(hash: u64) -> Self {
+        let hash = if hash == 0 { ALT_ZERO_HASH } else { hash };
+
         Self {
             #[cfg(not(feature = "no_function"))]
-            script: Some(hash),
+            script: hash,
             native: hash,
         }
     }
@@ -1839,8 +1836,8 @@ impl FnCallHashes {
     pub const fn from_native(hash: u64) -> Self {
         Self {
             #[cfg(not(feature = "no_function"))]
-            script: None,
-            native: hash,
+            script: 0,
+            native: if hash == 0 { ALT_ZERO_HASH } else { hash },
         }
     }
     /// Create a [`FnCallHashes`] with both native Rust and script function hashes.
@@ -1849,8 +1846,8 @@ impl FnCallHashes {
     pub const fn from_all(#[cfg(not(feature = "no_function"))] script: u64, native: u64) -> Self {
         Self {
             #[cfg(not(feature = "no_function"))]
-            script: Some(script),
-            native,
+            script: if script == 0 { ALT_ZERO_HASH } else { script },
+            native: if native == 0 { ALT_ZERO_HASH } else { native },
         }
     }
     /// Is this [`FnCallHashes`] native Rust only?
@@ -1858,7 +1855,7 @@ impl FnCallHashes {
     #[must_use]
     pub const fn is_native_only(&self) -> bool {
         #[cfg(not(feature = "no_function"))]
-        return self.script.is_none();
+        return self.script == 0;
 
         #[cfg(feature = "no_function")]
         return true;
@@ -1915,7 +1912,7 @@ impl FnCallExpr {
 pub struct FloatWrapper<F>(F);
 
 #[cfg(not(feature = "no_float"))]
-impl Hash for FloatWrapper<FLOAT> {
+impl Hash for FloatWrapper<crate::FLOAT> {
     #[inline(always)]
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.to_ne_bytes().hash(state);
@@ -2019,11 +2016,11 @@ impl<F: Float> FloatWrapper<F> {
 }
 
 #[cfg(not(feature = "no_float"))]
-impl FloatWrapper<FLOAT> {
+impl FloatWrapper<crate::FLOAT> {
     /// Create a new [`FloatWrapper`].
     #[inline(always)]
     #[must_use]
-    pub const fn new_const(value: FLOAT) -> Self {
+    pub const fn new_const(value: crate::FLOAT) -> Self {
         Self(value)
     }
 }
@@ -2034,7 +2031,7 @@ impl FloatWrapper<FLOAT> {
 pub enum Expr {
     /// Dynamic constant.
     ///
-    /// Used to hold complex constants such as [`Array`] or [`Map`][crate::Map] for quick cloning.
+    /// Used to hold complex constants such as [`Array`][crate::Array] or [`Map`][crate::Map] for quick cloning.
     /// Primitive data types should use the appropriate variants to avoid an allocation.
     DynamicConstant(Box<Dynamic>, Position),
     /// Boolean constant.
@@ -2045,7 +2042,7 @@ pub enum Expr {
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
-    FloatConstant(FloatWrapper<FLOAT>, Position),
+    FloatConstant(FloatWrapper<crate::FLOAT>, Position),
     /// Character constant.
     CharConstant(char, Position),
     /// [String][ImmutableString] constant.
@@ -2221,7 +2218,7 @@ impl Expr {
 
             #[cfg(not(feature = "no_index"))]
             Self::Array(x, _) if self.is_constant() => {
-                let mut arr = Array::with_capacity(x.len());
+                let mut arr = crate::Array::with_capacity(x.len());
                 arr.extend(
                     x.iter()
                         .map(|v| v.get_literal_value().expect("constant value")),
