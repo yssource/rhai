@@ -689,7 +689,16 @@ impl fmt::Debug for Dynamic {
             #[cfg(not(feature = "no_index"))]
             Union::Array(ref value, _, _) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_index"))]
-            Union::Blob(ref value, _, _) => fmt::Debug::fmt(value, f),
+            Union::Blob(ref value, _, _) => {
+                f.write_str("[")?;
+                value.iter().enumerate().try_for_each(|(i, v)| {
+                    if i > 0 && i % 8 == 0 {
+                        f.write_str(" ")?;
+                    }
+                    write!(f, "{:02x}", v)
+                })?;
+                f.write_str("]")
+            }
             #[cfg(not(feature = "no_object"))]
             Union::Map(ref value, _, _) => {
                 f.write_str("#")?;

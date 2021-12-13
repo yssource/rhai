@@ -1,6 +1,15 @@
 Rhai Release Notes
 ==================
 
+Version 1.3.1
+=============
+
+Enhancements
+------------
+
+* `BLOB`'s are refined to display in a more compact hex format.
+
+
 Version 1.3.0
 =============
 
