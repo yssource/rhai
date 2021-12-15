@@ -3,7 +3,10 @@
 
 use crate::engine::OP_EQUALS;
 use crate::plugin::*;
-use crate::{def_package, Array, Dynamic, EvalAltResult, FnPtr, NativeCallContext, Position, INT};
+use crate::{
+    def_package, Array, Dynamic, EvalAltResult, ExclusiveRange, FnPtr, InclusiveRange,
+    NativeCallContext, Position, INT,
+};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{any::TypeId, cmp::Ordering, mem};
@@ -145,6 +148,18 @@ mod array_functions {
             array.reverse();
         }
     }
+    #[rhai_fn(name = "splice")]
+    pub fn splice_range(array: &mut Array, range: ExclusiveRange, replace: Array) {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        splice(array, start, end - start, replace)
+    }
+    #[rhai_fn(name = "splice")]
+    pub fn splice_inclusive_range(array: &mut Array, range: InclusiveRange, replace: Array) {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        splice(array, start, end - start + 1, replace)
+    }
     pub fn splice(array: &mut Array, start: INT, len: INT, replace: Array) {
         if array.is_empty() {
             *array = replace;
@@ -172,6 +187,18 @@ mod array_functions {
         };
 
         array.splice(start..start + len, replace.into_iter());
+    }
+    #[rhai_fn(name = "extract")]
+    pub fn extract_range(array: &mut Array, range: ExclusiveRange) -> Array {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        extract(array, start, end - start)
+    }
+    #[rhai_fn(name = "extract")]
+    pub fn extract_inclusive_range(array: &mut Array, range: InclusiveRange) -> Array {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        extract(array, start, end - start + 1)
     }
     pub fn extract(array: &mut Array, start: INT, len: INT) -> Array {
         if array.is_empty() || len <= 0 {
@@ -911,6 +938,18 @@ mod array_functions {
         drain(ctx, array, FnPtr::new(filter)?)
     }
     #[rhai_fn(name = "drain")]
+    pub fn drain_exclusive_range(array: &mut Array, range: ExclusiveRange) -> Array {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        drain_range(array, start, end - start)
+    }
+    #[rhai_fn(name = "drain")]
+    pub fn drain_inclusive_range(array: &mut Array, range: InclusiveRange) -> Array {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        drain_range(array, start, end - start + 1)
+    }
+    #[rhai_fn(name = "drain")]
     pub fn drain_range(array: &mut Array, start: INT, len: INT) -> Array {
         if array.is_empty() || len <= 0 {
             return Array::new();
@@ -991,6 +1030,18 @@ mod array_functions {
         filter: &str,
     ) -> Result<Array, Box<EvalAltResult>> {
         retain(ctx, array, FnPtr::new(filter)?)
+    }
+    #[rhai_fn(name = "retain")]
+    pub fn retain_exclusive_range(array: &mut Array, range: ExclusiveRange) -> Array {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        retain_range(array, start, end - start)
+    }
+    #[rhai_fn(name = "retain")]
+    pub fn retain_inclusive_range(array: &mut Array, range: InclusiveRange) -> Array {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        retain_range(array, start, end - start + 1)
     }
     #[rhai_fn(name = "retain")]
     pub fn retain_range(array: &mut Array, start: INT, len: INT) -> Array {

@@ -2,7 +2,7 @@
 
 use crate::func::native::SendSync;
 use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
-use crate::{FnPtr, ImmutableString, INT};
+use crate::{ExclusiveRange, FnPtr, ImmutableString, InclusiveRange, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -588,6 +588,12 @@ pub(crate) fn map_std_type_name(name: &str) -> &str {
     if name == type_name::<Instant>() {
         return "timestamp";
     }
+    if name == type_name::<ExclusiveRange>() {
+        return "range";
+    }
+    if name == type_name::<InclusiveRange>() {
+        return "range=";
+    }
 
     name
 }
@@ -653,6 +659,14 @@ impl fmt::Display for Dynamic {
                     return fmt::Display::fmt(_value_any.downcast_ref::<u128>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<i128>() {
                     return fmt::Display::fmt(_value_any.downcast_ref::<i128>().expect(CHECKED), f);
+                }
+
+                if _type_id == TypeId::of::<ExclusiveRange>() {
+                    let range = _value_any.downcast_ref::<ExclusiveRange>().expect(CHECKED);
+                    return write!(f, "{}..{}", range.start, range.end);
+                } else if _type_id == TypeId::of::<InclusiveRange>() {
+                    let range = _value_any.downcast_ref::<InclusiveRange>().expect(CHECKED);
+                    return write!(f, "{}..={}", range.start(), range.end());
                 }
 
                 f.write_str((***value).type_name())
@@ -737,6 +751,14 @@ impl fmt::Debug for Dynamic {
                     return fmt::Debug::fmt(_value_any.downcast_ref::<i128>().expect(CHECKED), f);
                 }
 
+                if _type_id == TypeId::of::<ExclusiveRange>() {
+                    let range = _value_any.downcast_ref::<ExclusiveRange>().expect(CHECKED);
+                    return write!(f, "{}..{}", range.start, range.end);
+                } else if _type_id == TypeId::of::<InclusiveRange>() {
+                    let range = _value_any.downcast_ref::<InclusiveRange>().expect(CHECKED);
+                    return write!(f, "{}..={}", range.start(), range.end());
+                }
+
                 f.write_str((***value).type_name())
             }
 
@@ -809,6 +831,13 @@ impl Default for Dynamic {
     }
 }
 
+#[cfg(not(feature = "no_float"))]
+#[cfg(feature = "f32_float")]
+use std::f32::consts as FloatConstants;
+#[cfg(not(feature = "no_float"))]
+#[cfg(not(feature = "f32_float"))]
+use std::f64::consts as FloatConstants;
+
 impl Dynamic {
     /// A [`Dynamic`] containing a `()`.
     pub const UNIT: Self = Self(Union::Unit((), DEFAULT_TAG_VALUE, ReadWrite));
@@ -818,20 +847,24 @@ impl Dynamic {
     pub const FALSE: Self = Self::from_bool(false);
     /// A [`Dynamic`] containing the integer zero.
     pub const ZERO: Self = Self::from_int(0);
-    /// A [`Dynamic`] containing the integer one.
+    /// A [`Dynamic`] containing the integer 1.
     pub const ONE: Self = Self::from_int(1);
-    /// A [`Dynamic`] containing the integer two.
+    /// A [`Dynamic`] containing the integer 2.
     pub const TWO: Self = Self::from_int(2);
-    /// A [`Dynamic`] containing the integer three.
+    /// A [`Dynamic`] containing the integer 3.
     pub const THREE: Self = Self::from_int(3);
-    /// A [`Dynamic`] containing the integer ten.
+    /// A [`Dynamic`] containing the integer 10.
     pub const TEN: Self = Self::from_int(10);
-    /// A [`Dynamic`] containing the integer one hundred.
+    /// A [`Dynamic`] containing the integer 100.
     pub const HUNDRED: Self = Self::from_int(100);
-    /// A [`Dynamic`] containing the integer one thousand.
+    /// A [`Dynamic`] containing the integer 1,000.
     pub const THOUSAND: Self = Self::from_int(1000);
-    /// A [`Dynamic`] containing the integer negative one.
+    /// A [`Dynamic`] containing the integer 1,000,000.
+    pub const MILLION: Self = Self::from_int(1000000);
+    /// A [`Dynamic`] containing the integer -1.
     pub const NEGATIVE_ONE: Self = Self::from_int(-1);
+    /// A [`Dynamic`] containing the integer -2.
+    pub const NEGATIVE_TWO: Self = Self::from_int(-2);
     /// A [`Dynamic`] containing `0.0`.
     ///
     /// Not available under `no_float`.
@@ -862,54 +895,97 @@ impl Dynamic {
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     pub const FLOAT_THOUSAND: Self = Self::from_float(1000.0);
+    /// A [`Dynamic`] containing `1000000.0`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_MILLION: Self = Self::from_float(1000000.0);
     /// A [`Dynamic`] containing `-1.0`.
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     pub const FLOAT_NEGATIVE_ONE: Self = Self::from_float(-1.0);
+    /// A [`Dynamic`] containing `-2.0`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_NEGATIVE_TWO: Self = Self::from_float(-2.0);
+    /// A [`Dynamic`] containing `0.5`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_HALF: Self = Self::from_float(0.5);
+    /// A [`Dynamic`] containing `0.25`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_QUARTER: Self = Self::from_float(0.25);
+    /// A [`Dynamic`] containing `0.2`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_FIFTH: Self = Self::from_float(0.2);
+    /// A [`Dynamic`] containing `0.1`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_TENTH: Self = Self::from_float(0.1);
+    /// A [`Dynamic`] containing `0.01`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_HUNDREDTH: Self = Self::from_float(0.01);
+    /// A [`Dynamic`] containing `0.001`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_THOUSANDTH: Self = Self::from_float(0.001);
+    /// A [`Dynamic`] containing `0.000001`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_MILLIONTH: Self = Self::from_float(0.000001);
     /// A [`Dynamic`] containing π.
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     #[cfg(not(feature = "f32_float"))]
-    pub const FLOAT_PI: Self = Self::from_float(
-        #[cfg(not(feature = "f32_float"))]
-        {
-            std::f64::consts::PI
-        },
-        #[cfg(feature = "f32_float")]
-        {
-            std::f32::consts::PI
-        },
-    );
+    pub const FLOAT_PI: Self = Self::from_float(FloatConstants::PI);
     /// A [`Dynamic`] containing π/2.
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
-    pub const FLOAT_HALF_PI: Self = Self::from_float(
-        #[cfg(not(feature = "f32_float"))]
-        {
-            std::f64::consts::PI / 2.0
-        },
-        #[cfg(feature = "f32_float")]
-        {
-            std::f32::consts::PI / 2.0
-        },
-    );
+    pub const FLOAT_HALF_PI: Self = Self::from_float(FloatConstants::FRAC_PI_2);
+    /// A [`Dynamic`] containing π/4.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_QUARTER_PI: Self = Self::from_float(FloatConstants::FRAC_PI_4);
     /// A [`Dynamic`] containing 2π.
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
-    pub const FLOAT_TWO_PI: Self = Self::from_float(
-        #[cfg(not(feature = "f32_float"))]
-        {
-            std::f64::consts::PI * 2.0
-        },
-        #[cfg(feature = "f32_float")]
-        {
-            std::f32::consts::PI * 2.0
-        },
-    );
+    pub const FLOAT_TWO_PI: Self = Self::from_float(FloatConstants::TAU);
+    /// A [`Dynamic`] containing 1/π.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_INVERSE_PI: Self = Self::from_float(FloatConstants::FRAC_1_PI);
+    /// A [`Dynamic`] containing _e_.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_E: Self = Self::from_float(FloatConstants::E);
+    /// A [`Dynamic`] containing `log` _e_.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_LOG_E: Self = Self::from_float(FloatConstants::LOG10_E);
+    /// A [`Dynamic`] containing `ln 10`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_LN_10: Self = Self::from_float(FloatConstants::LN_10);
 
     /// Create a new [`Dynamic`] from a [`bool`].
     #[inline(always)]
@@ -2262,5 +2338,18 @@ impl From<crate::Shared<crate::Locked<Dynamic>>> for Dynamic {
     #[inline(always)]
     fn from(value: crate::Shared<crate::Locked<Self>>) -> Self {
         Self(Union::Shared(value, DEFAULT_TAG_VALUE, ReadWrite))
+    }
+}
+
+impl From<ExclusiveRange> for Dynamic {
+    #[inline(always)]
+    fn from(value: ExclusiveRange) -> Self {
+        Dynamic::from(value)
+    }
+}
+impl From<InclusiveRange> for Dynamic {
+    #[inline(always)]
+    fn from(value: InclusiveRange) -> Self {
+        Dynamic::from(value)
     }
 }

@@ -1,6 +1,17 @@
 Rhai Release Notes
 ==================
 
+Version 1.4.0
+=============
+
+This version adds support for integer _ranges_ via the `..` and `..=` operators.
+
+New features
+------------
+
+* Added support for integer _ranges_ via the `..` and `..=` operators.
+
+
 Version 1.3.0
 =============
 
