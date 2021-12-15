@@ -756,7 +756,7 @@ impl DerefMut for Target<'_> {
         match self {
             Self::RefMut(r) => *r,
             #[cfg(not(feature = "no_closure"))]
-            Self::LockGuard((r, _)) => r.deref_mut(),
+            Self::LockGuard((r, _)) => &mut *r,
             Self::TempValue(ref mut r) => r,
             #[cfg(not(feature = "no_index"))]
             Self::Bit(_, ref mut r, _)

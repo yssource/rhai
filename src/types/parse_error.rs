@@ -108,9 +108,9 @@ pub enum ParseErrorType {
     DuplicatedSwitchCase,
     /// A variable name is duplicated. Wrapped value is the variable name.
     DuplicatedVariable(String),
-    /// An integer case of a `switch` statement is after a range case.
+    /// An integer case of a `switch` statement is in an appropriate place.
     WrongSwitchIntegerCase,
-    /// The default case of a `switch` statement is not the last.
+    /// The default case of a `switch` statement is in an appropriate place.
     WrongSwitchDefaultCase,
     /// The case condition of a `switch` statement is not appropriate.
     WrongSwitchCaseCondition,
