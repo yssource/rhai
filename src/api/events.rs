@@ -158,7 +158,7 @@ impl Engine {
     /// engine.on_progress(move |ops| {
     ///     if ops > 1000 {
     ///         Some("Over 1,000 operations!".into())
-    ///     } else if ops % 100 == 0 {
+    ///     } else if ops % 123 == 0 {
     ///         *logger.write().unwrap() = ops;
     ///         None
     ///     } else {
@@ -169,7 +169,7 @@ impl Engine {
     /// engine.run("for x in 0..5000 { print(x); }")
     ///       .expect_err("should error");
     ///
-    /// assert_eq!(*result.read().unwrap(), 9600);
+    /// assert_eq!(*result.read().unwrap(), 984);
     ///
     /// # Ok(())
     /// # }
