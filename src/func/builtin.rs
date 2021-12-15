@@ -2,7 +2,9 @@
 
 use super::call::FnCallArgs;
 use crate::engine::OP_CONTAINS;
-use crate::{Dynamic, ImmutableString, NativeCallContext, RhaiResult, INT};
+use crate::{
+    Dynamic, ExclusiveRange, ImmutableString, InclusiveRange, NativeCallContext, RhaiResult, INT,
+};
 use std::any::TypeId;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -54,24 +56,6 @@ pub fn get_builtin_binary_op_fn(
 ) -> Option<fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult> {
     let type1 = x.type_id();
     let type2 = y.type_id();
-
-    // One of the operands is a custom type, so it is never built-in
-    if x.is_variant() || y.is_variant() {
-        return if is_numeric(type1) && is_numeric(type2) {
-            // Disallow comparisons between different numeric types
-            None
-        } else if type1 != type2 {
-            // If the types are not the same, default to not compare
-            match op {
-                "!=" => Some(|_, _| Ok(Dynamic::TRUE)),
-                "==" | ">" | ">=" | "<" | "<=" => Some(|_, _| Ok(Dynamic::FALSE)),
-                _ => None,
-            }
-        } else {
-            // Disallow comparisons between the same type
-            None
-        };
-    }
 
     let types_pair = (type1, type2);
 
@@ -298,6 +282,64 @@ pub fn get_builtin_binary_op_fn(
         return match op {
             OP_CONTAINS => Some(impl_op!(Map.contains_key(ImmutableString.as_str()))),
             _ => None,
+        };
+    }
+
+    // Non-compatible ranges
+    if types_pair
+        == (
+            TypeId::of::<ExclusiveRange>(),
+            TypeId::of::<InclusiveRange>(),
+        )
+        || types_pair
+            == (
+                TypeId::of::<InclusiveRange>(),
+                TypeId::of::<ExclusiveRange>(),
+            )
+    {
+        return match op {
+            "!=" => Some(|_, _| Ok(Dynamic::TRUE)),
+            "==" => Some(|_, _| Ok(Dynamic::FALSE)),
+            _ => None,
+        };
+    }
+
+    // Handle ranges here because ranges are implemented as custom type
+    if type1 == TypeId::of::<ExclusiveRange>() {
+        if type1 == type2 {
+            return match op {
+                "==" => Some(impl_op!(ExclusiveRange == ExclusiveRange)),
+                "!=" => Some(impl_op!(ExclusiveRange != ExclusiveRange)),
+                _ => None,
+            };
+        }
+    }
+
+    if type1 == TypeId::of::<InclusiveRange>() {
+        if type1 == type2 {
+            return match op {
+                "==" => Some(impl_op!(InclusiveRange == InclusiveRange)),
+                "!=" => Some(impl_op!(InclusiveRange != InclusiveRange)),
+                _ => None,
+            };
+        }
+    }
+
+    // One of the operands is a custom type, so it is never built-in
+    if x.is_variant() || y.is_variant() {
+        return if is_numeric(type1) && is_numeric(type2) {
+            // Disallow comparisons between different numeric types
+            None
+        } else if type1 != type2 {
+            // If the types are not the same, default to not compare
+            match op {
+                "!=" => Some(|_, _| Ok(Dynamic::TRUE)),
+                "==" | ">" | ">=" | "<" | "<=" => Some(|_, _| Ok(Dynamic::FALSE)),
+                _ => None,
+            }
+        } else {
+            // Disallow comparisons between the same type
+            None
         };
     }
 

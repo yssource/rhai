@@ -878,8 +878,6 @@ impl Token {
             | LeftShiftAssign | RightShiftAssign | AndAssign | OrAssign | XOrAssign
             | ModuloAssign => 0,
 
-            ExclusiveRange | InclusiveRange => 10,
-
             Or | XOr | Pipe => 30,
 
             And | Ampersand => 60,
@@ -889,6 +887,8 @@ impl Token {
             In => 110,
 
             LessThan | LessThanEqualsTo | GreaterThan | GreaterThanEqualsTo => 130,
+
+            ExclusiveRange | InclusiveRange => 140,
 
             Plus | Minus => 150,
 

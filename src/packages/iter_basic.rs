@@ -530,15 +530,15 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
 #[export_module]
 mod range_functions {
     #[rhai_fn(get = "start", name = "start", pure)]
-    pub fn range_start(range: &mut ExclusiveRange) -> INT {
+    pub fn start(range: &mut ExclusiveRange) -> INT {
         range.start
     }
     #[rhai_fn(get = "end", name = "end", pure)]
-    pub fn range_end(range: &mut ExclusiveRange) -> INT {
+    pub fn end(range: &mut ExclusiveRange) -> INT {
         range.end
     }
     #[rhai_fn(name = "contains", pure)]
-    pub fn range_contains(range: &mut ExclusiveRange, value: INT) -> bool {
+    pub fn contains(range: &mut ExclusiveRange, value: INT) -> bool {
         range.contains(&value)
     }
     #[rhai_fn(get = "is_inclusive", name = "is_inclusive", pure)]
@@ -546,20 +546,28 @@ mod range_functions {
         let _range = range;
         false
     }
+    #[rhai_fn(get = "is_empty", name = "is_empty", pure)]
+    pub fn is_empty(range: &mut ExclusiveRange) -> bool {
+        range.is_empty()
+    }
     #[rhai_fn(get = "start", name = "start", pure)]
-    pub fn range_inclusive_start(range: &mut InclusiveRange) -> INT {
+    pub fn start_inclusive(range: &mut InclusiveRange) -> INT {
         *range.start()
     }
     #[rhai_fn(get = "end", name = "end", pure)]
-    pub fn range_inclusive_end(range: &mut InclusiveRange) -> INT {
+    pub fn end_inclusive(range: &mut InclusiveRange) -> INT {
         *range.end()
     }
     #[rhai_fn(name = "contains", pure)]
-    pub fn range_inclusive_contains(range: &mut InclusiveRange, value: INT) -> bool {
+    pub fn contains_inclusive(range: &mut InclusiveRange, value: INT) -> bool {
         range.contains(&value)
     }
+    #[rhai_fn(get = "is_empty", name = "is_empty", pure)]
+    pub fn is_empty_inclusive(range: &mut InclusiveRange) -> bool {
+        range.is_empty()
+    }
     #[rhai_fn(get = "is_inclusive", name = "is_inclusive", pure)]
-    pub fn range_inclusive_is_inclusive(range: &mut InclusiveRange) -> bool {
+    pub fn is_inclusive_inclusive(range: &mut InclusiveRange) -> bool {
         let _range = range;
         true
     }
