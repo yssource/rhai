@@ -1057,6 +1057,12 @@ impl StmtBlock {
     pub fn len(&self) -> usize {
         self.0.len()
     }
+    /// Get the statements of this statements block.
+    #[inline(always)]
+    #[must_use]
+    pub fn statements(&self) -> &[Stmt] {
+        &self.0
+    }
     /// Get the position (location of the beginning `{`) of this statements block.
     #[inline(always)]
     #[must_use]

@@ -5,6 +5,7 @@ Version 1.4.0
 =============
 
 This version adds support for integer _ranges_ via the `..` and `..=` operators.
+Many standard API's are extended with range parameters where appropriate.
 
 New features
 ------------

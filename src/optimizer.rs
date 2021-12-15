@@ -471,11 +471,6 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                     // switch const { case if condition => stmt, _ => def } => if condition { stmt } else { def }
                     optimize_expr(&mut condition, state, false);
 
-                    let def_pos = if x.1.position().is_none() {
-                        *pos
-                    } else {
-                        x.1.position()
-                    };
                     let def_stmt =
                         optimize_stmt_block(mem::take(&mut *x.1), state, true, true, false);
 
@@ -483,16 +478,16 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                         condition,
                         Box::new((
                             mem::take(&mut block.1),
-                            Stmt::Block(def_stmt.into_boxed_slice(), def_pos).into(),
+                            Stmt::Block(def_stmt.into_boxed_slice(), x.1.position().or_else(*pos))
+                                .into(),
                         )),
                         match_expr.position(),
                     );
                 } else {
                     // Promote the matched case
-                    let new_pos = block.1.position();
                     let statements =
                         optimize_stmt_block(mem::take(&mut *block.1), state, true, true, false);
-                    *stmt = Stmt::Block(statements.into_boxed_slice(), new_pos);
+                    *stmt = Stmt::Block(statements.into_boxed_slice(), block.1.position());
                 }
 
                 state.set_dirty();
@@ -519,29 +514,27 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                             // switch const { range if condition => stmt, _ => def } => if condition { stmt } else { def }
                             optimize_expr(&mut condition, state, false);
 
-                            let def_block = mem::take(&mut *x.1);
-                            let def_stmt = optimize_stmt_block(def_block, state, true, true, false);
-                            let def_pos = if x.1.position().is_none() {
-                                *pos
-                            } else {
-                                x.1.position()
-                            };
-
+                            let def_stmt =
+                                optimize_stmt_block(mem::take(&mut *x.1), state, true, true, false);
                             *stmt = Stmt::If(
                                 condition,
                                 Box::new((
                                     mem::take(stmt_block),
-                                    Stmt::Block(def_stmt.into_boxed_slice(), def_pos).into(),
+                                    Stmt::Block(
+                                        def_stmt.into_boxed_slice(),
+                                        x.1.position().or_else(*pos),
+                                    )
+                                    .into(),
                                 )),
                                 match_expr.position(),
                             );
                         } else {
                             // Promote the matched case
-                            let new_pos = stmt_block.position();
                             let statements = mem::take(&mut **stmt_block);
                             let statements =
                                 optimize_stmt_block(statements, state, true, true, false);
-                            *stmt = Stmt::Block(statements.into_boxed_slice(), new_pos);
+                            *stmt =
+                                Stmt::Block(statements.into_boxed_slice(), stmt_block.position());
                         }
 
                         state.set_dirty();
@@ -551,9 +544,8 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                     // Multiple ranges - clear the table and just keep the right ranges
                     if !table.is_empty() {
                         state.set_dirty();
+                        table.clear();
                     }
-
-                    table.clear();
 
                     let old_ranges_len = ranges.len();
 
@@ -585,13 +577,8 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
 
             // Promote the default case
             state.set_dirty();
-            let def_pos = if x.1.position().is_none() {
-                *pos
-            } else {
-                x.1.position()
-            };
             let def_stmt = optimize_stmt_block(mem::take(&mut *x.1), state, true, true, false);
-            *stmt = Stmt::Block(def_stmt.into_boxed_slice(), def_pos);
+            *stmt = Stmt::Block(def_stmt.into_boxed_slice(), x.1.position().or_else(*pos));
         }
         // switch
         Stmt::Switch(match_expr, x, _) => {

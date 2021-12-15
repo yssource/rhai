@@ -213,6 +213,16 @@ impl Position {
         #[cfg(feature = "no_position")]
         return true;
     }
+    /// Returns an fallback [`Position`] if it is [`NONE`][Position::NONE]?
+    #[inline]
+    #[must_use]
+    pub const fn or_else(self, pos: Self) -> Self {
+        if self.is_none() {
+            pos
+        } else {
+            self
+        }
+    }
     /// Print this [`Position`] for debug purposes.
     #[inline]
     pub(crate) fn debug_print(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
