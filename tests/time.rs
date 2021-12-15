@@ -42,7 +42,7 @@ fn test_timestamp() -> Result<(), Box<EvalAltResult>> {
     assert!(engine.eval::<bool>(
         "
             let time1 = timestamp();
-            for x in range(0, 10000) {}
+            for x in 0..10000 {}
             let time2 = timestamp();
             time1 <= time2
         "

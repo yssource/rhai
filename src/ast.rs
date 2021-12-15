@@ -1,6 +1,7 @@
 //! Module defining the AST (abstract syntax tree).
 
 use crate::calc_fn_hash;
+use crate::engine::{OP_EXCLUSIVE_RANGE, OP_INCLUSIVE_RANGE};
 use crate::func::hashing::ALT_ZERO_HASH;
 use crate::module::NamespaceRef;
 use crate::tokenizer::Token;
@@ -1262,7 +1263,11 @@ pub enum Stmt {
     /// `switch` expr `if` condition `{` literal or _ `=>` stmt `,` ... `}`
     Switch(
         Expr,
-        Box<(BTreeMap<u64, Box<(Option<Expr>, StmtBlock)>>, StmtBlock)>,
+        Box<(
+            BTreeMap<u64, Box<(Option<Expr>, StmtBlock)>>,
+            StmtBlock,
+            StaticVec<(INT, INT, bool, Option<Expr>, StmtBlock)>,
+        )>,
         Position,
     ),
     /// `while` expr `{` stmt `}` | `loop` `{` stmt `}`
@@ -1501,6 +1506,10 @@ impl Stmt {
                         block.0.as_ref().map(Expr::is_pure).unwrap_or(true)
                             && (block.1).0.iter().all(Stmt::is_pure)
                     })
+                    && (x.2).iter().all(|(_, _, _, condition, stmt)| {
+                        condition.as_ref().map(Expr::is_pure).unwrap_or(true)
+                            && stmt.0.iter().all(Stmt::is_pure)
+                    })
                     && (x.1).0.iter().all(Stmt::is_pure)
             }
 
@@ -1612,6 +1621,16 @@ impl Stmt {
                         return false;
                     }
                     for s in &(b.1).0 {
+                        if !s.walk(path, on_node) {
+                            return false;
+                        }
+                    }
+                }
+                for (_, _, _, c, stmt) in &x.2 {
+                    if !c.as_ref().map(|e| e.walk(path, on_node)).unwrap_or(true) {
+                        return false;
+                    }
+                    for s in &stmt.0 {
                         if !s.walk(path, on_node) {
                             return false;
                         }
@@ -2234,6 +2253,35 @@ impl Expr {
                     map
                 }))
             }
+
+            // Binary operators
+            Self::FnCall(x, _) if x.args.len() == 2 => match x.name.as_str() {
+                // x..y
+                OP_EXCLUSIVE_RANGE => {
+                    if let Expr::IntegerConstant(ref start, _) = x.args[0] {
+                        if let Expr::IntegerConstant(ref end, _) = x.args[1] {
+                            (*start..*end).into()
+                        } else {
+                            return None;
+                        }
+                    } else {
+                        return None;
+                    }
+                }
+                // x..=y
+                OP_INCLUSIVE_RANGE => {
+                    if let Expr::IntegerConstant(ref start, _) = x.args[0] {
+                        if let Expr::IntegerConstant(ref end, _) = x.args[1] {
+                            (*start..=*end).into()
+                        } else {
+                            return None;
+                        }
+                    } else {
+                        return None;
+                    }
+                }
+                _ => return None,
+            },
 
             _ => return None,
         })

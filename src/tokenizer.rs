@@ -356,6 +356,10 @@ pub enum Token {
     Comma,
     /// `.`
     Period,
+    /// `..`
+    ExclusiveRange,
+    /// `..=`
+    InclusiveRange,
     /// `#{`
     MapStart,
     /// `=`
@@ -507,6 +511,8 @@ impl Token {
             Underscore => "_",
             Comma => ",",
             Period => ".",
+            ExclusiveRange => "..",
+            InclusiveRange => "..=",
             MapStart => "#{",
             Equals => "=",
             True => "true",
@@ -701,6 +707,8 @@ impl Token {
             "_" => Underscore,
             "," => Comma,
             "." => Period,
+            ".." => ExclusiveRange,
+            "..=" => InclusiveRange,
             "#{" => MapStart,
             "=" => Equals,
             "true" => True,
@@ -805,6 +813,8 @@ impl Token {
             Colon            | // #{ foo: - is unary
             Comma            | // ( ... , -expr ) - is unary
             //Period           |
+            ExclusiveRange            | // .. - is unary
+            InclusiveRange   | // ..= - is unary
             LeftBrace        | // { -expr } - is unary
             // RightBrace    | { expr } - expr not unary & is closing
             LeftParen        | // ( -expr ) - is unary
@@ -868,6 +878,8 @@ impl Token {
             | LeftShiftAssign | RightShiftAssign | AndAssign | OrAssign | XOrAssign
             | ModuloAssign => 0,
 
+            ExclusiveRange | InclusiveRange => 10,
+
             Or | XOr | Pipe => 30,
 
             And | Ampersand => 60,
@@ -921,11 +933,12 @@ impl Token {
         match self {
             LeftBrace | RightBrace | LeftParen | RightParen | LeftBracket | RightBracket | Plus
             | UnaryPlus | Minus | UnaryMinus | Multiply | Divide | Modulo | PowerOf | LeftShift
-            | RightShift | SemiColon | Colon | DoubleColon | Comma | Period | MapStart | Equals
-            | LessThan | GreaterThan | LessThanEqualsTo | GreaterThanEqualsTo | EqualsTo
-            | NotEqualsTo | Bang | Pipe | Or | XOr | Ampersand | And | PlusAssign | MinusAssign
-            | MultiplyAssign | DivideAssign | LeftShiftAssign | RightShiftAssign | AndAssign
-            | OrAssign | XOrAssign | ModuloAssign | PowerOfAssign => true,
+            | RightShift | SemiColon | Colon | DoubleColon | Comma | Period | ExclusiveRange
+            | InclusiveRange | MapStart | Equals | LessThan | GreaterThan | LessThanEqualsTo
+            | GreaterThanEqualsTo | EqualsTo | NotEqualsTo | Bang | Pipe | Or | XOr | Ampersand
+            | And | PlusAssign | MinusAssign | MultiplyAssign | DivideAssign | LeftShiftAssign
+            | RightShiftAssign | AndAssign | OrAssign | XOrAssign | ModuloAssign
+            | PowerOfAssign => true,
 
             _ => false,
         }
@@ -1794,13 +1807,20 @@ fn get_next_token_inner(
 
             ('.', '.') => {
                 eat_next(stream, pos);
-
-                if stream.peek_next() == Some('.') {
-                    eat_next(stream, pos);
-                    return Some((Token::Reserved("...".into()), start_pos));
-                } else {
-                    return Some((Token::Reserved("..".into()), start_pos));
-                }
+                return Some((
+                    match stream.peek_next() {
+                        Some('.') => {
+                            eat_next(stream, pos);
+                            Token::Reserved("...".into())
+                        }
+                        Some('=') => {
+                            eat_next(stream, pos);
+                            Token::InclusiveRange
+                        }
+                        _ => Token::ExclusiveRange,
+                    },
+                    start_pos,
+                ));
             }
             ('.', _) => return Some((Token::Period, start_pos)),
 

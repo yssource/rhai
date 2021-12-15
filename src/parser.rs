@@ -15,8 +15,9 @@ use crate::tokenizer::{
 };
 use crate::types::dynamic::AccessMode;
 use crate::{
-    calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Engine, Identifier,
-    ImmutableString, LexError, ParseError, ParseErrorType, Position, Scope, Shared, StaticVec, AST,
+    calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Engine, ExclusiveRange,
+    Identifier, ImmutableString, InclusiveRange, LexError, ParseError, ParseErrorType, Position,
+    Scope, Shared, StaticVec, AST, INT,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -1003,6 +1004,7 @@ fn parse_switch(
     }
 
     let mut table = BTreeMap::<u64, Box<(Option<Expr>, StmtBlock)>>::new();
+    let mut ranges = StaticVec::<(INT, INT, bool, Option<Expr>, StmtBlock)>::new();
     let mut def_pos = Position::NONE;
     let mut def_stmt = None;
 
@@ -1033,6 +1035,7 @@ fn parse_switch(
                 (None, None)
             }
             (Token::Underscore, pos) => return Err(PERR::DuplicatedSwitchCase.into_err(*pos)),
+
             _ if def_stmt.is_some() => return Err(PERR::WrongSwitchDefaultCase.into_err(def_pos)),
 
             _ => {
@@ -1047,21 +1050,31 @@ fn parse_switch(
             }
         };
 
-        let hash = if let Some(expr) = expr {
+        let (hash, range) = if let Some(expr) = expr {
             let value = expr.get_literal_value().ok_or_else(|| {
                 PERR::ExprExpected("a literal".to_string()).into_err(expr.position())
             })?;
-            let hasher = &mut get_hasher();
-            value.hash(hasher);
-            let hash = hasher.finish();
 
-            if table.contains_key(&hash) {
-                return Err(PERR::DuplicatedSwitchCase.into_err(expr.position()));
+            let guard = value.read_lock::<ExclusiveRange>();
+
+            if let Some(range) = guard {
+                (None, Some((range.start, range.end, false)))
+            } else if let Some(range) = value.read_lock::<InclusiveRange>() {
+                (None, Some((*range.start(), *range.end(), true)))
+            } else if value.is::<INT>() && !ranges.is_empty() {
+                return Err(PERR::WrongSwitchIntegerCase.into_err(expr.position()));
+            } else {
+                let hasher = &mut get_hasher();
+                value.hash(hasher);
+                let hash = hasher.finish();
+
+                if table.contains_key(&hash) {
+                    return Err(PERR::DuplicatedSwitchCase.into_err(expr.position()));
+                }
+                (Some(hash), None)
             }
-
-            Some(hash)
         } else {
-            None
+            (None, None)
         };
 
         match input.next().expect(NEVER_ENDS) {
@@ -1080,12 +1093,19 @@ fn parse_switch(
 
         let need_comma = !stmt.is_self_terminated();
 
-        def_stmt = match hash {
-            Some(hash) => {
+        def_stmt = match (hash, range) {
+            (None, Some(range)) => {
+                ranges.push((range.0, range.1, range.2, condition, stmt.into()));
+                None
+            }
+            (Some(hash), None) => {
                 table.insert(hash, (condition, stmt.into()).into());
                 None
             }
-            None => Some(stmt.into()),
+            (None, None) => Some(stmt.into()),
+            (Some(_), Some(_)) => {
+                unreachable!("cannot have both a hash and a range in a `switch` statement")
+            }
         };
 
         match input.peek().expect(NEVER_ENDS) {
@@ -1115,7 +1135,7 @@ fn parse_switch(
 
     Ok(Stmt::Switch(
         item,
-        (table, def_stmt_block).into(),
+        (table, def_stmt_block, ranges).into(),
         settings.pos,
     ))
 }
@@ -1975,18 +1995,6 @@ fn parse_binary_op(
         args.shrink_to_fit();
 
         root = match op_token {
-            Token::Plus
-            | Token::Minus
-            | Token::Multiply
-            | Token::Divide
-            | Token::LeftShift
-            | Token::RightShift
-            | Token::Modulo
-            | Token::PowerOf
-            | Token::Ampersand
-            | Token::Pipe
-            | Token::XOr => FnCallExpr { args, ..op_base }.into_fn_call_expr(pos),
-
             // '!=' defaults to true when passed invalid operands
             Token::NotEqualsTo => FnCallExpr { args, ..op_base }.into_fn_call_expr(pos),
 
@@ -2058,7 +2066,7 @@ fn parse_binary_op(
                 .into_fn_call_expr(pos)
             }
 
-            op_token => return Err(PERR::UnknownOperator(op_token.into()).into_err(pos)),
+            _ => FnCallExpr { args, ..op_base }.into_fn_call_expr(pos),
         };
     }
 }

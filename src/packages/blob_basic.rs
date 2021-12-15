@@ -2,7 +2,10 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::{def_package, Blob, Dynamic, EvalAltResult, NativeCallContext, Position, INT};
+use crate::{
+    def_package, Blob, Dynamic, EvalAltResult, ExclusiveRange, InclusiveRange, NativeCallContext,
+    Position, INT,
+};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{any::TypeId, mem};
@@ -184,6 +187,18 @@ mod blob_functions {
             blob.reverse();
         }
     }
+    #[rhai_fn(name = "splice")]
+    pub fn splice_range(blob: &mut Blob, range: ExclusiveRange, replace: Blob) {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        splice(blob, start, end - start, replace)
+    }
+    #[rhai_fn(name = "splice")]
+    pub fn splice_range_inclusive(blob: &mut Blob, range: InclusiveRange, replace: Blob) {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        splice(blob, start, end - start + 1, replace)
+    }
     pub fn splice(blob: &mut Blob, start: INT, len: INT, replace: Blob) {
         if blob.is_empty() {
             *blob = replace;
@@ -211,6 +226,18 @@ mod blob_functions {
         };
 
         blob.splice(start..start + len, replace.into_iter());
+    }
+    #[rhai_fn(name = "extract")]
+    pub fn extract_range(blob: &mut Blob, range: ExclusiveRange) -> Blob {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        extract(blob, start, end - start)
+    }
+    #[rhai_fn(name = "extract")]
+    pub fn extract_range_inclusive(blob: &mut Blob, range: InclusiveRange) -> Blob {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        extract(blob, start, end - start + 1)
     }
     pub fn extract(blob: &mut Blob, start: INT, len: INT) -> Blob {
         if blob.is_empty() || len <= 0 {
@@ -264,6 +291,18 @@ mod blob_functions {
             result
         }
     }
+    #[rhai_fn(name = "drain")]
+    pub fn drain_range(blob: &mut Blob, range: ExclusiveRange) -> Blob {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        drain(blob, start, end - start)
+    }
+    #[rhai_fn(name = "drain")]
+    pub fn drain_range_inclusive(blob: &mut Blob, range: InclusiveRange) -> Blob {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        drain(blob, start, end - start + 1)
+    }
     pub fn drain(blob: &mut Blob, start: INT, len: INT) -> Blob {
         if blob.is_empty() || len <= 0 {
             return Blob::new();
@@ -287,6 +326,18 @@ mod blob_functions {
         };
 
         blob.drain(start..start + len).collect()
+    }
+    #[rhai_fn(name = "retain")]
+    pub fn retain_range(blob: &mut Blob, range: ExclusiveRange) -> Blob {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        retain(blob, start, end - start)
+    }
+    #[rhai_fn(name = "retain")]
+    pub fn retain_range_inclusive(blob: &mut Blob, range: InclusiveRange) -> Blob {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        retain(blob, start, end - start + 1)
     }
     pub fn retain(blob: &mut Blob, start: INT, len: INT) -> Blob {
         if blob.is_empty() || len <= 0 {
@@ -374,8 +425,32 @@ mod blob_functions {
         }
     }
 
+    #[rhai_fn(name = "parse_le_int")]
+    pub fn parse_le_int_range(blob: &mut Blob, range: ExclusiveRange) -> INT {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        parse_le_int(blob, start, end - start)
+    }
+    #[rhai_fn(name = "parse_le_int")]
+    pub fn parse_le_int_range_inclusive(blob: &mut Blob, range: InclusiveRange) -> INT {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        parse_le_int(blob, start, end - start + 1)
+    }
     pub fn parse_le_int(blob: &mut Blob, start: INT, len: INT) -> INT {
         parse_int(blob, start, len, true)
+    }
+    #[rhai_fn(name = "parse_be_int")]
+    pub fn parse_be_int_range(blob: &mut Blob, range: ExclusiveRange) -> INT {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        parse_be_int(blob, start, end - start)
+    }
+    #[rhai_fn(name = "parse_be_int")]
+    pub fn parse_be_int_range_inclusive(blob: &mut Blob, range: InclusiveRange) -> INT {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        parse_be_int(blob, start, end - start + 1)
     }
     pub fn parse_be_int(blob: &mut Blob, start: INT, len: INT) -> INT {
         parse_int(blob, start, len, false)
@@ -418,9 +493,33 @@ mod blob_functions {
 
         blob[start..][..len].copy_from_slice(&buf[..len]);
     }
+    #[rhai_fn(name = "write_le_int")]
+    pub fn write_le_int_range(blob: &mut Blob, range: ExclusiveRange, value: INT) {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        write_le_int(blob, start, end - start, value)
+    }
+    #[rhai_fn(name = "write_le_int")]
+    pub fn write_le_int_range_inclusive(blob: &mut Blob, range: InclusiveRange, value: INT) {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        write_le_int(blob, start, end - start + 1, value)
+    }
     #[rhai_fn(name = "write_le")]
     pub fn write_le_int(blob: &mut Blob, start: INT, len: INT, value: INT) {
         write_int(blob, start, len, value, true)
+    }
+    #[rhai_fn(name = "write_be")]
+    pub fn write_be_int_range(blob: &mut Blob, range: ExclusiveRange, value: INT) {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        write_be_int(blob, start, end - start, value)
+    }
+    #[rhai_fn(name = "write_be")]
+    pub fn write_be_int_range_inclusive(blob: &mut Blob, range: InclusiveRange, value: INT) {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        write_be_int(blob, start, end - start + 1, value)
     }
     #[rhai_fn(name = "write_be")]
     pub fn write_be_int(blob: &mut Blob, start: INT, len: INT, value: INT) {
@@ -467,8 +566,36 @@ mod blob_functions {
     }
 
     #[cfg(not(feature = "no_float"))]
+    #[rhai_fn(name = "parse_le_float")]
+    pub fn parse_le_float_range(blob: &mut Blob, range: ExclusiveRange) -> FLOAT {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        parse_le_float(blob, start, end - start)
+    }
+    #[cfg(not(feature = "no_float"))]
+    #[rhai_fn(name = "parse_le_float")]
+    pub fn parse_le_float_range_inclusive(blob: &mut Blob, range: InclusiveRange) -> FLOAT {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        parse_le_float(blob, start, end - start + 1)
+    }
+    #[cfg(not(feature = "no_float"))]
     pub fn parse_le_float(blob: &mut Blob, start: INT, len: INT) -> FLOAT {
         parse_float(blob, start, len, true)
+    }
+    #[cfg(not(feature = "no_float"))]
+    #[rhai_fn(name = "parse_be_float")]
+    pub fn parse_be_float_range(blob: &mut Blob, range: ExclusiveRange) -> FLOAT {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        parse_be_float(blob, start, end - start)
+    }
+    #[cfg(not(feature = "no_float"))]
+    #[rhai_fn(name = "parse_be_float")]
+    pub fn parse_be_float_range_inclusive(blob: &mut Blob, range: InclusiveRange) -> FLOAT {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        parse_be_float(blob, start, end - start + 1)
     }
     #[cfg(not(feature = "no_float"))]
     pub fn parse_be_float(blob: &mut Blob, start: INT, len: INT) -> FLOAT {
@@ -514,9 +641,37 @@ mod blob_functions {
         blob[start..][..len].copy_from_slice(&buf[..len]);
     }
     #[cfg(not(feature = "no_float"))]
+    #[rhai_fn(name = "write_le_float")]
+    pub fn write_le_float_range(blob: &mut Blob, range: ExclusiveRange, value: FLOAT) {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        write_le_float(blob, start, end - start, value)
+    }
+    #[cfg(not(feature = "no_float"))]
+    #[rhai_fn(name = "write_le_float")]
+    pub fn write_le_float_range_inclusive(blob: &mut Blob, range: InclusiveRange, value: FLOAT) {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        write_le_float(blob, start, end - start + 1, value)
+    }
+    #[cfg(not(feature = "no_float"))]
     #[rhai_fn(name = "write_le")]
     pub fn write_le_float(blob: &mut Blob, start: INT, len: INT, value: FLOAT) {
         write_float(blob, start, len, value, true)
+    }
+    #[cfg(not(feature = "no_float"))]
+    #[rhai_fn(name = "write_be")]
+    pub fn write_be_float_range(blob: &mut Blob, range: ExclusiveRange, value: FLOAT) {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        write_be_float(blob, start, end - start, value)
+    }
+    #[cfg(not(feature = "no_float"))]
+    #[rhai_fn(name = "write_be")]
+    pub fn write_be_float_range_inclusive(blob: &mut Blob, range: InclusiveRange, value: FLOAT) {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        write_be_float(blob, start, end - start + 1, value)
     }
     #[cfg(not(feature = "no_float"))]
     #[rhai_fn(name = "write_be")]

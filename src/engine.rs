@@ -13,8 +13,8 @@ use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::tokenizer::Token;
 use crate::types::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::{
-    Dynamic, EvalAltResult, Identifier, ImmutableString, Module, Position, RhaiResult, Scope,
-    Shared, StaticVec, INT,
+    calc_fn_params_hash, combine_hashes, Dynamic, EvalAltResult, Identifier, ImmutableString,
+    Module, Position, RhaiResult, Scope, Shared, StaticVec, INT,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -367,6 +367,12 @@ pub const OP_EQUALS: &str = "==";
 /// The `in` operator is implemented as a call to this method.
 pub const OP_CONTAINS: &str = "contains";
 
+/// Standard exclusive range operator.
+pub const OP_EXCLUSIVE_RANGE: &str = "..";
+
+/// Standard inclusive range operator.
+pub const OP_INCLUSIVE_RANGE: &str = "..=";
+
 /// Standard concatenation operator token.
 pub const TOKEN_OP_CONCAT: Token = Token::PlusAssign;
 
@@ -484,7 +490,11 @@ pub enum Target<'a> {
     /// The target is a bit inside an [`INT`][crate::INT].
     /// This is necessary because directly pointing to a bit inside an [`INT`][crate::INT] is impossible.
     #[cfg(not(feature = "no_index"))]
-    BitField(&'a mut Dynamic, usize, Dynamic),
+    Bit(&'a mut Dynamic, Dynamic, u8),
+    /// The target is a range of bits inside an [`INT`][crate::INT].
+    /// This is necessary because directly pointing to a range of bits inside an [`INT`][crate::INT] is impossible.
+    #[cfg(not(feature = "no_index"))]
+    BitField(&'a mut Dynamic, INT, Dynamic, u8),
     /// The target is a byte inside a Blob.
     /// This is necessary because directly pointing to a byte (in [`Dynamic`] form) inside a blob is impossible.
     #[cfg(not(feature = "no_index"))]
@@ -507,7 +517,10 @@ impl<'a> Target<'a> {
             Self::LockGuard(_) => true,
             Self::TempValue(_) => false,
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, _) | Self::BlobByte(_, _, _) | Self::StringChar(_, _, _) => false,
+            Self::Bit(_, _, _)
+            | Self::BitField(_, _, _, _)
+            | Self::BlobByte(_, _, _)
+            | Self::StringChar(_, _, _) => false,
         }
     }
     /// Is the `Target` a temp value?
@@ -520,7 +533,10 @@ impl<'a> Target<'a> {
             Self::LockGuard(_) => false,
             Self::TempValue(_) => true,
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, _) | Self::BlobByte(_, _, _) | Self::StringChar(_, _, _) => false,
+            Self::Bit(_, _, _)
+            | Self::BitField(_, _, _, _)
+            | Self::BlobByte(_, _, _)
+            | Self::StringChar(_, _, _) => false,
         }
     }
     /// Is the `Target` a shared value?
@@ -534,7 +550,10 @@ impl<'a> Target<'a> {
             Self::LockGuard(_) => true,
             Self::TempValue(r) => r.is_shared(),
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, _) | Self::BlobByte(_, _, _) | Self::StringChar(_, _, _) => false,
+            Self::Bit(_, _, _)
+            | Self::BitField(_, _, _, _)
+            | Self::BlobByte(_, _, _)
+            | Self::StringChar(_, _, _) => false,
         }
     }
     /// Is the `Target` a specific type?
@@ -548,7 +567,9 @@ impl<'a> Target<'a> {
             Self::LockGuard((r, _)) => r.is::<T>(),
             Self::TempValue(r) => r.is::<T>(),
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, _) => TypeId::of::<T>() == TypeId::of::<bool>(),
+            Self::Bit(_, _, _) => TypeId::of::<T>() == TypeId::of::<bool>(),
+            #[cfg(not(feature = "no_index"))]
+            Self::BitField(_, _, _, _) => TypeId::of::<T>() == TypeId::of::<INT>(),
             #[cfg(not(feature = "no_index"))]
             Self::BlobByte(_, _, _) => TypeId::of::<T>() == TypeId::of::<crate::Blob>(),
             #[cfg(not(feature = "no_index"))]
@@ -565,7 +586,9 @@ impl<'a> Target<'a> {
             Self::LockGuard((_, orig)) => orig, // Original value is simply taken
             Self::TempValue(v) => v,      // Owned value is simply taken
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, value) => value, // Boolean is taken
+            Self::Bit(_, value, _) => value, // Boolean is taken
+            #[cfg(not(feature = "no_index"))]
+            Self::BitField(_, _, value, _) => value, // INT is taken
             #[cfg(not(feature = "no_index"))]
             Self::BlobByte(_, _, value) => value, // Byte is taken
             #[cfg(not(feature = "no_index"))]
@@ -596,7 +619,7 @@ impl<'a> Target<'a> {
             #[cfg(not(feature = "no_closure"))]
             Self::LockGuard(_) => (),
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(value, index, new_val) => {
+            Self::Bit(value, new_val, index) => {
                 // Replace the bit at the specified index position
                 let new_bit = new_val.as_bool().map_err(|err| {
                     Box::new(EvalAltResult::ErrorMismatchDataType(
@@ -610,16 +633,32 @@ impl<'a> Target<'a> {
 
                 let index = *index;
 
-                if index < std::mem::size_of_val(value) * 8 {
-                    let mask = 1 << index;
-                    if new_bit {
-                        *value |= mask;
-                    } else {
-                        *value &= !mask;
-                    }
+                let mask = 1 << index;
+                if new_bit {
+                    *value |= mask;
                 } else {
-                    unreachable!("bit-field index out of bounds: {}", index);
+                    *value &= !mask;
                 }
+            }
+            #[cfg(not(feature = "no_index"))]
+            Self::BitField(value, mask, new_val, shift) => {
+                let shift = *shift;
+                let mask = *mask;
+
+                // Replace the bit at the specified index position
+                let new_value = new_val.as_int().map_err(|err| {
+                    Box::new(EvalAltResult::ErrorMismatchDataType(
+                        "integer".to_string(),
+                        err.to_string(),
+                        Position::NONE,
+                    ))
+                })?;
+
+                let new_value = (new_value << shift) & mask;
+                let value = &mut *value.write_lock::<crate::INT>().expect("`INT`");
+
+                *value &= !mask;
+                *value |= new_value;
             }
             #[cfg(not(feature = "no_index"))]
             Self::BlobByte(value, index, new_val) => {
@@ -696,7 +735,8 @@ impl Deref for Target<'_> {
             Self::LockGuard((r, _)) => &**r,
             Self::TempValue(ref r) => r,
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, ref r)
+            Self::Bit(_, ref r, _)
+            | Self::BitField(_, _, ref r, _)
             | Self::BlobByte(_, _, ref r)
             | Self::StringChar(_, _, ref r) => r,
         }
@@ -719,7 +759,8 @@ impl DerefMut for Target<'_> {
             Self::LockGuard((r, _)) => r.deref_mut(),
             Self::TempValue(ref mut r) => r,
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, ref mut r)
+            Self::Bit(_, ref mut r, _)
+            | Self::BitField(_, _, ref mut r, _)
             | Self::BlobByte(_, _, ref mut r)
             | Self::StringChar(_, _, ref mut r) => r,
         }
@@ -2079,44 +2120,105 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_index"))]
+            Dynamic(Union::Int(value, _, _))
+                if idx.is::<crate::ExclusiveRange>() || idx.is::<crate::InclusiveRange>() =>
+            {
+                #[cfg(not(feature = "only_i32"))]
+                type BASE = u64;
+                #[cfg(feature = "only_i32")]
+                type BASE = u32;
+
+                // val_int[range]
+                const BITS: usize = std::mem::size_of::<INT>() * 8;
+
+                let (shift, mask) = if let Some(range) = idx.read_lock::<crate::ExclusiveRange>() {
+                    let start = range.start;
+                    let end = range.end;
+
+                    if start < 0 || start as usize >= BITS {
+                        return Err(EvalAltResult::ErrorBitFieldBounds(BITS, start, idx_pos).into());
+                    } else if end < 0 || end as usize >= BITS {
+                        return Err(EvalAltResult::ErrorBitFieldBounds(BITS, end, idx_pos).into());
+                    } else if end <= start {
+                        (0, 0)
+                    } else if end as usize == BITS && start == 0 {
+                        // -1 = all bits set
+                        (0, -1)
+                    } else {
+                        (
+                            start as u8,
+                            // 2^bits - 1
+                            (((2 as BASE).pow((end - start) as u32) - 1) as INT) << start,
+                        )
+                    }
+                } else if let Some(range) = idx.read_lock::<crate::InclusiveRange>() {
+                    let start = *range.start();
+                    let end = *range.end();
+
+                    if start < 0 || start as usize >= BITS {
+                        return Err(EvalAltResult::ErrorBitFieldBounds(BITS, start, idx_pos).into());
+                    } else if end < 0 || end as usize >= BITS {
+                        return Err(EvalAltResult::ErrorBitFieldBounds(BITS, end, idx_pos).into());
+                    } else if end < start {
+                        (0, 0)
+                    } else if end as usize == BITS - 1 && start == 0 {
+                        // -1 = all bits set
+                        (0, -1)
+                    } else {
+                        (
+                            start as u8,
+                            // 2^bits - 1
+                            (((2 as BASE).pow((end - start + 1) as u32) - 1) as INT) << start,
+                        )
+                    }
+                } else {
+                    unreachable!("`Range` or `RangeInclusive`");
+                };
+
+                let field_value = (*value & mask) >> shift;
+
+                Ok(Target::BitField(target, mask, field_value.into(), shift))
+            }
+
+            #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Int(value, _, _)) => {
                 // val_int[idx]
                 let index = idx
                     .as_int()
                     .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, idx_pos))?;
 
-                let bits = std::mem::size_of_val(value) * 8;
+                const BITS: usize = std::mem::size_of::<INT>() * 8;
 
                 let (bit_value, offset) = if index >= 0 {
                     let offset = index as usize;
                     (
-                        if offset >= bits {
+                        if offset >= BITS {
                             return Err(
-                                EvalAltResult::ErrorBitFieldBounds(bits, index, idx_pos).into()
+                                EvalAltResult::ErrorBitFieldBounds(BITS, index, idx_pos).into()
                             );
                         } else {
                             (*value & (1 << offset)) != 0
                         },
-                        offset,
+                        offset as u8,
                     )
                 } else if let Some(abs_index) = index.checked_abs() {
                     let offset = abs_index as usize;
                     (
                         // Count from end if negative
-                        if offset > bits {
+                        if offset > BITS {
                             return Err(
-                                EvalAltResult::ErrorBitFieldBounds(bits, index, idx_pos).into()
+                                EvalAltResult::ErrorBitFieldBounds(BITS, index, idx_pos).into()
                             );
                         } else {
-                            (*value & (1 << (bits - offset))) != 0
+                            (*value & (1 << (BITS - offset))) != 0
                         },
-                        offset,
+                        offset as u8,
                     )
                 } else {
-                    return Err(EvalAltResult::ErrorBitFieldBounds(bits, index, idx_pos).into());
+                    return Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, idx_pos).into());
                 };
 
-                Ok(Target::BitField(target, offset, bit_value.into()))
+                Ok(Target::Bit(target, bit_value.into(), offset))
             }
 
             #[cfg(not(feature = "no_index"))]
@@ -2660,48 +2762,80 @@ impl Engine {
 
             // Switch statement
             Stmt::Switch(match_expr, x, _) => {
-                let (table, def_stmt) = x.as_ref();
+                let (table, def_stmt, ranges) = x.as_ref();
 
                 let value = self.eval_expr(scope, mods, state, lib, this_ptr, match_expr, level)?;
 
-                if value.is_hashable() {
+                let stmt_block = if value.is_hashable() {
                     let hasher = &mut get_hasher();
                     value.hash(hasher);
                     let hash = hasher.finish();
 
-                    table.get(&hash).and_then(|t| {
-                        if let Some(condition) = &t.0 {
-                            match self
-                                .eval_expr(scope, mods, state, lib, this_ptr, &condition, level)
+                    // First check hashes
+                    if let Some(t) = table.get(&hash) {
+                        if let Some(ref c) = t.0 {
+                            if self
+                                .eval_expr(scope, mods, state, lib, this_ptr, &c, level)
                                 .and_then(|v| {
                                     v.as_bool().map_err(|typ| {
-                                        self.make_type_mismatch_err::<bool>(
-                                            typ,
-                                            condition.position(),
-                                        )
+                                        self.make_type_mismatch_err::<bool>(typ, c.position())
                                     })
-                                }) {
-                                Ok(true) => (),
-                                Ok(false) => return None,
-                                Err(err) => return Some(Err(err)),
+                                })?
+                            {
+                                Some(&t.1)
+                            } else {
+                                None
                             }
+                        } else {
+                            Some(&t.1)
+                        }
+                    } else if value.is::<INT>() && !ranges.is_empty() {
+                        // Then check integer ranges
+                        let value = value.as_int().expect("`INT`");
+                        let mut result = None;
+
+                        for (_, _, _, condition, stmt_block) in
+                            ranges.iter().filter(|&&(start, end, inclusive, _, _)| {
+                                (!inclusive && (start..end).contains(&value))
+                                    || (inclusive && (start..=end).contains(&value))
+                            })
+                        {
+                            if let Some(c) = condition {
+                                if !self
+                                    .eval_expr(scope, mods, state, lib, this_ptr, &c, level)
+                                    .and_then(|v| {
+                                        v.as_bool().map_err(|typ| {
+                                            self.make_type_mismatch_err::<bool>(typ, c.position())
+                                        })
+                                    })?
+                                {
+                                    continue;
+                                }
+                            }
+
+                            result = Some(stmt_block);
+                            break;
                         }
 
-                        let statements = &t.1;
-
-                        Some(if !statements.is_empty() {
-                            self.eval_stmt_block(
-                                scope, mods, state, lib, this_ptr, statements, true, true, level,
-                            )
-                        } else {
-                            Ok(Dynamic::UNIT)
-                        })
-                    })
+                        result
+                    } else {
+                        // Nothing matches
+                        None
+                    }
                 } else {
-                    // Non-hashable values never match any specific clause
+                    // Non-hashable
                     None
-                }
-                .unwrap_or_else(|| {
+                };
+
+                if let Some(statements) = stmt_block {
+                    if !statements.is_empty() {
+                        self.eval_stmt_block(
+                            scope, mods, state, lib, this_ptr, statements, true, true, level,
+                        )
+                    } else {
+                        Ok(Dynamic::UNIT)
+                    }
+                } else {
                     // Default match clause
                     if !def_stmt.is_empty() {
                         self.eval_stmt_block(
@@ -2710,7 +2844,7 @@ impl Engine {
                     } else {
                         Ok(Dynamic::UNIT)
                     }
-                })
+                }
             }
 
             // Loop
@@ -3161,6 +3295,18 @@ impl Engine {
 
         self.check_return_value(result)
             .map_err(|err| err.fill_position(stmt.position()))
+    }
+
+    // Has a system function a Rust-native override?
+    pub(crate) fn has_native_fn_override(&self, hash_script: u64, arg_types: &[TypeId]) -> bool {
+        let hash_params = calc_fn_params_hash(arg_types.iter().cloned());
+        let hash = combine_hashes(hash_script, hash_params);
+
+        // First check the global namespace and packages, but skip modules that are standard because
+        // they should never conflict with system functions.
+        self.global_modules.iter().filter(|m| !m.standard).any(|m| m.contains_fn(hash))
+            // Then check sub-modules
+            || self.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash))
     }
 
     /// Check a result to ensure that the data size is within allowable limit.
