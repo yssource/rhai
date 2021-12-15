@@ -13,8 +13,8 @@ use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::tokenizer::Token;
 use crate::types::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::{
-    calc_fn_params_hash, combine_hashes, Dynamic, EvalAltResult, ExclusiveRange, Identifier,
-    ImmutableString, InclusiveRange, Module, Position, RhaiResult, Scope, Shared, StaticVec, INT,
+    calc_fn_params_hash, combine_hashes, Dynamic, EvalAltResult, Identifier, ImmutableString,
+    Module, Position, RhaiResult, Scope, Shared, StaticVec, INT,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -517,8 +517,10 @@ impl<'a> Target<'a> {
             Self::LockGuard(_) => true,
             Self::TempValue(_) => false,
             #[cfg(not(feature = "no_index"))]
-            Self::Bit(_, _, _) | Self::BitField(_, _, _, _) => false,
-            Self::BlobByte(_, _, _) | Self::StringChar(_, _, _) => false,
+            Self::Bit(_, _, _)
+            | Self::BitField(_, _, _, _)
+            | Self::BlobByte(_, _, _)
+            | Self::StringChar(_, _, _) => false,
         }
     }
     /// Is the `Target` a temp value?
@@ -531,8 +533,10 @@ impl<'a> Target<'a> {
             Self::LockGuard(_) => false,
             Self::TempValue(_) => true,
             #[cfg(not(feature = "no_index"))]
-            Self::Bit(_, _, _) | Self::BitField(_, _, _, _) => false,
-            Self::BlobByte(_, _, _) | Self::StringChar(_, _, _) => false,
+            Self::Bit(_, _, _)
+            | Self::BitField(_, _, _, _)
+            | Self::BlobByte(_, _, _)
+            | Self::StringChar(_, _, _) => false,
         }
     }
     /// Is the `Target` a shared value?
@@ -546,8 +550,10 @@ impl<'a> Target<'a> {
             Self::LockGuard(_) => true,
             Self::TempValue(r) => r.is_shared(),
             #[cfg(not(feature = "no_index"))]
-            Self::Bit(_, _, _) | Self::BitField(_, _, _, _) => false,
-            Self::BlobByte(_, _, _) | Self::StringChar(_, _, _) => false,
+            Self::Bit(_, _, _)
+            | Self::BitField(_, _, _, _)
+            | Self::BlobByte(_, _, _)
+            | Self::StringChar(_, _, _) => false,
         }
     }
     /// Is the `Target` a specific type?
@@ -729,8 +735,10 @@ impl Deref for Target<'_> {
             Self::LockGuard((r, _)) => &**r,
             Self::TempValue(ref r) => r,
             #[cfg(not(feature = "no_index"))]
-            Self::Bit(_, ref r, _) | Self::BitField(_, _, ref r, _) => r,
-            Self::BlobByte(_, _, ref r) | Self::StringChar(_, _, ref r) => r,
+            Self::Bit(_, ref r, _)
+            | Self::BitField(_, _, ref r, _)
+            | Self::BlobByte(_, _, ref r)
+            | Self::StringChar(_, _, ref r) => r,
         }
     }
 }
@@ -751,8 +759,10 @@ impl DerefMut for Target<'_> {
             Self::LockGuard((r, _)) => r.deref_mut(),
             Self::TempValue(ref mut r) => r,
             #[cfg(not(feature = "no_index"))]
-            Self::Bit(_, ref mut r, _) | Self::BitField(_, _, ref mut r, _) => r,
-            Self::BlobByte(_, _, ref mut r) | Self::StringChar(_, _, ref mut r) => r,
+            Self::Bit(_, ref mut r, _)
+            | Self::BitField(_, _, ref mut r, _)
+            | Self::BlobByte(_, _, ref mut r)
+            | Self::StringChar(_, _, ref mut r) => r,
         }
     }
 }
@@ -2111,7 +2121,7 @@ impl Engine {
 
             #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Int(value, _, _))
-                if idx.is::<InclusiveRange>() || idx.is::<ExclusiveRange>() =>
+                if idx.is::<crate::ExclusiveRange>() || idx.is::<crate::InclusiveRange>() =>
             {
                 #[cfg(not(feature = "only_i32"))]
                 type BASE = u64;
@@ -2121,7 +2131,7 @@ impl Engine {
                 // val_int[range]
                 const BITS: usize = std::mem::size_of::<INT>() * 8;
 
-                let (shift, mask) = if let Some(range) = idx.read_lock::<ExclusiveRange>() {
+                let (shift, mask) = if let Some(range) = idx.read_lock::<crate::ExclusiveRange>() {
                     let start = range.start;
                     let end = range.end;
 
@@ -2141,7 +2151,7 @@ impl Engine {
                             (((2 as BASE).pow((end - start) as u32) - 1) as INT) << start,
                         )
                     }
-                } else if let Some(range) = idx.read_lock::<InclusiveRange>() {
+                } else if let Some(range) = idx.read_lock::<crate::InclusiveRange>() {
                     let start = *range.start();
                     let end = *range.end();
 

@@ -479,9 +479,12 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
     #[cfg(feature = "metadata")]
     lib.update_fn_metadata(_hash, &["string: &str", "Iterator<Item=char>"]);
 
-    let _hash = lib.set_getter_fn("chars", |string: &mut ImmutableString| Ok(CharsStream::new(string, 0, INT::MAX)));
-    #[cfg(feature = "metadata")]
-    lib.update_fn_metadata(_hash, &["string: &mut ImmutableString", "Iterator<Item=char>"]);
+    #[cfg(not(feature = "no_object"))]
+    {
+        let _hash = lib.set_getter_fn("chars", |string: &mut ImmutableString| Ok(CharsStream::new(string, 0, INT::MAX)));
+        #[cfg(feature = "metadata")]
+        lib.update_fn_metadata(_hash, &["string: &mut ImmutableString", "Iterator<Item=char>"]);
+    }
 
     // Register bit-field iterator
     lib.set_iterator::<BitRange>();
@@ -514,9 +517,12 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
     #[cfg(feature = "metadata")]
     lib.update_fn_metadata(_hash, &["value: INT", "Iterator<Item=bool>"]);
 
-    let _hash = lib.set_getter_fn("bits", |value: &mut INT| BitRange::new(*value, 0, INT::MAX) );
-    #[cfg(feature = "metadata")]
-    lib.update_fn_metadata(_hash, &["value: &mut INT", "range: Range", "Iterator<Item=bool>"]);
+    #[cfg(not(feature = "no_object"))]
+    {
+        let _hash = lib.set_getter_fn("bits", |value: &mut INT| BitRange::new(*value, 0, INT::MAX) );
+        #[cfg(feature = "metadata")]
+        lib.update_fn_metadata(_hash, &["value: &mut INT", "range: Range", "Iterator<Item=bool>"]);
+    }
 
     combine_with_exported_module!(lib, "range", range_functions);
 });
