@@ -79,7 +79,7 @@ The [`scripts`](https://github.com/rhaiscript/rhai/tree/master/scripts) subdirec
 
 Below is the standard _Fibonacci_ example for scripting languages:
 
-```js
+```ts
 // This Rhai script calculates the n-th Fibonacci number using a
 // really dumb algorithm to test the speed of the scripting engine.
 

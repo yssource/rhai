@@ -239,3 +239,37 @@ fn test_custom_syntax_raw() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_custom_syntax_raw2() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    engine
+        .register_custom_operator("#", 255)?
+        .register_custom_syntax_raw(
+            "#",
+            |symbols, lookahead| match symbols.len() {
+                1 if lookahead == "-" => Ok(Some("$symbol$".into())),
+                1 => Ok(Some("$int$".into())),
+                2 if symbols[1] == "-" => Ok(Some("$int$".into())),
+                2 => Ok(None),
+                3 => Ok(None),
+                _ => unreachable!(),
+            },
+            false,
+            move |_, inputs| {
+                let id = if inputs.len() == 2 {
+                    -inputs[1].get_literal_value::<INT>().unwrap()
+                } else {
+                    inputs[0].get_literal_value::<INT>().unwrap()
+                };
+                Ok(id.into())
+            },
+        );
+
+    assert_eq!(engine.eval::<INT>("let x = 41; x + #1")?, 42);
+    assert_eq!(engine.eval::<INT>("#42/2")?, 21);
+    assert_eq!(engine.eval::<INT>("#-1")?, -1);
+
+    Ok(())
+}
