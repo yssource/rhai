@@ -1135,7 +1135,7 @@ fn parse_primary(
     let mut settings = settings;
     settings.pos = *token_pos;
 
-    let mut root_expr = match token {
+    let root_expr = match token {
         Token::EOF => return Err(PERR::UnexpectedEOF.into_err(settings.pos)),
 
         Token::IntegerConstant(_)
@@ -1294,6 +1294,20 @@ fn parse_primary(
         #[cfg(not(feature = "no_object"))]
         Token::MapStart => parse_map_literal(input, state, lib, settings.level_up())?,
 
+        // Custom syntax.
+        Token::Custom(key) | Token::Reserved(key) | Token::Identifier(key)
+            if state.engine.custom_syntax.contains_key(&**key) =>
+        {
+            let (key, syntax) = state
+                .engine
+                .custom_syntax
+                .get_key_value(&**key)
+                .expect("exists");
+            let (_, pos) = input.next().expect(NEVER_ENDS);
+            let settings2 = settings.level_up();
+            parse_custom_syntax(input, state, lib, settings2, key, syntax, pos)?
+        }
+
         // Identifier
         Token::Identifier(_) => {
             let s = match input.next().expect(NEVER_ENDS) {
@@ -1398,18 +1412,31 @@ fn parse_primary(
         }
     };
 
+    parse_postfix(input, state, lib, root_expr, settings)
+}
+
+/// Tail processing of all possible postfix operators of a primary expression.
+fn parse_postfix(
+    input: &mut TokenStream,
+    state: &mut ParseState,
+    lib: &mut FunctionsLib,
+    mut lhs: Expr,
+    settings: ParseSettings,
+) -> Result<Expr, ParseError> {
+    let mut settings = settings;
+
     // Tail processing all possible postfix operators
     loop {
         let (tail_token, _) = input.peek().expect(NEVER_ENDS);
 
-        if !root_expr.is_valid_postfix(tail_token) {
+        if !lhs.is_valid_postfix(tail_token) {
             break;
         }
 
         let (tail_token, tail_pos) = input.next().expect(NEVER_ENDS);
         settings.pos = tail_pos;
 
-        root_expr = match (root_expr, tail_token) {
+        lhs = match (lhs, tail_token) {
             // Qualified function call with !
             (Expr::Variable(_, _, x), Token::Bang) if x.1.is_some() => {
                 return if !match_token(input, Token::LeftParen).0 {
@@ -1503,7 +1530,7 @@ fn parse_primary(
     }
 
     // Cache the hash key for namespace-qualified variables
-    let namespaced_variable = match root_expr {
+    let namespaced_variable = match lhs {
         Expr::Variable(_, _, ref mut x) if x.1.is_some() => Some(x.as_mut()),
         Expr::Index(ref mut x, _, _) | Expr::Dot(ref mut x, _, _) => match x.lhs {
             Expr::Variable(_, _, ref mut x) if x.1.is_some() => Some(x.as_mut()),
@@ -1536,7 +1563,7 @@ fn parse_primary(
     }
 
     // Make sure identifiers are valid
-    Ok(root_expr)
+    Ok(lhs)
 }
 
 /// Parse a potential unary operator.
@@ -1550,26 +1577,9 @@ fn parse_unary(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let (token, token_pos) = input.peek().expect(NEVER_ENDS);
-    let token_pos = *token_pos;
 
     let mut settings = settings;
-    settings.pos = token_pos;
-
-    // Check if it is a custom syntax.
-    if !state.engine.custom_syntax.is_empty() {
-        match token {
-            Token::Custom(key) | Token::Reserved(key) | Token::Identifier(key) => {
-                if let Some((key, syntax)) = state.engine.custom_syntax.get_key_value(key.as_ref())
-                {
-                    input.next().expect(NEVER_ENDS);
-                    return parse_custom_syntax(
-                        input, state, lib, settings, key, syntax, token_pos,
-                    );
-                }
-            }
-            _ => (),
-        }
-    }
+    settings.pos = *token_pos;
 
     match token {
         // -expr

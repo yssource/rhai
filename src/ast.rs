@@ -2421,7 +2421,8 @@ impl Expr {
             | Self::Dot(_, _, _)
             | Self::Index(_, _, _)
             | Self::Array(_, _)
-            | Self::Map(_, _) => match token {
+            | Self::Map(_, _)
+            | Self::Custom(_, _) => match token {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
                 _ => false,
@@ -2442,8 +2443,6 @@ impl Expr {
                 Token::LeftParen => true,
                 _ => false,
             },
-
-            Self::Custom(_, _) => false,
 
             Self::Stack(_, _) => false,
         }
