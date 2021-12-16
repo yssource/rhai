@@ -12,6 +12,11 @@ New features
 
 * Added support for integer _ranges_ via the `..` and `..=` operators.
 
+Deprecated API's
+----------------
+
+* `Expression::get_variable_name` is deprecated in favor of the new `Expression::get_string_value`.
+
 
 Version 1.3.1
 =============

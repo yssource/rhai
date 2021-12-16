@@ -1401,10 +1401,7 @@ fn parse_primary(
                     let msg = format!("'{}' can only be used in functions", s);
                     return Err(LexError::ImproperSymbol(s.to_string(), msg).into_err(settings.pos));
                 }
-                _ if is_valid_identifier(s.chars()) => {
-                    return Err(PERR::Reserved(s.to_string()).into_err(settings.pos))
-                }
-                _ => return Err(LexError::UnexpectedInput(s.to_string()).into_err(settings.pos)),
+                _ => return Err(PERR::Reserved(s.to_string()).into_err(settings.pos)),
             }
         }
 
@@ -1698,12 +1695,12 @@ fn make_assignment_stmt(
                 ref e => Some(e.position()),
             },
             Expr::Index(x, term, _) | Expr::Dot(x, term, _) => match x.lhs {
-                Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
+                Expr::Property(_) => unreachable!("unexpected `Expr::Property` in indexing"),
                 _ if !term => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _, _))),
                 _ => None,
             },
             Expr::Property(_) if parent_is_dot => None,
-            Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
+            Expr::Property(_) => unreachable!("unexpected `Expr::Property` in indexing"),
             e if parent_is_dot => Some(e.position()),
             _ => None,
         }
@@ -2277,15 +2274,9 @@ fn parse_expr(
     settings.pos = input.peek().expect(NEVER_ENDS).1;
 
     // Parse expression normally.
+    let precedence = Precedence::new(1);
     let lhs = parse_unary(input, state, lib, settings.level_up())?;
-    parse_binary_op(
-        input,
-        state,
-        lib,
-        Precedence::new(1),
-        lhs,
-        settings.level_up(),
-    )
+    parse_binary_op(input, state, lib, precedence, lhs, settings.level_up())
 }
 
 /// Parse an if statement.

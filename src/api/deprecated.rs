@@ -1,8 +1,8 @@
 //! Module containing all deprecated API that will be removed in the next major version.
 
 use crate::{
-    Dynamic, Engine, EvalAltResult, FnPtr, ImmutableString, NativeCallContext, RhaiResult, Scope,
-    AST,
+    Dynamic, Engine, EvalAltResult, Expression, FnPtr, ImmutableString, NativeCallContext,
+    RhaiResult, Scope, AST,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -302,5 +302,21 @@ impl FnPtr {
         arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {
         self.call_raw(context, this_ptr, arg_values)
+    }
+}
+
+impl Expression<'_> {
+    /// If this expression is a variable name, return it.  Otherwise [`None`].
+    ///
+    /// # Deprecated
+    ///
+    /// This method is deprecated. Use [`get_string_value`][Expression::get_string_value] instead.
+    ///
+    /// This method will be removed in the next major version.
+    #[deprecated(since = "1.4.0", note = "use `get_string_value` instead")]
+    #[inline(always)]
+    #[must_use]
+    pub fn get_variable_name(&self) -> Option<&str> {
+        self.get_string_value()
     }
 }

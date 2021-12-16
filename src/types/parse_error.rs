@@ -1,5 +1,6 @@
 //! Module containing error definitions for the parsing process.
 
+use crate::tokenizer::is_valid_identifier;
 use crate::{EvalAltResult, Position};
 #[cfg(feature = "no_std")]
 use core_error::Error;
@@ -120,7 +121,7 @@ pub enum ParseErrorType {
     PropertyExpected,
     /// Missing a variable name after the `let`, `const`, `for` or `catch` keywords.
     VariableExpected,
-    /// An identifier is a reserved keyword.
+    /// An identifier is a reserved symbol.
     Reserved(String),
     /// An expression is of the wrong type.
     /// Wrapped values are the type requested and type of the actual result.
@@ -260,7 +261,8 @@ impl fmt::Display for ParseErrorType {
             },
 
             Self::LiteralTooLarge(typ, max) => write!(f, "{} exceeds the maximum limit ({})", typ, max),
-            Self::Reserved(s) => write!(f, "'{}' is a reserved keyword", s),
+            Self::Reserved(s) if is_valid_identifier(s.chars()) => write!(f, "'{}' is a reserved keyword", s),
+            Self::Reserved(s) => write!(f, "'{}' is a reserved symbol", s),
             Self::UnexpectedEOF => f.write_str("Script is incomplete"),
             Self::WrongSwitchIntegerCase => f.write_str("Integer switch case cannot follow a range case"),
             Self::WrongSwitchDefaultCase => f.write_str("Default switch case must be the last"),

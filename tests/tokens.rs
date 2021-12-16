@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, LexError, ParseErrorType, INT};
+use rhai::{Engine, EvalAltResult, ParseErrorType, INT};
 
 #[test]
 fn test_tokens_disabled() {
@@ -26,7 +26,7 @@ fn test_tokens_disabled() {
 
     assert!(matches!(
         *engine.compile("let x = += 0;").expect_err("should error").0,
-        ParseErrorType::BadInput(LexError::UnexpectedInput(err)) if err == "+="
+        ParseErrorType::Reserved(err) if err == "+="
     ));
 }
 

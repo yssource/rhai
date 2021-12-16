@@ -2213,14 +2213,9 @@ impl<'a> Iterator for TokenIterator<'a> {
                 )),
                 // Reserved keyword/operator that is custom.
                 (_, true) => Token::Custom(s),
-                // Reserved operator that is not custom.
-                (token, false) if !is_valid_identifier(token.chars()) => {
-                    let msg = format!("'{}' is a reserved symbol", token);
-                    Token::LexError(LERR::ImproperSymbol(s.to_string(), msg))
-                },
                 // Reserved keyword that is not custom and disabled.
                 (token, false) if self.engine.disabled_symbols.contains(token) => {
-                    let msg = format!("reserved symbol '{}' is disabled", token);
+                    let msg = format!("reserved {} '{}' is disabled", if is_valid_identifier(token.chars()) { "keyword"} else {"symbol"}, token);
                     Token::LexError(LERR::ImproperSymbol(s.to_string(), msg))
                 },
                 // Reserved keyword/operator that is not custom.
@@ -2230,14 +2225,14 @@ impl<'a> Iterator for TokenIterator<'a> {
             Some((Token::Identifier(s), pos)) if self.engine.custom_keywords.contains_key(&*s) => {
                 (Token::Custom(s), pos)
             }
-            // Custom standard keyword/symbol - must be disabled
+            // Custom keyword/symbol - must be disabled
             Some((token, pos)) if self.engine.custom_keywords.contains_key(&*token.syntax()) => {
                 if self.engine.disabled_symbols.contains(&*token.syntax()) {
                     // Disabled standard keyword/symbol
                     (Token::Custom(token.syntax().into()), pos)
                 } else {
                     // Active standard keyword - should never be a custom keyword!
-                    unreachable!("{:?} is an active keyword", token)
+                    unreachable!("`{:?}` is an active keyword", token)
                 }
             }
             // Disabled symbol
