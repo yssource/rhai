@@ -4,6 +4,11 @@ Rhai Release Notes
 Version 1.3.1
 =============
 
+Bug fixes
+---------
+
+* Custom syntax now works properly inside binary expressions.
+
 Enhancements
 ------------
 

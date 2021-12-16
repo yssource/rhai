@@ -1550,9 +1550,26 @@ fn parse_unary(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let (token, token_pos) = input.peek().expect(NEVER_ENDS);
+    let token_pos = *token_pos;
 
     let mut settings = settings;
-    settings.pos = *token_pos;
+    settings.pos = token_pos;
+
+    // Check if it is a custom syntax.
+    if !state.engine.custom_syntax.is_empty() {
+        match token {
+            Token::Custom(key) | Token::Reserved(key) | Token::Identifier(key) => {
+                if let Some((key, syntax)) = state.engine.custom_syntax.get_key_value(key.as_ref())
+                {
+                    input.next().expect(NEVER_ENDS);
+                    return parse_custom_syntax(
+                        input, state, lib, settings, key, syntax, token_pos,
+                    );
+                }
+            }
+            _ => (),
+        }
+    }
 
     match token {
         // -expr
@@ -2250,25 +2267,6 @@ fn parse_expr(
 
     let mut settings = settings;
     settings.pos = input.peek().expect(NEVER_ENDS).1;
-
-    // Check if it is a custom syntax.
-    if !state.engine.custom_syntax.is_empty() {
-        let (token, pos) = input.peek().expect(NEVER_ENDS);
-        let token_pos = *pos;
-
-        match token {
-            Token::Custom(key) | Token::Reserved(key) | Token::Identifier(key) => {
-                if let Some((key, syntax)) = state.engine.custom_syntax.get_key_value(key.as_ref())
-                {
-                    input.next().expect(NEVER_ENDS);
-                    return parse_custom_syntax(
-                        input, state, lib, settings, key, syntax, token_pos,
-                    );
-                }
-            }
-            _ => (),
-        }
-    }
 
     // Parse expression normally.
     let lhs = parse_unary(input, state, lib, settings.level_up())?;

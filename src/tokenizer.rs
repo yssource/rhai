@@ -863,11 +863,6 @@ impl Token {
         use Token::*;
 
         Precedence::new(match self {
-            // Assignments are not considered expressions - set to zero
-            Equals | PlusAssign | MinusAssign | MultiplyAssign | DivideAssign | PowerOfAssign
-            | LeftShiftAssign | RightShiftAssign | AndAssign | OrAssign | XOrAssign
-            | ModuloAssign => 0,
-
             Or | XOr | Pipe => 30,
 
             And | Ampersand => 60,
@@ -886,8 +881,6 @@ impl Token {
 
             LeftShift | RightShift => 210,
 
-            Period => 240,
-
             _ => 0,
         })
     }
@@ -898,14 +891,6 @@ impl Token {
         use Token::*;
 
         match self {
-            // Assignments bind to the right
-            Equals | PlusAssign | MinusAssign | MultiplyAssign | DivideAssign | PowerOfAssign
-            | LeftShiftAssign | RightShiftAssign | AndAssign | OrAssign | XOrAssign
-            | ModuloAssign => true,
-
-            // Property access binds to the right
-            Period => true,
-
             // Exponentiation binds to the right
             PowerOf => true,
 
@@ -1662,6 +1647,17 @@ fn get_next_token_inner(
             // Shebang
             ('#', '!') => return Some((Token::Reserved("#!".into()), start_pos)),
 
+            ('#', ' ') => {
+                eat_next(stream, pos);
+                let token = if stream.peek_next() == Some('{') {
+                    eat_next(stream, pos);
+                    "# {"
+                } else {
+                    "#"
+                };
+                return Some((Token::Reserved(token.into()), start_pos));
+            }
+
             ('#', _) => return Some((Token::Reserved("#".into()), start_pos)),
 
             // Operators
@@ -2182,7 +2178,7 @@ impl<'a> Iterator for TokenIterator<'a> {
                 ("(*", false) | ("*)", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
                     "'(* .. *)' is not a valid comment format. This is not Pascal! Should it be '/* .. */'?".to_string(),
                 )),
-                ("#", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
+                ("# {", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
                     "'#' is not a valid symbol. Should it be '#{'?".to_string(),
                 )),
                 // Reserved keyword/operator that is custom.
