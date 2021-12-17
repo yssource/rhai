@@ -163,7 +163,7 @@ impl Engine {
         result
     }
 
-    // Does a scripted function exist?
+    // Does a script-defined function exist?
     #[must_use]
     pub(crate) fn has_script_fn(
         &self,

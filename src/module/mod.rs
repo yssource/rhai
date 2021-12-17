@@ -1328,7 +1328,7 @@ impl Module {
                 f.access,
                 f.name.as_str(),
                 f.params,
-                f.func.get_script_fn_def().expect("scripted function"),
+                f.func.get_script_fn_def().expect("script-defined function"),
             )
         })
     }
@@ -1459,7 +1459,7 @@ impl Module {
                     let mut func = f
                         .func
                         .get_script_fn_def()
-                        .expect("scripted function")
+                        .expect("script-defined function")
                         .as_ref()
                         .clone();
                     func.lib = Some(ast.shared_lib().clone());

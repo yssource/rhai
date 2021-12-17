@@ -296,7 +296,7 @@ fn test_call_fn_events() -> Result<(), Box<EvalAltResult>> {
                 "end" => engine.call_fn(scope, ast, "end", (event_data,)).unwrap(),
 
                 // The 'update' event maps to function 'update'.
-                // This event provides a default implementation when the scripted function is not found.
+                // This event provides a default implementation when the script-defined function is not found.
                 "update" => engine
                     .call_fn(scope, ast, "update", (event_data,))
                     .or_else(|err| match *err {

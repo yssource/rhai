@@ -2042,7 +2042,7 @@ pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
     first_alphabetic
 }
 
-/// Is a text string a valid scripted function name?
+/// Is a text string a valid script-defined function name?
 #[inline(always)]
 #[must_use]
 pub fn is_valid_function_name(name: impl AsRef<str>) -> bool {

@@ -83,17 +83,15 @@ impl Engine {
             .map(|f| {
                 f.func
                     .get_script_fn_def()
-                    .expect("scripted function")
+                    .expect("script-defined function")
                     .clone()
             })
             .collect();
 
-        let statements = std::mem::take(ast.statements_mut());
-
         crate::optimizer::optimize_into_ast(
             self,
             scope,
-            statements,
+            ast.take_statements(),
             #[cfg(not(feature = "no_function"))]
             lib,
             optimization_level,

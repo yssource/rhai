@@ -163,18 +163,15 @@ impl From<&crate::module::FuncInfo> for FnMetadata {
             signature: info.gen_signature(),
             doc_comments: if info.func.is_script() {
                 #[cfg(feature = "no_function")]
-                {
-                    unreachable!("scripted functions should not exist under no_function")
-                }
+                unreachable!("script-defined functions should not exist under no_function");
+
                 #[cfg(not(feature = "no_function"))]
-                {
-                    info.func
-                        .get_script_fn_def()
-                        .expect("scripted function")
-                        .comments
-                        .as_ref()
-                        .map_or_else(|| Vec::new(), |v| v.to_vec())
-                }
+                info.func
+                    .get_script_fn_def()
+                    .expect("script-defined function")
+                    .comments
+                    .as_ref()
+                    .map_or_else(|| Vec::new(), |v| v.to_vec())
             } else {
                 Vec::new()
             },

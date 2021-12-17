@@ -476,7 +476,7 @@ impl CallableFunction {
             Self::Script(_) => false,
         }
     }
-    /// Is this a Rhai-scripted function?
+    /// Is this a script-defined function?
     #[inline]
     #[must_use]
     pub const fn is_script(&self) -> bool {

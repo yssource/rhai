@@ -561,7 +561,7 @@ impl Engine {
             _ => (),
         }
 
-        // Scripted function call?
+        // Script-defined function call?
         #[cfg(not(feature = "no_function"))]
         if let Some(FnResolutionCacheEntry { func, source }) = self
             .resolve_fn(mods, state, lib, fn_name, hashes.script, None, false, false)
@@ -570,7 +570,7 @@ impl Engine {
             // Script function call
             assert!(func.is_script());
 
-            let func = func.get_script_fn_def().expect("scripted function");
+            let func = func.get_script_fn_def().expect("script-defined function");
 
             if func.body.is_empty() {
                 return Ok((Dynamic::UNIT, false));
@@ -1271,7 +1271,7 @@ impl Engine {
         match func {
             #[cfg(not(feature = "no_function"))]
             Some(f) if f.is_script() => {
-                let fn_def = f.get_script_fn_def().expect("scripted function");
+                let fn_def = f.get_script_fn_def().expect("script-defined function");
 
                 if fn_def.body.is_empty() {
                     Ok(Dynamic::UNIT)
