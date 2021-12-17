@@ -307,32 +307,6 @@ impl fmt::Debug for Imports {
     }
 }
 
-#[cfg(not(feature = "unchecked"))]
-#[cfg(debug_assertions)]
-#[cfg(not(feature = "no_function"))]
-pub const MAX_CALL_STACK_DEPTH: usize = 8;
-#[cfg(not(feature = "unchecked"))]
-#[cfg(debug_assertions)]
-pub const MAX_EXPR_DEPTH: usize = 32;
-#[cfg(not(feature = "unchecked"))]
-#[cfg(not(feature = "no_function"))]
-#[cfg(debug_assertions)]
-pub const MAX_FUNCTION_EXPR_DEPTH: usize = 16;
-
-#[cfg(not(feature = "unchecked"))]
-#[cfg(not(debug_assertions))]
-#[cfg(not(feature = "no_function"))]
-pub const MAX_CALL_STACK_DEPTH: usize = 64;
-#[cfg(not(feature = "unchecked"))]
-#[cfg(not(debug_assertions))]
-pub const MAX_EXPR_DEPTH: usize = 64;
-#[cfg(not(feature = "unchecked"))]
-#[cfg(not(feature = "no_function"))]
-#[cfg(not(debug_assertions))]
-pub const MAX_FUNCTION_EXPR_DEPTH: usize = 32;
-
-pub const MAX_DYNAMIC_PARAMETERS: usize = 16;
-
 pub const KEYWORD_PRINT: &str = "print";
 pub const KEYWORD_DEBUG: &str = "debug";
 pub const KEYWORD_TYPE_OF: &str = "type_of";

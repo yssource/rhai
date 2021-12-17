@@ -2,11 +2,11 @@
 
 use super::native::{CallableFunction, FnAny};
 use super::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
+use crate::api::limits::defaults::MAX_DYNAMIC_PARAMETERS;
 use crate::ast::FnCallHashes;
 use crate::engine::{
     EvalState, FnResolutionCacheEntry, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
     KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
-    MAX_DYNAMIC_PARAMETERS,
 };
 use crate::module::NamespaceRef;
 use crate::tokenizer::Token;
