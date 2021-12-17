@@ -27,6 +27,34 @@ use crate::{Engine, Identifier};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
+pub mod default_limits {
+    #[cfg(not(feature = "unchecked"))]
+    #[cfg(debug_assertions)]
+    #[cfg(not(feature = "no_function"))]
+    pub const MAX_CALL_STACK_DEPTH: usize = 8;
+    #[cfg(not(feature = "unchecked"))]
+    #[cfg(debug_assertions)]
+    pub const MAX_EXPR_DEPTH: usize = 32;
+    #[cfg(not(feature = "unchecked"))]
+    #[cfg(not(feature = "no_function"))]
+    #[cfg(debug_assertions)]
+    pub const MAX_FUNCTION_EXPR_DEPTH: usize = 16;
+
+    #[cfg(not(feature = "unchecked"))]
+    #[cfg(not(debug_assertions))]
+    #[cfg(not(feature = "no_function"))]
+    pub const MAX_CALL_STACK_DEPTH: usize = 64;
+    #[cfg(not(feature = "unchecked"))]
+    #[cfg(not(debug_assertions))]
+    pub const MAX_EXPR_DEPTH: usize = 64;
+    #[cfg(not(feature = "unchecked"))]
+    #[cfg(not(feature = "no_function"))]
+    #[cfg(not(debug_assertions))]
+    pub const MAX_FUNCTION_EXPR_DEPTH: usize = 32;
+
+    pub const MAX_DYNAMIC_PARAMETERS: usize = 16;
+}
+
 /// Script optimization API.
 #[cfg(not(feature = "no_optimize"))]
 impl Engine {
