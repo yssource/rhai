@@ -2,7 +2,7 @@
 
 use super::native::{CallableFunction, FnAny};
 use super::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
-use crate::api::limits::defaults::MAX_DYNAMIC_PARAMETERS;
+use crate::api::default_limits::MAX_DYNAMIC_PARAMETERS;
 use crate::ast::FnCallHashes;
 use crate::engine::{
     EvalState, FnResolutionCacheEntry, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,

@@ -335,20 +335,20 @@ pub const FN_IDX_SET: &str = "index$set$";
 pub const FN_ANONYMOUS: &str = "anon$";
 
 /// Standard equality comparison operator.
-pub const OP_EQUALS: &str = "==";
+pub const OP_EQUALS: &str = Token::EqualsTo.literal_syntax();
 
 /// Standard method function for containment testing.
 /// The `in` operator is implemented as a call to this method.
 pub const OP_CONTAINS: &str = "contains";
 
 /// Standard exclusive range operator.
-pub const OP_EXCLUSIVE_RANGE: &str = "..";
+pub const OP_EXCLUSIVE_RANGE: &str = Token::ExclusiveRange.literal_syntax();
 
 /// Standard inclusive range operator.
-pub const OP_INCLUSIVE_RANGE: &str = "..=";
+pub const OP_INCLUSIVE_RANGE: &str = Token::InclusiveRange.literal_syntax();
 
 /// Standard concatenation operator token.
-pub const TOKEN_OP_CONCAT: Token = Token::PlusAssign;
+pub const OP_CONCAT: &str = Token::PlusAssign.literal_syntax();
 
 /// Method of chaining.
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
@@ -2312,7 +2312,7 @@ impl Engine {
                         mods,
                         state,
                         lib,
-                        Some(OpAssignment::new(TOKEN_OP_CONCAT)),
+                        Some(OpAssignment::new(OP_CONCAT)),
                         pos,
                         &mut (&mut result).into(),
                         ("", Position::NONE),

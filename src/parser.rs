@@ -1716,7 +1716,7 @@ fn make_assignment_stmt(
         }
     }
 
-    let op_info = op.map(OpAssignment::new);
+    let op_info = op.map(OpAssignment::new_from_token);
 
     match lhs {
         // const_expr = rhs

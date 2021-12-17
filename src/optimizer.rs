@@ -381,9 +381,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
             match x.2 {
                 Expr::FnCall(ref mut x2, _) => {
                     state.set_dirty();
-                    let op = Token::lookup_from_syntax(&x2.name).expect("operator");
-                    let op_assignment = op.make_op_assignment().expect("operator");
-                    x.1 = Some(OpAssignment::new(op_assignment));
+                    x.1 = Some(OpAssignment::new(&x2.name));
 
                     let value = mem::take(&mut x2.args[1]);
 

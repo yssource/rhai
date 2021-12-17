@@ -30,19 +30,27 @@ impl OpAssignment<'_> {
     ///
     /// # Panics
     ///
-    /// Panics if the operator name is not an op-assignment operator.
+    /// Panics if the name is not an op-assignment operator.
     #[must_use]
-    pub fn new(op: Token) -> Self {
+    #[inline(always)]
+    pub fn new(name: &str) -> Self {
+        Self::new_from_token(Token::lookup_from_syntax(name).expect("operator"))
+    }
+    /// Create a new [`OpAssignment`] from a [`Token`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the token is not an op-assignment operator.
+    #[must_use]
+    pub fn new_from_token(op: Token) -> Self {
         let op_raw = op
             .map_op_assignment()
-            .expect("op-assignment")
+            .expect("op-assignment operator")
             .literal_syntax();
-        let op_assignment = op.literal_syntax();
-
         Self {
-            hash_op_assign: calc_fn_hash(op_assignment, 2),
+            hash_op_assign: calc_fn_hash(op.literal_syntax(), 2),
             hash_op: calc_fn_hash(op_raw, 2),
-            op: op_assignment,
+            op: op.literal_syntax(),
         }
     }
 }
