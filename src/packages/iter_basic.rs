@@ -551,10 +551,6 @@ mod range_functions {
         let _range = range;
         true
     }
-    #[rhai_fn(get = "is_empty", name = "is_empty", pure)]
-    pub fn is_empty(range: &mut ExclusiveRange) -> bool {
-        range.is_empty()
-    }
     #[rhai_fn(get = "start", name = "start", pure)]
     pub fn start_inclusive(range: &mut InclusiveRange) -> INT {
         *range.start()
@@ -566,10 +562,6 @@ mod range_functions {
     #[rhai_fn(name = "contains", pure)]
     pub fn contains_inclusive(range: &mut InclusiveRange, value: INT) -> bool {
         range.contains(&value)
-    }
-    #[rhai_fn(get = "is_empty", name = "is_empty", pure)]
-    pub fn is_empty_inclusive(range: &mut InclusiveRange) -> bool {
-        range.is_empty()
     }
     #[rhai_fn(get = "is_inclusive", name = "is_inclusive", pure)]
     pub fn is_inclusive_inclusive(range: &mut InclusiveRange) -> bool {

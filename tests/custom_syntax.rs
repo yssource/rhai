@@ -267,6 +267,7 @@ fn test_custom_syntax_raw2() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(engine.eval::<INT>("#-1")?, -1);
     assert_eq!(engine.eval::<INT>("let x = 41; x + #1")?, 42);
+    #[cfg(not(feature = "no_object"))]
     assert_eq!(engine.eval::<INT>("#-42.abs()")?, 42);
     assert_eq!(engine.eval::<INT>("#42/2")?, 21);
     assert_eq!(engine.eval::<INT>("sign(#1)")?, 1);
