@@ -250,7 +250,7 @@ pub fn get_builtin_binary_op_fn(
             OP_CONTAINS => Some(|_, args| {
                 let s = &*args[0].read_lock::<ImmutableString>().expect(BUILTIN);
                 let c = args[1].as_char().expect(BUILTIN);
-                Ok((s.contains(c)).into())
+                Ok(s.contains(c).into())
             }),
             _ => None,
         };
@@ -306,6 +306,16 @@ pub fn get_builtin_binary_op_fn(
 
     // Handle ranges here because ranges are implemented as custom type
     if type1 == TypeId::of::<ExclusiveRange>() {
+        if type2 == TypeId::of::<INT>() {
+            return match op {
+                OP_CONTAINS => Some(|_, args| {
+                    let range = &*args[0].read_lock::<ExclusiveRange>().expect(BUILTIN);
+                    let x = args[1].as_int().expect("`INT`");
+                    Ok(range.contains(&x).into())
+                }),
+                _ => None,
+            };
+        }
         if type1 == type2 {
             return match op {
                 "==" => Some(impl_op!(ExclusiveRange == ExclusiveRange)),
@@ -316,6 +326,16 @@ pub fn get_builtin_binary_op_fn(
     }
 
     if type1 == TypeId::of::<InclusiveRange>() {
+        if type2 == TypeId::of::<INT>() {
+            return match op {
+                OP_CONTAINS => Some(|_, args| {
+                    let range = &*args[0].read_lock::<InclusiveRange>().expect(BUILTIN);
+                    let x = args[1].as_int().expect("`INT`");
+                    Ok(range.contains(&x).into())
+                }),
+                _ => None,
+            };
+        }
         if type1 == type2 {
             return match op {
                 "==" => Some(impl_op!(InclusiveRange == InclusiveRange)),
@@ -433,11 +453,7 @@ pub fn get_builtin_binary_op_fn(
             ">=" => Some(impl_op!(ImmutableString >= ImmutableString)),
             "<" => Some(impl_op!(ImmutableString < ImmutableString)),
             "<=" => Some(impl_op!(ImmutableString <= ImmutableString)),
-            OP_CONTAINS => Some(|_, args| {
-                let s1 = &*args[0].read_lock::<ImmutableString>().expect(BUILTIN);
-                let s2 = &*args[1].read_lock::<ImmutableString>().expect(BUILTIN);
-                Ok((s1.contains(s2.as_str())).into())
-            }),
+            OP_CONTAINS => Some(impl_op!(ImmutableString.contains(ImmutableString.as_str()))),
             _ => None,
         };
     }
