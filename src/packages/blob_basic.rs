@@ -24,7 +24,7 @@ def_package!(crate:BasicBlobPackage:"Basic BLOB utilities.", lib, {
 
 #[export_module]
 mod blob_functions {
-    pub fn blob() -> Blob {
+    pub const fn blob() -> Blob {
         Blob::new()
     }
     #[rhai_fn(name = "blob", return_raw)]
@@ -54,7 +54,7 @@ mod blob_functions {
         }
 
         let mut blob = Blob::new();
-        blob.resize(len, (value & 0x00ff) as u8);
+        blob.resize(len, (value & 0x000000ff) as u8);
         Ok(blob)
     }
     #[rhai_fn(name = "len", get = "len", pure)]
@@ -63,7 +63,7 @@ mod blob_functions {
     }
     #[rhai_fn(name = "push")]
     pub fn push(blob: &mut Blob, item: INT) {
-        let item = (item & 0x00ff) as u8;
+        let item = (item & 0x000000ff) as u8;
         blob.push(item);
     }
     #[rhai_fn(name = "append")]
@@ -77,7 +77,7 @@ mod blob_functions {
         }
     }
     pub fn insert(blob: &mut Blob, position: INT, item: INT) {
-        let item = (item & 0x00ff) as u8;
+        let item = (item & 0x000000ff) as u8;
 
         if blob.is_empty() {
             blob.push(item);
@@ -108,7 +108,7 @@ mod blob_functions {
             return Ok(());
         }
 
-        let item = (item & 0x00ff) as u8;
+        let item = (item & 0x000000ff) as u8;
         let _ctx = ctx;
 
         // Check if blob will be over max size limit
@@ -452,13 +452,11 @@ mod blob_functions {
 
         let len = usize::min(len, INT_BYTES);
 
-        let mut buf = [0_u8; INT_BYTES];
-
-        buf.copy_from_slice(&if is_le {
+        let buf = if is_le {
             value.to_le_bytes()
         } else {
             value.to_be_bytes()
-        });
+        };
 
         blob[start..][..len].copy_from_slice(&buf[..len]);
     }
@@ -598,14 +596,11 @@ mod blob_functions {
         const FLOAT_BYTES: usize = mem::size_of::<FLOAT>();
 
         let len = usize::min(len, FLOAT_BYTES);
-
-        let mut buf = [0_u8; FLOAT_BYTES];
-
-        buf.copy_from_slice(&if is_le {
+        let buf = if is_le {
             value.to_le_bytes()
         } else {
             value.to_be_bytes()
-        });
+        };
 
         blob[start..][..len].copy_from_slice(&buf[..len]);
     }
@@ -646,5 +641,44 @@ mod blob_functions {
     #[rhai_fn(name = "write_be")]
     pub fn write_be_float(blob: &mut Blob, start: INT, len: INT, value: FLOAT) {
         write_float(blob, start, len, value, false)
+    }
+    #[rhai_fn(name = "write")]
+    pub fn write_string(blob: &mut Blob, start: INT, len: INT, string: &str) {
+        if len <= 0 || blob.is_empty() || string.is_empty() {
+            return;
+        }
+        let blob_len = blob.len();
+
+        let start = if start < 0 {
+            start
+                .checked_abs()
+                .map_or(0, |n| blob_len - (n as usize).min(blob_len))
+        } else if start as usize >= blob_len {
+            return;
+        } else {
+            start as usize
+        };
+
+        let len = if len as usize > blob_len - start {
+            blob_len - start
+        } else {
+            len as usize
+        };
+
+        let len = usize::min(len, string.len());
+
+        blob[start..][..len].copy_from_slice(string[..len].as_bytes());
+    }
+    #[rhai_fn(name = "write")]
+    pub fn write_string_range(blob: &mut Blob, range: ExclusiveRange, string: &str) {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        write_string(blob, start, end - start, string)
+    }
+    #[rhai_fn(name = "write")]
+    pub fn write_string_range_inclusive(blob: &mut Blob, range: InclusiveRange, string: &str) {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        write_string(blob, start, end - start + 1, string)
     }
 }

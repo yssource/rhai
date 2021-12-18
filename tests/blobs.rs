@@ -169,6 +169,16 @@ fn test_blobs_parse() -> Result<(), Box<EvalAltResult>> {
         vec![0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef, 0xab, 0xcd, 0xef, 0x12, 0x34, 0x56, 0x78, 0x90]
     );
 
+    assert_eq!(
+        engine.eval::<Blob>(r#"let x = blob(16, 0); write(x, 0, 14, "hello, world!"); x"#)?,
+        "hello, world!\0\0\0".as_bytes()
+    );
+
+    assert_eq!(
+        engine.eval::<Blob>(r#"let x = blob(10, 0); write(x, 3, 5, "hello, world!"); x"#)?,
+        "\0\0\0hello\0\0".as_bytes()
+    );
+
     Ok(())
 }
 
@@ -236,6 +246,16 @@ fn test_blobs_parse() -> Result<(), Box<EvalAltResult>> {
             "let x = blob(16, 0); for n in 0..16 { x[n] = n; } write_le(x, 3, 3, -98765432); parse_le_int(x, 3, 3)"
         )?,
         0x1cf588
+    );
+
+    assert_eq!(
+        engine.eval::<Blob>(r#"let x = blob(16, 0); write(x, 0, 14, "hello, world!"); x"#)?,
+        "hello, world!\0\0\0".as_bytes()
+    );
+
+    assert_eq!(
+        engine.eval::<Blob>(r#"let x = blob(10, 0); write(x, 3, 5, "hello, world!"); x"#)?,
+        "\0\0\0hello\0\0".as_bytes()
     );
 
     Ok(())
