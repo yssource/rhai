@@ -1031,6 +1031,24 @@ impl Dynamic {
     pub fn from_decimal(value: rust_decimal::Decimal) -> Self {
         Self(Union::Decimal(value.into(), DEFAULT_TAG_VALUE, ReadWrite))
     }
+    /// Create a [`Dynamic`] from an [`Array`][crate::Array].
+    #[cfg(not(feature = "no_index"))]
+    #[inline(always)]
+    pub fn from_array(array: crate::Array) -> Self {
+        Self(Union::Array(array.into(), DEFAULT_TAG_VALUE, ReadWrite))
+    }
+    /// Create a [`Dynamic`] from a [`Blob`][crate::Blob].
+    #[cfg(not(feature = "no_index"))]
+    #[inline(always)]
+    pub fn from_blob(blob: crate::Blob) -> Self {
+        Self(Union::Blob(blob.into(), DEFAULT_TAG_VALUE, ReadWrite))
+    }
+    /// Create a [`Dynamic`] from a [`Map`][crate::Map].
+    #[cfg(not(feature = "no_object"))]
+    #[inline(always)]
+    pub fn from_map(map: crate::Map) -> Self {
+        Self(Union::Map(map.into(), DEFAULT_TAG_VALUE, ReadWrite))
+    }
     /// Create a new [`Dynamic`] from an [`Instant`].
     ///
     /// Not available under `no-std`.
@@ -1177,11 +1195,14 @@ impl Dynamic {
     /// # Notes
     ///
     /// Beware that you need to pass in an [`Array`][crate::Array] type for it to be recognized as an [`Array`][crate::Array].
-    /// A [`Vec<T>`][Vec] does not get automatically converted to an [`Array`][crate::Array], but will be a generic
-    /// restricted trait object instead, because [`Vec<T>`][Vec] is not a supported standard type.
+    /// A [`Vec<T>`][Vec] does not get automatically converted to an [`Array`][crate::Array], but
+    /// will be a custom type instead (stored as a trait object).  Use `Into<Dynamic>` to convert a
+    /// [`Vec<T>`][Vec] into a [`Dynamic`] as an [`Array`][crate::Array] value.
     ///
     /// Similarly, passing in a [`HashMap<String, T>`][std::collections::HashMap] or
-    /// [`BTreeMap<String, T>`][std::collections::BTreeMap] will not get a [`Map`][crate::Map] but a trait object.
+    /// [`BTreeMap<String, T>`][std::collections::BTreeMap] will not get a [`Map`][crate::Map]
+    /// but a custom type. Again, use `Into<Dynamic>` to get a [`Dynamic`] with a
+    /// [`Map`][crate::Map] value.
     ///
     /// # Examples
     ///
@@ -1256,7 +1277,7 @@ impl Dynamic {
         #[cfg(not(feature = "no_index"))]
         {
             value = match unsafe_try_cast::<_, crate::Blob>(value) {
-                Ok(blob) => return Self(Union::Blob(Box::new(blob), DEFAULT_TAG_VALUE, ReadWrite)),
+                Ok(blob) => return blob.into(),
                 Err(value) => value,
             };
         }
@@ -1297,8 +1318,7 @@ impl Dynamic {
         ))
     }
     /// Turn the [`Dynamic`] value into a shared [`Dynamic`] value backed by an
-    /// [`Rc`][std::rc::Rc]`<`[`RefCell`][std::cell::RefCell]`<`[`Dynamic`]`>>` or
-    /// [`Arc`][std::sync::Arc]`<`[`RwLock`][std::sync::RwLock]`<`[`Dynamic`]`>>`
+    /// [`Rc<RefCell<Dynamic>>`][std::rc::Rc] or [`Arc<RwLock<Dynamic>>`][std::sync::Arc]
     /// depending on the `sync` feature.
     ///
     /// Not available under `no_closure`.
@@ -2030,117 +2050,9 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-}
-
-impl From<()> for Dynamic {
-    #[inline(always)]
-    fn from(value: ()) -> Self {
-        Self(Union::Unit(value, DEFAULT_TAG_VALUE, ReadWrite))
-    }
-}
-impl From<bool> for Dynamic {
-    #[inline(always)]
-    fn from(value: bool) -> Self {
-        Self(Union::Bool(value, DEFAULT_TAG_VALUE, ReadWrite))
-    }
-}
-impl From<INT> for Dynamic {
-    #[inline(always)]
-    fn from(value: INT) -> Self {
-        Self(Union::Int(value, DEFAULT_TAG_VALUE, ReadWrite))
-    }
-}
-#[cfg(not(feature = "no_float"))]
-impl From<crate::FLOAT> for Dynamic {
-    #[inline(always)]
-    fn from(value: crate::FLOAT) -> Self {
-        Self(Union::Float(value.into(), DEFAULT_TAG_VALUE, ReadWrite))
-    }
-}
-#[cfg(not(feature = "no_float"))]
-impl From<crate::ast::FloatWrapper<crate::FLOAT>> for Dynamic {
-    #[inline(always)]
-    fn from(value: crate::ast::FloatWrapper<crate::FLOAT>) -> Self {
-        Self(Union::Float(value, DEFAULT_TAG_VALUE, ReadWrite))
-    }
-}
-#[cfg(feature = "decimal")]
-impl From<rust_decimal::Decimal> for Dynamic {
-    #[inline(always)]
-    fn from(value: rust_decimal::Decimal) -> Self {
-        Self(Union::Decimal(value.into(), DEFAULT_TAG_VALUE, ReadWrite))
-    }
-}
-impl From<char> for Dynamic {
-    #[inline(always)]
-    fn from(value: char) -> Self {
-        Self(Union::Char(value, DEFAULT_TAG_VALUE, ReadWrite))
-    }
-}
-impl<S: Into<ImmutableString>> From<S> for Dynamic {
-    #[inline(always)]
-    fn from(value: S) -> Self {
-        Self(Union::Str(value.into(), DEFAULT_TAG_VALUE, ReadWrite))
-    }
-}
-impl From<&ImmutableString> for Dynamic {
-    #[inline(always)]
-    fn from(value: &ImmutableString) -> Self {
-        value.clone().into()
-    }
-}
-impl FromStr for Dynamic {
-    type Err = ();
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Ok(Self(Union::Str(value.into(), DEFAULT_TAG_VALUE, ReadWrite)))
-    }
-}
-#[cfg(not(feature = "no_index"))]
-impl Dynamic {
-    /// Create a [`Dynamic`] from an [`Array`][crate::Array].
-    #[inline(always)]
-    pub(crate) fn from_array(array: crate::Array) -> Self {
-        Self(Union::Array(array.into(), DEFAULT_TAG_VALUE, ReadWrite))
-    }
-}
-#[cfg(not(feature = "no_index"))]
-impl<T: Variant + Clone> From<Vec<T>> for Dynamic {
-    #[inline]
-    fn from(value: Vec<T>) -> Self {
-        Self(Union::Array(
-            Box::new(value.into_iter().map(Dynamic::from).collect()),
-            DEFAULT_TAG_VALUE,
-            ReadWrite,
-        ))
-    }
-}
-#[cfg(not(feature = "no_index"))]
-impl<T: Variant + Clone> From<&[T]> for Dynamic {
-    #[inline]
-    fn from(value: &[T]) -> Self {
-        Self(Union::Array(
-            Box::new(value.iter().cloned().map(Dynamic::from).collect()),
-            DEFAULT_TAG_VALUE,
-            ReadWrite,
-        ))
-    }
-}
-#[cfg(not(feature = "no_index"))]
-impl<T: Variant + Clone> std::iter::FromIterator<T> for Dynamic {
-    #[inline]
-    fn from_iter<X: IntoIterator<Item = T>>(iter: X) -> Self {
-        Self(Union::Array(
-            Box::new(iter.into_iter().map(Dynamic::from).collect()),
-            DEFAULT_TAG_VALUE,
-            ReadWrite,
-        ))
-    }
-}
-#[cfg(not(feature = "no_index"))]
-impl Dynamic {
     /// Convert the [`Dynamic`] into an [`Array`][crate::Array].
     /// Returns the name of the actual type if the cast fails.
+    #[cfg(not(feature = "no_index"))]
     #[inline(always)]
     pub fn into_array(self) -> Result<crate::Array, &'static str> {
         match self.0 {
@@ -2215,16 +2127,9 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-}
-#[cfg(not(feature = "no_index"))]
-impl Dynamic {
-    /// Create a [`Dynamic`] from a [`Vec<u8>`].
-    #[inline(always)]
-    pub fn from_blob(blob: crate::Blob) -> Self {
-        Self(Union::Blob(Box::new(blob), DEFAULT_TAG_VALUE, ReadWrite))
-    }
-    /// Convert the [`Dynamic`] into a [`Vec<u8>`].
+    /// Convert the [`Dynamic`] into a [`Blob`][crate::Blob].
     /// Returns the name of the actual type if the cast fails.
+    #[cfg(not(feature = "no_index"))]
     #[inline(always)]
     pub fn into_blob(self) -> Result<crate::Blob, &'static str> {
         match self.0 {
@@ -2245,12 +2150,102 @@ impl Dynamic {
         }
     }
 }
-#[cfg(not(feature = "no_object"))]
-impl Dynamic {
-    /// Create a [`Dynamic`] from a [`Map`][crate::Map].
+
+impl From<()> for Dynamic {
     #[inline(always)]
-    pub(crate) fn from_map(map: crate::Map) -> Self {
-        Self(Union::Map(map.into(), DEFAULT_TAG_VALUE, ReadWrite))
+    fn from(value: ()) -> Self {
+        Self(Union::Unit(value, DEFAULT_TAG_VALUE, ReadWrite))
+    }
+}
+impl From<bool> for Dynamic {
+    #[inline(always)]
+    fn from(value: bool) -> Self {
+        Self(Union::Bool(value, DEFAULT_TAG_VALUE, ReadWrite))
+    }
+}
+impl From<INT> for Dynamic {
+    #[inline(always)]
+    fn from(value: INT) -> Self {
+        Self(Union::Int(value, DEFAULT_TAG_VALUE, ReadWrite))
+    }
+}
+#[cfg(not(feature = "no_float"))]
+impl From<crate::FLOAT> for Dynamic {
+    #[inline(always)]
+    fn from(value: crate::FLOAT) -> Self {
+        Self(Union::Float(value.into(), DEFAULT_TAG_VALUE, ReadWrite))
+    }
+}
+#[cfg(not(feature = "no_float"))]
+impl From<crate::ast::FloatWrapper<crate::FLOAT>> for Dynamic {
+    #[inline(always)]
+    fn from(value: crate::ast::FloatWrapper<crate::FLOAT>) -> Self {
+        Self(Union::Float(value, DEFAULT_TAG_VALUE, ReadWrite))
+    }
+}
+#[cfg(feature = "decimal")]
+impl From<rust_decimal::Decimal> for Dynamic {
+    #[inline(always)]
+    fn from(value: rust_decimal::Decimal) -> Self {
+        Self(Union::Decimal(value.into(), DEFAULT_TAG_VALUE, ReadWrite))
+    }
+}
+impl From<char> for Dynamic {
+    #[inline(always)]
+    fn from(value: char) -> Self {
+        Self(Union::Char(value, DEFAULT_TAG_VALUE, ReadWrite))
+    }
+}
+impl<S: Into<ImmutableString>> From<S> for Dynamic {
+    #[inline(always)]
+    fn from(value: S) -> Self {
+        Self(Union::Str(value.into(), DEFAULT_TAG_VALUE, ReadWrite))
+    }
+}
+impl From<&ImmutableString> for Dynamic {
+    #[inline(always)]
+    fn from(value: &ImmutableString) -> Self {
+        value.clone().into()
+    }
+}
+impl FromStr for Dynamic {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Ok(Self(Union::Str(value.into(), DEFAULT_TAG_VALUE, ReadWrite)))
+    }
+}
+#[cfg(not(feature = "no_index"))]
+impl<T: Variant + Clone> From<Vec<T>> for Dynamic {
+    #[inline]
+    fn from(value: Vec<T>) -> Self {
+        Self(Union::Array(
+            Box::new(value.into_iter().map(Dynamic::from).collect()),
+            DEFAULT_TAG_VALUE,
+            ReadWrite,
+        ))
+    }
+}
+#[cfg(not(feature = "no_index"))]
+impl<T: Variant + Clone> From<&[T]> for Dynamic {
+    #[inline]
+    fn from(value: &[T]) -> Self {
+        Self(Union::Array(
+            Box::new(value.iter().cloned().map(Dynamic::from).collect()),
+            DEFAULT_TAG_VALUE,
+            ReadWrite,
+        ))
+    }
+}
+#[cfg(not(feature = "no_index"))]
+impl<T: Variant + Clone> std::iter::FromIterator<T> for Dynamic {
+    #[inline]
+    fn from_iter<X: IntoIterator<Item = T>>(iter: X) -> Self {
+        Self(Union::Array(
+            Box::new(iter.into_iter().map(Dynamic::from).collect()),
+            DEFAULT_TAG_VALUE,
+            ReadWrite,
+        ))
     }
 }
 #[cfg(not(feature = "no_object"))]
@@ -2327,12 +2322,6 @@ impl From<FnPtr> for Dynamic {
     #[inline(always)]
     fn from(value: FnPtr) -> Self {
         Self(Union::FnPtr(value.into(), DEFAULT_TAG_VALUE, ReadWrite))
-    }
-}
-impl From<Box<FnPtr>> for Dynamic {
-    #[inline(always)]
-    fn from(value: Box<FnPtr>) -> Self {
-        Self(Union::FnPtr(value, DEFAULT_TAG_VALUE, ReadWrite))
     }
 }
 #[cfg(not(feature = "no_std"))]
