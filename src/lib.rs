@@ -98,6 +98,20 @@ pub type INT = i64;
 #[cfg(feature = "only_i32")]
 pub type INT = i32;
 
+/// The system base integer type. It is defined as [`u64`].
+///
+/// If the `only_i32` feature is enabled, this will be [`u32`] instead.
+#[cfg(not(feature = "only_i32"))]
+#[allow(non_camel_case_types)]
+type INT_BASE = u64;
+/// The system integer base type.
+/// It is defined as [`u32`] since the `only_i32` feature is used.
+///
+/// If the `only_i32` feature is not used, this will be `u64` instead.
+#[cfg(feature = "only_i32")]
+#[allow(non_camel_case_types)]
+type INT_BASE = u32;
+
 /// The system floating-point type. It is defined as [`f64`].
 /// Not available under `no_float`.
 ///

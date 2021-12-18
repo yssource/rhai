@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::{def_package, Position, INT};
+use crate::{def_package, Position, INT, INT_BASE};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -120,13 +120,15 @@ mod int_functions {
             .into());
         }
 
-        INT::from_str_radix(string.trim(), radix as u32).map_err(|err| {
-            EvalAltResult::ErrorArithmetic(
-                format!("Error parsing integer number '{}': {}", string, err),
-                Position::NONE,
-            )
-            .into()
-        })
+        INT_BASE::from_str_radix(string.trim(), radix as u32)
+            .map(|v| v as INT)
+            .map_err(|err| {
+                EvalAltResult::ErrorArithmetic(
+                    format!("Error parsing integer number '{}': {}", string, err),
+                    Position::NONE,
+                )
+                .into()
+            })
     }
     #[rhai_fn(name = "parse_int", return_raw)]
     pub fn parse_int(string: &str) -> Result<INT, Box<EvalAltResult>> {

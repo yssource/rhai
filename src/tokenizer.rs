@@ -5,7 +5,7 @@ use crate::engine::{
     KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
 use crate::func::native::OnParseTokenCallback;
-use crate::{Engine, LexError, StaticVec, INT};
+use crate::{Engine, LexError, StaticVec, INT, INT_BASE};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -1507,7 +1507,8 @@ fn get_next_token_inner(
                             .filter(|&&c| c != NUMBER_SEPARATOR)
                             .collect();
 
-                        INT::from_str_radix(&out, radix)
+                        INT_BASE::from_str_radix(&out, radix)
+                            .map(|v| v as INT)
                             .map(Token::IntegerConstant)
                             .unwrap_or_else(|_| {
                                 Token::LexError(LERR::MalformedNumber(result.into_iter().collect()))
@@ -1515,7 +1516,9 @@ fn get_next_token_inner(
                     } else {
                         let out: String =
                             result.iter().filter(|&&c| c != NUMBER_SEPARATOR).collect();
-                        let num = INT::from_str(&out).map(Token::IntegerConstant);
+                        let num = INT_BASE::from_str(&out)
+                            .map(|v| v as INT)
+                            .map(Token::IntegerConstant);
 
                         // If integer parsing is unnecessary, try float instead
                         #[cfg(not(feature = "no_float"))]
