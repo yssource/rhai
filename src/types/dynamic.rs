@@ -2074,6 +2074,7 @@ impl Dynamic {
     }
     /// Convert the [`Dynamic`] into a [`Vec`].
     /// Returns the name of the actual type if any cast fails.
+    #[cfg(not(feature = "no_index"))]
     #[inline(always)]
     pub fn into_typed_array<T: Variant + Clone>(self) -> Result<Vec<T>, &'static str> {
         match self.0 {
@@ -2120,6 +2121,9 @@ impl Dynamic {
                                 v.read_lock::<T>().ok_or_else(|| typ).map(|v| v.clone())
                             })
                             .collect()
+                    }
+                    Union::Blob(_, _, _) if TypeId::of::<T>() == TypeId::of::<u8>() => {
+                        Ok((*value).clone().cast::<Vec<T>>())
                     }
                     _ => Err((*value).type_name()),
                 }
