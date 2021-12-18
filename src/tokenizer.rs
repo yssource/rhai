@@ -1516,9 +1516,7 @@ fn get_next_token_inner(
                     } else {
                         let out: String =
                             result.iter().filter(|&&c| c != NUMBER_SEPARATOR).collect();
-                        let num = INT_BASE::from_str(&out)
-                            .map(|v| v as INT)
-                            .map(Token::IntegerConstant);
+                        let num = INT::from_str(&out).map(Token::IntegerConstant);
 
                         // If integer parsing is unnecessary, try float instead
                         #[cfg(not(feature = "no_float"))]

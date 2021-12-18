@@ -136,6 +136,13 @@ fn test_blobs_parse() -> Result<(), Box<EvalAltResult>> {
         0x1cf588
     );
 
+    assert_eq!(
+        engine.eval::<Blob>(
+            "let x = blob(16, 0); x.write_be(0, 8, 0x1234567890abcdef); x.write_be(8, 8, 0xabcdef1234567890); x"
+        )?,
+        vec![0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef, 0xab, 0xcd, 0xef, 0x12, 0x34, 0x56, 0x78, 0x90]
+    );
+
     Ok(())
 }
 
