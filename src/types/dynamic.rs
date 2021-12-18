@@ -1277,7 +1277,7 @@ impl Dynamic {
         #[cfg(not(feature = "no_index"))]
         {
             value = match unsafe_try_cast::<_, crate::Blob>(value) {
-                Ok(blob) => return blob.into(),
+                Ok(blob) => return Dynamic::from_blob(blob), // don't use blob.into() because it'll be converted into an Array
                 Err(value) => value,
             };
         }
