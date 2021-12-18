@@ -274,6 +274,30 @@ pub fn get_builtin_binary_op_fn(
         };
     }
 
+    // blob
+    #[cfg(not(feature = "no_index"))]
+    if type1 == TypeId::of::<crate::Blob>() {
+        use crate::Blob;
+
+        if type2 == TypeId::of::<INT>() {
+            return match op {
+                OP_CONTAINS => Some(|_, args| {
+                    let range = &*args[0].read_lock::<Blob>().expect(BUILTIN);
+                    let x = (args[1].as_int().expect("`INT`") & 0x000000ff) as u8;
+                    Ok(range.contains(&x).into())
+                }),
+                _ => None,
+            };
+        }
+        if type1 == type2 {
+            return match op {
+                "==" => Some(impl_op!(Blob == Blob)),
+                "!=" => Some(impl_op!(Blob != Blob)),
+                _ => None,
+            };
+        }
+    }
+
     // map op string
     #[cfg(not(feature = "no_object"))]
     if types_pair == (TypeId::of::<crate::Map>(), TypeId::of::<ImmutableString>()) {

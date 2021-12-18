@@ -17,14 +17,6 @@ def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
 
 #[export_module]
 mod map_functions {
-    #[rhai_fn(name = "has", pure)]
-    pub fn contains(map: &mut Map, prop: ImmutableString) -> bool {
-        if map.is_empty() {
-            false
-        } else {
-            map.contains_key(prop.as_str())
-        }
-    }
     #[rhai_fn(pure)]
     pub fn len(map: &mut Map) -> INT {
         map.len() as INT

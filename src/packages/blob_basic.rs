@@ -366,26 +366,6 @@ mod blob_functions {
 
         drained
     }
-    pub fn contains(blob: &mut Blob, value: Dynamic) -> bool {
-        if blob.is_empty() {
-            return false;
-        }
-
-        let value = match value.as_int() {
-            Ok(value) => value as u8,
-            _ => return false,
-        };
-
-        blob.contains(&value)
-    }
-    #[rhai_fn(name = "==", pure)]
-    pub fn equals(blob1: &mut Blob, blob2: Blob) -> bool {
-        &*blob1 == &blob2
-    }
-    #[rhai_fn(name = "!=", pure)]
-    pub fn not_equals(blob1: &mut Blob, blob2: Blob) -> bool {
-        &*blob1 != &blob2
-    }
 
     #[inline]
     fn parse_int(blob: &mut Blob, start: INT, len: INT, is_le: bool) -> INT {
