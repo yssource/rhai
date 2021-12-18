@@ -12,6 +12,11 @@ New features
 
 * Added support for integer _ranges_ via the `..` and `..=` operators.
 
+Enhancements
+------------
+
+* Added `NativeCallContext::call_fn` to easily call a function.
+
 Deprecated API's
 ----------------
 

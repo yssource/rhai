@@ -5,12 +5,14 @@ use crate::ast::{FnAccess, FnCallHashes};
 use crate::engine::{EvalState, Imports};
 use crate::plugin::PluginFunction;
 use crate::tokenizer::{Token, TokenizeState};
+use crate::types::dynamic::Variant;
 use crate::{
-    calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, Module, Position, RhaiResult,
+    calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, FuncArgs, Module, Position,
+    RhaiResult, StaticVec,
 };
-use std::fmt;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
+use std::{any::type_name, fmt};
 
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(feature = "sync")]
@@ -224,6 +226,31 @@ impl<'a> NativeCallContext<'a> {
     #[must_use]
     pub const fn namespaces(&self) -> &[&Module] {
         self.lib
+    }
+    /// Call a function inside the call context with the provided arguments.
+    #[inline]
+    pub fn call_fn<T: Variant + Clone>(
+        &self,
+        fn_name: impl AsRef<str>,
+        args: impl FuncArgs,
+    ) -> Result<T, Box<EvalAltResult>> {
+        let mut arg_values = StaticVec::new_const();
+        args.parse(&mut arg_values);
+
+        let mut args: StaticVec<_> = arg_values.iter_mut().collect();
+
+        let result = self.call_fn_raw(fn_name, false, false, &mut args)?;
+
+        let typ = self.engine().map_type_name(result.type_name());
+
+        result.try_cast().ok_or_else(|| {
+            EvalAltResult::ErrorMismatchOutputType(
+                self.engine().map_type_name(type_name::<T>()).into(),
+                typ.into(),
+                Position::NONE,
+            )
+            .into()
+        })
     }
     /// Call a function inside the call context.
     ///
