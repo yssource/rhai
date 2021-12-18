@@ -61,12 +61,12 @@ mod blob_functions {
     pub fn len(blob: &mut Blob) -> INT {
         blob.len() as INT
     }
-    #[rhai_fn(name = "push", name = "+=")]
+    #[rhai_fn(name = "push")]
     pub fn push(blob: &mut Blob, item: INT) {
         let item = (item & 0x00ff) as u8;
         blob.push(item);
     }
-    #[rhai_fn(name = "append", name = "+=")]
+    #[rhai_fn(name = "append")]
     pub fn append(blob: &mut Blob, y: Blob) {
         if !y.is_empty() {
             if blob.is_empty() {
@@ -75,17 +75,6 @@ mod blob_functions {
                 blob.extend(y);
             }
         }
-    }
-    #[rhai_fn(name = "+")]
-    pub fn concat(mut blob: Blob, y: Blob) -> Blob {
-        if !y.is_empty() {
-            if blob.is_empty() {
-                blob = y;
-            } else {
-                blob.extend(y);
-            }
-        }
-        blob
     }
     pub fn insert(blob: &mut Blob, position: INT, item: INT) {
         let item = (item & 0x00ff) as u8;
@@ -211,7 +200,7 @@ mod blob_functions {
                 .checked_abs()
                 .map_or(0, |n| blob_len - (n as usize).min(blob_len))
         } else if start as usize >= blob_len {
-            blob.extend(replace.into_iter());
+            blob.extend(replace);
             return;
         } else {
             start as usize

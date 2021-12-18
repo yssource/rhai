@@ -282,15 +282,37 @@ pub fn get_builtin_binary_op_fn(
         if type2 == TypeId::of::<INT>() {
             return match op {
                 OP_CONTAINS => Some(|_, args| {
-                    let range = &*args[0].read_lock::<Blob>().expect(BUILTIN);
+                    let blob = &*args[0].read_lock::<Blob>().expect(BUILTIN);
                     let x = (args[1].as_int().expect("`INT`") & 0x000000ff) as u8;
-                    Ok(range.contains(&x).into())
+                    Ok(blob.contains(&x).into())
                 }),
                 _ => None,
             };
         }
         if type1 == type2 {
             return match op {
+                "+" => Some(|_, args| {
+                    let blob1 = &*args[0].read_lock::<Blob>().expect(BUILTIN);
+                    let blob2 = &*args[1].read_lock::<Blob>().expect(BUILTIN);
+                    let result = if blob1.is_empty() {
+                        if blob2.is_empty() {
+                            Blob::new()
+                        } else {
+                            blob2.clone()
+                        }
+                    } else {
+                        if blob2.is_empty() {
+                            blob1.clone()
+                        } else {
+                            let mut blob = Blob::with_capacity(blob1.len() + blob2.len());
+                            blob.extend_from_slice(blob1);
+                            blob.extend_from_slice(blob2);
+                            blob
+                        }
+                    };
+
+                    Ok(Dynamic::from_blob(result)) // do not use result.into() because it'll convert into an Array
+                }),
                 "==" => Some(impl_op!(Blob == Blob)),
                 "!=" => Some(impl_op!(Blob != Blob)),
                 _ => None,
@@ -652,6 +674,20 @@ pub fn get_builtin_op_assignment_fn(
             _ => None,
         };
     }
+    // Blob op= int
+    #[cfg(not(feature = "no_index"))]
+    if types_pair == (TypeId::of::<crate::Blob>(), TypeId::of::<INT>()) {
+        use crate::Blob;
+
+        return match op {
+            "+=" => Some(|_, args| {
+                let x = (args[1].as_int().expect("`INT`") & 0x000000ff) as u8;
+                let mut blob = args[0].write_lock::<Blob>().expect(BUILTIN);
+                Ok(blob.push(x).into())
+            }),
+            _ => None,
+        };
+    }
 
     // No built-in op-assignments for different types.
     if type2 != type1 {
@@ -729,6 +765,27 @@ pub fn get_builtin_op_assignment_fn(
                 let mut x = first.write_lock::<ImmutableString>().expect(BUILTIN);
                 let y = &*second[0].read_lock::<ImmutableString>().expect(BUILTIN);
                 Ok((*x -= y).into())
+            }),
+            _ => None,
+        };
+    }
+
+    #[cfg(not(feature = "no_index"))]
+    if type1 == TypeId::of::<crate::Blob>() {
+        use crate::Blob;
+
+        return match op {
+            "+=" => Some(|_, args| {
+                let blob2 = std::mem::take(args[1]).cast::<Blob>();
+                let mut blob1 = args[0].write_lock::<Blob>().expect(BUILTIN);
+                if !blob2.is_empty() {
+                    if blob1.is_empty() {
+                        *blob1 = blob2;
+                    } else {
+                        blob1.extend_from_slice(&blob2);
+                    }
+                }
+                Ok(Dynamic::UNIT)
             }),
             _ => None,
         };

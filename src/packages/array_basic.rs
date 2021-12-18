@@ -172,7 +172,7 @@ mod array_functions {
                 .checked_abs()
                 .map_or(0, |n| arr_len - (n as usize).min(arr_len))
         } else if start as usize >= array.len() {
-            array.extend(replace.into_iter());
+            array.extend(replace);
             return;
         } else {
             start as usize
