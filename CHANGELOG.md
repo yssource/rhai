@@ -30,6 +30,7 @@ Bug fixes
 ---------
 
 * Custom syntax now works properly inside binary expressions and with method calls.
+* Hex numbers with the high-bit set now parse correctly into negative integer numbers.
 
 Enhancements
 ------------
