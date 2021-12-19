@@ -159,7 +159,6 @@ impl Engine {
         let orig_scope_len = scope.len();
 
         if eval_ast && !statements.is_empty() {
-            // Make sure new variables introduced at global level do not _spill_ into the function call
             self.eval_global_statements(scope, mods, state, statements, &[ast.as_ref()], 0)?;
 
             if rewind_scope {
