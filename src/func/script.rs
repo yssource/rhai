@@ -1,9 +1,9 @@
 //! Implement script function-calling mechanism for [`Engine`].
 #![cfg(not(feature = "no_function"))]
 
+use super::call::FnCallArgs;
 use crate::ast::ScriptFnDef;
 use crate::engine::{EvalState, Imports};
-use crate::func::call::FnCallArgs;
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::{Dynamic, Engine, EvalAltResult, Module, Position, RhaiResult, Scope, StaticVec};
 use std::mem;

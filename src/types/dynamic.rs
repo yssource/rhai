@@ -611,14 +611,11 @@ impl fmt::Display for Dynamic {
             #[cfg(feature = "decimal")]
             Union::Decimal(ref value, _, _) => fmt::Display::fmt(value, f),
             #[cfg(not(feature = "no_index"))]
-            Union::Array(ref value, _, _) => fmt::Debug::fmt(value, f),
+            Union::Array(_, _, _) => fmt::Debug::fmt(self, f),
             #[cfg(not(feature = "no_index"))]
-            Union::Blob(ref value, _, _) => fmt::Debug::fmt(value, f),
+            Union::Blob(_, _, _) => fmt::Debug::fmt(self, f),
             #[cfg(not(feature = "no_object"))]
-            Union::Map(ref value, _, _) => {
-                f.write_str("#")?;
-                fmt::Debug::fmt(value, f)
-            }
+            Union::Map(_, _, _) => fmt::Debug::fmt(self, f),
             Union::FnPtr(ref value, _, _) => fmt::Display::fmt(value, f),
             #[cfg(not(feature = "no_std"))]
             Union::TimeStamp(_, _, _) => f.write_str("<timestamp>"),

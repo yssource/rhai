@@ -1,6 +1,7 @@
 //! Implement function-calling mechanism for [`Engine`].
 
-use super::native::{CallableFunction, FnAny};
+use super::callable_function::CallableFunction;
+use super::native::FnAny;
 use super::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
 use crate::api::default_limits::MAX_DYNAMIC_PARAMETERS;
 use crate::ast::FnCallHashes;

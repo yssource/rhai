@@ -2,8 +2,9 @@
 
 #![allow(non_snake_case)]
 
-use crate::func::call::FnCallArgs;
-use crate::func::native::{CallableFunction, FnAny, SendSync};
+use super::call::FnCallArgs;
+use super::callable_function::CallableFunction;
+use super::native::{FnAny, SendSync};
 use crate::r#unsafe::unsafe_try_cast;
 use crate::tokenizer::Position;
 use crate::types::dynamic::{DynamicWriteLock, Variant};
