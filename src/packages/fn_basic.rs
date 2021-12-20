@@ -3,11 +3,14 @@ use crate::{def_package, FnPtr, ImmutableString, NativeCallContext};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
-def_package!(crate:BasicFnPackage:"Basic Fn functions.", lib, {
-    lib.standard = true;
+def_package! {
+    /// Package of basic function poitner utilities.
+    crate::BasicFnPackage => |lib| {
+        lib.standard = true;
 
-    combine_with_exported_module!(lib, "FnPtr", fn_ptr_functions);
-});
+        combine_with_exported_module!(lib, "FnPtr", fn_ptr_functions);
+    }
+}
 
 #[export_module]
 mod fn_ptr_functions {

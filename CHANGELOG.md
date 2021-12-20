@@ -16,11 +16,13 @@ Enhancements
 ------------
 
 * Added `NativeCallContext::call_fn` to easily call a function.
+* A new syntax is introduced for `def_package!` that will replace the old syntax in future versions.
 
 Deprecated API's
 ----------------
 
 * `Expression::get_variable_name` is deprecated in favor of the new `Expression::get_string_value`.
+* The old syntax of `def_package!` is deprecated in favor of the new syntax.
 
 
 Version 1.3.1

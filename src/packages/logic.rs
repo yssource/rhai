@@ -37,33 +37,36 @@ macro_rules! reg_functions {
     )* }
 }
 
-def_package!(crate:LogicPackage:"Logical operators.", lib, {
-    lib.standard = true;
+def_package! {
+    /// Package of basic logic operators.
+    crate::LogicPackage => |lib| {
+        lib.standard = true;
 
-    #[cfg(not(feature = "only_i32"))]
-    #[cfg(not(feature = "only_i64"))]
-    {
-        reg_functions!(lib += numbers; i8, u8, i16, u16, i32, u32, u64);
+        #[cfg(not(feature = "only_i32"))]
+        #[cfg(not(feature = "only_i64"))]
+        {
+            reg_functions!(lib += numbers; i8, u8, i16, u16, i32, u32, u64);
 
-        #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-        reg_functions!(lib += num_128; i128, u128);
+            #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+            reg_functions!(lib += num_128; i128, u128);
+        }
+
+        #[cfg(not(feature = "no_float"))]
+        {
+            #[cfg(not(feature = "f32_float"))]
+            reg_functions!(lib += float; f32);
+            combine_with_exported_module!(lib, "f32", f32_functions);
+
+            #[cfg(feature = "f32_float")]
+            reg_functions!(lib += float; f64);
+            combine_with_exported_module!(lib, "f64", f64_functions);
+        }
+
+        set_exported_fn!(lib, "!", not);
+
+        combine_with_exported_module!(lib, "bit_field", bit_field_functions);
     }
-
-    #[cfg(not(feature = "no_float"))]
-    {
-        #[cfg(not(feature = "f32_float"))]
-        reg_functions!(lib += float; f32);
-        combine_with_exported_module!(lib, "f32", f32_functions);
-
-        #[cfg(feature = "f32_float")]
-        reg_functions!(lib += float; f64);
-        combine_with_exported_module!(lib, "f64", f64_functions);
-    }
-
-    set_exported_fn!(lib, "!", not);
-
-    combine_with_exported_module!(lib, "bit_field", bit_field_functions);
-});
+}
 
 // Logic operators
 #[export_fn]

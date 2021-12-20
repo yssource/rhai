@@ -9,11 +9,14 @@ use std::prelude::v1::*;
 #[cfg(not(feature = "no_index"))]
 use crate::Array;
 
-def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
-    lib.standard = true;
+def_package! {
+    /// Package of basic object map utilities.
+    crate::BasicMapPackage => |lib| {
+        lib.standard = true;
 
-    combine_with_exported_module!(lib, "map", map_functions);
-});
+        combine_with_exported_module!(lib, "map", map_functions);
+    }
+}
 
 #[export_module]
 mod map_functions {

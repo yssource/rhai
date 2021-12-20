@@ -13,14 +13,17 @@ use std::{any::TypeId, mem};
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;
 
-def_package!(crate:BasicBlobPackage:"Basic BLOB utilities.", lib, {
-    lib.standard = true;
+def_package! {
+    /// Package of basic BLOB utilities.
+    crate::BasicBlobPackage => |lib| {
+        lib.standard = true;
 
-    combine_with_exported_module!(lib, "blob", blob_functions);
+        combine_with_exported_module!(lib, "blob", blob_functions);
 
-    // Register blob iterator
-    lib.set_iterable::<Blob>();
-});
+        // Register blob iterator
+        lib.set_iterable::<Blob>();
+    }
+}
 
 #[export_module]
 mod blob_functions {

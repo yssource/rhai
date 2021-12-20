@@ -5,6 +5,15 @@ use crate::{Dynamic, EvalAltResult, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
+def_package! {
+    /// Package of core language features.
+    crate::LanguageCorePackage => |lib| {
+        lib.standard = true;
+
+        combine_with_exported_module!(lib, "language_core", core_functions);
+    }
+}
+
 #[export_module]
 mod core_functions {
     #[rhai_fn(name = "tag", get = "tag", pure)]
@@ -41,9 +50,3 @@ mod core_functions {
         }
     }
 }
-
-def_package!(crate:LanguageCorePackage:"Language core functions.", lib, {
-    lib.standard = true;
-
-    combine_with_exported_module!(lib, "language_core", core_functions);
-});

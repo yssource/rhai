@@ -179,36 +179,39 @@ macro_rules! reg_functions {
     )* }
 }
 
-def_package!(crate:ArithmeticPackage:"Basic arithmetic", lib, {
-    lib.standard = true;
+def_package! {
+    /// Basic arithmetic package.
+    crate::ArithmeticPackage => |lib| {
+        lib.standard = true;
 
-    combine_with_exported_module!(lib, "int", int_functions);
-    reg_functions!(lib += signed_basic; INT);
+        combine_with_exported_module!(lib, "int", int_functions);
+        reg_functions!(lib += signed_basic; INT);
 
-    #[cfg(not(feature = "only_i32"))]
-    #[cfg(not(feature = "only_i64"))]
-    {
-        reg_functions!(lib += arith_numbers; i8, u8, i16, u16, i32, u32, u64);
-        reg_functions!(lib += signed_numbers; i8, i16, i32);
-
-        #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+        #[cfg(not(feature = "only_i32"))]
+        #[cfg(not(feature = "only_i64"))]
         {
-            reg_functions!(lib += arith_num_128; i128, u128);
-            reg_functions!(lib += signed_num_128; i128);
+            reg_functions!(lib += arith_numbers; i8, u8, i16, u16, i32, u32, u64);
+            reg_functions!(lib += signed_numbers; i8, i16, i32);
+
+            #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+            {
+                reg_functions!(lib += arith_num_128; i128, u128);
+                reg_functions!(lib += signed_num_128; i128);
+            }
         }
-    }
 
-    // Basic arithmetic for floating-point
-    #[cfg(not(feature = "no_float"))]
-    {
-        combine_with_exported_module!(lib, "f32", f32_functions);
-        combine_with_exported_module!(lib, "f64", f64_functions);
-    }
+        // Basic arithmetic for floating-point
+        #[cfg(not(feature = "no_float"))]
+        {
+            combine_with_exported_module!(lib, "f32", f32_functions);
+            combine_with_exported_module!(lib, "f64", f64_functions);
+        }
 
-    // Decimal functions
-    #[cfg(feature = "decimal")]
-    combine_with_exported_module!(lib, "decimal", decimal_functions);
-});
+        // Decimal functions
+        #[cfg(feature = "decimal")]
+        combine_with_exported_module!(lib, "decimal", decimal_functions);
+    }
+}
 
 #[export_module]
 mod int_functions {

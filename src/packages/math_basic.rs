@@ -58,55 +58,58 @@ macro_rules! reg_functions {
     )* }
 }
 
-def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
-    lib.standard = true;
+def_package! {
+    /// Basic mathematical package.
+    crate::BasicMathPackage => |lib| {
+        lib.standard = true;
 
-    // Integer functions
-    combine_with_exported_module!(lib, "int", int_functions);
+        // Integer functions
+        combine_with_exported_module!(lib, "int", int_functions);
 
-    reg_functions!(lib += basic_to_int::to_int(char));
-
-    #[cfg(not(feature = "only_i32"))]
-    #[cfg(not(feature = "only_i64"))]
-    {
-        reg_functions!(lib += numbers_to_int::to_int(i8, u8, i16, u16, i32, u32, i64, u64));
-
-        #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-        reg_functions!(lib += num_128_to_int::to_int(i128, u128));
-    }
-
-    #[cfg(not(feature = "no_float"))]
-    {
-        // Floating point functions
-        combine_with_exported_module!(lib, "float", float_functions);
-
-        // Trig functions
-        combine_with_exported_module!(lib, "trig", trig_functions);
-
-        reg_functions!(lib += basic_to_float::to_float(INT));
+        reg_functions!(lib += basic_to_int::to_int(char));
 
         #[cfg(not(feature = "only_i32"))]
         #[cfg(not(feature = "only_i64"))]
         {
-            reg_functions!(lib += numbers_to_float::to_float(i8, u8, i16, u16, i32, u32, i64, u32));
+            reg_functions!(lib += numbers_to_int::to_int(i8, u8, i16, u16, i32, u32, i64, u64));
 
             #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-            reg_functions!(lib += num_128_to_float::to_float(i128, u128));
+            reg_functions!(lib += num_128_to_int::to_int(i128, u128));
+        }
+
+        #[cfg(not(feature = "no_float"))]
+        {
+            // Floating point functions
+            combine_with_exported_module!(lib, "float", float_functions);
+
+            // Trig functions
+            combine_with_exported_module!(lib, "trig", trig_functions);
+
+            reg_functions!(lib += basic_to_float::to_float(INT));
+
+            #[cfg(not(feature = "only_i32"))]
+            #[cfg(not(feature = "only_i64"))]
+            {
+                reg_functions!(lib += numbers_to_float::to_float(i8, u8, i16, u16, i32, u32, i64, u32));
+
+                #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+                reg_functions!(lib += num_128_to_float::to_float(i128, u128));
+            }
+        }
+
+        // Decimal functions
+        #[cfg(feature = "decimal")]
+        {
+            combine_with_exported_module!(lib, "decimal", decimal_functions);
+
+            reg_functions!(lib += basic_to_decimal::to_decimal(INT));
+
+            #[cfg(not(feature = "only_i32"))]
+            #[cfg(not(feature = "only_i64"))]
+            reg_functions!(lib += numbers_to_decimal::to_decimal(i8, u8, i16, u16, i32, u32, i64, u64));
         }
     }
-
-    // Decimal functions
-    #[cfg(feature = "decimal")]
-    {
-        combine_with_exported_module!(lib, "decimal", decimal_functions);
-
-        reg_functions!(lib += basic_to_decimal::to_decimal(INT));
-
-        #[cfg(not(feature = "only_i32"))]
-        #[cfg(not(feature = "only_i64"))]
-        reg_functions!(lib += numbers_to_decimal::to_decimal(i8, u8, i16, u16, i32, u32, i64, u64));
-    }
-});
+}
 
 #[export_module]
 mod int_functions {

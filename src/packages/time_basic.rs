@@ -13,12 +13,15 @@ use std::time::{Duration, Instant};
 #[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))]
 use instant::{Duration, Instant};
 
-def_package!(crate:BasicTimePackage:"Basic timing utilities.", lib, {
-    lib.standard = true;
+def_package! {
+    /// Package of basic timing utilities.
+    crate::BasicTimePackage => |lib| {
+        lib.standard = true;
 
-    // Register date/time functions
-    combine_with_exported_module!(lib, "time", time_functions);
-});
+        // Register date/time functions
+        combine_with_exported_module!(lib, "time", time_functions);
+    }
+}
 
 #[export_module]
 mod time_functions {
