@@ -11,7 +11,7 @@ for (a, i) in arr {
 
     if a == 3 { break; }
 }
-//print(a);                 // <- if you uncomment this line, the script will fail to run
+//print(a);                 // <- if you uncomment this line, the script will fail to compile
                             //    because 'a' is not defined here
 
 for i in range(5, 0, -1) {  // runs from 5 down to 1
