@@ -100,10 +100,12 @@ impl CallableFunction {
     #[inline]
     #[must_use]
     pub const fn is_script(&self) -> bool {
-        match self {
-            #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => true,
+        #[cfg(feature = "no_function")]
+        return false;
 
+        #[cfg(not(feature = "no_function"))]
+        match self {
+            Self::Script(_) => true,
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) | Self::Plugin(_) => false,
         }
     }
@@ -123,12 +125,14 @@ impl CallableFunction {
     #[inline]
     #[must_use]
     pub const fn is_native(&self) -> bool {
+        #[cfg(feature = "no_function")]
+        return true;
+
+        #[cfg(not(feature = "no_function"))]
         match self {
             Self::Pure(_) | Self::Method(_) => true,
             Self::Plugin(_) => true,
             Self::Iterator(_) => true,
-
-            #[cfg(not(feature = "no_function"))]
             Self::Script(_) => false,
         }
     }
@@ -136,11 +140,13 @@ impl CallableFunction {
     #[inline]
     #[must_use]
     pub fn access(&self) -> FnAccess {
+        #[cfg(feature = "no_function")]
+        return FnAccess::Public;
+
+        #[cfg(not(feature = "no_function"))]
         match self {
             Self::Plugin(_) => FnAccess::Public,
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => FnAccess::Public,
-
-            #[cfg(not(feature = "no_function"))]
             Self::Script(f) => f.access,
         }
     }
