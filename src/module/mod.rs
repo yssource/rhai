@@ -10,7 +10,7 @@ use crate::tokenizer::Token;
 use crate::types::dynamic::Variant;
 use crate::{
     calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes, Dynamic, EvalAltResult,
-    Identifier, ImmutableString, NativeCallContext, Shared, SmartString, StaticVec,
+    Identifier, ImmutableString, NativeCallContext, Shared, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -55,7 +55,7 @@ pub struct FuncInfo {
     pub return_type_name: Identifier,
     /// Comments.
     #[cfg(feature = "metadata")]
-    pub comments: SmartString,
+    pub comments: crate::SmartString,
 }
 
 impl FuncInfo {
@@ -495,7 +495,7 @@ impl Module {
                 comments: fn_def
                     .comments
                     .as_ref()
-                    .map_or(SmartString::new_const(), |v| v.join("\n").into()),
+                    .map_or(crate::SmartString::new_const(), |v| v.join("\n").into()),
                 func: Into::<CallableFunction>::into(fn_def).into(),
             }
             .into(),
@@ -759,7 +759,7 @@ impl Module {
                 #[cfg(feature = "metadata")]
                 return_type_name,
                 #[cfg(feature = "metadata")]
-                comments: SmartString::new_const(),
+                comments: crate::SmartString::new_const(),
                 func: func.into(),
             }
             .into(),
@@ -797,7 +797,7 @@ impl Module {
         access: FnAccess,
         arg_names: Option<&[&str]>,
         arg_types: &[TypeId],
-        comment: impl Into<SmartString>,
+        comment: impl Into<crate::SmartString>,
         func: CallableFunction,
     ) -> u64 {
         let hash = self.set_fn(name, namespace, access, arg_names, arg_types, func);
