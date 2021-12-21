@@ -166,14 +166,18 @@ pub fn generate_body(
             );
 
             #[cfg(feature = "metadata")]
-            let (param_names, comment) = (
+            let (param_names, comments) = (
                 quote! { Some(#fn_token_name::PARAM_NAMES) },
-                function.comment(),
+                function
+                    .comments()
+                    .iter()
+                    .map(|s| syn::LitStr::new(s, Span::call_site()))
+                    .collect::<Vec<_>>(),
             );
             #[cfg(not(feature = "metadata"))]
-            let (param_names, comment) = (quote! { None }, "");
+            let (param_names, comments) = (quote! { None }, Vec::<syn::LitStr>::new());
 
-            set_fn_statements.push(if comment.is_empty() {
+            set_fn_statements.push(if comments.is_empty() {
                 syn::parse2::<syn::Stmt>(quote! {
                     #(#cfg_attrs)*
                     m.set_fn(#fn_literal, FnNamespace::#ns_str, FnAccess::Public,
@@ -181,12 +185,10 @@ pub fn generate_body(
                 })
                 .unwrap()
             } else {
-                let comment_literal = syn::LitStr::new(comment, Span::call_site());
-
                 syn::parse2::<syn::Stmt>(quote! {
                     #(#cfg_attrs)*
-                    m.set_fn_with_comment(#fn_literal, FnNamespace::#ns_str, FnAccess::Public,
-                             #param_names, &[#(#fn_input_types),*], #comment_literal, #fn_token_name().into());
+                    m.set_fn_with_comments(#fn_literal, FnNamespace::#ns_str, FnAccess::Public,
+                             #param_names, &[#(#fn_input_types),*], &[#(#comments),*], #fn_token_name().into());
                 })
                 .unwrap()
             });

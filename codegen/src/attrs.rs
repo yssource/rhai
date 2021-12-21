@@ -142,27 +142,31 @@ pub fn inner_item_attributes<T: ExportedParams>(
 }
 
 #[cfg(feature = "metadata")]
-pub fn doc_attribute(attrs: &mut Vec<syn::Attribute>) -> syn::Result<String> {
+pub fn doc_attributes(attrs: &mut Vec<syn::Attribute>) -> syn::Result<Vec<String>> {
     // Find the #[doc] attribute which will turn be read for function documentation.
-    let mut comments = String::new();
+    let mut comments = Vec::new();
 
     while let Some(index) = attrs
         .iter()
         .position(|attr| attr.path.get_ident().map(|i| *i == "doc").unwrap_or(false))
     {
-        let attr = attrs.remove(index);
-        let meta = attr.parse_meta()?;
-
-        match meta {
+        match attrs.remove(index).parse_meta()? {
             syn::Meta::NameValue(syn::MetaNameValue {
                 lit: syn::Lit::Str(s),
                 ..
             }) => {
-                if !comments.is_empty() {
-                    comments += "\n";
+                let mut line = s.value();
+
+                if line.contains('\n') {
+                    // Must be a block comment `/** ... */`
+                    line.insert_str(0, "/**");
+                    line.push_str("*/");
+                } else {
+                    // Single line - assume it is `///`
+                    line.insert_str(0, "///");
                 }
 
-                comments += &s.value();
+                comments.push(line);
             }
             _ => continue,
         }

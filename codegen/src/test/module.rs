@@ -38,7 +38,7 @@ mod module_tests {
     }
 
     #[test]
-    fn one_factory_fn_with_comment_module() {
+    fn one_factory_fn_with_comments_module() {
         let input_tokens: TokenStream = quote! {
             pub mod one_fn {
                 /// This is a doc-comment.
@@ -59,7 +59,20 @@ mod module_tests {
         assert!(item_mod.consts().is_empty());
         assert_eq!(item_mod.fns().len(), 1);
         assert_eq!(item_mod.fns()[0].name().to_string(), "get_mystic_number");
-        assert_eq!(item_mod.fns()[0].comment(), " This is a doc-comment.\n Another line.\n block doc-comment \n Final line.\n doc-comment\n                    in multiple lines\n                 ");
+        assert_eq!(
+            item_mod.fns()[0]
+                .comments()
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec![
+                "/// This is a doc-comment.",
+                "/// Another line.",
+                "/// block doc-comment ",
+                "/// Final line.",
+                "/** doc-comment\n                    in multiple lines\n                 */"
+            ]
+        );
         assert_eq!(item_mod.fns()[0].arg_count(), 0);
         assert_eq!(
             item_mod.fns()[0].return_type().unwrap(),
@@ -354,7 +367,7 @@ mod generate_tests {
     }
 
     #[test]
-    fn one_factory_fn_with_comment_module() {
+    fn one_factory_fn_with_comments_module() {
         let input_tokens: TokenStream = quote! {
             pub mod one_fn {
                 /// This is a doc-comment.
@@ -387,8 +400,8 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn_with_comment("get_mystic_number", FnNamespace::Internal, FnAccess::Public,
-                             Some(get_mystic_number_token::PARAM_NAMES), &[], " This is a doc-comment.\n Another line.\n block doc-comment \n Final line.\n doc-comment\n                    in multiple lines\n                 ",
+                    m.set_fn_with_comments("get_mystic_number", FnNamespace::Internal, FnAccess::Public,
+                             Some(get_mystic_number_token::PARAM_NAMES), &[], &["/// This is a doc-comment.","/// Another line.","/// block doc-comment ","/// Final line.","/** doc-comment\n                    in multiple lines\n                 */"],
                              get_mystic_number_token().into());
                     if flatten {} else {}
                 }

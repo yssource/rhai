@@ -55,7 +55,7 @@ pub struct FuncInfo {
     pub return_type_name: Identifier,
     /// Comments.
     #[cfg(feature = "metadata")]
-    pub comments: crate::SmartString,
+    pub comments: Option<Box<[Box<str>]>>,
 }
 
 impl FuncInfo {
@@ -492,10 +492,7 @@ impl Module {
                 #[cfg(feature = "metadata")]
                 return_type_name: self.identifiers.get("Dynamic"),
                 #[cfg(feature = "metadata")]
-                comments: fn_def
-                    .comments
-                    .as_ref()
-                    .map_or(crate::SmartString::new_const(), |v| v.join("\n").into()),
+                comments: None,
                 func: Into::<CallableFunction>::into(fn_def).into(),
             }
             .into(),
@@ -624,7 +621,7 @@ impl Module {
         self.functions.contains_key(&hash_fn)
     }
 
-    /// Update the metadata (parameter names/types and return type) of a registered function.
+    /// _(metadata)_ Update the metadata (parameter names/types and return type) of a registered function.
     /// Exported under the `metadata` feature only.
     ///
     /// The [`u64`] hash is returned by the [`set_native_fn`][Module::set_native_fn] call.
@@ -654,6 +651,47 @@ impl Module {
             };
             f.param_names_and_types = param_names;
             f.return_type_name = return_type_name;
+        }
+
+        self
+    }
+
+    /// _(metadata)_ Update the metadata (parameter names/types, return type and doc-comments) of a
+    /// registered function.
+    /// Exported under the `metadata` feature only.
+    ///
+    /// The [`u64`] hash is returned by the [`set_native_fn`][Module::set_native_fn] call.
+    ///
+    /// ## Parameter Names and Types
+    ///
+    /// Each parameter name/type pair should be a single string of the format: `var_name: type`.
+    ///
+    /// ## Return Type
+    ///
+    /// The _last entry_ in the list should be the _return type_ of the function. In other words,
+    /// the number of entries should be one larger than the number of parameters.
+    ///
+    /// ## Comments
+    ///
+    /// Block doc-comments should be kept in a single line.
+    ///
+    /// Line doc-comments should be kept in one string slice per line without the termination line-break.
+    ///
+    /// Leading white-spaces should be stripped, and each string slice always starts with the corresponding
+    /// doc-comment leader: `///` or `/**`.
+    #[cfg(feature = "metadata")]
+    #[inline]
+    pub fn update_fn_metadata_with_comments(
+        &mut self,
+        hash_fn: u64,
+        arg_names: &[impl AsRef<str>],
+        comments: &[impl AsRef<str>],
+    ) -> &mut Self {
+        self.update_fn_metadata(hash_fn, arg_names);
+
+        if !comments.is_empty() {
+            let f = self.functions.get_mut(&hash_fn).expect("exists");
+            f.comments = Some(comments.iter().map(|s| s.as_ref().into()).collect());
         }
 
         self
@@ -759,7 +797,7 @@ impl Module {
                 #[cfg(feature = "metadata")]
                 return_type_name,
                 #[cfg(feature = "metadata")]
-                comments: crate::SmartString::new_const(),
+                comments: None,
                 func: func.into(),
             }
             .into(),
@@ -788,25 +826,32 @@ impl Module {
     ///
     /// The _last entry_ in the list should be the _return type_ of the function.
     /// In other words, the number of entries should be one larger than the number of parameters.
+    ///
+    /// ## Comments
+    ///
+    /// Block doc-comments should be kept in a single line.
+    ///
+    /// Line doc-comments should be kept in one string slice per line without the termination line-break.
+    ///
+    /// Leading white-spaces should be stripped, and each string slice always starts with the corresponding
+    /// doc-comment leader: `///` or `/**`.
     #[cfg(feature = "metadata")]
     #[inline]
-    pub fn set_fn_with_comment(
+    pub fn set_fn_with_comments(
         &mut self,
         name: impl AsRef<str> + Into<Identifier>,
         namespace: FnNamespace,
         access: FnAccess,
         arg_names: Option<&[&str]>,
         arg_types: &[TypeId],
-        comment: impl Into<crate::SmartString>,
+        comments: &[impl AsRef<str>],
         func: CallableFunction,
     ) -> u64 {
         let hash = self.set_fn(name, namespace, access, arg_names, arg_types, func);
 
-        let comment = comment.into();
-
-        if !comment.is_empty() {
+        if !comments.is_empty() {
             let f = self.functions.get_mut(&hash).expect("exists");
-            f.comments = comment;
+            f.comments = Some(comments.iter().map(|s| s.as_ref().into()).collect());
         }
 
         hash
@@ -845,7 +890,7 @@ impl Module {
     ///
     /// # Function Metadata
     ///
-    /// No metadata for the function is registered. Use `update_fn_metadata` to add metadata.
+    /// No metadata for the function is registered. Use [`update_fn_metadata`][Module::update_fn_metadata] to add metadata.
     ///
     /// # Example
     ///
@@ -953,7 +998,8 @@ impl Module {
     ///
     /// # Function Metadata
     ///
-    /// No metadata for the function is registered. Use `update_fn_metadata` to add metadata.
+    /// No metadata for the function is registered.
+    /// Use [`update_fn_metadata`][Module::update_fn_metadata] to add metadata.
     ///
     /// # Example
     ///
@@ -990,7 +1036,8 @@ impl Module {
     ///
     /// # Function Metadata
     ///
-    /// No metadata for the function is registered. Use `update_fn_metadata` to add metadata.
+    /// No metadata for the function is registered.
+    /// Use [`update_fn_metadata`][Module::update_fn_metadata] to add metadata.
     ///
     /// # Example
     ///
@@ -1036,7 +1083,8 @@ impl Module {
     ///
     /// # Function Metadata
     ///
-    /// No metadata for the function is registered. Use `update_fn_metadata` to add metadata.
+    /// No metadata for the function is registered.
+    /// Use [`update_fn_metadata`][Module::update_fn_metadata] to add metadata.
     ///
     /// # Example
     ///
@@ -1097,7 +1145,8 @@ impl Module {
     ///
     /// # Function Metadata
     ///
-    /// No metadata for the function is registered. Use `update_fn_metadata` to add metadata.
+    /// No metadata for the function is registered.
+    /// Use [`update_fn_metadata`][Module::update_fn_metadata] to add metadata.
     ///
     /// # Example
     ///
@@ -1158,7 +1207,8 @@ impl Module {
     ///
     /// # Function Metadata
     ///
-    /// No metadata for the function is registered. Use `update_fn_metadata` to add metadata.
+    /// No metadata for the function is registered.
+    /// Use [`update_fn_metadata`][Module::update_fn_metadata] to add metadata.
     ///
     /// # Example
     ///

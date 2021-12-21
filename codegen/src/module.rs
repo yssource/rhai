@@ -127,7 +127,7 @@ impl Parse for Module {
                             f.set_cfg_attrs(crate::attrs::collect_cfg_attr(&item_fn.attrs));
 
                             #[cfg(feature = "metadata")]
-                            f.set_comment(crate::attrs::doc_attribute(&mut item_fn.attrs)?);
+                            f.set_comments(crate::attrs::doc_attributes(&mut item_fn.attrs)?);
                             Ok(f)
                         })?;
 

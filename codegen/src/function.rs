@@ -283,7 +283,7 @@ pub struct ExportedFn {
     params: ExportedFnParams,
     cfg_attrs: Vec<syn::Attribute>,
     #[cfg(feature = "metadata")]
-    comment: String,
+    comments: Vec<String>,
 }
 
 impl Parse for ExportedFn {
@@ -407,7 +407,7 @@ impl Parse for ExportedFn {
             params: Default::default(),
             cfg_attrs,
             #[cfg(feature = "metadata")]
-            comment: Default::default(),
+            comments: Default::default(),
         })
     }
 }
@@ -508,13 +508,13 @@ impl ExportedFn {
     }
 
     #[cfg(feature = "metadata")]
-    pub fn comment(&self) -> &str {
-        &self.comment
+    pub fn comments(&self) -> &[String] {
+        &self.comments
     }
 
     #[cfg(feature = "metadata")]
-    pub fn set_comment(&mut self, comment: String) {
-        self.comment = comment
+    pub fn set_comments(&mut self, comments: Vec<String>) {
+        self.comments = comments
     }
 
     pub fn set_cfg_attrs(&mut self, cfg_attrs: Vec<syn::Attribute>) {

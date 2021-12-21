@@ -168,7 +168,9 @@ impl<'a> From<&'a crate::module::FuncInfo> for FnMetadata<'a> {
                 }
                 #[cfg(feature = "metadata")]
                 {
-                    info.comments.split("\n").collect()
+                    info.comments
+                        .as_ref()
+                        .map_or_else(|| Vec::new(), |v| v.iter().map(|s| &**s).collect())
                 }
             },
         }
