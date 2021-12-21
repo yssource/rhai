@@ -47,9 +47,12 @@ pub struct FuncInfo {
     pub params: usize,
     /// Parameter types (if applicable).
     pub param_types: StaticVec<TypeId>,
-    /// Parameter names (if available).
+    /// Parameter names and types (if available).
     #[cfg(feature = "metadata")]
-    pub param_names: StaticVec<Identifier>,
+    pub param_names_and_types: StaticVec<Identifier>,
+    /// Return type name.
+    #[cfg(feature = "metadata")]
+    pub return_type_name: Identifier,
 }
 
 impl FuncInfo {
@@ -60,16 +63,21 @@ impl FuncInfo {
     pub fn gen_signature(&self) -> String {
         let mut sig = format!("{}(", self.name);
 
-        if !self.param_names.is_empty() {
-            let mut params: StaticVec<Box<str>> =
-                self.param_names.iter().map(|s| s.as_str().into()).collect();
-            let return_type = params.pop().unwrap_or_else(|| "()".into());
+        if !self.param_names_and_types.is_empty() {
+            let params: StaticVec<_> = self
+                .param_names_and_types
+                .iter()
+                .map(|s| s.as_str())
+                .collect();
             sig.push_str(&params.join(", "));
-            if &*return_type != "()" {
-                sig.push_str(") -> ");
-                sig.push_str(&return_type);
-            } else {
-                sig.push(')');
+            sig.push_str(")");
+
+            match self.return_type_name.as_str() {
+                "" | "()" => (),
+                ty => {
+                    sig.push_str(" -> ");
+                    sig.push_str(ty);
+                }
             }
         } else {
             for x in 0..self.params {
@@ -82,7 +90,12 @@ impl FuncInfo {
             if self.func.is_script() {
                 sig.push(')');
             } else {
-                sig.push_str(") -> ?");
+                sig.push_str(")");
+
+                match self.return_type_name.as_str() {
+                    "()" => (),
+                    _ => sig.push_str(" -> ?"),
+                }
             }
         }
 
@@ -457,8 +470,12 @@ impl Module {
         // None + function name + number of arguments.
         let num_params = fn_def.params.len();
         let hash_script = crate::calc_fn_hash(&fn_def.name, num_params);
-        let mut param_names = fn_def.params.clone();
-        param_names.push("Dynamic".into());
+        #[cfg(feature = "metadata")]
+        let param_names_and_types = fn_def
+            .params
+            .iter()
+            .map(|v| self.identifiers.get(v.as_str()))
+            .collect();
         self.functions.insert(
             hash_script,
             FuncInfo {
@@ -468,7 +485,9 @@ impl Module {
                 params: num_params,
                 param_types: StaticVec::new_const(),
                 #[cfg(feature = "metadata")]
-                param_names,
+                param_names_and_types,
+                #[cfg(feature = "metadata")]
+                return_type_name: self.identifiers.get("Dynamic"),
                 func: Into::<CallableFunction>::into(fn_def).into(),
             }
             .into(),
@@ -613,13 +632,20 @@ impl Module {
     #[cfg(feature = "metadata")]
     #[inline]
     pub fn update_fn_metadata(&mut self, hash_fn: u64, arg_names: &[impl AsRef<str>]) -> &mut Self {
-        let param_names = arg_names
+        let mut param_names: StaticVec<_> = arg_names
             .iter()
             .map(|name| self.identifiers.get(name.as_ref()))
             .collect();
 
         if let Some(f) = self.functions.get_mut(&hash_fn) {
-            f.param_names = param_names;
+            let (param_names, return_type_name) = if param_names.len() > f.params {
+                let return_type = param_names.pop().expect("exists");
+                (param_names, return_type)
+            } else {
+                (param_names, Default::default())
+            };
+            f.param_names_and_types = param_names;
+            f.return_type_name = return_type_name;
         }
 
         self
@@ -664,6 +690,15 @@ impl Module {
     /// # WARNING - Low Level API
     ///
     /// This function is very low level.
+    ///
+    /// ## Parameter Names and Types
+    ///
+    /// Each parameter name/type pair should be a single string of the format: `var_name: type`.
+    ///
+    /// ## Return Type
+    ///
+    /// The _last entry_ in the list should be the _return type_ of the function.
+    /// In other words, the number of entries should be one larger than the number of parameters.
     #[inline]
     pub fn set_fn(
         &mut self,
@@ -686,13 +721,20 @@ impl Module {
         param_types.shrink_to_fit();
 
         #[cfg(feature = "metadata")]
-        let mut param_names: StaticVec<_> = _arg_names
-            .iter()
-            .flat_map(|&p| p.iter())
-            .map(|&arg| self.identifiers.get(arg))
-            .collect();
-        #[cfg(feature = "metadata")]
-        param_names.shrink_to_fit();
+        let (param_names, return_type_name) = {
+            let mut names = _arg_names
+                .iter()
+                .flat_map(|&p| p.iter())
+                .map(|&arg| self.identifiers.get(arg))
+                .collect::<StaticVec<_>>();
+            let return_type = if names.len() > arg_types.len() {
+                names.pop().expect("exists")
+            } else {
+                Default::default()
+            };
+            names.shrink_to_fit();
+            (names, return_type)
+        };
 
         let hash_fn = calc_native_fn_hash(empty::<&str>(), name.as_ref(), &param_types);
 
@@ -705,7 +747,9 @@ impl Module {
                 params: param_types.len(),
                 param_types,
                 #[cfg(feature = "metadata")]
-                param_names,
+                param_names_and_types: param_names,
+                #[cfg(feature = "metadata")]
+                return_type_name,
                 func: func.into(),
             }
             .into(),
@@ -1284,8 +1328,8 @@ impl Module {
 
     /// Get an iterator to the sub-modules in the [`Module`].
     #[inline]
-    pub fn iter_sub_modules(&self) -> impl Iterator<Item = (&str, Shared<Module>)> {
-        self.modules.iter().map(|(k, m)| (k.as_str(), m.clone()))
+    pub fn iter_sub_modules(&self) -> impl Iterator<Item = (&str, &Shared<Module>)> {
+        self.modules.iter().map(|(k, m)| (k.as_str(), m))
     }
 
     /// Get an iterator to the variables in the [`Module`].

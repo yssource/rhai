@@ -48,33 +48,24 @@ impl From<crate::FnAccess> for FnAccess {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct FnParam {
-    pub name: Box<str>,
+struct FnParam<'a> {
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    pub typ: Option<Box<str>>,
+    pub name: Option<&'a str>,
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub typ: Option<&'a str>,
 }
 
-impl PartialOrd for FnParam {
+impl PartialOrd for FnParam<'_> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(match self.name.partial_cmp(&other.name).expect("succeed") {
             Ordering::Less => Ordering::Less,
             Ordering::Greater => Ordering::Greater,
-            Ordering::Equal => match (self.typ.is_none(), other.typ.is_none()) {
-                (true, true) => Ordering::Equal,
-                (true, false) => Ordering::Greater,
-                (false, true) => Ordering::Less,
-                (false, false) => self
-                    .typ
-                    .as_ref()
-                    .expect("`Some`")
-                    .partial_cmp(other.typ.as_ref().expect("`Some`"))
-                    .expect("succeed"),
-            },
+            Ordering::Equal => self.typ.partial_cmp(other.typ).expect("succeed"),
         })
     }
 }
 
-impl Ord for FnParam {
+impl Ord for FnParam<'_> {
     fn cmp(&self, other: &Self) -> Ordering {
         match self.name.cmp(&other.name) {
             Ordering::Equal => self.typ.cmp(&other.typ),
@@ -85,7 +76,7 @@ impl Ord for FnParam {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct FnMetadata {
+struct FnMetadata<'a> {
     pub base_hash: u64,
     pub full_hash: u64,
     pub namespace: FnNamespace,
@@ -95,21 +86,21 @@ struct FnMetadata {
     pub typ: FnType,
     pub num_params: usize,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub params: Vec<FnParam>,
+    pub params: Vec<FnParam<'a>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub return_type: Option<Box<str>>,
+    pub return_type_name: Option<&'a str>,
     pub signature: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub doc_comments: Vec<Box<str>>,
+    pub doc_comments: Vec<&'a str>,
 }
 
-impl PartialOrd for FnMetadata {
+impl PartialOrd for FnMetadata<'_> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for FnMetadata {
+impl Ord for FnMetadata<'_> {
     fn cmp(&self, other: &Self) -> Ordering {
         match self.name.cmp(&other.name) {
             Ordering::Equal => match self.num_params.cmp(&other.num_params) {
@@ -121,8 +112,8 @@ impl Ord for FnMetadata {
     }
 }
 
-impl From<&crate::module::FuncInfo> for FnMetadata {
-    fn from(info: &crate::module::FuncInfo) -> Self {
+impl<'a> From<&'a crate::module::FuncInfo> for FnMetadata<'a> {
+    fn from(info: &'a crate::module::FuncInfo) -> Self {
         let base_hash = calc_fn_hash(&info.name, info.params);
         let (typ, full_hash) = if info.func.is_script() {
             (FnType::Script, base_hash)
@@ -142,24 +133,22 @@ impl From<&crate::module::FuncInfo> for FnMetadata {
             typ,
             num_params: info.params,
             params: info
-                .param_names
+                .param_names_and_types
                 .iter()
-                .take(info.params)
                 .map(|s| {
                     let mut seg = s.splitn(2, ':');
-                    let name = seg
-                        .next()
-                        .map(|s| s.trim().into())
-                        .unwrap_or_else(|| "_".into());
-                    let typ = seg.next().map(|s| s.trim().into());
+                    let name = match seg.next().map(&str::trim).unwrap_or("_") {
+                        "_" => None,
+                        s => Some(s),
+                    };
+                    let typ = seg.next().map(&str::trim);
                     FnParam { name, typ }
                 })
                 .collect(),
-            return_type: info
-                .param_names
-                .last()
-                .map(|s| s.as_str().into())
-                .or_else(|| Some("()".into())),
+            return_type_name: match info.return_type_name.as_str() {
+                "" | "()" => None,
+                ty => Some(ty),
+            },
             signature: info.gen_signature(),
             doc_comments: if info.func.is_script() {
                 #[cfg(feature = "no_function")]
@@ -171,7 +160,7 @@ impl From<&crate::module::FuncInfo> for FnMetadata {
                     .expect("script-defined function")
                     .comments
                     .as_ref()
-                    .map_or_else(|| Vec::new(), |v| v.to_vec())
+                    .map_or_else(|| Vec::new(), |v| v.iter().map(|s| &**s).collect())
             } else {
                 Vec::new()
             },
@@ -181,14 +170,14 @@ impl From<&crate::module::FuncInfo> for FnMetadata {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ModuleMetadata {
+struct ModuleMetadata<'a> {
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
-    pub modules: BTreeMap<String, Self>,
+    pub modules: BTreeMap<&'a str, Self>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub functions: Vec<FnMetadata>,
+    pub functions: Vec<FnMetadata<'a>>,
 }
 
-impl ModuleMetadata {
+impl ModuleMetadata<'_> {
     #[inline(always)]
     pub fn new() -> Self {
         Self {
@@ -198,15 +187,15 @@ impl ModuleMetadata {
     }
 }
 
-impl From<&crate::Module> for ModuleMetadata {
-    fn from(module: &crate::Module) -> Self {
+impl<'a> From<&'a crate::Module> for ModuleMetadata<'a> {
+    fn from(module: &'a crate::Module) -> Self {
         let mut functions: Vec<_> = module.iter_fn().map(|f| f.into()).collect();
         functions.sort();
 
         Self {
             modules: module
                 .iter_sub_modules()
-                .map(|(name, m)| (name.to_string(), m.as_ref().into()))
+                .map(|(name, m)| (name, m.as_ref().into()))
                 .collect(),
             functions,
         }
@@ -232,20 +221,14 @@ impl Engine {
         let _ast = ast;
         let mut global = ModuleMetadata::new();
 
-        if include_global {
-            self.global_modules
-                .iter()
-                .take(self.global_modules.len() - 1)
-                .flat_map(|m| m.iter_fn())
-                .for_each(|f| global.functions.push(f.into()));
-        }
-
         self.global_sub_modules.iter().for_each(|(name, m)| {
-            global.modules.insert(name.to_string(), m.as_ref().into());
+            global.modules.insert(name, m.as_ref().into());
         });
 
-        self.global_namespace()
-            .iter_fn()
+        self.global_modules
+            .iter()
+            .take(if include_global { usize::MAX } else { 1 })
+            .flat_map(|m| m.iter_fn())
             .for_each(|f| global.functions.push(f.into()));
 
         #[cfg(not(feature = "no_function"))]
