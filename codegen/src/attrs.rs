@@ -117,16 +117,58 @@ pub fn inner_item_attributes<T: ExportedParams>(
     attrs: &mut Vec<syn::Attribute>,
     attr_name: &str,
 ) -> syn::Result<T> {
-    // Find the #[rhai_fn] attribute which will turn be read for the function parameters.
-    if let Some(rhai_fn_idx) = attrs
+    // Find the #[rhai_fn] attribute which will turn be read for function parameters.
+    if let Some(index) = attrs
         .iter()
         .position(|a| a.path.get_ident().map(|i| *i == attr_name).unwrap_or(false))
     {
-        let rhai_fn_attr = attrs.remove(rhai_fn_idx);
+        let rhai_fn_attr = attrs.remove(index);
+
+        // Cannot have more than one #[rhai_fn]
+        if let Some(duplicate) = attrs
+            .iter()
+            .find(|a| a.path.get_ident().map(|i| *i == attr_name).unwrap_or(false))
+        {
+            return Err(syn::Error::new(
+                duplicate.span(),
+                format!("duplicated attribute '{}'", attr_name),
+            ));
+        }
+
         rhai_fn_attr.parse_args_with(T::parse_stream)
     } else {
         Ok(T::no_attrs())
     }
+}
+
+#[cfg(feature = "metadata")]
+pub fn doc_attribute(attrs: &mut Vec<syn::Attribute>) -> syn::Result<String> {
+    // Find the #[doc] attribute which will turn be read for function documentation.
+    let mut comments = String::new();
+
+    while let Some(index) = attrs
+        .iter()
+        .position(|attr| attr.path.get_ident().map(|i| *i == "doc").unwrap_or(false))
+    {
+        let attr = attrs.remove(index);
+        let meta = attr.parse_meta()?;
+
+        match meta {
+            syn::Meta::NameValue(syn::MetaNameValue {
+                lit: syn::Lit::Str(s),
+                ..
+            }) => {
+                if !comments.is_empty() {
+                    comments += "\n";
+                }
+
+                comments += &s.value();
+            }
+            _ => continue,
+        }
+    }
+
+    Ok(comments)
 }
 
 pub fn collect_cfg_attr(attrs: &[syn::Attribute]) -> Vec<syn::Attribute> {

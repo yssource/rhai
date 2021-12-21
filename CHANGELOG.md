@@ -17,6 +17,7 @@ Enhancements
 
 * Added `NativeCallContext::call_fn` to easily call a function.
 * A new syntax is introduced for `def_package!` that will replace the old syntax in future versions.
+* Doc-comments on plugin module functions are extracted into the functions' metadata.
 
 Deprecated API's
 ----------------

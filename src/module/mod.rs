@@ -10,7 +10,7 @@ use crate::tokenizer::Token;
 use crate::types::dynamic::Variant;
 use crate::{
     calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes, Dynamic, EvalAltResult,
-    Identifier, ImmutableString, NativeCallContext, Shared, StaticVec,
+    Identifier, ImmutableString, NativeCallContext, Shared, SmartString, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -53,6 +53,9 @@ pub struct FuncInfo {
     /// Return type name.
     #[cfg(feature = "metadata")]
     pub return_type_name: Identifier,
+    /// Comments.
+    #[cfg(feature = "metadata")]
+    pub comments: SmartString,
 }
 
 impl FuncInfo {
@@ -488,6 +491,11 @@ impl Module {
                 param_names_and_types,
                 #[cfg(feature = "metadata")]
                 return_type_name: self.identifiers.get("Dynamic"),
+                #[cfg(feature = "metadata")]
+                comments: fn_def
+                    .comments
+                    .as_ref()
+                    .map_or(SmartString::new_const(), |v| v.join("\n").into()),
                 func: Into::<CallableFunction>::into(fn_def).into(),
             }
             .into(),
@@ -750,6 +758,8 @@ impl Module {
                 param_names_and_types: param_names,
                 #[cfg(feature = "metadata")]
                 return_type_name,
+                #[cfg(feature = "metadata")]
+                comments: SmartString::new_const(),
                 func: func.into(),
             }
             .into(),
@@ -759,6 +769,47 @@ impl Module {
         self.contains_indexed_global_functions = false;
 
         hash_fn
+    }
+
+    /// _(metadata)_ Set a Rust function into the [`Module`], returning a non-zero hash key.
+    /// Exported under the `metadata` feature only.
+    ///
+    /// If there is an existing Rust function of the same hash, it is replaced.
+    ///
+    /// # WARNING - Low Level API
+    ///
+    /// This function is very low level.
+    ///
+    /// ## Parameter Names and Types
+    ///
+    /// Each parameter name/type pair should be a single string of the format: `var_name: type`.
+    ///
+    /// ## Return Type
+    ///
+    /// The _last entry_ in the list should be the _return type_ of the function.
+    /// In other words, the number of entries should be one larger than the number of parameters.
+    #[cfg(feature = "metadata")]
+    #[inline]
+    pub fn set_fn_with_comment(
+        &mut self,
+        name: impl AsRef<str> + Into<Identifier>,
+        namespace: FnNamespace,
+        access: FnAccess,
+        arg_names: Option<&[&str]>,
+        arg_types: &[TypeId],
+        comment: impl Into<SmartString>,
+        func: CallableFunction,
+    ) -> u64 {
+        let hash = self.set_fn(name, namespace, access, arg_names, arg_types, func);
+
+        let comment = comment.into();
+
+        if !comment.is_empty() {
+            let f = self.functions.get_mut(&hash).expect("exists");
+            f.comments = comment;
+        }
+
+        hash
     }
 
     /// Set a Rust function taking a reference to the scripting [`Engine`][crate::Engine],

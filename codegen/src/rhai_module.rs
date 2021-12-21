@@ -166,20 +166,30 @@ pub fn generate_body(
             );
 
             #[cfg(feature = "metadata")]
-            let param_names = quote! {
-                Some(#fn_token_name::PARAM_NAMES)
-            };
+            let (param_names, comment) = (
+                quote! { Some(#fn_token_name::PARAM_NAMES) },
+                function.comment(),
+            );
             #[cfg(not(feature = "metadata"))]
-            let param_names = quote! { None };
+            let (param_names, comment) = (quote! { None }, "");
 
-            set_fn_statements.push(
+            set_fn_statements.push(if comment.is_empty() {
                 syn::parse2::<syn::Stmt>(quote! {
                     #(#cfg_attrs)*
                     m.set_fn(#fn_literal, FnNamespace::#ns_str, FnAccess::Public,
                              #param_names, &[#(#fn_input_types),*], #fn_token_name().into());
                 })
-                .unwrap(),
-            );
+                .unwrap()
+            } else {
+                let comment_literal = syn::LitStr::new(comment, Span::call_site());
+
+                syn::parse2::<syn::Stmt>(quote! {
+                    #(#cfg_attrs)*
+                    m.set_fn_with_comment(#fn_literal, FnNamespace::#ns_str, FnAccess::Public,
+                             #param_names, &[#(#fn_input_types),*], #comment_literal, #fn_token_name().into());
+                })
+                .unwrap()
+            });
         }
 
         gen_fn_tokens.push(quote! {

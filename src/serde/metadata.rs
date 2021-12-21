@@ -60,7 +60,7 @@ impl PartialOrd for FnParam<'_> {
         Some(match self.name.partial_cmp(&other.name).expect("succeed") {
             Ordering::Less => Ordering::Less,
             Ordering::Greater => Ordering::Greater,
-            Ordering::Equal => self.typ.partial_cmp(other.typ).expect("succeed"),
+            Ordering::Equal => self.typ.partial_cmp(&other.typ).expect("succeed"),
         })
     }
 }
@@ -162,7 +162,14 @@ impl<'a> From<&'a crate::module::FuncInfo> for FnMetadata<'a> {
                     .as_ref()
                     .map_or_else(|| Vec::new(), |v| v.iter().map(|s| &**s).collect())
             } else {
-                Vec::new()
+                #[cfg(not(feature = "metadata"))]
+                {
+                    Vec::new()
+                }
+                #[cfg(feature = "metadata")]
+                {
+                    info.comments.split("\n").collect()
+                }
             },
         }
     }

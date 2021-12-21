@@ -117,18 +117,22 @@ impl Parse for Module {
                     syn::Item::Fn(f) => Some(f),
                     _ => None,
                 })
-                .try_fold(Vec::new(), |mut vec, item_fn| {
+                .try_fold(Vec::new(), |mut vec, item_fn| -> syn::Result<_> {
                     let params =
                         crate::attrs::inner_item_attributes(&mut item_fn.attrs, "rhai_fn")?;
 
-                    syn::parse2::<ExportedFn>(item_fn.to_token_stream())
-                        .and_then(|mut f| {
+                    let f =
+                        syn::parse2(item_fn.to_token_stream()).and_then(|mut f: ExportedFn| {
                             f.set_params(params)?;
                             f.set_cfg_attrs(crate::attrs::collect_cfg_attr(&item_fn.attrs));
+
+                            #[cfg(feature = "metadata")]
+                            f.set_comment(crate::attrs::doc_attribute(&mut item_fn.attrs)?);
                             Ok(f)
-                        })
-                        .map(|f| vec.push(f))
-                        .map(|_| vec)
+                        })?;
+
+                    vec.push(f);
+                    Ok(vec)
                 })?;
             // Gather and parse constants definitions.
             for item in content.iter() {
