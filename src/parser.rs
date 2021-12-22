@@ -15,7 +15,7 @@ use crate::tokenizer::{
 };
 use crate::types::dynamic::AccessMode;
 use crate::{
-    calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Engine, ExclusiveRange,
+    calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Dynamic, Engine, ExclusiveRange,
     Identifier, ImmutableString, InclusiveRange, LexError, ParseError, ParseErrorType, Position,
     Scope, Shared, StaticVec, AST, INT,
 };
@@ -1095,7 +1095,29 @@ fn parse_switch(
 
         def_stmt = match (hash, range) {
             (None, Some(range)) => {
-                ranges.push((range.0, range.1, range.2, condition, stmt.into()));
+                let is_empty = if range.2 {
+                    (range.0..=range.1).is_empty()
+                } else {
+                    (range.0..range.1).is_empty()
+                };
+
+                if !is_empty {
+                    match (range.1.checked_sub(range.0), range.2) {
+                        // Unroll single range
+                        (Some(1), false) | (Some(0), true) => {
+                            let value = Dynamic::from_int(range.0);
+                            let hasher = &mut get_hasher();
+                            value.hash(hasher);
+                            let hash = hasher.finish();
+
+                            if !table.contains_key(&hash) {
+                                table.insert(hash, (condition.clone(), stmt.into()).into());
+                            }
+                        }
+                        // Other range
+                        _ => ranges.push((range.0, range.1, range.2, condition, stmt.into())),
+                    }
+                }
                 None
             }
             (Some(hash), None) => {
@@ -1103,9 +1125,7 @@ fn parse_switch(
                 None
             }
             (None, None) => Some(stmt.into()),
-            (Some(_), Some(_)) => {
-                unreachable!("cannot have both a hash and a range in a `switch` statement")
-            }
+            _ => unreachable!("both hash and range in `switch` statement case"),
         };
 
         match input.peek().expect(NEVER_ENDS) {

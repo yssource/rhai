@@ -144,10 +144,17 @@ impl fmt::Debug for StmtBlock {
     }
 }
 
-impl From<StmtBlock> for Stmt {
-    #[inline(always)]
-    fn from(block: StmtBlock) -> Self {
-        Self::Block(block.0.into_boxed_slice(), block.1)
+impl From<Stmt> for StmtBlock {
+    #[inline]
+    fn from(stmt: Stmt) -> Self {
+        match stmt {
+            Stmt::Block(mut block, pos) => Self(block.iter_mut().map(mem::take).collect(), pos),
+            Stmt::Noop(pos) => Self(StaticVec::new_const(), pos),
+            _ => {
+                let pos = stmt.position();
+                Self(vec![stmt].into(), pos)
+            }
+        }
     }
 }
 
@@ -176,7 +183,13 @@ pub enum Stmt {
     Noop(Position),
     /// `if` expr `{` stmt `}` `else` `{` stmt `}`
     If(Expr, Box<(StmtBlock, StmtBlock)>, Position),
-    /// `switch` expr `if` condition `{` literal or _ `=>` stmt `,` ... `}`
+    /// `switch` expr `{` literal or range or _ `if` condition `=>` stmt `,` ... `}`
+    ///
+    /// ### Data Structure
+    ///
+    /// 0) Hash table for (condition, block)
+    /// 1) Default block
+    /// 2) List of ranges: (start, end, inclusive, condition, statement)
     Switch(
         Expr,
         Box<(
@@ -262,17 +275,10 @@ impl Default for Stmt {
     }
 }
 
-impl From<Stmt> for StmtBlock {
-    #[inline]
-    fn from(stmt: Stmt) -> Self {
-        match stmt {
-            Stmt::Block(mut block, pos) => Self(block.iter_mut().map(mem::take).collect(), pos),
-            Stmt::Noop(pos) => Self(StaticVec::new_const(), pos),
-            _ => {
-                let pos = stmt.position();
-                Self(vec![stmt].into(), pos)
-            }
-        }
+impl From<StmtBlock> for Stmt {
+    #[inline(always)]
+    fn from(block: StmtBlock) -> Self {
+        Self::Block(block.0.into_boxed_slice(), block.1)
     }
 }
 
