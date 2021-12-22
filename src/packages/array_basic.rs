@@ -24,7 +24,7 @@ def_package! {
 }
 
 #[export_module]
-mod array_functions {
+pub mod array_functions {
     #[rhai_fn(name = "len", get = "len", pure)]
     pub fn len(array: &mut Array) -> INT {
         array.len() as INT
@@ -33,26 +33,29 @@ mod array_functions {
     pub fn push(array: &mut Array, item: Dynamic) {
         array.push(item);
     }
-    #[rhai_fn(name = "append", name = "+=")]
-    pub fn append(array: &mut Array, y: Array) {
-        if !y.is_empty() {
-            if array.is_empty() {
-                *array = y;
+    #[rhai_fn(name = "append")]
+    pub fn append(array1: &mut Array, array2: Array) {
+        if !array2.is_empty() {
+            if array1.is_empty() {
+                *array1 = array2;
             } else {
-                array.extend(y);
+                array1.extend(array2);
             }
         }
     }
     #[rhai_fn(name = "+")]
-    pub fn concat(mut array: Array, y: Array) -> Array {
-        if !y.is_empty() {
-            if array.is_empty() {
-                array = y;
+    pub fn concat(array1: Array, array2: Array) -> Array {
+        if !array2.is_empty() {
+            if array1.is_empty() {
+                array2
             } else {
-                array.extend(y);
+                let mut array = array1;
+                array.extend(array2);
+                array
             }
+        } else {
+            array1
         }
-        array
     }
     pub fn insert(array: &mut Array, position: INT, item: Dynamic) {
         if array.is_empty() {

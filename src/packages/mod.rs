@@ -3,8 +3,8 @@
 use crate::{Module, Shared};
 
 pub(crate) mod arithmetic;
-mod array_basic;
-mod blob_basic;
+pub(crate) mod array_basic;
+pub(crate) mod blob_basic;
 mod fn_basic;
 mod iter_basic;
 mod lang_core;

@@ -26,7 +26,7 @@ def_package! {
 }
 
 #[export_module]
-mod blob_functions {
+pub mod blob_functions {
     pub const fn blob() -> Blob {
         Blob::new()
     }
@@ -64,12 +64,10 @@ mod blob_functions {
     pub fn len(blob: &mut Blob) -> INT {
         blob.len() as INT
     }
-    #[rhai_fn(name = "push")]
     pub fn push(blob: &mut Blob, item: INT) {
         let item = (item & 0x000000ff) as u8;
         blob.push(item);
     }
-    #[rhai_fn(name = "append")]
     pub fn append(blob: &mut Blob, y: Blob) {
         if !y.is_empty() {
             if blob.is_empty() {
@@ -77,6 +75,20 @@ mod blob_functions {
             } else {
                 blob.extend(y);
             }
+        }
+    }
+    #[rhai_fn(name = "+")]
+    pub fn concat(blob1: Blob, blob2: Blob) -> Blob {
+        if !blob2.is_empty() {
+            if blob1.is_empty() {
+                blob2
+            } else {
+                let mut blob = blob1;
+                blob.extend(blob2);
+                blob
+            }
+        } else {
+            blob1
         }
     }
     pub fn insert(blob: &mut Blob, position: INT, item: INT) {

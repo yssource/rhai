@@ -48,6 +48,8 @@ fn is_numeric(type_id: TypeId) -> bool {
 }
 
 /// Build in common binary operator implementations to avoid the cost of calling a registered function.
+///
+/// The return function will be registered as a _method_, so the first parameter cannot be consumed.
 #[must_use]
 pub fn get_builtin_binary_op_fn(
     op: &str,
@@ -291,28 +293,6 @@ pub fn get_builtin_binary_op_fn(
         }
         if type1 == type2 {
             return match op {
-                "+" => Some(|_, args| {
-                    let blob1 = &*args[0].read_lock::<Blob>().expect(BUILTIN);
-                    let blob2 = &*args[1].read_lock::<Blob>().expect(BUILTIN);
-                    let result = if blob1.is_empty() {
-                        if blob2.is_empty() {
-                            Blob::new()
-                        } else {
-                            blob2.clone()
-                        }
-                    } else {
-                        if blob2.is_empty() {
-                            blob1.clone()
-                        } else {
-                            let mut blob = Blob::with_capacity(blob1.len() + blob2.len());
-                            blob.extend_from_slice(blob1);
-                            blob.extend_from_slice(blob2);
-                            blob
-                        }
-                    };
-
-                    Ok(Dynamic::from_blob(result)) // do not use result.into() because it'll convert into an Array
-                }),
                 "==" => Some(impl_op!(Blob == Blob)),
                 "!=" => Some(impl_op!(Blob != Blob)),
                 _ => None,
@@ -533,6 +513,8 @@ pub fn get_builtin_binary_op_fn(
 }
 
 /// Build in common operator assignment implementations to avoid the cost of calling a registered function.
+///
+/// The return function is registered as a _method_, so the first parameter cannot be consumed.
 #[must_use]
 pub fn get_builtin_op_assignment_fn(
     op: &str,
@@ -771,21 +753,30 @@ pub fn get_builtin_op_assignment_fn(
     }
 
     #[cfg(not(feature = "no_index"))]
+    if type1 == TypeId::of::<crate::Array>() {
+        use crate::packages::array_basic::array_functions::*;
+        use crate::Array;
+
+        return match op {
+            "+=" => Some(|_, args| {
+                let array2 = std::mem::take(args[1]).cast::<Array>();
+                let array1 = &mut *args[0].write_lock::<Array>().expect(BUILTIN);
+                Ok(append(array1, array2).into())
+            }),
+            _ => None,
+        };
+    }
+
+    #[cfg(not(feature = "no_index"))]
     if type1 == TypeId::of::<crate::Blob>() {
+        use crate::packages::blob_basic::blob_functions::*;
         use crate::Blob;
 
         return match op {
             "+=" => Some(|_, args| {
                 let blob2 = std::mem::take(args[1]).cast::<Blob>();
-                let mut blob1 = args[0].write_lock::<Blob>().expect(BUILTIN);
-                if !blob2.is_empty() {
-                    if blob1.is_empty() {
-                        *blob1 = blob2;
-                    } else {
-                        blob1.extend_from_slice(&blob2);
-                    }
-                }
-                Ok(Dynamic::UNIT)
+                let blob1 = &mut *args[0].write_lock::<Blob>().expect(BUILTIN);
+                Ok(append(blob1, blob2).into())
             }),
             _ => None,
         };
