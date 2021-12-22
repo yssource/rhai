@@ -656,7 +656,35 @@ pub fn get_builtin_op_assignment_fn(
             _ => None,
         };
     }
-    // Blob op= int
+
+    // array op= any
+    #[cfg(not(feature = "no_index"))]
+    if type1 == TypeId::of::<crate::Array>() {
+        use crate::packages::array_basic::array_functions::*;
+        use crate::Array;
+
+        if type2 == TypeId::of::<crate::Array>() {
+            return match op {
+                "+=" => Some(|_, args| {
+                    let array2 = std::mem::take(args[1]).cast::<Array>();
+                    let array1 = &mut *args[0].write_lock::<Array>().expect(BUILTIN);
+                    Ok(append(array1, array2).into())
+                }),
+                _ => None,
+            };
+        } else {
+            return match op {
+                "+=" => Some(|_, args| {
+                    let x = std::mem::take(args[1]);
+                    let array = &mut *args[0].write_lock::<Array>().expect(BUILTIN);
+                    Ok(push(array, x).into())
+                }),
+                _ => None,
+            };
+        }
+    }
+
+    // blob op= int
     #[cfg(not(feature = "no_index"))]
     if types_pair == (TypeId::of::<crate::Blob>(), TypeId::of::<INT>()) {
         use crate::Blob;
@@ -747,21 +775,6 @@ pub fn get_builtin_op_assignment_fn(
                 let mut x = first.write_lock::<ImmutableString>().expect(BUILTIN);
                 let y = &*second[0].read_lock::<ImmutableString>().expect(BUILTIN);
                 Ok((*x -= y).into())
-            }),
-            _ => None,
-        };
-    }
-
-    #[cfg(not(feature = "no_index"))]
-    if type1 == TypeId::of::<crate::Array>() {
-        use crate::packages::array_basic::array_functions::*;
-        use crate::Array;
-
-        return match op {
-            "+=" => Some(|_, args| {
-                let array2 = std::mem::take(args[1]).cast::<Array>();
-                let array1 = &mut *args[0].write_lock::<Array>().expect(BUILTIN);
-                Ok(append(array1, array2).into())
             }),
             _ => None,
         };

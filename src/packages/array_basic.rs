@@ -29,11 +29,9 @@ pub mod array_functions {
     pub fn len(array: &mut Array) -> INT {
         array.len() as INT
     }
-    #[rhai_fn(name = "push", name = "+=")]
     pub fn push(array: &mut Array, item: Dynamic) {
         array.push(item);
     }
-    #[rhai_fn(name = "append")]
     pub fn append(array1: &mut Array, array2: Array) {
         if !array2.is_empty() {
             if array1.is_empty() {

@@ -1110,9 +1110,9 @@ fn parse_switch(
                             value.hash(hasher);
                             let hash = hasher.finish();
 
-                            if !table.contains_key(&hash) {
-                                table.insert(hash, (condition.clone(), stmt.into()).into());
-                            }
+                            table
+                                .entry(hash)
+                                .or_insert_with(|| (condition.clone(), stmt.into()).into());
                         }
                         // Other range
                         _ => ranges.push((range.0, range.1, range.2, condition, stmt.into())),
