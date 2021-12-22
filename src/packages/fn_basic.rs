@@ -4,7 +4,7 @@ use crate::{def_package, FnPtr, ImmutableString, NativeCallContext};
 use std::prelude::v1::*;
 
 def_package! {
-    /// Package of basic function poitner utilities.
+    /// Package of basic function pointer utilities.
     crate::BasicFnPackage => |lib| {
         lib.standard = true;
 

@@ -70,7 +70,7 @@ pub trait Package {
 /// ```
 #[macro_export]
 macro_rules! def_package {
-    ($(#[$outer:meta])* $root:ident :: $package:ident => | $lib:ident | $block:stmt) => {
+    ($($(#[$outer:meta])* $root:ident :: $package:ident => | $lib:ident | $block:block)+) => { $(
         $(#[$outer])*
         pub struct $package($root::Shared<$root::Module>);
 
@@ -97,7 +97,7 @@ macro_rules! def_package {
                 Self(module.into())
             }
         }
-    };
+    )* };
     ($root:ident : $package:ident : $comment:expr , $lib:ident , $block:stmt) => {
         #[deprecated(since = "1.4.0", note = "this is an old syntax of `def_package!` and is deprecated; use the new syntax of `def_package!` instead")]
         #[doc=$comment]
