@@ -7,6 +7,11 @@ Version 1.4.0
 This version adds support for integer _ranges_ via the `..` and `..=` operators.
 Many standard API's are extended with range parameters where appropriate.
 
+Script-breaking changes
+-----------------------
+
+* `is` is (pun intended) now a reserved keyword to prepare for possible future type checking expressions (e.g. `x is "string"`).
+
 New features
 ------------
 
@@ -100,8 +105,8 @@ Bug fixes
 Version 1.2.0
 =============
 
-Bug fixes with breaking script changes
--------------------------------------
+Bug fixes (potentially script-breaking)
+--------------------------------------
 
 * As originally intended, function calls with a bang (`!`) now operates directly on the caller's scope, allowing variables inside the scope to be mutated.
 * As originally intended, `Engine::XXX_with_scope` API's now properly propagate constants within the provided scope also to _functions_ in the script.

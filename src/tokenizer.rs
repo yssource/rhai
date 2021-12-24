@@ -786,11 +786,16 @@ impl Token {
             #[cfg(feature = "no_module")]
             "import" | "export" | "as" => Reserved(syntax.into()),
 
-            "===" | "!==" | "->" | "<-" | ":=" | "~" | "::<" | "(*" | "*)" | "#" | "#!"
-            | "public" | "protected" | "super" | "new" | "use" | "module" | "package" | "var"
-            | "static" | "shared" | "with" | "goto" | "exit" | "match" | "case" | "default"
-            | "void" | "null" | "nil" | "spawn" | "thread" | "go" | "sync" | "async" | "await"
-            | "yield" => Reserved(syntax.into()),
+            // List of reserved operators
+            "===" | "!==" | "->" | "<-" | ":=" | "~" | "::<" | "(*" | "*)" | "#" | "#!" => {
+                Reserved(syntax.into())
+            }
+
+            // List of reserved keywords
+            "public" | "protected" | "super" | "new" | "use" | "module" | "package" | "var"
+            | "static" | "shared" | "with" | "is" | "goto" | "exit" | "match" | "case"
+            | "default" | "void" | "null" | "nil" | "spawn" | "thread" | "go" | "sync"
+            | "async" | "await" | "yield" => Reserved(syntax.into()),
 
             KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
             | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_THIS | KEYWORD_IS_DEF_VAR => {
