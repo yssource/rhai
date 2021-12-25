@@ -2,14 +2,14 @@
 
 use crate::engine::{EvalState, Imports};
 use crate::parser::ParseState;
-use crate::{Engine, EvalAltResult, Module, Scope, AST};
+use crate::{Engine, Module, RhaiResultOf, Scope, AST};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
 impl Engine {
     /// Evaluate a script, returning any error (if any).
     #[inline(always)]
-    pub fn run(&self, script: &str) -> Result<(), Box<EvalAltResult>> {
+    pub fn run(&self, script: &str) -> RhaiResultOf<()> {
         self.run_with_scope(&mut Scope::new(), script)
     }
     /// Evaluate a script with own scope, returning any error (if any).
@@ -20,11 +20,7 @@ impl Engine {
     /// the scope are propagated throughout the script _including_ functions. This allows functions
     /// to be optimized based on dynamic global constants.
     #[inline]
-    pub fn run_with_scope(
-        &self,
-        scope: &mut Scope,
-        script: &str,
-    ) -> Result<(), Box<EvalAltResult>> {
+    pub fn run_with_scope(&self, scope: &mut Scope, script: &str) -> RhaiResultOf<()> {
         let scripts = [script];
         let (stream, tokenizer_control) =
             self.lex_raw(&scripts, self.token_mapper.as_ref().map(Box::as_ref));
@@ -42,16 +38,12 @@ impl Engine {
     }
     /// Evaluate an [`AST`], returning any error (if any).
     #[inline(always)]
-    pub fn run_ast(&self, ast: &AST) -> Result<(), Box<EvalAltResult>> {
+    pub fn run_ast(&self, ast: &AST) -> RhaiResultOf<()> {
         self.run_ast_with_scope(&mut Scope::new(), ast)
     }
     /// Evaluate an [`AST`] with own scope, returning any error (if any).
     #[inline]
-    pub fn run_ast_with_scope(
-        &self,
-        scope: &mut Scope,
-        ast: &AST,
-    ) -> Result<(), Box<EvalAltResult>> {
+    pub fn run_ast_with_scope(&self, scope: &mut Scope, ast: &AST) -> RhaiResultOf<()> {
         let mods = &mut Imports::new();
         let mut state = EvalState::new();
         if ast.source_raw().is_some() {

@@ -3,7 +3,7 @@
 use crate::func::{FnCallArgs, RegisterNativeFunction, SendSync};
 use crate::types::dynamic::Variant;
 use crate::{
-    Engine, EvalAltResult, FnAccess, FnNamespace, Identifier, Module, NativeCallContext, Shared,
+    Engine, FnAccess, FnNamespace, Identifier, Module, NativeCallContext, RhaiResultOf, Shared,
     SmartString,
 };
 use std::any::{type_name, TypeId};
@@ -113,7 +113,7 @@ impl Engine {
     pub fn register_result_fn<N, A, F, R>(&mut self, name: N, func: F) -> &mut Self
     where
         N: AsRef<str> + Into<Identifier>,
-        F: RegisterNativeFunction<A, Result<R, Box<EvalAltResult>>>,
+        F: RegisterNativeFunction<A, RhaiResultOf<R>>,
     {
         let param_types = F::param_types();
 
@@ -166,9 +166,7 @@ impl Engine {
         &mut self,
         name: N,
         arg_types: &[TypeId],
-        func: impl Fn(NativeCallContext, &mut FnCallArgs) -> Result<T, Box<EvalAltResult>>
-            + SendSync
-            + 'static,
+        func: impl Fn(NativeCallContext, &mut FnCallArgs) -> RhaiResultOf<T> + SendSync + 'static,
     ) -> &mut Self
     where
         N: AsRef<str> + Into<Identifier>,
@@ -383,7 +381,7 @@ impl Engine {
     pub fn register_get_result<T: Variant + Clone, V: Variant + Clone>(
         &mut self,
         name: impl AsRef<str>,
-        get_fn: impl Fn(&mut T) -> Result<V, Box<EvalAltResult>> + SendSync + 'static,
+        get_fn: impl Fn(&mut T) -> RhaiResultOf<V> + SendSync + 'static,
     ) -> &mut Self {
         self.register_result_fn(&crate::engine::make_getter(name), get_fn)
     }
@@ -449,7 +447,7 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self { Self { field: 1 } }
-    ///     fn set_field(&mut self, new_val: i64) -> Result<(), Box<EvalAltResult>> {
+    ///     fn set_field(&mut self, new_val: i64) -> Result<(), Box<rhai::EvalAltResult>> {
     ///         self.field = new_val;
     ///         Ok(())
     ///     }
@@ -478,7 +476,7 @@ impl Engine {
     pub fn register_set_result<T: Variant + Clone, V: Variant + Clone>(
         &mut self,
         name: impl AsRef<str>,
-        set_fn: impl Fn(&mut T, V) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
+        set_fn: impl Fn(&mut T, V) -> RhaiResultOf<()> + SendSync + 'static,
     ) -> &mut Self {
         self.register_result_fn(&crate::engine::make_setter(name), set_fn)
     }
@@ -657,7 +655,7 @@ impl Engine {
         V: Variant + Clone,
     >(
         &mut self,
-        get_fn: impl Fn(&mut T, X) -> Result<V, Box<EvalAltResult>> + SendSync + 'static,
+        get_fn: impl Fn(&mut T, X) -> RhaiResultOf<V> + SendSync + 'static,
     ) -> &mut Self {
         #[cfg(not(feature = "no_index"))]
         if TypeId::of::<T>() == TypeId::of::<crate::Array>() {
@@ -772,7 +770,7 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
-    ///     fn set_field(&mut self, index: i64, value: i64) -> Result<(), Box<EvalAltResult>> {
+    ///     fn set_field(&mut self, index: i64, value: i64) -> Result<(), Box<rhai::EvalAltResult>> {
     ///         self.fields[index as usize] = value;
     ///         Ok(())
     ///     }
@@ -806,7 +804,7 @@ impl Engine {
         V: Variant + Clone,
     >(
         &mut self,
-        set_fn: impl Fn(&mut T, X, V) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
+        set_fn: impl Fn(&mut T, X, V) -> RhaiResultOf<()> + SendSync + 'static,
     ) -> &mut Self {
         #[cfg(not(feature = "no_index"))]
         if TypeId::of::<T>() == TypeId::of::<crate::Array>() {

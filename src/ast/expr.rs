@@ -3,7 +3,7 @@
 use super::{ASTNode, Ident, Stmt, StmtBlock};
 use crate::engine::{OP_EXCLUSIVE_RANGE, OP_INCLUSIVE_RANGE};
 use crate::func::hashing::ALT_ZERO_HASH;
-use crate::module::NamespaceRef;
+use crate::module::Namespace;
 use crate::tokenizer::Token;
 use crate::types::dynamic::Union;
 use crate::{Dynamic, Identifier, ImmutableString, Position, StaticVec, INT};
@@ -62,7 +62,7 @@ impl CustomExpr {
 ///
 /// Two separate hashes are pre-calculated because of the following patterns:
 ///
-/// ```ignore
+/// ```js
 /// func(a, b, c);      // Native: func(a, b, c)        - 3 parameters
 ///                     // Script: func(a, b, c)        - 3 parameters
 ///
@@ -158,7 +158,7 @@ impl FnCallHashes {
 #[derive(Debug, Clone, Default, Hash)]
 pub struct FnCallExpr {
     /// Namespace of the function, if any.
-    pub namespace: Option<NamespaceRef>,
+    pub namespace: Option<Namespace>,
     /// Function name.
     pub name: Identifier,
     /// Pre-calculated hashes.
@@ -357,11 +357,7 @@ pub enum Expr {
     Variable(
         Option<NonZeroU8>,
         Position,
-        Box<(
-            Option<NonZeroUsize>,
-            Option<(NamespaceRef, u64)>,
-            Identifier,
-        )>,
+        Box<(Option<NonZeroUsize>, Option<(Namespace, u64)>, Identifier)>,
     ),
     /// Property access - ((getter, hash), (setter, hash), prop)
     Property(

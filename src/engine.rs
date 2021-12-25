@@ -7,14 +7,14 @@ use crate::func::{
     native::{OnDebugCallback, OnParseTokenCallback, OnPrintCallback, OnVarCallback},
     CallableFunction, IteratorFn,
 };
-use crate::module::NamespaceRef;
+use crate::module::Namespace;
 use crate::packages::{Package, StandardPackage};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::tokenizer::Token;
 use crate::types::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::{
     calc_fn_params_hash, combine_hashes, Dynamic, EvalAltResult, Identifier, ImmutableString,
-    Module, Position, RhaiResult, Scope, Shared, StaticVec, INT,
+    Module, Position, RhaiError, RhaiResult, RhaiResultOf, Scope, Shared, StaticVec, INT,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -587,7 +587,7 @@ impl<'a> Target<'a> {
     /// Propagate a changed value back to the original source.
     /// This has no effect except for string indexing.
     #[inline]
-    pub fn propagate_changed_value(&mut self) -> Result<(), Box<EvalAltResult>> {
+    pub fn propagate_changed_value(&mut self) -> RhaiResultOf<()> {
         match self {
             Self::RefMut(_) | Self::TempValue(_) => (),
             #[cfg(not(feature = "no_closure"))]
@@ -1136,7 +1136,7 @@ impl Engine {
         &self,
         mods: &Imports,
         state: &mut EvalState,
-        namespace: &NamespaceRef,
+        namespace: &Namespace,
     ) -> Option<Shared<Module>> {
         let root = &namespace[0].name;
 
@@ -1167,7 +1167,7 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &Expr,
-    ) -> Result<(Target<'s>, Position), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<(Target<'s>, Position)> {
         match expr {
             Expr::Variable(Some(_), _, _) => {
                 self.search_scope_only(scope, mods, state, lib, this_ptr, expr)
@@ -1258,7 +1258,7 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &Expr,
-    ) -> Result<(Target<'s>, Position), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<(Target<'s>, Position)> {
         // Make sure that the pointer indirection is taken only when absolutely necessary.
 
         let (index, var_pos) = match expr {
@@ -1334,7 +1334,7 @@ impl Engine {
         chain_type: ChainType,
         level: usize,
         new_val: Option<((Dynamic, Position), (Option<OpAssignment>, Position))>,
-    ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<(Dynamic, bool)> {
         let is_ref_mut = target.is_ref();
         let _terminate_chaining = terminate_chaining;
 
@@ -1854,7 +1854,7 @@ impl Engine {
         idx_values: &mut StaticVec<ChainArgument>,
         size: usize,
         level: usize,
-    ) -> Result<(), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(&mut mods.num_operations, expr.position())?;
 
@@ -1869,7 +1869,7 @@ impl Engine {
 
                 let (values, pos) = args.iter().try_fold(
                     (StaticVec::with_capacity(args.len()), Position::NONE),
-                    |(mut values, mut pos), expr| -> Result<_, Box<EvalAltResult>> {
+                    |(mut values, mut pos), expr| -> RhaiResultOf<_> {
                         let (value, arg_pos) = self.get_arg_value(
                             scope, mods, state, lib, this_ptr, level, expr, constants,
                         )?;
@@ -1916,7 +1916,7 @@ impl Engine {
                         args.iter()
                             .try_fold(
                                 (StaticVec::with_capacity(args.len()), Position::NONE),
-                                |(mut values, mut pos), expr| -> Result<_, Box<EvalAltResult>> {
+                                |(mut values, mut pos), expr| -> RhaiResultOf<_> {
                                     let (value, arg_pos) = self.get_arg_value(
                                         scope, mods, state, lib, this_ptr, level, expr, constants,
                                     )?;
@@ -1984,7 +1984,7 @@ impl Engine {
         add_if_not_found: bool,
         use_indexers: bool,
         level: usize,
-    ) -> Result<Target<'t>, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Target<'t>> {
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(&mut mods.num_operations, Position::NONE)?;
 
@@ -2339,7 +2339,7 @@ impl Engine {
                 .iter()
                 .try_fold(
                     crate::Array::with_capacity(x.len()),
-                    |mut arr, item| -> Result<_, Box<EvalAltResult>> {
+                    |mut arr, item| -> RhaiResultOf<_> {
                         arr.push(
                             self.eval_expr(scope, mods, state, lib, this_ptr, item, level)?
                                 .flatten(),
@@ -2355,7 +2355,7 @@ impl Engine {
                 .iter()
                 .try_fold(
                     x.1.clone(),
-                    |mut map, (Ident { name: key, .. }, expr)| -> Result<_, Box<EvalAltResult>> {
+                    |mut map, (Ident { name: key, .. }, expr)| -> RhaiResultOf<_> {
                         let value_ref = map.get_mut(key.as_str()).expect("contains all keys");
                         *value_ref = self
                             .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
@@ -2539,7 +2539,7 @@ impl Engine {
         target: &mut Target,
         root: (&str, Position),
         new_val: Dynamic,
-    ) -> Result<(), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         if target.is_read_only() {
             // Assignment to constant variable
             return Err(
@@ -3243,7 +3243,7 @@ impl Engine {
                                 index,
                                 if rename.is_empty() { name } else { rename }.clone(),
                             );
-                            Ok(()) as Result<_, Box<EvalAltResult>>
+                            Ok(()) as RhaiResultOf<_>
                         } else {
                             Err(EvalAltResult::ErrorVariableNotFound(name.to_string(), *pos).into())
                         }
@@ -3305,12 +3305,12 @@ impl Engine {
 
     #[cfg(feature = "unchecked")]
     #[inline(always)]
-    fn check_data_size(&self, _value: &Dynamic) -> Result<(), Box<EvalAltResult>> {
+    fn check_data_size(&self, _value: &Dynamic) -> RhaiResultOf<()> {
         Ok(())
     }
 
     #[cfg(not(feature = "unchecked"))]
-    fn check_data_size(&self, value: &Dynamic) -> Result<(), Box<EvalAltResult>> {
+    fn check_data_size(&self, value: &Dynamic) -> RhaiResultOf<()> {
         // Recursively calculate the size of a value (especially `Array` and `Map`)
         fn calc_size(value: &Dynamic) -> (usize, usize, usize) {
             match value.0 {
@@ -3424,7 +3424,7 @@ impl Engine {
         &self,
         num_operations: &mut u64,
         pos: Position,
-    ) -> Result<(), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         *num_operations += 1;
 
         // Guard against too many operations
@@ -3459,7 +3459,7 @@ impl Engine {
     /// Make a `Box<`[`EvalAltResult<ErrorMismatchDataType>`][EvalAltResult::ErrorMismatchDataType]`>`.
     #[inline]
     #[must_use]
-    pub(crate) fn make_type_mismatch_err<T>(&self, typ: &str, pos: Position) -> Box<EvalAltResult> {
+    pub(crate) fn make_type_mismatch_err<T>(&self, typ: &str, pos: Position) -> RhaiError {
         EvalAltResult::ErrorMismatchDataType(
             self.map_type_name(type_name::<T>()).into(),
             typ.into(),

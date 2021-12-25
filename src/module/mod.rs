@@ -9,8 +9,8 @@ use crate::parser::IdentifierBuilder;
 use crate::tokenizer::Token;
 use crate::types::dynamic::Variant;
 use crate::{
-    calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes, Dynamic, EvalAltResult,
-    Identifier, ImmutableString, NativeCallContext, Shared, StaticVec,
+    calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes, Dynamic, Identifier,
+    ImmutableString, NativeCallContext, RhaiResultOf, Shared, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -456,9 +456,9 @@ impl Module {
     /// Name and Position in [`EvalAltResult`] are [`None`] and [`NONE`][Position::NONE] and must be set afterwards.
     #[cfg(not(feature = "no_module"))]
     #[inline]
-    pub(crate) fn get_qualified_var(&self, hash_var: u64) -> Result<&Dynamic, Box<EvalAltResult>> {
+    pub(crate) fn get_qualified_var(&self, hash_var: u64) -> RhaiResultOf<&Dynamic> {
         self.all_variables.get(&hash_var).ok_or_else(|| {
-            EvalAltResult::ErrorVariableNotFound(String::new(), crate::Position::NONE).into()
+            crate::EvalAltResult::ErrorVariableNotFound(String::new(), crate::Position::NONE).into()
         })
     }
 
@@ -918,7 +918,7 @@ impl Module {
     ///                         *x *= 2;            // the first argument can be mutated
     ///                     }
     ///
-    ///                     Ok(orig)                // return Result<T, Box<EvalAltResult>>
+    ///                     Ok(orig)                // return RhaiResult<T>
     ///                 });
     ///
     /// assert!(module.contains_fn(hash));
@@ -935,9 +935,7 @@ impl Module {
     where
         N: AsRef<str> + Into<Identifier>,
         T: Variant + Clone,
-        F: Fn(NativeCallContext, &mut FnCallArgs) -> Result<T, Box<EvalAltResult>>
-            + SendSync
-            + 'static,
+        F: Fn(NativeCallContext, &mut FnCallArgs) -> RhaiResultOf<T> + SendSync + 'static,
     {
         let f =
             move |ctx: NativeCallContext, args: &mut FnCallArgs| func(ctx, args).map(Dynamic::from);
@@ -979,7 +977,7 @@ impl Module {
     where
         N: AsRef<str> + Into<Identifier>,
         T: Variant + Clone,
-        F: RegisterNativeFunction<ARGS, Result<T, Box<EvalAltResult>>>,
+        F: RegisterNativeFunction<ARGS, RhaiResultOf<T>>,
     {
         self.set_fn(
             name,
@@ -1015,8 +1013,8 @@ impl Module {
     where
         A: Variant + Clone,
         T: Variant + Clone,
-        F: RegisterNativeFunction<ARGS, Result<T, Box<EvalAltResult>>>,
-        F: Fn(&mut A) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
+        F: RegisterNativeFunction<ARGS, RhaiResultOf<T>>,
+        F: Fn(&mut A) -> RhaiResultOf<T> + SendSync + 'static,
     {
         self.set_fn(
             &crate::engine::make_getter(name),
@@ -1057,8 +1055,8 @@ impl Module {
     where
         A: Variant + Clone,
         B: Variant + Clone,
-        F: RegisterNativeFunction<ARGS, Result<(), Box<EvalAltResult>>>,
-        F: Fn(&mut A, B) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
+        F: RegisterNativeFunction<ARGS, RhaiResultOf<()>>,
+        F: Fn(&mut A, B) -> RhaiResultOf<()> + SendSync + 'static,
     {
         self.set_fn(
             &crate::engine::make_setter(name),
@@ -1104,8 +1102,8 @@ impl Module {
         A: Variant + Clone,
         B: Variant + Clone,
         T: Variant + Clone,
-        F: RegisterNativeFunction<ARGS, Result<T, Box<EvalAltResult>>>,
-        F: Fn(&mut A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
+        F: RegisterNativeFunction<ARGS, RhaiResultOf<T>>,
+        F: Fn(&mut A, B) -> RhaiResultOf<T> + SendSync + 'static,
     {
         #[cfg(not(feature = "no_index"))]
         if TypeId::of::<A>() == TypeId::of::<crate::Array>() {
@@ -1166,8 +1164,8 @@ impl Module {
         A: Variant + Clone,
         B: Variant + Clone,
         C: Variant + Clone,
-        F: RegisterNativeFunction<ARGS, Result<(), Box<EvalAltResult>>>,
-        F: Fn(&mut A, B, C) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
+        F: RegisterNativeFunction<ARGS, RhaiResultOf<()>>,
+        F: Fn(&mut A, B, C) -> RhaiResultOf<()> + SendSync + 'static,
     {
         #[cfg(not(feature = "no_index"))]
         if TypeId::of::<A>() == TypeId::of::<crate::Array>() {
@@ -1231,8 +1229,8 @@ impl Module {
     #[inline(always)]
     pub fn set_indexer_get_set_fn<A, B, T>(
         &mut self,
-        get_fn: impl Fn(&mut A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
-        set_fn: impl Fn(&mut A, B, T) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
+        get_fn: impl Fn(&mut A, B) -> RhaiResultOf<T> + SendSync + 'static,
+        set_fn: impl Fn(&mut A, B, T) -> RhaiResultOf<()> + SendSync + 'static,
     ) -> (u64, u64)
     where
         A: Variant + Clone,
@@ -1549,7 +1547,7 @@ impl Module {
         scope: crate::Scope,
         ast: &crate::AST,
         engine: &crate::Engine,
-    ) -> Result<Self, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Self> {
         let mut scope = scope;
         let mut mods = crate::engine::Imports::new();
         let orig_mods_len = mods.len();
@@ -1800,12 +1798,12 @@ impl Module {
 /// A [`StaticVec`] is used because most namespace-qualified access contains only one level,
 /// and it is wasteful to always allocate a [`Vec`] with one element.
 #[derive(Clone, Eq, PartialEq, Default, Hash)]
-pub struct NamespaceRef {
+pub struct Namespace {
     index: Option<NonZeroUsize>,
     path: StaticVec<Ident>,
 }
 
-impl fmt::Debug for NamespaceRef {
+impl fmt::Debug for Namespace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(index) = self.index {
             write!(f, "{} -> ", index)?;
@@ -1822,7 +1820,7 @@ impl fmt::Debug for NamespaceRef {
     }
 }
 
-impl fmt::Display for NamespaceRef {
+impl fmt::Display for Namespace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(
             &self
@@ -1835,7 +1833,7 @@ impl fmt::Display for NamespaceRef {
     }
 }
 
-impl Deref for NamespaceRef {
+impl Deref for Namespace {
     type Target = StaticVec<Ident>;
 
     #[inline(always)]
@@ -1844,14 +1842,14 @@ impl Deref for NamespaceRef {
     }
 }
 
-impl DerefMut for NamespaceRef {
+impl DerefMut for Namespace {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.path
     }
 }
 
-impl From<Vec<Ident>> for NamespaceRef {
+impl From<Vec<Ident>> for Namespace {
     #[inline(always)]
     fn from(mut path: Vec<Ident>) -> Self {
         path.shrink_to_fit();
@@ -1862,7 +1860,7 @@ impl From<Vec<Ident>> for NamespaceRef {
     }
 }
 
-impl From<StaticVec<Ident>> for NamespaceRef {
+impl From<StaticVec<Ident>> for Namespace {
     #[inline(always)]
     fn from(mut path: StaticVec<Ident>) -> Self {
         path.shrink_to_fit();
@@ -1870,8 +1868,8 @@ impl From<StaticVec<Ident>> for NamespaceRef {
     }
 }
 
-impl NamespaceRef {
-    /// Create a new [`NamespaceRef`].
+impl Namespace {
+    /// Create a new [`Namespace`].
     #[inline(always)]
     #[must_use]
     pub const fn new() -> Self {

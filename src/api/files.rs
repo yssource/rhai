@@ -3,13 +3,13 @@
 #![cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 
 use crate::types::dynamic::Variant;
-use crate::{Engine, EvalAltResult, Scope, AST};
+use crate::{Engine, EvalAltResult, RhaiResultOf, Scope, AST};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
 impl Engine {
     /// Read the contents of a file into a string.
-    fn read_file(path: std::path::PathBuf) -> Result<String, Box<EvalAltResult>> {
+    fn read_file(path: std::path::PathBuf) -> RhaiResultOf<String> {
         use std::io::Read;
 
         let mut f = std::fs::File::open(path.clone()).map_err(|err| {
@@ -62,7 +62,7 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    pub fn compile_file(&self, path: std::path::PathBuf) -> Result<AST, Box<EvalAltResult>> {
+    pub fn compile_file(&self, path: std::path::PathBuf) -> RhaiResultOf<AST> {
         self.compile_file_with_scope(&Scope::new(), path)
     }
     /// Compile a script file into an [`AST`] using own scope, which can be used later for evaluation.
@@ -103,7 +103,7 @@ impl Engine {
         &self,
         scope: &Scope,
         path: std::path::PathBuf,
-    ) -> Result<AST, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<AST> {
         Self::read_file(path).and_then(|contents| Ok(self.compile_with_scope(scope, &contents)?))
     }
     /// Evaluate a script file.
@@ -124,10 +124,7 @@ impl Engine {
     /// # }
     /// ```
     #[inline]
-    pub fn eval_file<T: Variant + Clone>(
-        &self,
-        path: std::path::PathBuf,
-    ) -> Result<T, Box<EvalAltResult>> {
+    pub fn eval_file<T: Variant + Clone>(&self, path: std::path::PathBuf) -> RhaiResultOf<T> {
         Self::read_file(path).and_then(|contents| self.eval::<T>(&contents))
     }
     /// Evaluate a script file with own scope.
@@ -162,7 +159,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         path: std::path::PathBuf,
-    ) -> Result<T, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<T> {
         Self::read_file(path).and_then(|contents| self.eval_with_scope(scope, &contents))
     }
     /// Evaluate a file, returning any error (if any).
@@ -171,7 +168,7 @@ impl Engine {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     #[inline]
-    pub fn run_file(&self, path: std::path::PathBuf) -> Result<(), Box<EvalAltResult>> {
+    pub fn run_file(&self, path: std::path::PathBuf) -> RhaiResultOf<()> {
         Self::read_file(path).and_then(|contents| self.run(&contents))
     }
     /// Evaluate a file with own scope, returning any error (if any).
@@ -190,7 +187,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         path: std::path::PathBuf,
-    ) -> Result<(), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         Self::read_file(path).and_then(|contents| self.run_with_scope(scope, &contents))
     }
 }

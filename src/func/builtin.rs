@@ -1,10 +1,9 @@
 //! Built-in implementations for common operators.
 
 use super::call::FnCallArgs;
+use super::native::FnBuiltin;
 use crate::engine::OP_CONTAINS;
-use crate::{
-    Dynamic, ExclusiveRange, ImmutableString, InclusiveRange, NativeCallContext, RhaiResult, INT,
-};
+use crate::{Dynamic, ExclusiveRange, ImmutableString, InclusiveRange, INT};
 use std::any::TypeId;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -51,11 +50,7 @@ fn is_numeric(type_id: TypeId) -> bool {
 ///
 /// The return function will be registered as a _method_, so the first parameter cannot be consumed.
 #[must_use]
-pub fn get_builtin_binary_op_fn(
-    op: &str,
-    x: &Dynamic,
-    y: &Dynamic,
-) -> Option<fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult> {
+pub fn get_builtin_binary_op_fn(op: &str, x: &Dynamic, y: &Dynamic) -> Option<FnBuiltin> {
     let type1 = x.type_id();
     let type2 = y.type_id();
 
@@ -516,11 +511,7 @@ pub fn get_builtin_binary_op_fn(
 ///
 /// The return function is registered as a _method_, so the first parameter cannot be consumed.
 #[must_use]
-pub fn get_builtin_op_assignment_fn(
-    op: &str,
-    x: &Dynamic,
-    y: &Dynamic,
-) -> Option<fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult> {
+pub fn get_builtin_op_assignment_fn(op: &str, x: &Dynamic, y: &Dynamic) -> Option<FnBuiltin> {
     let type1 = x.type_id();
     let type2 = y.type_id();
 

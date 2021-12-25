@@ -1,7 +1,7 @@
 //! Module containing error definitions for the parsing process.
 
 use crate::tokenizer::is_valid_identifier;
-use crate::{EvalAltResult, Position};
+use crate::{EvalAltResult, Position, RhaiError};
 #[cfg(feature = "no_std")]
 use core_error::Error;
 #[cfg(not(feature = "no_std"))]
@@ -310,7 +310,7 @@ impl fmt::Display for ParseError {
     }
 }
 
-impl From<ParseErrorType> for Box<EvalAltResult> {
+impl From<ParseErrorType> for RhaiError {
     #[inline(always)]
     fn from(err: ParseErrorType) -> Self {
         Box::new(err.into())
@@ -324,7 +324,7 @@ impl From<ParseErrorType> for EvalAltResult {
     }
 }
 
-impl From<ParseError> for Box<EvalAltResult> {
+impl From<ParseError> for RhaiError {
     #[inline(always)]
     fn from(err: ParseError) -> Self {
         Box::new(err.into())

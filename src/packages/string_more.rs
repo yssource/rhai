@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::{def_package, Dynamic, ExclusiveRange, InclusiveRange, StaticVec, INT};
+use crate::{def_package, Dynamic, ExclusiveRange, InclusiveRange, RhaiResultOf, StaticVec, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{any::TypeId, mem};
@@ -500,7 +500,7 @@ mod string_functions {
         string: &mut ImmutableString,
         len: INT,
         character: char,
-    ) -> Result<(), Box<crate::EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         if len <= 0 {
             return Ok(());
         }
@@ -544,7 +544,7 @@ mod string_functions {
         string: &mut ImmutableString,
         len: INT,
         padding: &str,
-    ) -> Result<(), Box<crate::EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         if len <= 0 {
             return Ok(());
         }

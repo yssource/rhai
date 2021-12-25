@@ -1,6 +1,6 @@
 use crate::plugin::*;
 use crate::types::dynamic::Variant;
-use crate::{def_package, EvalAltResult, ExclusiveRange, InclusiveRange, INT};
+use crate::{def_package, EvalAltResult, ExclusiveRange, InclusiveRange, RhaiResultOf, INT};
 use std::iter::{ExactSizeIterator, FusedIterator};
 use std::ops::{Range, RangeInclusive};
 #[cfg(feature = "no_std")]
@@ -22,7 +22,7 @@ impl<T> StepRange<T>
 where
     T: Variant + Copy + PartialOrd + Add<Output = T> + Sub<Output = T>,
 {
-    pub fn new(from: T, to: T, step: T) -> Result<Self, Box<EvalAltResult>> {
+    pub fn new(from: T, to: T, step: T) -> RhaiResultOf<Self> {
         #[cfg(not(feature = "unchecked"))]
         if let Some(r) = from.checked_add(&step) {
             if r == from {
@@ -117,7 +117,7 @@ struct BitRange(INT, INT, usize);
 const BITS: usize = std::mem::size_of::<INT>() * 8;
 
 impl BitRange {
-    pub fn new(value: INT, from: INT, len: INT) -> Result<Self, Box<EvalAltResult>> {
+    pub fn new(value: INT, from: INT, len: INT) -> RhaiResultOf<Self> {
         let from = if from >= 0 {
             let offset = from as usize;
 
@@ -334,7 +334,7 @@ def_package! {
             struct StepFloatRange(FLOAT, FLOAT, FLOAT);
 
             impl StepFloatRange {
-                pub fn new(from: FLOAT, to: FLOAT, step: FLOAT) -> Result<Self, Box<EvalAltResult>> {
+                pub fn new(from: FLOAT, to: FLOAT, step: FLOAT) -> RhaiResultOf<Self> {
                     #[cfg(not(feature = "unchecked"))]
                     if step == 0.0 {
                         return Err(EvalAltResult::ErrorInFunctionCall("range".to_string(), "".to_string(),
@@ -396,7 +396,7 @@ def_package! {
             struct StepDecimalRange(Decimal, Decimal, Decimal);
 
             impl StepDecimalRange {
-                pub fn new(from: Decimal, to: Decimal, step: Decimal) -> Result<Self, Box<EvalAltResult>> {
+                pub fn new(from: Decimal, to: Decimal, step: Decimal) -> RhaiResultOf<Self> {
                     #[cfg(not(feature = "unchecked"))]
                     if step.is_zero() {
                         return Err(EvalAltResult::ErrorInFunctionCall("range".to_string(), "".to_string(),

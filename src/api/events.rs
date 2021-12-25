@@ -2,7 +2,7 @@
 
 use crate::engine::EvalContext;
 use crate::func::SendSync;
-use crate::{Dynamic, Engine, EvalAltResult, Position};
+use crate::{Dynamic, Engine, Position, RhaiResultOf};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -58,7 +58,7 @@ impl Engine {
     #[inline(always)]
     pub fn on_var(
         &mut self,
-        callback: impl Fn(&str, usize, &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>
+        callback: impl Fn(&str, usize, &EvalContext) -> RhaiResultOf<Option<Dynamic>>
             + SendSync
             + 'static,
     ) -> &mut Self {

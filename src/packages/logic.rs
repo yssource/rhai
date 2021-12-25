@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::{def_package, EvalAltResult, ExclusiveRange, InclusiveRange, INT};
+use crate::{def_package, EvalAltResult, ExclusiveRange, InclusiveRange, RhaiResultOf, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -202,7 +202,7 @@ mod bit_field_functions {
     const BITS: usize = std::mem::size_of::<INT>() * 8;
 
     #[rhai_fn(return_raw)]
-    pub fn get_bit(value: INT, index: INT) -> Result<bool, Box<EvalAltResult>> {
+    pub fn get_bit(value: INT, index: INT) -> RhaiResultOf<bool> {
         if index >= 0 {
             let offset = index as usize;
 
@@ -225,7 +225,7 @@ mod bit_field_functions {
         }
     }
     #[rhai_fn(return_raw)]
-    pub fn set_bit(value: &mut INT, index: INT, new_value: bool) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_bit(value: &mut INT, index: INT, new_value: bool) -> RhaiResultOf<()> {
         if index >= 0 {
             let offset = index as usize;
 
@@ -260,22 +260,19 @@ mod bit_field_functions {
         }
     }
     #[rhai_fn(name = "get_bits", return_raw)]
-    pub fn get_bits_range(value: INT, range: ExclusiveRange) -> Result<INT, Box<EvalAltResult>> {
+    pub fn get_bits_range(value: INT, range: ExclusiveRange) -> RhaiResultOf<INT> {
         let from = INT::max(range.start, 0);
         let to = INT::max(range.end, from);
         get_bits(value, from, to - from)
     }
     #[rhai_fn(name = "get_bits", return_raw)]
-    pub fn get_bits_range_inclusive(
-        value: INT,
-        range: InclusiveRange,
-    ) -> Result<INT, Box<EvalAltResult>> {
+    pub fn get_bits_range_inclusive(value: INT, range: InclusiveRange) -> RhaiResultOf<INT> {
         let from = INT::max(*range.start(), 0);
         let to = INT::max(*range.end(), from - 1);
         get_bits(value, from, to - from + 1)
     }
     #[rhai_fn(return_raw)]
-    pub fn get_bits(value: INT, index: INT, bits: INT) -> Result<INT, Box<EvalAltResult>> {
+    pub fn get_bits(value: INT, index: INT, bits: INT) -> RhaiResultOf<INT> {
         if bits < 1 {
             return Ok(0);
         }
@@ -321,7 +318,7 @@ mod bit_field_functions {
         value: &mut INT,
         range: ExclusiveRange,
         new_value: INT,
-    ) -> Result<(), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         let from = INT::max(range.start, 0);
         let to = INT::max(range.end, from);
         set_bits(value, from, to - from, new_value)
@@ -331,18 +328,13 @@ mod bit_field_functions {
         value: &mut INT,
         range: InclusiveRange,
         new_value: INT,
-    ) -> Result<(), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         let from = INT::max(*range.start(), 0);
         let to = INT::max(*range.end(), from - 1);
         set_bits(value, from, to - from + 1, new_value)
     }
     #[rhai_fn(return_raw)]
-    pub fn set_bits(
-        value: &mut INT,
-        index: INT,
-        bits: INT,
-        new_value: INT,
-    ) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_bits(value: &mut INT, index: INT, bits: INT, new_value: INT) -> RhaiResultOf<()> {
         if bits < 1 {
             return Ok(());
         }

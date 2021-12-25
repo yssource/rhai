@@ -1,4 +1,4 @@
-use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
+use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, RhaiResultOf, Shared};
 use std::ops::AddAssign;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -123,7 +123,7 @@ impl ModuleResolver for ModuleResolversCollection {
         source_path: Option<&str>,
         path: &str,
         pos: Position,
-    ) -> Result<Shared<Module>, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Shared<Module>> {
         for resolver in self.0.iter() {
             match resolver.resolve(engine, source_path, path, pos) {
                 Ok(module) => return Ok(module),

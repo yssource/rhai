@@ -8,7 +8,7 @@ use crate::tokenizer::{Token, TokenizeState};
 use crate::types::dynamic::Variant;
 use crate::{
     calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, FuncArgs, Module, Position,
-    RhaiResult, StaticVec,
+    RhaiResult, RhaiResultOf, StaticVec,
 };
 use std::any::type_name;
 #[cfg(feature = "no_std")]
@@ -233,7 +233,7 @@ impl<'a> NativeCallContext<'a> {
         &self,
         fn_name: impl AsRef<str>,
         args: impl FuncArgs,
-    ) -> Result<T, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<T> {
         let mut arg_values = StaticVec::new_const();
         args.parse(&mut arg_values);
 
@@ -277,7 +277,7 @@ impl<'a> NativeCallContext<'a> {
         is_ref_mut: bool,
         is_method_call: bool,
         args: &mut [&mut Dynamic],
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         let fn_name = fn_name.as_ref();
 
         let hash = if is_method_call {
@@ -363,6 +363,9 @@ pub type FnAny = dyn Fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult;
 #[cfg(feature = "sync")]
 pub type FnAny = dyn Fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult + Send + Sync;
 
+/// A trail object for built-in functions.
+pub type FnBuiltin = fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult;
+
 /// A standard function that gets an iterator from a type.
 pub type IteratorFn = fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
@@ -405,12 +408,9 @@ pub type OnParseTokenCallback =
 /// A standard callback function for variable access.
 #[cfg(not(feature = "sync"))]
 pub type OnVarCallback =
-    Box<dyn Fn(&str, usize, &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>> + 'static>;
+    Box<dyn Fn(&str, usize, &EvalContext) -> RhaiResultOf<Option<Dynamic>> + 'static>;
 /// A standard callback function for variable access.
 #[cfg(feature = "sync")]
 pub type OnVarCallback = Box<
-    dyn Fn(&str, usize, &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>
-        + Send
-        + Sync
-        + 'static,
+    dyn Fn(&str, usize, &EvalContext) -> RhaiResultOf<Option<Dynamic>> + Send + Sync + 'static,
 >;

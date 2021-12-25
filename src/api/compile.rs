@@ -1,7 +1,7 @@
 //! Module that defines the public compilation API of [`Engine`].
 
-use crate::parser::ParseState;
-use crate::{Engine, ParseError, Scope, AST};
+use crate::parser::{ParseResult, ParseState};
+use crate::{Engine, RhaiResultOf, Scope, AST};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -26,7 +26,7 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    pub fn compile(&self, script: impl AsRef<str>) -> Result<AST, ParseError> {
+    pub fn compile(&self, script: impl AsRef<str>) -> ParseResult<AST> {
         self.compile_with_scope(&Scope::new(), script)
     }
     /// Compile a string into an [`AST`] using own scope, which can be used later for evaluation.
@@ -67,11 +67,7 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    pub fn compile_with_scope(
-        &self,
-        scope: &Scope,
-        script: impl AsRef<str>,
-    ) -> Result<AST, ParseError> {
+    pub fn compile_with_scope(&self, scope: &Scope, script: impl AsRef<str>) -> ParseResult<AST> {
         self.compile_scripts_with_scope(scope, &[script])
     }
     /// Compile a string into an [`AST`] using own scope, which can be used later for evaluation,
@@ -88,7 +84,7 @@ impl Engine {
         &self,
         scope: &Scope,
         script: impl AsRef<str>,
-    ) -> Result<AST, Box<crate::EvalAltResult>> {
+    ) -> RhaiResultOf<AST> {
         use crate::{
             ast::{ASTNode, Expr, Stmt},
             func::native::shared_take_or_clone,
@@ -201,7 +197,7 @@ impl Engine {
         &self,
         scope: &Scope,
         scripts: &[impl AsRef<str>],
-    ) -> Result<AST, ParseError> {
+    ) -> ParseResult<AST> {
         self.compile_with_scope_and_optimization_level(
             scope,
             scripts,
@@ -222,7 +218,7 @@ impl Engine {
         scope: &Scope,
         scripts: &[impl AsRef<str>],
         #[cfg(not(feature = "no_optimize"))] optimization_level: crate::OptimizationLevel,
-    ) -> Result<AST, ParseError> {
+    ) -> ParseResult<AST> {
         let (stream, tokenizer_control) =
             self.lex_raw(scripts, self.token_mapper.as_ref().map(Box::as_ref));
         let mut state = ParseState::new(self, tokenizer_control);
@@ -255,7 +251,7 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    pub fn compile_expression(&self, script: impl AsRef<str>) -> Result<AST, ParseError> {
+    pub fn compile_expression(&self, script: impl AsRef<str>) -> ParseResult<AST> {
         self.compile_expression_with_scope(&Scope::new(), script)
     }
     /// Compile a string containing an expression into an [`AST`] using own scope,
@@ -295,7 +291,7 @@ impl Engine {
         &self,
         scope: &Scope,
         script: impl AsRef<str>,
-    ) -> Result<AST, ParseError> {
+    ) -> ParseResult<AST> {
         let scripts = [script];
         let (stream, tokenizer_control) =
             self.lex_raw(&scripts, self.token_mapper.as_ref().map(Box::as_ref));
@@ -355,18 +351,14 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
-    pub fn parse_json(
-        &self,
-        json: impl AsRef<str>,
-        has_null: bool,
-    ) -> Result<crate::Map, Box<crate::EvalAltResult>> {
+    pub fn parse_json(&self, json: impl AsRef<str>, has_null: bool) -> RhaiResultOf<crate::Map> {
         use crate::tokenizer::Token;
 
         fn parse_json_inner(
             engine: &Engine,
             json: &str,
             has_null: bool,
-        ) -> Result<crate::Map, Box<crate::EvalAltResult>> {
+        ) -> RhaiResultOf<crate::Map> {
             let mut scope = Scope::new();
             let json_text = json.trim_start();
             let scripts = if json_text.starts_with(Token::MapStart.literal_syntax()) {

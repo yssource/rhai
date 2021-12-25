@@ -4,7 +4,7 @@
 use crate::plugin::*;
 use crate::{
     def_package, Blob, Dynamic, EvalAltResult, ExclusiveRange, InclusiveRange, NativeCallContext,
-    Position, INT,
+    Position, RhaiResultOf, INT,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -31,10 +31,7 @@ pub mod blob_functions {
         Blob::new()
     }
     #[rhai_fn(name = "blob", return_raw)]
-    pub fn blob_with_capacity(
-        ctx: NativeCallContext,
-        len: INT,
-    ) -> Result<Blob, Box<EvalAltResult>> {
+    pub fn blob_with_capacity(ctx: NativeCallContext, len: INT) -> RhaiResultOf<Blob> {
         blob_with_capacity_and_value(ctx, len, 0)
     }
     #[rhai_fn(name = "blob", return_raw)]
@@ -42,7 +39,7 @@ pub mod blob_functions {
         ctx: NativeCallContext,
         len: INT,
         value: INT,
-    ) -> Result<Blob, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Blob> {
         let len = if len < 0 { 0 } else { len as usize };
         let _ctx = ctx;
 
@@ -118,7 +115,7 @@ pub mod blob_functions {
         blob: &mut Blob,
         len: INT,
         item: INT,
-    ) -> Result<(), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         if len <= 0 {
             return Ok(());
         }

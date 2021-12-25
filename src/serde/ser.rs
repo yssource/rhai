@@ -1,6 +1,6 @@
 //! Implement serialization support of [`Dynamic`][crate::Dynamic] for [`serde`].
 
-use crate::{Dynamic, EvalAltResult, Position, RhaiResult};
+use crate::{Dynamic, EvalAltResult, Position, RhaiError, RhaiResult, RhaiResultOf};
 use serde::ser::{
     Error, SerializeMap, SerializeSeq, SerializeStruct, SerializeTuple, SerializeTupleStruct,
 };
@@ -81,7 +81,7 @@ pub fn to_dynamic<T: Serialize>(value: T) -> RhaiResult {
     value.serialize(&mut s)
 }
 
-impl Error for Box<EvalAltResult> {
+impl Error for RhaiError {
     fn custom<T: fmt::Display>(err: T) -> Self {
         EvalAltResult::ErrorRuntime(err.to_string().into(), Position::NONE).into()
     }
@@ -89,47 +89,47 @@ impl Error for Box<EvalAltResult> {
 
 impl Serializer for &mut DynamicSerializer {
     type Ok = Dynamic;
-    type Error = Box<EvalAltResult>;
+    type Error = RhaiError;
     type SerializeSeq = DynamicSerializer;
     type SerializeTuple = DynamicSerializer;
     type SerializeTupleStruct = DynamicSerializer;
     #[cfg(not(any(feature = "no_object", feature = "no_index")))]
     type SerializeTupleVariant = TupleVariantSerializer;
     #[cfg(any(feature = "no_object", feature = "no_index"))]
-    type SerializeTupleVariant = serde::ser::Impossible<Dynamic, Box<EvalAltResult>>;
+    type SerializeTupleVariant = serde::ser::Impossible<Dynamic, RhaiError>;
     type SerializeMap = DynamicSerializer;
     type SerializeStruct = DynamicSerializer;
     #[cfg(not(feature = "no_object"))]
     type SerializeStructVariant = StructVariantSerializer;
     #[cfg(feature = "no_object")]
-    type SerializeStructVariant = serde::ser::Impossible<Dynamic, Box<EvalAltResult>>;
+    type SerializeStructVariant = serde::ser::Impossible<Dynamic, RhaiError>;
 
-    fn serialize_bool(self, v: bool) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn serialize_bool(self, v: bool) -> RhaiResultOf<Self::Ok> {
         Ok(v.into())
     }
 
-    fn serialize_i8(self, v: i8) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn serialize_i8(self, v: i8) -> RhaiResultOf<Self::Ok> {
         #[cfg(not(feature = "only_i32"))]
         return self.serialize_i64(i64::from(v));
         #[cfg(feature = "only_i32")]
         return self.serialize_i32(i32::from(v));
     }
 
-    fn serialize_i16(self, v: i16) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn serialize_i16(self, v: i16) -> RhaiResultOf<Self::Ok> {
         #[cfg(not(feature = "only_i32"))]
         return self.serialize_i64(i64::from(v));
         #[cfg(feature = "only_i32")]
         return self.serialize_i32(i32::from(v));
     }
 
-    fn serialize_i32(self, v: i32) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn serialize_i32(self, v: i32) -> RhaiResultOf<Self::Ok> {
         #[cfg(not(feature = "only_i32"))]
         return self.serialize_i64(i64::from(v));
         #[cfg(feature = "only_i32")]
         return Ok(v.into());
     }
 
-    fn serialize_i64(self, v: i64) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn serialize_i64(self, v: i64) -> RhaiResultOf<Self::Ok> {
         #[cfg(not(feature = "only_i32"))]
         {
             Ok(v.into())
@@ -142,7 +142,7 @@ impl Serializer for &mut DynamicSerializer {
         }
     }
 
-    fn serialize_i128(self, v: i128) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn serialize_i128(self, v: i128) -> RhaiResultOf<Self::Ok> {
         #[cfg(not(feature = "only_i32"))]
         if v > i64::MAX as i128 {
             Ok(Dynamic::from(v))
@@ -157,21 +157,21 @@ impl Serializer for &mut DynamicSerializer {
         }
     }
 
-    fn serialize_u8(self, v: u8) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn serialize_u8(self, v: u8) -> RhaiResultOf<Self::Ok> {
         #[cfg(not(feature = "only_i32"))]
         return self.serialize_i64(i64::from(v));
         #[cfg(feature = "only_i32")]
         return self.serialize_i32(i32::from(v));
     }
 
-    fn serialize_u16(self, v: u16) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn serialize_u16(self, v: u16) -> RhaiResultOf<Self::Ok> {
         #[cfg(not(feature = "only_i32"))]
         return self.serialize_i64(i64::from(v));
         #[cfg(feature = "only_i32")]
         return self.serialize_i32(i32::from(v));
     }
 
-    fn serialize_u32(self, v: u32) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn serialize_u32(self, v: u32) -> RhaiResultOf<Self::Ok> {
         #[cfg(not(feature = "only_i32"))]
         {
             self.serialize_i64(i64::from(v))
@@ -184,7 +184,7 @@ impl Serializer for &mut DynamicSerializer {
         }
     }
 
-    fn serialize_u64(self, v: u64) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn serialize_u64(self, v: u64) -> RhaiResultOf<Self::Ok> {
         #[cfg(not(feature = "only_i32"))]
         if v > i64::MAX as u64 {
             Ok(Dynamic::from(v))
@@ -199,7 +199,7 @@ impl Serializer for &mut DynamicSerializer {
         }
     }
 
-    fn serialize_u128(self, v: u128) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn serialize_u128(self, v: u128) -> RhaiResultOf<Self::Ok> {
         #[cfg(not(feature = "only_i32"))]
         if v > i64::MAX as u128 {
             Ok(Dynamic::from(v))
@@ -214,7 +214,7 @@ impl Serializer for &mut DynamicSerializer {
         }
     }
 
-    fn serialize_f32(self, v: f32) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn serialize_f32(self, v: f32) -> RhaiResultOf<Self::Ok> {
         #[cfg(any(not(feature = "no_float"), not(feature = "decimal")))]
         return Ok(Dynamic::from(v));
 
@@ -230,7 +230,7 @@ impl Serializer for &mut DynamicSerializer {
         }
     }
 
-    fn serialize_f64(self, v: f64) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn serialize_f64(self, v: f64) -> RhaiResultOf<Self::Ok> {
         #[cfg(any(not(feature = "no_float"), not(feature = "decimal")))]
         return Ok(Dynamic::from(v));
 
@@ -246,15 +246,15 @@ impl Serializer for &mut DynamicSerializer {
         }
     }
 
-    fn serialize_char(self, v: char) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn serialize_char(self, v: char) -> RhaiResultOf<Self::Ok> {
         Ok(v.into())
     }
 
-    fn serialize_str(self, v: &str) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn serialize_str(self, v: &str) -> RhaiResultOf<Self::Ok> {
         Ok(v.into())
     }
 
-    fn serialize_bytes(self, _v: &[u8]) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn serialize_bytes(self, _v: &[u8]) -> RhaiResultOf<Self::Ok> {
         #[cfg(not(feature = "no_index"))]
         return Ok(Dynamic::from_blob(_v.to_vec()));
 
@@ -267,22 +267,19 @@ impl Serializer for &mut DynamicSerializer {
         .into());
     }
 
-    fn serialize_none(self) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn serialize_none(self) -> RhaiResultOf<Self::Ok> {
         Ok(Dynamic::UNIT)
     }
 
-    fn serialize_some<T: ?Sized + Serialize>(
-        self,
-        value: &T,
-    ) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn serialize_some<T: ?Sized + Serialize>(self, value: &T) -> RhaiResultOf<Self::Ok> {
         value.serialize(&mut *self)
     }
 
-    fn serialize_unit(self) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn serialize_unit(self) -> RhaiResultOf<Self::Ok> {
         Ok(Dynamic::UNIT)
     }
 
-    fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn serialize_unit_struct(self, _name: &'static str) -> RhaiResultOf<Self::Ok> {
         self.serialize_unit()
     }
 
@@ -291,7 +288,7 @@ impl Serializer for &mut DynamicSerializer {
         _name: &'static str,
         _variant_index: u32,
         variant: &'static str,
-    ) -> Result<Self::Ok, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Self::Ok> {
         self.serialize_str(variant)
     }
 
@@ -299,7 +296,7 @@ impl Serializer for &mut DynamicSerializer {
         self,
         _name: &'static str,
         value: &T,
-    ) -> Result<Self::Ok, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Self::Ok> {
         value.serialize(&mut *self)
     }
 
@@ -309,7 +306,7 @@ impl Serializer for &mut DynamicSerializer {
         _variant_index: u32,
         _variant: &'static str,
         _value: &T,
-    ) -> Result<Self::Ok, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Self::Ok> {
         #[cfg(not(feature = "no_object"))]
         {
             let content = to_dynamic(_value)?;
@@ -324,7 +321,7 @@ impl Serializer for &mut DynamicSerializer {
         .into());
     }
 
-    fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Box<EvalAltResult>> {
+    fn serialize_seq(self, _len: Option<usize>) -> RhaiResultOf<Self::SerializeSeq> {
         #[cfg(not(feature = "no_index"))]
         return Ok(DynamicSerializer::new(crate::Array::new().into()));
         #[cfg(feature = "no_index")]
@@ -336,7 +333,7 @@ impl Serializer for &mut DynamicSerializer {
         .into());
     }
 
-    fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple, Box<EvalAltResult>> {
+    fn serialize_tuple(self, len: usize) -> RhaiResultOf<Self::SerializeTuple> {
         self.serialize_seq(Some(len))
     }
 
@@ -344,7 +341,7 @@ impl Serializer for &mut DynamicSerializer {
         self,
         _name: &'static str,
         len: usize,
-    ) -> Result<Self::SerializeTupleStruct, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Self::SerializeTupleStruct> {
         self.serialize_seq(Some(len))
     }
 
@@ -354,7 +351,7 @@ impl Serializer for &mut DynamicSerializer {
         _variant_index: u32,
         _variant: &'static str,
         _len: usize,
-    ) -> Result<Self::SerializeTupleVariant, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Self::SerializeTupleVariant> {
         #[cfg(not(feature = "no_object"))]
         #[cfg(not(feature = "no_index"))]
         return Ok(TupleVariantSerializer {
@@ -370,7 +367,7 @@ impl Serializer for &mut DynamicSerializer {
         .into());
     }
 
-    fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Box<EvalAltResult>> {
+    fn serialize_map(self, _len: Option<usize>) -> RhaiResultOf<Self::SerializeMap> {
         #[cfg(not(feature = "no_object"))]
         return Ok(DynamicSerializer::new(crate::Map::new().into()));
         #[cfg(feature = "no_object")]
@@ -386,7 +383,7 @@ impl Serializer for &mut DynamicSerializer {
         self,
         _name: &'static str,
         len: usize,
-    ) -> Result<Self::SerializeStruct, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Self::SerializeStruct> {
         self.serialize_map(Some(len))
     }
 
@@ -396,7 +393,7 @@ impl Serializer for &mut DynamicSerializer {
         _variant_index: u32,
         _variant: &'static str,
         _len: usize,
-    ) -> Result<Self::SerializeStructVariant, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Self::SerializeStructVariant> {
         #[cfg(not(feature = "no_object"))]
         return Ok(StructVariantSerializer {
             variant: _variant,
@@ -414,12 +411,9 @@ impl Serializer for &mut DynamicSerializer {
 
 impl SerializeSeq for DynamicSerializer {
     type Ok = Dynamic;
-    type Error = Box<EvalAltResult>;
+    type Error = RhaiError;
 
-    fn serialize_element<T: ?Sized + Serialize>(
-        &mut self,
-        _value: &T,
-    ) -> Result<(), Box<EvalAltResult>> {
+    fn serialize_element<T: ?Sized + Serialize>(&mut self, _value: &T) -> RhaiResultOf<()> {
         #[cfg(not(feature = "no_index"))]
         {
             let _value = _value.serialize(&mut *self)?;
@@ -437,7 +431,7 @@ impl SerializeSeq for DynamicSerializer {
     }
 
     // Close the sequence.
-    fn end(self) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn end(self) -> RhaiResultOf<Self::Ok> {
         #[cfg(not(feature = "no_index"))]
         return Ok(self._value);
         #[cfg(feature = "no_index")]
@@ -452,12 +446,9 @@ impl SerializeSeq for DynamicSerializer {
 
 impl SerializeTuple for DynamicSerializer {
     type Ok = Dynamic;
-    type Error = Box<EvalAltResult>;
+    type Error = RhaiError;
 
-    fn serialize_element<T: ?Sized + Serialize>(
-        &mut self,
-        _value: &T,
-    ) -> Result<(), Box<EvalAltResult>> {
+    fn serialize_element<T: ?Sized + Serialize>(&mut self, _value: &T) -> RhaiResultOf<()> {
         #[cfg(not(feature = "no_index"))]
         {
             let _value = _value.serialize(&mut *self)?;
@@ -474,7 +465,7 @@ impl SerializeTuple for DynamicSerializer {
         .into());
     }
 
-    fn end(self) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn end(self) -> RhaiResultOf<Self::Ok> {
         #[cfg(not(feature = "no_index"))]
         return Ok(self._value);
         #[cfg(feature = "no_index")]
@@ -489,12 +480,9 @@ impl SerializeTuple for DynamicSerializer {
 
 impl SerializeTupleStruct for DynamicSerializer {
     type Ok = Dynamic;
-    type Error = Box<EvalAltResult>;
+    type Error = RhaiError;
 
-    fn serialize_field<T: ?Sized + Serialize>(
-        &mut self,
-        _value: &T,
-    ) -> Result<(), Box<EvalAltResult>> {
+    fn serialize_field<T: ?Sized + Serialize>(&mut self, _value: &T) -> RhaiResultOf<()> {
         #[cfg(not(feature = "no_index"))]
         {
             let _value = _value.serialize(&mut *self)?;
@@ -511,7 +499,7 @@ impl SerializeTupleStruct for DynamicSerializer {
         .into());
     }
 
-    fn end(self) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn end(self) -> RhaiResultOf<Self::Ok> {
         #[cfg(not(feature = "no_index"))]
         return Ok(self._value);
         #[cfg(feature = "no_index")]
@@ -526,9 +514,9 @@ impl SerializeTupleStruct for DynamicSerializer {
 
 impl SerializeMap for DynamicSerializer {
     type Ok = Dynamic;
-    type Error = Box<EvalAltResult>;
+    type Error = RhaiError;
 
-    fn serialize_key<T: ?Sized + Serialize>(&mut self, _key: &T) -> Result<(), Box<EvalAltResult>> {
+    fn serialize_key<T: ?Sized + Serialize>(&mut self, _key: &T) -> RhaiResultOf<()> {
         #[cfg(not(feature = "no_object"))]
         {
             self._key = _key.serialize(&mut *self)?;
@@ -543,10 +531,7 @@ impl SerializeMap for DynamicSerializer {
         .into());
     }
 
-    fn serialize_value<T: ?Sized + Serialize>(
-        &mut self,
-        _value: &T,
-    ) -> Result<(), Box<EvalAltResult>> {
+    fn serialize_value<T: ?Sized + Serialize>(&mut self, _value: &T) -> RhaiResultOf<()> {
         #[cfg(not(feature = "no_object"))]
         {
             let key = std::mem::take(&mut self._key)
@@ -576,7 +561,7 @@ impl SerializeMap for DynamicSerializer {
         &mut self,
         _key: &K,
         _value: &T,
-    ) -> Result<(), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         #[cfg(not(feature = "no_object"))]
         {
             let _key: Dynamic = _key.serialize(&mut *self)?;
@@ -597,7 +582,7 @@ impl SerializeMap for DynamicSerializer {
         .into());
     }
 
-    fn end(self) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn end(self) -> RhaiResultOf<Self::Ok> {
         #[cfg(not(feature = "no_object"))]
         return Ok(self._value);
         #[cfg(feature = "no_object")]
@@ -612,13 +597,13 @@ impl SerializeMap for DynamicSerializer {
 
 impl SerializeStruct for DynamicSerializer {
     type Ok = Dynamic;
-    type Error = Box<EvalAltResult>;
+    type Error = RhaiError;
 
     fn serialize_field<T: ?Sized + Serialize>(
         &mut self,
         _key: &'static str,
         _value: &T,
-    ) -> Result<(), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         #[cfg(not(feature = "no_object"))]
         {
             let _value = _value.serialize(&mut *self)?;
@@ -635,7 +620,7 @@ impl SerializeStruct for DynamicSerializer {
         .into());
     }
 
-    fn end(self) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn end(self) -> RhaiResultOf<Self::Ok> {
         #[cfg(not(feature = "no_object"))]
         return Ok(self._value);
         #[cfg(feature = "no_object")]
@@ -657,18 +642,15 @@ struct TupleVariantSerializer {
 #[cfg(not(any(feature = "no_object", feature = "no_index")))]
 impl serde::ser::SerializeTupleVariant for TupleVariantSerializer {
     type Ok = Dynamic;
-    type Error = Box<EvalAltResult>;
+    type Error = RhaiError;
 
-    fn serialize_field<T: ?Sized + Serialize>(
-        &mut self,
-        value: &T,
-    ) -> Result<(), Box<EvalAltResult>> {
+    fn serialize_field<T: ?Sized + Serialize>(&mut self, value: &T) -> RhaiResultOf<()> {
         let value = to_dynamic(value)?;
         self.array.push(value);
         Ok(())
     }
 
-    fn end(self) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn end(self) -> RhaiResultOf<Self::Ok> {
         make_variant(self.variant, self.array.into())
     }
 }
@@ -682,19 +664,19 @@ struct StructVariantSerializer {
 #[cfg(not(feature = "no_object"))]
 impl serde::ser::SerializeStructVariant for StructVariantSerializer {
     type Ok = Dynamic;
-    type Error = Box<EvalAltResult>;
+    type Error = RhaiError;
 
     fn serialize_field<T: ?Sized + Serialize>(
         &mut self,
         key: &'static str,
         value: &T,
-    ) -> Result<(), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         let value = to_dynamic(value)?;
         self.map.insert(key.into(), value);
         Ok(())
     }
 
-    fn end(self) -> Result<Self::Ok, Box<EvalAltResult>> {
+    fn end(self) -> RhaiResultOf<Self::Ok> {
         make_variant(self.variant, self.map.into())
     }
 }

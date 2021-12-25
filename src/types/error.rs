@@ -1,6 +1,6 @@
 //! Module containing error definitions for the evaluation process.
 
-use crate::{Dynamic, ImmutableString, ParseErrorType, Position, INT};
+use crate::{Dynamic, ImmutableString, ParseErrorType, Position, INT, RhaiError};
 #[cfg(feature = "no_std")]
 use core_error::Error;
 #[cfg(not(feature = "no_std"))]
@@ -36,12 +36,12 @@ pub enum EvalAltResult {
     ErrorFunctionNotFound(String, Position),
     /// An error has occurred inside a called function.
     /// Wrapped values are the function name, function source, and the interior error.
-    ErrorInFunctionCall(String, String, Box<EvalAltResult>, Position),
+    ErrorInFunctionCall(String, String, RhaiError, Position),
     /// Usage of an unknown [module][crate::Module]. Wrapped value is the [module][crate::Module] name.
     ErrorModuleNotFound(String, Position),
     /// An error has occurred while loading a [module][crate::Module].
     /// Wrapped value are the [module][crate::Module] name and the interior error.
-    ErrorInModule(String, Box<EvalAltResult>, Position),
+    ErrorInModule(String, RhaiError, Position),
     /// Access to `this` that is not bound.
     ErrorUnboundThis(Position),
     /// Data is not of the required type.
@@ -222,7 +222,7 @@ impl<T: AsRef<str>> From<T> for EvalAltResult {
     }
 }
 
-impl<T: AsRef<str>> From<T> for Box<EvalAltResult> {
+impl<T: AsRef<str>> From<T> for RhaiError {
     #[inline(never)]
     fn from(err: T) -> Self {
         EvalAltResult::ErrorRuntime(err.as_ref().to_string().into(), Position::NONE).into()

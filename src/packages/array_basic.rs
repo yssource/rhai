@@ -5,7 +5,7 @@ use crate::engine::OP_EQUALS;
 use crate::plugin::*;
 use crate::{
     def_package, Array, Dynamic, EvalAltResult, ExclusiveRange, FnPtr, InclusiveRange,
-    NativeCallContext, Position, INT,
+    NativeCallContext, Position, RhaiResultOf, INT,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -80,7 +80,7 @@ pub mod array_functions {
         array: &mut Array,
         len: INT,
         item: Dynamic,
-    ) -> Result<(), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         if len <= 0 {
             return Ok(());
         }
@@ -263,11 +263,7 @@ pub mod array_functions {
         }
     }
     #[rhai_fn(return_raw, pure)]
-    pub fn map(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        mapper: FnPtr,
-    ) -> Result<Array, Box<EvalAltResult>> {
+    pub fn map(ctx: NativeCallContext, array: &mut Array, mapper: FnPtr) -> RhaiResultOf<Array> {
         if array.is_empty() {
             return Ok(array.clone());
         }
@@ -304,7 +300,7 @@ pub mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         mapper: &str,
-    ) -> Result<Array, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Array> {
         map(ctx, array, FnPtr::new(mapper)?)
     }
 
@@ -313,7 +309,7 @@ pub mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         filter: FnPtr,
-    ) -> Result<Array, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Array> {
         if array.is_empty() {
             return Ok(array.clone());
         }
@@ -353,7 +349,7 @@ pub mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         filter_func: &str,
-    ) -> Result<Array, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Array> {
         filter(ctx, array, FnPtr::new(filter_func)?)
     }
     #[rhai_fn(return_raw, pure)]
@@ -361,7 +357,7 @@ pub mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         value: Dynamic,
-    ) -> Result<bool, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<bool> {
         if array.is_empty() {
             return Ok(false);
         }
@@ -396,7 +392,7 @@ pub mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         value: Dynamic,
-    ) -> Result<INT, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<INT> {
         if array.is_empty() {
             Ok(-1)
         } else {
@@ -409,7 +405,7 @@ pub mod array_functions {
         array: &mut Array,
         value: Dynamic,
         start: INT,
-    ) -> Result<INT, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<INT> {
         if array.is_empty() {
             return Ok(-1);
         }
@@ -455,7 +451,7 @@ pub mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         filter: &str,
-    ) -> Result<INT, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<INT> {
         index_of_filter(ctx, array, FnPtr::new(filter)?)
     }
     #[rhai_fn(name = "index_of", return_raw, pure)]
@@ -463,7 +459,7 @@ pub mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         filter: FnPtr,
-    ) -> Result<INT, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<INT> {
         if array.is_empty() {
             Ok(-1)
         } else {
@@ -476,7 +472,7 @@ pub mod array_functions {
         array: &mut Array,
         filter: FnPtr,
         start: INT,
-    ) -> Result<INT, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<INT> {
         if array.is_empty() {
             return Ok(-1);
         }
@@ -526,15 +522,11 @@ pub mod array_functions {
         array: &mut Array,
         filter: &str,
         start: INT,
-    ) -> Result<INT, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<INT> {
         index_of_filter_starting_from(ctx, array, FnPtr::new(filter)?, start)
     }
     #[rhai_fn(return_raw, pure)]
-    pub fn some(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        filter: FnPtr,
-    ) -> Result<bool, Box<EvalAltResult>> {
+    pub fn some(ctx: NativeCallContext, array: &mut Array, filter: FnPtr) -> RhaiResultOf<bool> {
         if array.is_empty() {
             return Ok(false);
         }
@@ -572,15 +564,11 @@ pub mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         filter: &str,
-    ) -> Result<bool, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<bool> {
         some(ctx, array, FnPtr::new(filter)?)
     }
     #[rhai_fn(return_raw, pure)]
-    pub fn all(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        filter: FnPtr,
-    ) -> Result<bool, Box<EvalAltResult>> {
+    pub fn all(ctx: NativeCallContext, array: &mut Array, filter: FnPtr) -> RhaiResultOf<bool> {
         if array.is_empty() {
             return Ok(true);
         }
@@ -618,11 +606,11 @@ pub mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         filter: &str,
-    ) -> Result<bool, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<bool> {
         all(ctx, array, FnPtr::new(filter)?)
     }
     #[rhai_fn(return_raw)]
-    pub fn dedup(ctx: NativeCallContext, array: &mut Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn dedup(ctx: NativeCallContext, array: &mut Array) -> RhaiResultOf<()> {
         dedup_with_fn_name(ctx, array, OP_EQUALS)
     }
     #[rhai_fn(name = "dedup", return_raw)]
@@ -630,7 +618,7 @@ pub mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         comparer: FnPtr,
-    ) -> Result<(), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         if array.is_empty() {
             return Ok(());
         }
@@ -650,15 +638,11 @@ pub mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         comparer: &str,
-    ) -> Result<(), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         dedup_by_comparer(ctx, array, FnPtr::new(comparer)?)
     }
     #[rhai_fn(return_raw, pure)]
-    pub fn reduce(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        reducer: FnPtr,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    pub fn reduce(ctx: NativeCallContext, array: &mut Array, reducer: FnPtr) -> RhaiResult {
         reduce_with_initial(ctx, array, reducer, Dynamic::UNIT)
     }
     #[rhai_fn(name = "reduce", return_raw, pure)]
@@ -666,7 +650,7 @@ pub mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         reducer: &str,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         reduce(ctx, array, FnPtr::new(reducer)?)
     }
     #[rhai_fn(name = "reduce", return_raw, pure)]
@@ -675,7 +659,7 @@ pub mod array_functions {
         array: &mut Array,
         reducer: FnPtr,
         initial: Dynamic,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         if array.is_empty() {
             return Ok(initial);
         }
@@ -713,15 +697,11 @@ pub mod array_functions {
         array: &mut Array,
         reducer: &str,
         initial: Dynamic,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         reduce_with_initial(ctx, array, FnPtr::new(reducer)?, initial)
     }
     #[rhai_fn(return_raw, pure)]
-    pub fn reduce_rev(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        reducer: FnPtr,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    pub fn reduce_rev(ctx: NativeCallContext, array: &mut Array, reducer: FnPtr) -> RhaiResult {
         reduce_rev_with_initial(ctx, array, reducer, Dynamic::UNIT)
     }
     #[rhai_fn(name = "reduce_rev", return_raw, pure)]
@@ -729,7 +709,7 @@ pub mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         reducer: &str,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         reduce_rev(ctx, array, FnPtr::new(reducer)?)
     }
     #[rhai_fn(name = "reduce_rev", return_raw, pure)]
@@ -738,7 +718,7 @@ pub mod array_functions {
         array: &mut Array,
         reducer: FnPtr,
         initial: Dynamic,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         if array.is_empty() {
             return Ok(initial);
         }
@@ -777,7 +757,7 @@ pub mod array_functions {
         array: &mut Array,
         reducer: &str,
         initial: Dynamic,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         reduce_rev_with_initial(ctx, array, FnPtr::new(reducer)?, initial)
     }
     #[rhai_fn(name = "sort", return_raw)]
@@ -785,15 +765,11 @@ pub mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         comparer: &str,
-    ) -> Result<(), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         sort(ctx, array, FnPtr::new(comparer)?)
     }
     #[rhai_fn(return_raw)]
-    pub fn sort(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        comparer: FnPtr,
-    ) -> Result<(), Box<EvalAltResult>> {
+    pub fn sort(ctx: NativeCallContext, array: &mut Array, comparer: FnPtr) -> RhaiResultOf<()> {
         if array.len() <= 1 {
             return Ok(());
         }
@@ -815,7 +791,7 @@ pub mod array_functions {
         Ok(())
     }
     #[rhai_fn(name = "sort", return_raw)]
-    pub fn sort_with_builtin(array: &mut Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn sort_with_builtin(array: &mut Array) -> RhaiResultOf<()> {
         if array.len() <= 1 {
             return Ok(());
         }
@@ -891,7 +867,7 @@ pub mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         filter: FnPtr,
-    ) -> Result<Array, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Array> {
         if array.is_empty() {
             return Ok(Array::new());
         }
@@ -938,7 +914,7 @@ pub mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         filter: &str,
-    ) -> Result<Array, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Array> {
         drain(ctx, array, FnPtr::new(filter)?)
     }
     #[rhai_fn(name = "drain")]
@@ -985,7 +961,7 @@ pub mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         filter: FnPtr,
-    ) -> Result<Array, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Array> {
         if array.is_empty() {
             return Ok(Array::new());
         }
@@ -1032,7 +1008,7 @@ pub mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         filter: &str,
-    ) -> Result<Array, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Array> {
         retain(ctx, array, FnPtr::new(filter)?)
     }
     #[rhai_fn(name = "retain")]
@@ -1082,7 +1058,7 @@ pub mod array_functions {
         ctx: NativeCallContext,
         array1: &mut Array,
         array2: Array,
-    ) -> Result<bool, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<bool> {
         if array1.len() != array2.len() {
             return Ok(false);
         }
@@ -1122,7 +1098,7 @@ pub mod array_functions {
         ctx: NativeCallContext,
         array1: &mut Array,
         array2: Array,
-    ) -> Result<bool, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<bool> {
         equals(ctx, array1, array2).map(|r| !r)
     }
 }

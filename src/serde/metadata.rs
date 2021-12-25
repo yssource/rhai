@@ -1,3 +1,5 @@
+//! Serialization of functions metadata.
+
 #![cfg(feature = "metadata")]
 
 use crate::module::calc_native_fn_hash;
@@ -162,16 +164,9 @@ impl<'a> From<&'a crate::module::FuncInfo> for FnMetadata<'a> {
                     .as_ref()
                     .map_or_else(|| Vec::new(), |v| v.iter().map(|s| &**s).collect())
             } else {
-                #[cfg(not(feature = "metadata"))]
-                {
-                    Vec::new()
-                }
-                #[cfg(feature = "metadata")]
-                {
-                    info.comments
-                        .as_ref()
-                        .map_or_else(|| Vec::new(), |v| v.iter().map(|s| &**s).collect())
-                }
+                info.comments
+                    .as_ref()
+                    .map_or_else(|| Vec::new(), |v| v.iter().map(|s| &**s).collect())
             },
         }
     }
@@ -211,7 +206,6 @@ impl<'a> From<&'a crate::Module> for ModuleMetadata<'a> {
     }
 }
 
-#[cfg(feature = "metadata")]
 impl Engine {
     /// _(metadata)_ Generate a list of all functions (including those defined in an
     /// [`AST`][crate::AST]) in JSON format.

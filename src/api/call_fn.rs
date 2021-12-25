@@ -4,7 +4,8 @@
 use crate::engine::{EvalState, Imports};
 use crate::types::dynamic::Variant;
 use crate::{
-    Dynamic, Engine, EvalAltResult, FuncArgs, Position, RhaiResult, Scope, StaticVec, AST,
+    Dynamic, Engine, EvalAltResult, FuncArgs, Position, RhaiResult, RhaiResultOf, Scope, StaticVec,
+    AST,
 };
 use std::any::type_name;
 #[cfg(feature = "no_std")]
@@ -60,7 +61,7 @@ impl Engine {
         ast: &AST,
         name: impl AsRef<str>,
         args: impl FuncArgs,
-    ) -> Result<T, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<T> {
         let mut arg_values = StaticVec::new_const();
         args.parse(&mut arg_values);
 

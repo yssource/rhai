@@ -2,7 +2,7 @@
 
 use crate::engine::OP_EQUALS;
 use crate::plugin::*;
-use crate::{def_package, Dynamic, ImmutableString, Map, INT};
+use crate::{def_package, Dynamic, ImmutableString, Map, RhaiResultOf, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -66,11 +66,7 @@ mod map_functions {
         }
     }
     #[rhai_fn(name = "==", return_raw, pure)]
-    pub fn equals(
-        ctx: NativeCallContext,
-        map1: &mut Map,
-        map2: Map,
-    ) -> Result<bool, Box<EvalAltResult>> {
+    pub fn equals(ctx: NativeCallContext, map1: &mut Map, map2: Map) -> RhaiResultOf<bool> {
         if map1.len() != map2.len() {
             return Ok(false);
         }
@@ -96,11 +92,7 @@ mod map_functions {
         Ok(true)
     }
     #[rhai_fn(name = "!=", return_raw, pure)]
-    pub fn not_equals(
-        ctx: NativeCallContext,
-        map1: &mut Map,
-        map2: Map,
-    ) -> Result<bool, Box<EvalAltResult>> {
+    pub fn not_equals(ctx: NativeCallContext, map1: &mut Map, map2: Map) -> RhaiResultOf<bool> {
         equals(ctx, map1, map2).map(|r| !r)
     }
 

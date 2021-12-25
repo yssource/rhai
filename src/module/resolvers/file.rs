@@ -2,7 +2,10 @@
 #![cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 
 use crate::func::native::shared_write_lock;
-use crate::{Engine, EvalAltResult, Identifier, Module, ModuleResolver, Position, Scope, Shared};
+use crate::{
+    Engine, EvalAltResult, Identifier, Module, ModuleResolver, Position, RhaiResultOf, Scope,
+    Shared,
+};
 
 use std::{
     collections::BTreeMap,
@@ -259,7 +262,7 @@ impl ModuleResolver for FileModuleResolver {
         source_path: Option<&str>,
         path: &str,
         pos: Position,
-    ) -> Result<Shared<Module>, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Shared<Module>> {
         // Load relative paths from source if there is no base path specified
         let source_path =
             source_path.and_then(|p| Path::new(p).parent().map(|p| p.to_string_lossy()));
@@ -315,7 +318,7 @@ impl ModuleResolver for FileModuleResolver {
         source_path: Option<&str>,
         path: &str,
         pos: Position,
-    ) -> Option<Result<crate::AST, Box<EvalAltResult>>> {
+    ) -> Option<RhaiResultOf<crate::AST>> {
         // Construct the script file path
         let file_path = self.get_file_path(path, source_path);
 

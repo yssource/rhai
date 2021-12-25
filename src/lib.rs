@@ -42,11 +42,10 @@
 //!
 //! #   #[cfg(not(feature = "no_std"))]
 //! #   #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-//!     assert_eq!(
-//!         // Evaluate the script, expects a 'bool' return
-//!         engine.eval_file::<bool>("my_script.rhai".into())?,
-//!         true
-//!     );
+//!     // Evaluate the script, expects a 'bool' return
+//!     let result = engine.eval_file::<bool>("my_script.rhai".into())?,
+//!
+//!     assert_eq!(result, true);
 //!
 //!     Ok(())
 //! }
@@ -83,7 +82,12 @@ mod tokenizer;
 mod types;
 mod r#unsafe;
 
-type RhaiResult = Result<Dynamic, Box<EvalAltResult>>;
+/// General evaluation error for Rhai scripts.
+type RhaiError = Box<EvalAltResult>;
+/// Generic [`Result`] type for Rhai functions.
+type RhaiResultOf<T> = Result<T, RhaiError>;
+/// General [`Result`] type for Rhai functions returning [`Dynamic`] values.
+type RhaiResult = RhaiResultOf<Dynamic>;
 
 /// The system integer type. It is defined as [`i64`].
 ///
@@ -234,7 +238,7 @@ pub use ast::FloatWrapper;
 pub use engine::{EvalState, FnResolutionCache, FnResolutionCacheEntry, Imports};
 
 #[cfg(feature = "internals")]
-pub use module::NamespaceRef;
+pub use module::Namespace;
 
 /// Alias to [`smallvec::SmallVec<[T; 3]>`](https://crates.io/crates/smallvec), which is a
 /// specialized [`Vec`] backed by a small, inline, fixed-size array when there are ≤ 3 items stored.

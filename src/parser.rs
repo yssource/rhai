@@ -8,7 +8,7 @@ use crate::ast::{
 use crate::custom_syntax::{markers::*, CustomSyntax};
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::func::hashing::get_hasher;
-use crate::module::NamespaceRef;
+use crate::module::Namespace;
 use crate::tokenizer::{
     is_keyword_function, is_valid_function_name, is_valid_identifier, Token, TokenStream,
     TokenizerControl,
@@ -28,9 +28,11 @@ use std::{
     ops::AddAssign,
 };
 
+pub type ParseResult<T> = Result<T, ParseError>;
+
 type PERR = ParseErrorType;
 
-type FunctionsLib = BTreeMap<u64, Shared<ScriptFnDef>>;
+type FnLib = BTreeMap<u64, Shared<ScriptFnDef>>;
 
 /// Invalid variable name that acts as a search barrier in a [`Scope`].
 const SCOPE_SEARCH_BARRIER_MARKER: &str = "$BARRIER$";
@@ -258,10 +260,7 @@ impl ParseSettings {
     /// Make sure that the current level of expression nesting is within the maximum limit.
     #[cfg(not(feature = "unchecked"))]
     #[inline]
-    pub fn ensure_level_within_max_limit(
-        &self,
-        limit: Option<NonZeroUsize>,
-    ) -> Result<(), ParseError> {
+    pub fn ensure_level_within_max_limit(&self, limit: Option<NonZeroUsize>) -> ParseResult<()> {
         if let Some(limit) = limit {
             if self.level > limit.get() {
                 return Err(PERR::ExprTooDeep.into_err(self.pos));
@@ -296,7 +295,7 @@ impl Expr {
         }
     }
     /// Raise an error if the expression can never yield a boolean value.
-    fn ensure_bool_expr(self) -> Result<Expr, ParseError> {
+    fn ensure_bool_expr(self) -> ParseResult<Expr> {
         let type_name = match self {
             Expr::Unit(_) => "()",
             Expr::DynamicConstant(ref v, _) if !v.is::<bool>() => v.type_name(),
@@ -317,7 +316,7 @@ impl Expr {
         )
     }
     /// Raise an error if the expression can never yield an iterable value.
-    fn ensure_iterable(self) -> Result<Expr, ParseError> {
+    fn ensure_iterable(self) -> ParseResult<Expr> {
         let type_name = match self {
             Expr::Unit(_) => "()",
             Expr::BoolConstant(_, _) => "a boolean",
@@ -340,10 +339,7 @@ impl Expr {
 
 /// Make sure that the next expression is not a statement expression (i.e. wrapped in `{}`).
 #[inline]
-fn ensure_not_statement_expr(
-    input: &mut TokenStream,
-    type_name: impl ToString,
-) -> Result<(), ParseError> {
+fn ensure_not_statement_expr(input: &mut TokenStream, type_name: impl ToString) -> ParseResult<()> {
     match input.peek().expect(NEVER_ENDS) {
         (Token::LeftBrace, pos) => Err(PERR::ExprExpected(type_name.to_string()).into_err(*pos)),
         _ => Ok(()),
@@ -352,7 +348,7 @@ fn ensure_not_statement_expr(
 
 /// Make sure that the next expression is not a mis-typed assignment (i.e. `a = b` instead of `a == b`).
 #[inline]
-fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
+fn ensure_not_assignment(input: &mut TokenStream) -> ParseResult<()> {
     match input.peek().expect(NEVER_ENDS) {
         (Token::Equals, pos) => Err(LexError::ImproperSymbol(
             "=".to_string(),
@@ -395,7 +391,7 @@ fn match_token(input: &mut TokenStream, token: Token) -> (bool, Position) {
 }
 
 /// Parse a variable name.
-fn parse_var_name(input: &mut TokenStream) -> Result<(Box<str>, Position), ParseError> {
+fn parse_var_name(input: &mut TokenStream) -> ParseResult<(Box<str>, Position)> {
     match input.next().expect(NEVER_ENDS) {
         // Variable name
         (Token::Identifier(s), pos) => Ok((s, pos)),
@@ -411,7 +407,7 @@ fn parse_var_name(input: &mut TokenStream) -> Result<(Box<str>, Position), Parse
 }
 
 /// Parse a symbol.
-fn parse_symbol(input: &mut TokenStream) -> Result<(Box<str>, Position), ParseError> {
+fn parse_symbol(input: &mut TokenStream) -> ParseResult<(Box<str>, Position)> {
     match input.next().expect(NEVER_ENDS) {
         // Symbol
         (token, pos) if token.is_standard_symbol() => Ok((token.literal_syntax().into(), pos)),
@@ -428,9 +424,9 @@ fn parse_symbol(input: &mut TokenStream) -> Result<(Box<str>, Position), ParseEr
 fn parse_paren_expr(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -462,12 +458,12 @@ fn parse_paren_expr(
 fn parse_fn_call(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     id: Identifier,
     capture_parent_scope: bool,
-    namespace: Option<NamespaceRef>,
+    namespace: Option<Namespace>,
     settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -625,10 +621,10 @@ fn parse_fn_call(
 fn parse_index_chain(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     lhs: Expr,
     settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -789,9 +785,9 @@ fn parse_index_chain(
 fn parse_array_literal(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -862,9 +858,9 @@ fn parse_array_literal(
 fn parse_map_literal(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -979,9 +975,9 @@ fn parse_map_literal(
 fn parse_switch(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -1164,9 +1160,9 @@ fn parse_switch(
 fn parse_primary(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -1258,7 +1254,7 @@ fn parse_primary(
 
             #[cfg(not(feature = "no_closure"))]
             new_state.external_vars.iter().try_for_each(
-                |(captured_var, &pos)| -> Result<_, ParseError> {
+                |(captured_var, &pos)| -> ParseResult<_> {
                     let index = state.access_var(captured_var, pos);
 
                     if !settings.is_closure && settings.strict_var && index.is_none() {
@@ -1456,10 +1452,10 @@ fn parse_primary(
 fn parse_postfix(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     mut lhs: Expr,
     settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     let mut settings = settings;
 
     // Tail processing all possible postfix operators
@@ -1522,7 +1518,7 @@ fn parse_postfix(
                 if let Some((ref mut namespace, _)) = namespace {
                     namespace.push(var_name_def);
                 } else {
-                    let mut ns = NamespaceRef::new();
+                    let mut ns = Namespace::new();
                     ns.push(var_name_def);
                     namespace = Some((ns, 42));
                 }
@@ -1607,9 +1603,9 @@ fn parse_postfix(
 fn parse_unary(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -1712,7 +1708,7 @@ fn make_assignment_stmt(
     lhs: Expr,
     rhs: Expr,
     op_pos: Position,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[must_use]
     fn check_lvalue(expr: &Expr, parent_is_dot: bool) -> Option<Position> {
         match expr {
@@ -1808,10 +1804,10 @@ fn make_assignment_stmt(
 fn parse_op_assignment_stmt(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     lhs: Expr,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -1842,7 +1838,7 @@ fn make_dot_expr(
     terminate_chaining: bool,
     rhs: Expr,
     op_pos: Position,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     match (lhs, rhs) {
         // lhs[idx_expr].rhs
         (Expr::Index(mut x, term, pos), rhs) => {
@@ -1956,11 +1952,11 @@ fn make_dot_expr(
 fn parse_binary_op(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     parent_precedence: Option<Precedence>,
     lhs: Expr,
     settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2119,12 +2115,12 @@ fn parse_binary_op(
 fn parse_custom_syntax(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
     key: impl Into<ImmutableString>,
     syntax: &CustomSyntax,
     pos: Position,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     let mut settings = settings;
     let mut inputs = StaticVec::<Expr>::new();
     let mut segments = StaticVec::new_const();
@@ -2294,9 +2290,9 @@ fn parse_custom_syntax(
 fn parse_expr(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2313,9 +2309,9 @@ fn parse_expr(
 fn parse_if(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2353,9 +2349,9 @@ fn parse_if(
 fn parse_while_loop(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2384,9 +2380,9 @@ fn parse_while_loop(
 fn parse_do(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2427,9 +2423,9 @@ fn parse_do(
 fn parse_for(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2518,11 +2514,11 @@ fn parse_for(
 fn parse_let(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     var_type: AccessMode,
     is_export: bool,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2573,9 +2569,9 @@ fn parse_let(
 fn parse_import(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2608,9 +2604,9 @@ fn parse_import(
 fn parse_export(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2681,9 +2677,9 @@ fn parse_export(
 fn parse_block(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2783,9 +2779,9 @@ fn parse_block(
 fn parse_expr_stmt(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2801,9 +2797,9 @@ fn parse_expr_stmt(
 fn parse_stmt(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     use AccessMode::{ReadOnly, ReadWrite};
 
     let mut settings = settings;
@@ -3015,9 +3011,9 @@ fn parse_stmt(
 fn parse_try_catch(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -3077,13 +3073,13 @@ fn parse_try_catch(
 fn parse_fn(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     access: crate::FnAccess,
     settings: ParseSettings,
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
     comments: Vec<Box<str>>,
-) -> Result<ScriptFnDef, ParseError> {
+) -> ParseResult<ScriptFnDef> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -3222,9 +3218,9 @@ fn make_curry_from_externals(
 fn parse_anon_fn(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<(Expr, ScriptFnDef), ParseError> {
+) -> ParseResult<(Expr, ScriptFnDef)> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -3332,7 +3328,7 @@ impl Engine {
         state: &mut ParseState,
         scope: &Scope,
         #[cfg(not(feature = "no_optimize"))] optimization_level: crate::OptimizationLevel,
-    ) -> Result<AST, ParseError> {
+    ) -> ParseResult<AST> {
         let _scope = scope;
         let mut functions = BTreeMap::new();
 
@@ -3392,7 +3388,7 @@ impl Engine {
         &self,
         input: &mut TokenStream,
         state: &mut ParseState,
-    ) -> Result<(StaticVec<Stmt>, StaticVec<Shared<ScriptFnDef>>), ParseError> {
+    ) -> ParseResult<(StaticVec<Stmt>, StaticVec<Shared<ScriptFnDef>>)> {
         let mut statements = StaticVec::new_const();
         let mut functions = BTreeMap::new();
 
@@ -3462,7 +3458,7 @@ impl Engine {
         state: &mut ParseState,
         scope: &Scope,
         #[cfg(not(feature = "no_optimize"))] optimization_level: crate::OptimizationLevel,
-    ) -> Result<AST, ParseError> {
+    ) -> ParseResult<AST> {
         let _scope = scope;
         let (statements, _lib) = self.parse_global_level(input, state)?;
 

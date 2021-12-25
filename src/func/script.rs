@@ -5,7 +5,9 @@ use super::call::FnCallArgs;
 use crate::ast::ScriptFnDef;
 use crate::engine::{EvalState, Imports};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
-use crate::{Dynamic, Engine, EvalAltResult, Module, Position, RhaiResult, Scope, StaticVec};
+use crate::{
+    Dynamic, Engine, EvalAltResult, Module, Position, RhaiError, RhaiResult, Scope, StaticVec,
+};
 use std::mem;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -39,7 +41,7 @@ impl Engine {
             name: String,
             fn_def: &ScriptFnDef,
             mods: &Imports,
-            err: Box<EvalAltResult>,
+            err: RhaiError,
             pos: Position,
         ) -> RhaiResult {
             Err(EvalAltResult::ErrorInFunctionCall(

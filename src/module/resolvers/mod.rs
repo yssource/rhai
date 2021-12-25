@@ -1,5 +1,5 @@
 use crate::func::native::SendSync;
-use crate::{Engine, EvalAltResult, Module, Position, Shared, AST};
+use crate::{Engine, Module, Position, RhaiResultOf, Shared, AST};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -24,7 +24,7 @@ pub trait ModuleResolver: SendSync {
         source_path: Option<&str>,
         path: &str,
         pos: Position,
-    ) -> Result<Shared<Module>, Box<EvalAltResult>>;
+    ) -> RhaiResultOf<Shared<Module>>;
 
     /// Resolve an `AST` based on a path string.
     ///
@@ -43,7 +43,7 @@ pub trait ModuleResolver: SendSync {
         source_path: Option<&str>,
         path: &str,
         pos: Position,
-    ) -> Option<Result<AST, Box<EvalAltResult>>> {
+    ) -> Option<RhaiResultOf<AST>> {
         None
     }
 }

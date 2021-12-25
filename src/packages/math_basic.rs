@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::{def_package, Position, INT, INT_BASE};
+use crate::{def_package, Position, RhaiResultOf, INT, INT_BASE};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -114,7 +114,7 @@ def_package! {
 #[export_module]
 mod int_functions {
     #[rhai_fn(name = "parse_int", return_raw)]
-    pub fn parse_int_radix(string: &str, radix: INT) -> Result<INT, Box<EvalAltResult>> {
+    pub fn parse_int_radix(string: &str, radix: INT) -> RhaiResultOf<INT> {
         if !(2..=36).contains(&radix) {
             return Err(EvalAltResult::ErrorArithmetic(
                 format!("Invalid radix: '{}'", radix),
@@ -134,7 +134,7 @@ mod int_functions {
             })
     }
     #[rhai_fn(name = "parse_int", return_raw)]
-    pub fn parse_int(string: &str) -> Result<INT, Box<EvalAltResult>> {
+    pub fn parse_int(string: &str) -> RhaiResultOf<INT> {
         parse_int_radix(string, 10)
     }
 }
@@ -263,7 +263,7 @@ mod float_functions {
         x.is_infinite()
     }
     #[rhai_fn(name = "to_int", return_raw)]
-    pub fn f32_to_int(x: f32) -> Result<INT, Box<EvalAltResult>> {
+    pub fn f32_to_int(x: f32) -> RhaiResultOf<INT> {
         if cfg!(not(feature = "unchecked")) && x > (MAX_INT as f32) {
             Err(EvalAltResult::ErrorArithmetic(
                 format!("Integer overflow: to_int({})", x),
@@ -275,7 +275,7 @@ mod float_functions {
         }
     }
     #[rhai_fn(name = "to_int", return_raw)]
-    pub fn f64_to_int(x: f64) -> Result<INT, Box<EvalAltResult>> {
+    pub fn f64_to_int(x: f64) -> RhaiResultOf<INT> {
         if cfg!(not(feature = "unchecked")) && x > (MAX_INT as f64) {
             Err(EvalAltResult::ErrorArithmetic(
                 format!("Integer overflow: to_int({})", x),
@@ -287,7 +287,7 @@ mod float_functions {
         }
     }
     #[rhai_fn(return_raw)]
-    pub fn parse_float(string: &str) -> Result<FLOAT, Box<EvalAltResult>> {
+    pub fn parse_float(string: &str) -> RhaiResultOf<FLOAT> {
         string.trim().parse::<FLOAT>().map_err(|err| {
             EvalAltResult::ErrorArithmetic(
                 format!("Error parsing floating-point number '{}': {}", string, err),
@@ -325,7 +325,7 @@ mod decimal_functions {
     }
     #[cfg(feature = "no_float")]
     #[rhai_fn(return_raw)]
-    pub fn parse_float(s: &str) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn parse_float(s: &str) -> RhaiResultOf<Decimal> {
         parse_decimal(s)
     }
 
@@ -339,12 +339,12 @@ mod decimal_functions {
         x.tan()
     }
     #[rhai_fn(return_raw)]
-    pub fn sqrt(x: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn sqrt(x: Decimal) -> RhaiResultOf<Decimal> {
         x.sqrt()
             .ok_or_else(|| make_err(format!("Error taking the square root of {}", x,)))
     }
     #[rhai_fn(return_raw)]
-    pub fn exp(x: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn exp(x: Decimal) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             x.checked_exp()
                 .ok_or_else(|| make_err(format!("Exponential overflow: e ** {}", x,)))
@@ -353,7 +353,7 @@ mod decimal_functions {
         }
     }
     #[rhai_fn(return_raw)]
-    pub fn ln(x: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn ln(x: Decimal) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             x.checked_ln()
                 .ok_or_else(|| make_err(format!("Error taking the natural log of {}", x)))
@@ -362,7 +362,7 @@ mod decimal_functions {
         }
     }
     #[rhai_fn(name = "log", return_raw)]
-    pub fn log10(x: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn log10(x: Decimal) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             x.checked_log10()
                 .ok_or_else(|| make_err(format!("Error taking the log of {}", x)))
@@ -383,7 +383,7 @@ mod decimal_functions {
         x.round()
     }
     #[rhai_fn(name = "round", return_raw)]
-    pub fn round_dp(x: Decimal, dp: INT) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn round_dp(x: Decimal, dp: INT) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             if dp < 0 {
                 return Err(make_err(format!(
@@ -399,7 +399,7 @@ mod decimal_functions {
         Ok(x.round_dp(dp as u32))
     }
     #[rhai_fn(return_raw)]
-    pub fn round_up(x: Decimal, dp: INT) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn round_up(x: Decimal, dp: INT) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             if dp < 0 {
                 return Err(make_err(format!(
@@ -415,7 +415,7 @@ mod decimal_functions {
         Ok(x.round_dp_with_strategy(dp as u32, RoundingStrategy::AwayFromZero))
     }
     #[rhai_fn(return_raw)]
-    pub fn round_down(x: Decimal, dp: INT) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn round_down(x: Decimal, dp: INT) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             if dp < 0 {
                 return Err(make_err(format!(
@@ -431,7 +431,7 @@ mod decimal_functions {
         Ok(x.round_dp_with_strategy(dp as u32, RoundingStrategy::ToZero))
     }
     #[rhai_fn(return_raw)]
-    pub fn round_half_up(x: Decimal, dp: INT) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn round_half_up(x: Decimal, dp: INT) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             if dp < 0 {
                 return Err(make_err(format!(
@@ -447,7 +447,7 @@ mod decimal_functions {
         Ok(x.round_dp_with_strategy(dp as u32, RoundingStrategy::MidpointAwayFromZero))
     }
     #[rhai_fn(return_raw)]
-    pub fn round_half_down(x: Decimal, dp: INT) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn round_half_down(x: Decimal, dp: INT) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             if dp < 0 {
                 return Err(make_err(format!(
@@ -471,7 +471,7 @@ mod decimal_functions {
         x.fract()
     }
     #[rhai_fn(return_raw)]
-    pub fn parse_decimal(string: &str) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn parse_decimal(string: &str) -> RhaiResultOf<Decimal> {
         Decimal::from_str(string)
             .or_else(|_| Decimal::from_scientific(string))
             .map_err(|err| {
@@ -485,7 +485,7 @@ mod decimal_functions {
 
     #[cfg(not(feature = "no_float"))]
     #[rhai_fn(name = "to_decimal", return_raw)]
-    pub fn f32_to_decimal(x: f32) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn f32_to_decimal(x: f32) -> RhaiResultOf<Decimal> {
         Decimal::try_from(x).map_err(|_| {
             EvalAltResult::ErrorArithmetic(
                 format!("Cannot convert to Decimal: to_decimal({})", x),
@@ -496,7 +496,7 @@ mod decimal_functions {
     }
     #[cfg(not(feature = "no_float"))]
     #[rhai_fn(name = "to_decimal", return_raw)]
-    pub fn f64_to_decimal(x: f64) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn f64_to_decimal(x: f64) -> RhaiResultOf<Decimal> {
         Decimal::try_from(x).map_err(|_| {
             EvalAltResult::ErrorArithmetic(
                 format!("Cannot convert to Decimal: to_decimal({})", x),
@@ -507,7 +507,7 @@ mod decimal_functions {
     }
     #[cfg(not(feature = "no_float"))]
     #[rhai_fn(return_raw)]
-    pub fn to_float(x: Decimal) -> Result<FLOAT, Box<EvalAltResult>> {
+    pub fn to_float(x: Decimal) -> RhaiResultOf<FLOAT> {
         FLOAT::try_from(x).map_err(|_| {
             EvalAltResult::ErrorArithmetic(
                 format!("Cannot convert to floating-point: to_float({})", x),

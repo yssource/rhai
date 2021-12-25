@@ -8,7 +8,7 @@ use super::native::{FnAny, SendSync};
 use crate::r#unsafe::unsafe_try_cast;
 use crate::tokenizer::Position;
 use crate::types::dynamic::{DynamicWriteLock, Variant};
-use crate::{Dynamic, EvalAltResult, NativeCallContext};
+use crate::{Dynamic, EvalAltResult, NativeCallContext, RhaiResultOf};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{any::TypeId, mem};
@@ -169,14 +169,14 @@ macro_rules! def_register {
         }
 
         impl<
-            FN: Fn($($param),*) -> Result<RET, Box<EvalAltResult>> + SendSync + 'static,
+            FN: Fn($($param),*) -> RhaiResultOf<RET> + SendSync + 'static,
             $($par: Variant + Clone,)*
             RET: Variant + Clone
-        > RegisterNativeFunction<($($mark,)*), Result<RET, Box<EvalAltResult>>> for FN {
+        > RegisterNativeFunction<($($mark,)*), RhaiResultOf<RET>> for FN {
             #[inline(always)] fn param_types() -> Box<[TypeId]> { vec![$(TypeId::of::<$par>()),*].into_boxed_slice() }
             #[cfg(feature = "metadata")] #[inline(always)] fn param_names() -> Box<[&'static str]> { vec![$(std::any::type_name::<$par>()),*].into_boxed_slice() }
-            #[cfg(feature = "metadata")] #[inline(always)] fn return_type() -> TypeId { TypeId::of::<Result<RET, Box<EvalAltResult>>>() }
-            #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<Result<RET, Box<EvalAltResult>>>() }
+            #[cfg(feature = "metadata")] #[inline(always)] fn return_type() -> TypeId { TypeId::of::<RhaiResultOf<RET>>() }
+            #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<RhaiResultOf<RET>>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
                     if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {
@@ -194,14 +194,14 @@ macro_rules! def_register {
         }
 
         impl<
-            FN: for<'a> Fn(NativeCallContext<'a>, $($param),*) -> Result<RET, Box<EvalAltResult>> + SendSync + 'static,
+            FN: for<'a> Fn(NativeCallContext<'a>, $($param),*) -> RhaiResultOf<RET> + SendSync + 'static,
             $($par: Variant + Clone,)*
             RET: Variant + Clone
-        > RegisterNativeFunction<(NativeCallContext<'static>, $($mark,)*), Result<RET, Box<EvalAltResult>>> for FN {
+        > RegisterNativeFunction<(NativeCallContext<'static>, $($mark,)*), RhaiResultOf<RET>> for FN {
             #[inline(always)] fn param_types() -> Box<[TypeId]> { vec![$(TypeId::of::<$par>()),*].into_boxed_slice() }
             #[cfg(feature = "metadata")] #[inline(always)] fn param_names() -> Box<[&'static str]> { vec![$(std::any::type_name::<$par>()),*].into_boxed_slice() }
-            #[cfg(feature = "metadata")] #[inline(always)] fn return_type() -> TypeId { TypeId::of::<Result<RET, Box<EvalAltResult>>>() }
-            #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<Result<RET, Box<EvalAltResult>>>() }
+            #[cfg(feature = "metadata")] #[inline(always)] fn return_type() -> TypeId { TypeId::of::<RhaiResultOf<RET>>() }
+            #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<RhaiResultOf<RET>>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
                     if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {

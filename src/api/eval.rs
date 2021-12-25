@@ -3,7 +3,9 @@
 use crate::engine::{EvalState, Imports};
 use crate::parser::ParseState;
 use crate::types::dynamic::Variant;
-use crate::{Dynamic, Engine, EvalAltResult, Module, Position, RhaiResult, Scope, AST};
+use crate::{
+    Dynamic, Engine, EvalAltResult, Module, Position, RhaiResult, RhaiResultOf, Scope, AST,
+};
 use std::any::type_name;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -24,7 +26,7 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    pub fn eval<T: Variant + Clone>(&self, script: &str) -> Result<T, Box<EvalAltResult>> {
+    pub fn eval<T: Variant + Clone>(&self, script: &str) -> RhaiResultOf<T> {
         self.eval_with_scope(&mut Scope::new(), script)
     }
     /// Evaluate a string with own scope.
@@ -60,7 +62,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         script: &str,
-    ) -> Result<T, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<T> {
         let ast = self.compile_with_scope_and_optimization_level(
             scope,
             &[script],
@@ -84,10 +86,7 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    pub fn eval_expression<T: Variant + Clone>(
-        &self,
-        script: &str,
-    ) -> Result<T, Box<EvalAltResult>> {
+    pub fn eval_expression<T: Variant + Clone>(&self, script: &str) -> RhaiResultOf<T> {
         self.eval_expression_with_scope(&mut Scope::new(), script)
     }
     /// Evaluate a string containing an expression with own scope.
@@ -113,7 +112,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         script: &str,
-    ) -> Result<T, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<T> {
         let scripts = [script];
         let (stream, tokenizer_control) =
             self.lex_raw(&scripts, self.token_mapper.as_ref().map(Box::as_ref));
@@ -149,7 +148,7 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    pub fn eval_ast<T: Variant + Clone>(&self, ast: &AST) -> Result<T, Box<EvalAltResult>> {
+    pub fn eval_ast<T: Variant + Clone>(&self, ast: &AST) -> RhaiResultOf<T> {
         self.eval_ast_with_scope(&mut Scope::new(), ast)
     }
     /// Evaluate an [`AST`] with own scope.
@@ -186,7 +185,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         ast: &AST,
-    ) -> Result<T, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<T> {
         let mods = &mut Imports::new();
 
         let result = self.eval_ast_with_scope_raw(scope, mods, ast, 0)?;

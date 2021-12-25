@@ -4,17 +4,16 @@ use super::callable_function::CallableFunction;
 use super::native::FnAny;
 use super::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
 use crate::api::default_limits::MAX_DYNAMIC_PARAMETERS;
-use crate::ast::FnCallHashes;
+use crate::ast::{Expr, FnCallHashes, Stmt};
 use crate::engine::{
     EvalState, FnResolutionCacheEntry, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
     KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
-use crate::module::NamespaceRef;
+use crate::module::Namespace;
 use crate::tokenizer::Token;
 use crate::{
-    ast::{Expr, Stmt},
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, EvalAltResult, FnPtr,
-    Identifier, ImmutableString, Module, Position, RhaiResult, Scope, StaticVec,
+    Identifier, ImmutableString, Module, Position, RhaiResult, RhaiResultOf, Scope, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -108,7 +107,7 @@ pub fn ensure_no_data_race(
     fn_name: impl AsRef<str>,
     args: &FnCallArgs,
     is_method_call: bool,
-) -> Result<(), Box<EvalAltResult>> {
+) -> RhaiResultOf<()> {
     if let Some((n, _)) = args
         .iter()
         .enumerate()
@@ -131,7 +130,7 @@ impl Engine {
     #[must_use]
     fn gen_call_signature(
         &self,
-        namespace: Option<&NamespaceRef>,
+        namespace: Option<&Namespace>,
         fn_name: impl AsRef<str>,
         args: &[&mut Dynamic],
     ) -> String {
@@ -318,7 +317,7 @@ impl Engine {
         is_ref_mut: bool,
         is_op_assign: bool,
         pos: Position,
-    ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<(Dynamic, bool)> {
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(&mut mods.num_operations, pos)?;
 
@@ -499,8 +498,8 @@ impl Engine {
         pos: Position,
         scope: Option<&mut Scope>,
         level: usize,
-    ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
-        fn no_method_err(name: &str, pos: Position) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<(Dynamic, bool)> {
+        fn no_method_err(name: &str, pos: Position) -> RhaiResultOf<(Dynamic, bool)> {
             let msg = format!("'{0}' should not be called this way. Try {0}(...);", name);
             Err(EvalAltResult::ErrorRuntime(msg.into(), pos).into())
         }
@@ -733,7 +732,7 @@ impl Engine {
         (call_args, call_arg_pos): &mut (StaticVec<Dynamic>, Position),
         pos: Position,
         level: usize,
-    ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<(Dynamic, bool)> {
         let fn_name = fn_name.as_ref();
         let is_ref_mut = target.is_ref();
 
@@ -893,7 +892,7 @@ impl Engine {
         level: usize,
         arg_expr: &Expr,
         constants: &[Dynamic],
-    ) -> Result<(Dynamic, Position), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<(Dynamic, Position)> {
         match arg_expr {
             Expr::Stack(slot, pos) => Ok((constants[*slot].clone(), *pos)),
             ref arg => self
@@ -992,7 +991,7 @@ impl Engine {
                 // Append the new curried arguments to the existing list.
                 let fn_curry = a_expr.iter().skip(1).try_fold(
                     fn_curry,
-                    |mut curried, expr| -> Result<_, Box<EvalAltResult>> {
+                    |mut curried, expr| -> RhaiResultOf<_> {
                         let (value, _) = self.get_arg_value(
                             scope, mods, state, lib, this_ptr, level, expr, constants,
                         )?;
@@ -1181,7 +1180,7 @@ impl Engine {
         state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
-        namespace: &NamespaceRef,
+        namespace: &Namespace,
         fn_name: impl AsRef<str>,
         args_expr: &[Expr],
         constants: &[Dynamic],
