@@ -3,12 +3,12 @@
 use crate::ast::Expr;
 use crate::engine::EvalContext;
 use crate::func::native::SendSync;
+use crate::parser::ParseResult;
 use crate::r#unsafe::unsafe_try_cast;
 use crate::tokenizer::{is_valid_identifier, Token};
 use crate::types::dynamic::Variant;
 use crate::{
-    Engine, Identifier, ImmutableString, LexError, ParseError, Position, RhaiResult, Shared,
-    StaticVec, INT,
+    Engine, Identifier, ImmutableString, LexError, Position, RhaiResult, Shared, StaticVec, INT,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -47,11 +47,11 @@ pub type FnCustomSyntaxEval = dyn Fn(&mut EvalContext, &[Expression]) -> RhaiRes
 /// A general expression parsing trait object.
 #[cfg(not(feature = "sync"))]
 pub type FnCustomSyntaxParse =
-    dyn Fn(&[ImmutableString], &str) -> Result<Option<ImmutableString>, ParseError>;
+    dyn Fn(&[ImmutableString], &str) -> ParseResult<Option<ImmutableString>>;
 /// A general expression parsing trait object.
 #[cfg(feature = "sync")]
 pub type FnCustomSyntaxParse =
-    dyn Fn(&[ImmutableString], &str) -> Result<Option<ImmutableString>, ParseError> + Send + Sync;
+    dyn Fn(&[ImmutableString], &str) -> ParseResult<Option<ImmutableString>> + Send + Sync;
 
 /// An expression sub-tree in an [`AST`][crate::AST].
 #[derive(Debug, Clone)]
@@ -216,7 +216,7 @@ impl Engine {
         symbols: &[S],
         scope_may_be_changed: bool,
         func: impl Fn(&mut EvalContext, &[Expression]) -> RhaiResult + SendSync + 'static,
-    ) -> Result<&mut Self, ParseError> {
+    ) -> ParseResult<&mut Self> {
         use markers::*;
 
         let mut segments = StaticVec::<ImmutableString>::new();
@@ -357,7 +357,7 @@ impl Engine {
     pub fn register_custom_syntax_raw(
         &mut self,
         key: impl Into<Identifier>,
-        parse: impl Fn(&[ImmutableString], &str) -> Result<Option<ImmutableString>, ParseError>
+        parse: impl Fn(&[ImmutableString], &str) -> ParseResult<Option<ImmutableString>>
             + SendSync
             + 'static,
         scope_may_be_changed: bool,
