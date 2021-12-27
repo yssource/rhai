@@ -329,10 +329,7 @@ pub type StaticVec<T> = smallvec::SmallVec<[T; 3]>;
 type FnArgsVec<T> = smallvec::SmallVec<[T; 8]>;
 
 /// Inline arguments storage for function calls.
-///
-/// # Notes
-///
-/// This type aliases to [`StaticVec`][crate::StaticVec] under `no_closure`.
+/// This type aliases to [`StaticVec`][crate::StaticVec].
 #[cfg(feature = "no_closure")]
 type FnArgsVec<T> = crate::StaticVec<T>;
 

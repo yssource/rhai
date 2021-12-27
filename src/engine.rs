@@ -368,8 +368,11 @@ enum ChainArgument {
     Property(Position),
     /// Arguments to a dot method call.
     /// Wrapped values are the arguments plus the [position][Position] of the first argument.
+    ///
+    /// Since many dotted function calls have no arguments (e.g. `string.len()`), it is better to
+    /// reduce the size of [`ChainArgument`] by using a boxed slice.
     #[cfg(not(feature = "no_object"))]
-    MethodCallArgs(FnArgsVec<Dynamic>, Position),
+    MethodCallArgs(Option<Box<[Dynamic]>>, Position),
     /// Index value and [position][Position].
     #[cfg(not(feature = "no_index"))]
     IndexValue(Dynamic, Position),
@@ -389,13 +392,20 @@ impl ChainArgument {
         }
     }
     /// Return the list of method call arguments.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the [`ChainArgument`] is not [`MethodCallArgs`][ChainArgument::MethodCallArgs].
     #[inline(always)]
     #[cfg(not(feature = "no_object"))]
     #[must_use]
-    pub fn into_fn_call_args(self) -> Option<(FnArgsVec<Dynamic>, Position)> {
+    pub fn into_fn_call_args(self) -> (FnArgsVec<Dynamic>, Position) {
         match self {
-            Self::MethodCallArgs(values, pos) => Some((values, pos)),
-            _ => None,
+            Self::MethodCallArgs(None, pos) => (FnArgsVec::new_const(), pos),
+            Self::MethodCallArgs(Some(mut values), pos) => {
+                (values.iter_mut().map(std::mem::take).collect(), pos)
+            }
+            _ => unreachable!("`MethodCallArgs` expected"),
         }
     }
     /// Return the [position][Position].
@@ -412,20 +422,21 @@ impl ChainArgument {
             ChainArgument::IndexValue(_, pos) => *pos,
         }
     }
-}
-
-#[cfg(not(feature = "no_object"))]
-impl From<(FnArgsVec<Dynamic>, Position)> for ChainArgument {
+    /// Create n [`MethodCallArgs`][ChainArgument::MethodCallArgs].
     #[inline(always)]
-    fn from((values, pos): (FnArgsVec<Dynamic>, Position)) -> Self {
-        Self::MethodCallArgs(values, pos)
+    #[cfg(not(feature = "no_object"))]
+    #[must_use]
+    pub fn from_fn_call_args(values: FnArgsVec<Dynamic>, pos: Position) -> Self {
+        if values.is_empty() {
+            Self::MethodCallArgs(None, pos)
+        } else {
+            Self::MethodCallArgs(Some(values.into_vec().into()), pos)
+        }
     }
-}
-
-#[cfg(not(feature = "no_index"))]
-impl From<(Dynamic, Position)> for ChainArgument {
+    /// Create an [`IndexValue`][ChainArgument::IndexValue].
     #[inline(always)]
-    fn from((value, pos): (Dynamic, Position)) -> Self {
+    #[must_use]
+    pub const fn from_index_value(value: Dynamic, pos: Position) -> Self {
         Self::IndexValue(value, pos)
     }
 }
@@ -1322,7 +1333,7 @@ impl Engine {
         root: (&str, Position),
         rhs: &Expr,
         terminate_chaining: bool,
-        idx_values: &mut FnArgsVec<ChainArgument>,
+        idx_values: &mut StaticVec<ChainArgument>,
         chain_type: ChainType,
         level: usize,
         new_val: Option<((Dynamic, Position), (Option<OpAssignment>, Position))>,
@@ -1445,9 +1456,7 @@ impl Engine {
                     // xxx.fn_name(arg_expr_list)
                     Expr::FnCall(x, pos) if !x.is_qualified() && new_val.is_none() => {
                         let FnCallExpr { name, hashes, .. } = x.as_ref();
-                        let call_args = &mut idx_val
-                            .into_fn_call_args()
-                            .expect("`ChainType::Dot` with `Expr::FnCallExpr`");
+                        let call_args = &mut idx_val.into_fn_call_args();
                         self.make_method_call(
                             mods, state, lib, name, *hashes, target, call_args, *pos, level,
                         )
@@ -1611,9 +1620,7 @@ impl Engine {
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
                             Expr::FnCall(ref x, pos) if !x.is_qualified() => {
                                 let FnCallExpr { name, hashes, .. } = x.as_ref();
-                                let call_args = &mut idx_val.into_fn_call_args().expect(
-                                    "`chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`",
-                                );
+                                let call_args = &mut idx_val.into_fn_call_args();
                                 let (val, _) = self.make_method_call(
                                     mods, state, lib, name, *hashes, target, call_args, pos, level,
                                 )?;
@@ -1736,9 +1743,7 @@ impl Engine {
                             Expr::FnCall(ref f, pos) if !f.is_qualified() => {
                                 let FnCallExpr { name, hashes, .. } = f.as_ref();
                                 let rhs_chain = match_chaining_type(rhs);
-                                let args = &mut idx_val.into_fn_call_args().expect(
-                                    "`chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`",
-                                );
+                                let args = &mut idx_val.into_fn_call_args();
                                 let (mut val, _) = self.make_method_call(
                                     mods, state, lib, name, *hashes, target, args, pos, level,
                                 )?;
@@ -1787,7 +1792,7 @@ impl Engine {
             _ => unreachable!("index or dot chain expected, but gets {:?}", expr),
         };
 
-        let idx_values = &mut FnArgsVec::new_const();
+        let idx_values = &mut StaticVec::new_const();
 
         self.eval_dot_index_chain_arguments(
             scope, mods, state, lib, this_ptr, rhs, term, chain_type, idx_values, 0, level,
@@ -1843,7 +1848,7 @@ impl Engine {
         expr: &Expr,
         terminate_chaining: bool,
         parent_chain_type: ChainType,
-        idx_values: &mut FnArgsVec<ChainArgument>,
+        idx_values: &mut StaticVec<ChainArgument>,
         size: usize,
         level: usize,
     ) -> RhaiResultOf<()> {
@@ -1873,7 +1878,7 @@ impl Engine {
                     },
                 )?;
 
-                idx_values.push((values, pos).into());
+                idx_values.push(ChainArgument::from_fn_call_args(values, pos));
             }
             #[cfg(not(feature = "no_object"))]
             Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dotting => {
@@ -1890,7 +1895,7 @@ impl Engine {
                 let crate::ast::BinaryExpr { lhs, rhs, .. } = x.as_ref();
 
                 // Evaluate in left-to-right order
-                let lhs_val = match lhs {
+                let lhs_arg_val = match lhs {
                     #[cfg(not(feature = "no_object"))]
                     Expr::Property(x) if _parent_chain_type == ChainType::Dotting => {
                         ChainArgument::Property((x.2).1)
@@ -1905,21 +1910,20 @@ impl Engine {
                             args, constants, ..
                         } = x.as_ref();
 
-                        args.iter()
-                            .try_fold(
-                                (FnArgsVec::with_capacity(args.len()), Position::NONE),
-                                |(mut values, mut pos), expr| -> RhaiResultOf<_> {
-                                    let (value, arg_pos) = self.get_arg_value(
-                                        scope, mods, state, lib, this_ptr, level, expr, constants,
-                                    )?;
-                                    if values.is_empty() {
-                                        pos = arg_pos
-                                    }
-                                    values.push(value.flatten());
-                                    Ok((values, pos))
-                                },
-                            )?
-                            .into()
+                        let (values, pos) = args.iter().try_fold(
+                            (FnArgsVec::with_capacity(args.len()), Position::NONE),
+                            |(mut values, mut pos), expr| -> RhaiResultOf<_> {
+                                let (value, arg_pos) = self.get_arg_value(
+                                    scope, mods, state, lib, this_ptr, level, expr, constants,
+                                )?;
+                                if values.is_empty() {
+                                    pos = arg_pos
+                                }
+                                values.push(value.flatten());
+                                Ok((values, pos))
+                            },
+                        )?;
+                        ChainArgument::from_fn_call_args(values, pos)
                     }
                     #[cfg(not(feature = "no_object"))]
                     Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dotting => {
@@ -1932,7 +1936,7 @@ impl Engine {
                     #[cfg(not(feature = "no_index"))]
                     _ if _parent_chain_type == ChainType::Indexing => self
                         .eval_expr(scope, mods, state, lib, this_ptr, lhs, level)
-                        .map(|v| (v.flatten(), lhs.position()).into())?,
+                        .map(|v| ChainArgument::from_index_value(v.flatten(), lhs.position()))?,
                     expr => unreachable!("unknown chained expression: {:?}", expr),
                 };
 
@@ -1944,7 +1948,7 @@ impl Engine {
                     level,
                 )?;
 
-                idx_values.push(lhs_val);
+                idx_values.push(lhs_arg_val);
             }
 
             #[cfg(not(feature = "no_object"))]
@@ -1954,7 +1958,7 @@ impl Engine {
             #[cfg(not(feature = "no_index"))]
             _ if _parent_chain_type == ChainType::Indexing => idx_values.push(
                 self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
-                    .map(|v| (v.flatten(), expr.position()).into())?,
+                    .map(|v| ChainArgument::from_index_value(v.flatten(), expr.position()))?,
             ),
             _ => unreachable!("unknown chained expression: {:?}", expr),
         }
