@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::{def_package, Position, RhaiResultOf, INT, INT_BASE};
+use crate::{def_package, Position, RhaiResultOf, ERR, INT, INT_BASE};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -116,7 +116,7 @@ mod int_functions {
     #[rhai_fn(name = "parse_int", return_raw)]
     pub fn parse_int_radix(string: &str, radix: INT) -> RhaiResultOf<INT> {
         if !(2..=36).contains(&radix) {
-            return Err(EvalAltResult::ErrorArithmetic(
+            return Err(ERR::ErrorArithmetic(
                 format!("Invalid radix: '{}'", radix),
                 Position::NONE,
             )
@@ -126,7 +126,7 @@ mod int_functions {
         INT_BASE::from_str_radix(string.trim(), radix as u32)
             .map(|v| v as INT)
             .map_err(|err| {
-                EvalAltResult::ErrorArithmetic(
+                ERR::ErrorArithmetic(
                     format!("Error parsing integer number '{}': {}", string, err),
                     Position::NONE,
                 )
@@ -265,11 +265,10 @@ mod float_functions {
     #[rhai_fn(name = "to_int", return_raw)]
     pub fn f32_to_int(x: f32) -> RhaiResultOf<INT> {
         if cfg!(not(feature = "unchecked")) && x > (MAX_INT as f32) {
-            Err(EvalAltResult::ErrorArithmetic(
-                format!("Integer overflow: to_int({})", x),
-                Position::NONE,
+            Err(
+                ERR::ErrorArithmetic(format!("Integer overflow: to_int({})", x), Position::NONE)
+                    .into(),
             )
-            .into())
         } else {
             Ok(x.trunc() as INT)
         }
@@ -277,11 +276,10 @@ mod float_functions {
     #[rhai_fn(name = "to_int", return_raw)]
     pub fn f64_to_int(x: f64) -> RhaiResultOf<INT> {
         if cfg!(not(feature = "unchecked")) && x > (MAX_INT as f64) {
-            Err(EvalAltResult::ErrorArithmetic(
-                format!("Integer overflow: to_int({})", x),
-                Position::NONE,
+            Err(
+                ERR::ErrorArithmetic(format!("Integer overflow: to_int({})", x), Position::NONE)
+                    .into(),
             )
-            .into())
         } else {
             Ok(x.trunc() as INT)
         }
@@ -289,7 +287,7 @@ mod float_functions {
     #[rhai_fn(return_raw)]
     pub fn parse_float(string: &str) -> RhaiResultOf<FLOAT> {
         string.trim().parse::<FLOAT>().map_err(|err| {
-            EvalAltResult::ErrorArithmetic(
+            ERR::ErrorArithmetic(
                 format!("Error parsing floating-point number '{}': {}", string, err),
                 Position::NONE,
             )
@@ -475,7 +473,7 @@ mod decimal_functions {
         Decimal::from_str(string)
             .or_else(|_| Decimal::from_scientific(string))
             .map_err(|err| {
-                EvalAltResult::ErrorArithmetic(
+                ERR::ErrorArithmetic(
                     format!("Error parsing decimal number '{}': {}", string, err),
                     Position::NONE,
                 )
@@ -487,7 +485,7 @@ mod decimal_functions {
     #[rhai_fn(name = "to_decimal", return_raw)]
     pub fn f32_to_decimal(x: f32) -> RhaiResultOf<Decimal> {
         Decimal::try_from(x).map_err(|_| {
-            EvalAltResult::ErrorArithmetic(
+            ERR::ErrorArithmetic(
                 format!("Cannot convert to Decimal: to_decimal({})", x),
                 Position::NONE,
             )
@@ -498,7 +496,7 @@ mod decimal_functions {
     #[rhai_fn(name = "to_decimal", return_raw)]
     pub fn f64_to_decimal(x: f64) -> RhaiResultOf<Decimal> {
         Decimal::try_from(x).map_err(|_| {
-            EvalAltResult::ErrorArithmetic(
+            ERR::ErrorArithmetic(
                 format!("Cannot convert to Decimal: to_decimal({})", x),
                 Position::NONE,
             )
@@ -509,7 +507,7 @@ mod decimal_functions {
     #[rhai_fn(return_raw)]
     pub fn to_float(x: Decimal) -> RhaiResultOf<FLOAT> {
         FLOAT::try_from(x).map_err(|_| {
-            EvalAltResult::ErrorArithmetic(
+            ERR::ErrorArithmetic(
                 format!("Cannot convert to floating-point: to_float({})", x),
                 Position::NONE,
             )

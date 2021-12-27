@@ -13,8 +13,8 @@ use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::tokenizer::Token;
 use crate::types::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::{
-    calc_fn_params_hash, combine_hashes, Dynamic, EvalAltResult, Identifier, ImmutableString,
-    Module, Position, RhaiError, RhaiResult, RhaiResultOf, Scope, Shared, StaticVec, INT,
+    calc_fn_params_hash, combine_hashes, Dynamic, Identifier, ImmutableString, Module, Position,
+    RhaiError, RhaiResult, RhaiResultOf, Scope, Shared, StaticVec, ERR, INT,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -459,7 +459,7 @@ pub enum Target<'a> {
             Dynamic,
         ),
     ),
-    /// The target is a temporary `Dynamic` value (i.e. the mutation can cause no side effects).
+    /// The target is a temporary `Dynamic` value (i.e. its mutation can cause no side effects).
     TempValue(Dynamic),
     /// The target is a bit inside an [`INT`][crate::INT].
     /// This is necessary because directly pointing to a bit inside an [`INT`][crate::INT] is impossible.
@@ -557,7 +557,7 @@ impl<'a> Target<'a> {
         match self {
             Self::RefMut(r) => r.clone(), // Referenced value is cloned
             #[cfg(not(feature = "no_closure"))]
-            Self::LockGuard((_, orig)) => orig, // Original value is simply taken
+            Self::LockGuard((_, shared)) => shared, // Original shared value is simply taken
             Self::TempValue(v) => v,      // Owned value is simply taken
             #[cfg(not(feature = "no_index"))]
             Self::Bit(_, value, _) => value, // Boolean is taken
@@ -585,7 +585,7 @@ impl<'a> Target<'a> {
         self.take_or_clone().into()
     }
     /// Propagate a changed value back to the original source.
-    /// This has no effect except for string indexing.
+    /// This has no effect for direct references.
     #[inline]
     pub fn propagate_changed_value(&mut self) -> RhaiResultOf<()> {
         match self {
@@ -596,7 +596,7 @@ impl<'a> Target<'a> {
             Self::Bit(value, new_val, index) => {
                 // Replace the bit at the specified index position
                 let new_bit = new_val.as_bool().map_err(|err| {
-                    Box::new(EvalAltResult::ErrorMismatchDataType(
+                    Box::new(ERR::ErrorMismatchDataType(
                         "bool".to_string(),
                         err.to_string(),
                         Position::NONE,
@@ -621,7 +621,7 @@ impl<'a> Target<'a> {
 
                 // Replace the bit at the specified index position
                 let new_value = new_val.as_int().map_err(|err| {
-                    Box::new(EvalAltResult::ErrorMismatchDataType(
+                    Box::new(ERR::ErrorMismatchDataType(
                         "integer".to_string(),
                         err.to_string(),
                         Position::NONE,
@@ -638,7 +638,7 @@ impl<'a> Target<'a> {
             Self::BlobByte(value, index, new_val) => {
                 // Replace the byte at the specified index position
                 let new_byte = new_val.as_int().map_err(|err| {
-                    Box::new(EvalAltResult::ErrorMismatchDataType(
+                    Box::new(ERR::ErrorMismatchDataType(
                         "INT".to_string(),
                         err.to_string(),
                         Position::NONE,
@@ -659,7 +659,7 @@ impl<'a> Target<'a> {
             Self::StringChar(s, index, new_val) => {
                 // Replace the character at the specified index position
                 let new_ch = new_val.as_char().map_err(|err| {
-                    Box::new(EvalAltResult::ErrorMismatchDataType(
+                    Box::new(ERR::ErrorMismatchDataType(
                         "char".to_string(),
                         err.to_string(),
                         Position::NONE,
@@ -1189,18 +1189,16 @@ impl Engine {
                                 Ok((target.into(), *_var_pos))
                             }
                             Err(err) => Err(match *err {
-                                EvalAltResult::ErrorVariableNotFound(_, _) => {
-                                    EvalAltResult::ErrorVariableNotFound(
-                                        format!(
-                                            "{}{}{}",
-                                            namespace,
-                                            Token::DoubleColon.literal_syntax(),
-                                            var_name
-                                        ),
-                                        namespace[0].pos,
-                                    )
-                                    .into()
-                                }
+                                ERR::ErrorVariableNotFound(_, _) => ERR::ErrorVariableNotFound(
+                                    format!(
+                                        "{}{}{}",
+                                        namespace,
+                                        Token::DoubleColon.literal_syntax(),
+                                        var_name
+                                    ),
+                                    namespace[0].pos,
+                                )
+                                .into(),
                                 _ => err.fill_position(*_var_pos),
                             }),
                         };
@@ -1220,7 +1218,7 @@ impl Engine {
                             }
                         }
 
-                        return Err(EvalAltResult::ErrorVariableNotFound(
+                        return Err(ERR::ErrorVariableNotFound(
                             format!(
                                 "{}{}{}",
                                 namespace,
@@ -1232,10 +1230,7 @@ impl Engine {
                         .into());
                     }
 
-                    Err(
-                        EvalAltResult::ErrorModuleNotFound(namespace.to_string(), namespace[0].pos)
-                            .into(),
-                    )
+                    Err(ERR::ErrorModuleNotFound(namespace.to_string(), namespace[0].pos).into())
                 }
 
                 #[cfg(feature = "no_module")]
@@ -1267,7 +1262,7 @@ impl Engine {
                 return if let Some(val) = this_ptr {
                     Ok(((*val).into(), *pos))
                 } else {
-                    Err(EvalAltResult::ErrorUnboundThis(*pos).into())
+                    Err(ERR::ErrorUnboundThis(*pos).into())
                 }
             }
             _ if state.always_search_scope => (0, expr.position()),
@@ -1308,7 +1303,7 @@ impl Engine {
             let var_name = expr.get_variable_name(true).expect("`Variable`");
             scope
                 .get_index(var_name)
-                .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(var_name.to_string(), var_pos))?
+                .ok_or_else(|| ERR::ErrorVariableNotFound(var_name.to_string(), var_pos))?
                 .0
         };
 
@@ -1387,7 +1382,7 @@ impl Engine {
                                 root_pos, None, level,
                             ) {
                                 // Just ignore if there is no index setter
-                                if !matches!(*err, EvalAltResult::ErrorFunctionNotFound(_, _)) {
+                                if !matches!(*err, ERR::ErrorFunctionNotFound(_, _)) {
                                     return Err(err);
                                 }
                             }
@@ -1416,7 +1411,7 @@ impl Engine {
                             }
                             // Can't index - try to call an index setter
                             #[cfg(not(feature = "no_index"))]
-                            Err(err) if matches!(*err, EvalAltResult::ErrorIndexingType(_, _)) => {
+                            Err(err) if matches!(*err, ERR::ErrorIndexingType(_, _)) => {
                                 Some(new_val)
                             }
                             // Any other error
@@ -1510,7 +1505,7 @@ impl Engine {
                                 )
                                 .or_else(|err| match *err {
                                     // Try an indexer if property does not exist
-                                    EvalAltResult::ErrorDotExpr(_, _) => {
+                                    ERR::ErrorDotExpr(_, _) => {
                                         let prop = name.into();
                                         self.get_indexed_mut(
                                             mods, state, lib, target, prop, *pos, false, true,
@@ -1519,7 +1514,7 @@ impl Engine {
                                         .map(|v| (v.take_or_clone(), false))
                                         .map_err(
                                             |idx_err| match *idx_err {
-                                                EvalAltResult::ErrorIndexingType(_, _) => err,
+                                                ERR::ErrorIndexingType(_, _) => err,
                                                 _ => idx_err,
                                             },
                                         )
@@ -1553,7 +1548,7 @@ impl Engine {
                         )
                         .or_else(|err| match *err {
                             // Try an indexer if property does not exist
-                            EvalAltResult::ErrorDotExpr(_, _) => {
+                            ERR::ErrorDotExpr(_, _) => {
                                 let args = &mut [target, &mut name.into(), &mut new_val];
                                 let hash_set =
                                     crate::ast::FnCallHashes::from_native(mods.hash_idx_set());
@@ -1565,7 +1560,7 @@ impl Engine {
                                 )
                                 .map_err(
                                     |idx_err| match *idx_err {
-                                        EvalAltResult::ErrorIndexingType(_, _) => err,
+                                        ERR::ErrorIndexingType(_, _) => err,
                                         _ => idx_err,
                                     },
                                 )
@@ -1585,7 +1580,7 @@ impl Engine {
                         .map_or_else(
                             |err| match *err {
                                 // Try an indexer if property does not exist
-                                EvalAltResult::ErrorDotExpr(_, _) => {
+                                ERR::ErrorDotExpr(_, _) => {
                                     let prop = name.into();
                                     self.get_indexed_mut(
                                         mods, state, lib, target, prop, *pos, false, true, level,
@@ -1593,7 +1588,7 @@ impl Engine {
                                     .map(|v| (v.take_or_clone(), false))
                                     .map_err(|idx_err| {
                                         match *idx_err {
-                                            EvalAltResult::ErrorIndexingType(_, _) => err,
+                                            ERR::ErrorIndexingType(_, _) => err,
                                             _ => idx_err,
                                         }
                                     })
@@ -1663,7 +1658,7 @@ impl Engine {
                                     )
                                     .or_else(|err| match *err {
                                         // Try an indexer if property does not exist
-                                        EvalAltResult::ErrorDotExpr(_, _) => {
+                                        ERR::ErrorDotExpr(_, _) => {
                                             let prop = name.into();
                                             self.get_indexed_mut(
                                                 mods, state, lib, target, prop, *pos, false, true,
@@ -1672,7 +1667,7 @@ impl Engine {
                                             .map(|v| (v.take_or_clone(), false))
                                             .map_err(
                                                 |idx_err| match *idx_err {
-                                                    EvalAltResult::ErrorIndexingType(_, _) => err,
+                                                    ERR::ErrorIndexingType(_, _) => err,
                                                     _ => idx_err,
                                                 },
                                             )
@@ -1711,7 +1706,7 @@ impl Engine {
                                     .or_else(
                                         |err| match *err {
                                             // Try an indexer if property does not exist
-                                            EvalAltResult::ErrorDotExpr(_, _) => {
+                                            ERR::ErrorDotExpr(_, _) => {
                                                 let args =
                                                     &mut [target.as_mut(), &mut name.into(), val];
                                                 let hash_set =
@@ -1723,7 +1718,7 @@ impl Engine {
                                                     is_ref_mut, true, *pos, None, level,
                                                 )
                                                 .or_else(|idx_err| match *idx_err {
-                                                    EvalAltResult::ErrorIndexingType(_, _) => {
+                                                    ERR::ErrorIndexingType(_, _) => {
                                                         // If there is no setter, no need to feed it back because
                                                         // the property is read-only
                                                         Ok((Dynamic::UNIT, false))
@@ -1768,7 +1763,7 @@ impl Engine {
                         }
                     }
                     // Syntax error
-                    _ => Err(EvalAltResult::ErrorDotExpr("".into(), rhs.position()).into()),
+                    _ => Err(ERR::ErrorDotExpr("".into(), rhs.position()).into()),
                 }
             }
         }
@@ -2007,11 +2002,10 @@ impl Engine {
                     arr_len
                         - index
                             .checked_abs()
-                            .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos))
+                            .ok_or_else(|| ERR::ErrorArrayBounds(arr_len, index, idx_pos))
                             .and_then(|n| {
                                 if n as usize > arr_len {
-                                    Err(EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos)
-                                        .into())
+                                    Err(ERR::ErrorArrayBounds(arr_len, index, idx_pos).into())
                                 } else {
                                     Ok(n as usize)
                                 }
@@ -2029,7 +2023,7 @@ impl Engine {
 
                 arr.get_mut(arr_idx)
                     .map(Target::from)
-                    .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos).into())
+                    .ok_or_else(|| ERR::ErrorArrayBounds(arr_len, index, idx_pos).into())
             }
 
             #[cfg(not(feature = "no_index"))]
@@ -2047,11 +2041,10 @@ impl Engine {
                     arr_len
                         - index
                             .checked_abs()
-                            .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos))
+                            .ok_or_else(|| ERR::ErrorArrayBounds(arr_len, index, idx_pos))
                             .and_then(|n| {
                                 if n as usize > arr_len {
-                                    Err(EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos)
-                                        .into())
+                                    Err(ERR::ErrorArrayBounds(arr_len, index, idx_pos).into())
                                 } else {
                                     Ok(n as usize)
                                 }
@@ -2070,9 +2063,7 @@ impl Engine {
                 let value = arr
                     .get(arr_idx)
                     .map(|&v| (v as INT).into())
-                    .ok_or_else(|| {
-                        Box::new(EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos))
-                    })?;
+                    .ok_or_else(|| Box::new(ERR::ErrorArrayBounds(arr_len, index, idx_pos)))?;
                 Ok(Target::BlobByte(target, arr_idx, value))
             }
 
@@ -2110,9 +2101,9 @@ impl Engine {
                     let end = range.end;
 
                     if start < 0 || start as usize >= BITS {
-                        return Err(EvalAltResult::ErrorBitFieldBounds(BITS, start, idx_pos).into());
+                        return Err(ERR::ErrorBitFieldBounds(BITS, start, idx_pos).into());
                     } else if end < 0 || end as usize >= BITS {
-                        return Err(EvalAltResult::ErrorBitFieldBounds(BITS, end, idx_pos).into());
+                        return Err(ERR::ErrorBitFieldBounds(BITS, end, idx_pos).into());
                     } else if end <= start {
                         (0, 0)
                     } else if end as usize == BITS && start == 0 {
@@ -2130,9 +2121,9 @@ impl Engine {
                     let end = *range.end();
 
                     if start < 0 || start as usize >= BITS {
-                        return Err(EvalAltResult::ErrorBitFieldBounds(BITS, start, idx_pos).into());
+                        return Err(ERR::ErrorBitFieldBounds(BITS, start, idx_pos).into());
                     } else if end < 0 || end as usize >= BITS {
-                        return Err(EvalAltResult::ErrorBitFieldBounds(BITS, end, idx_pos).into());
+                        return Err(ERR::ErrorBitFieldBounds(BITS, end, idx_pos).into());
                     } else if end < start {
                         (0, 0)
                     } else if end as usize == BITS - 1 && start == 0 {
@@ -2167,9 +2158,7 @@ impl Engine {
                     let offset = index as usize;
                     (
                         if offset >= BITS {
-                            return Err(
-                                EvalAltResult::ErrorBitFieldBounds(BITS, index, idx_pos).into()
-                            );
+                            return Err(ERR::ErrorBitFieldBounds(BITS, index, idx_pos).into());
                         } else {
                             (*value & (1 << offset)) != 0
                         },
@@ -2180,16 +2169,14 @@ impl Engine {
                     (
                         // Count from end if negative
                         if offset > BITS {
-                            return Err(
-                                EvalAltResult::ErrorBitFieldBounds(BITS, index, idx_pos).into()
-                            );
+                            return Err(ERR::ErrorBitFieldBounds(BITS, index, idx_pos).into());
                         } else {
                             (*value & (1 << (BITS - offset))) != 0
                         },
                         offset as u8,
                     )
                 } else {
-                    return Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, idx_pos).into());
+                    return Err(ERR::ErrorBitFieldBounds(BITS, index, idx_pos).into());
                 };
 
                 Ok(Target::Bit(target, bit_value.into(), offset))
@@ -2207,7 +2194,7 @@ impl Engine {
                     (
                         s.chars().nth(offset).ok_or_else(|| {
                             let chars_len = s.chars().count();
-                            EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos)
+                            ERR::ErrorStringBounds(chars_len, index, idx_pos)
                         })?,
                         offset,
                     )
@@ -2217,13 +2204,13 @@ impl Engine {
                         // Count from end if negative
                         s.chars().rev().nth(offset - 1).ok_or_else(|| {
                             let chars_len = s.chars().count();
-                            EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos)
+                            ERR::ErrorStringBounds(chars_len, index, idx_pos)
                         })?,
                         offset,
                     )
                 } else {
                     let chars_len = s.chars().count();
-                    return Err(EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos).into());
+                    return Err(ERR::ErrorStringBounds(chars_len, index, idx_pos).into());
                 };
 
                 Ok(Target::StringChar(target, offset, ch.into()))
@@ -2240,7 +2227,7 @@ impl Engine {
                 .map(|(v, _)| v.into())
             }
 
-            _ => Err(EvalAltResult::ErrorIndexingType(
+            _ => Err(ERR::ErrorIndexingType(
                 format!(
                     "{} [{}]",
                     self.map_type_name(target.type_name()),
@@ -2277,7 +2264,7 @@ impl Engine {
             Expr::Variable(None, var_pos, x) if x.0.is_none() && x.2 == KEYWORD_THIS => this_ptr
                 .as_deref()
                 .cloned()
-                .ok_or_else(|| EvalAltResult::ErrorUnboundThis(*var_pos).into()),
+                .ok_or_else(|| ERR::ErrorUnboundThis(*var_pos).into()),
             Expr::Variable(_, _, _) => self
                 .search_namespace(scope, mods, state, lib, this_ptr, expr)
                 .map(|(val, _)| val.take_or_clone()),
@@ -2542,9 +2529,7 @@ impl Engine {
     ) -> RhaiResultOf<()> {
         if target.is_read_only() {
             // Assignment to constant variable
-            return Err(
-                EvalAltResult::ErrorAssignmentToConstant(root.0.to_string(), root.1).into(),
-            );
+            return Err(ERR::ErrorAssignmentToConstant(root.0.to_string(), root.1).into());
         }
 
         let mut new_val = new_val;
@@ -2575,7 +2560,7 @@ impl Engine {
                 let args = &mut [lhs_ptr_inner, &mut new_val];
 
                 match self.call_native_fn(mods, state, lib, op, hash, args, true, true, op_pos) {
-                    Err(err) if matches!(*err, EvalAltResult::ErrorFunctionNotFound(ref f, _) if f.starts_with(op)) =>
+                    Err(err) if matches!(*err, ERR::ErrorFunctionNotFound(ref f, _) if f.starts_with(op)) =>
                     {
                         // Expand to `var = var op rhs`
                         let op = &op[..op.len() - 1]; // extract operator without =
@@ -2638,11 +2623,7 @@ impl Engine {
                 let var_name = lhs_expr.get_variable_name(false).expect("`Variable`");
 
                 if !lhs_ptr.is_ref() {
-                    return Err(EvalAltResult::ErrorAssignmentToConstant(
-                        var_name.to_string(),
-                        pos,
-                    )
-                    .into());
+                    return Err(ERR::ErrorAssignmentToConstant(var_name.to_string(), pos).into());
                 }
 
                 #[cfg(not(feature = "unchecked"))]
@@ -2829,8 +2810,8 @@ impl Engine {
                     {
                         Ok(_) => (),
                         Err(err) => match *err {
-                            EvalAltResult::LoopBreak(false, _) => (),
-                            EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
+                            ERR::LoopBreak(false, _) => (),
+                            ERR::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
                             _ => return Err(err),
                         },
                     }
@@ -2856,8 +2837,8 @@ impl Engine {
                     {
                         Ok(_) => (),
                         Err(err) => match *err {
-                            EvalAltResult::LoopBreak(false, _) => (),
-                            EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
+                            ERR::LoopBreak(false, _) => (),
+                            ERR::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
                             _ => return Err(err),
                         },
                     }
@@ -2874,8 +2855,8 @@ impl Engine {
                     {
                         Ok(_) => (),
                         Err(err) => match *err {
-                            EvalAltResult::LoopBreak(false, _) => continue,
-                            EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
+                            ERR::LoopBreak(false, _) => continue,
+                            ERR::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
                             _ => return Err(err),
                         },
                     }
@@ -2932,7 +2913,7 @@ impl Engine {
                         if let Some(c) = counter_index {
                             #[cfg(not(feature = "unchecked"))]
                             if x > INT::MAX as usize {
-                                return Err(EvalAltResult::ErrorArithmetic(
+                                return Err(ERR::ErrorArithmetic(
                                     format!("for-loop counter overflow: {}", x),
                                     counter.as_ref().expect("`Some`").pos,
                                 )
@@ -2975,8 +2956,8 @@ impl Engine {
                         match result {
                             Ok(_) => (),
                             Err(err) => match *err {
-                                EvalAltResult::LoopBreak(false, _) => (),
-                                EvalAltResult::LoopBreak(true, _) => break,
+                                ERR::LoopBreak(false, _) => (),
+                                ERR::LoopBreak(true, _) => break,
                                 _ => return Err(err),
                             },
                         }
@@ -2985,13 +2966,13 @@ impl Engine {
                     scope.rewind(orig_scope_len);
                     Ok(Dynamic::UNIT)
                 } else {
-                    Err(EvalAltResult::ErrorFor(expr.position()).into())
+                    Err(ERR::ErrorFor(expr.position()).into())
                 }
             }
 
             // Continue/Break statement
             Stmt::BreakLoop(options, pos) => {
-                Err(EvalAltResult::LoopBreak(options.contains(AST_OPTION_BREAK_OUT), *pos).into())
+                Err(ERR::LoopBreak(options.contains(AST_OPTION_BREAK_OUT), *pos).into())
             }
 
             // Namespace-qualified function call
@@ -3044,7 +3025,7 @@ impl Engine {
                     Err(err) if !err.is_catchable() => Err(err),
                     Err(mut err) => {
                         let err_value = match *err {
-                            EvalAltResult::ErrorRuntime(ref x, _) => x.clone(),
+                            ERR::ErrorRuntime(ref x, _) => x.clone(),
 
                             #[cfg(feature = "no_object")]
                             _ => {
@@ -3096,7 +3077,7 @@ impl Engine {
                             Ok(_) => Ok(Dynamic::UNIT),
                             Err(result_err) => match *result_err {
                                 // Re-throw exception
-                                EvalAltResult::ErrorRuntime(Dynamic(Union::Unit(_, _, _)), pos) => {
+                                ERR::ErrorRuntime(Dynamic(Union::Unit(_, _, _)), pos) => {
                                     err.set_position(pos);
                                     Err(err)
                                 }
@@ -3109,7 +3090,7 @@ impl Engine {
 
             // Throw value
             Stmt::Return(options, Some(expr), pos) if options.contains(AST_OPTION_BREAK_OUT) => {
-                Err(EvalAltResult::ErrorRuntime(
+                Err(ERR::ErrorRuntime(
                     self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                         .flatten(),
                     *pos,
@@ -3119,11 +3100,11 @@ impl Engine {
 
             // Empty throw
             Stmt::Return(options, None, pos) if options.contains(AST_OPTION_BREAK_OUT) => {
-                Err(EvalAltResult::ErrorRuntime(Dynamic::UNIT, *pos).into())
+                Err(ERR::ErrorRuntime(Dynamic::UNIT, *pos).into())
             }
 
             // Return value
-            Stmt::Return(_, Some(expr), pos) => Err(EvalAltResult::Return(
+            Stmt::Return(_, Some(expr), pos) => Err(ERR::Return(
                 self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .flatten(),
                 *pos,
@@ -3131,7 +3112,7 @@ impl Engine {
             .into()),
 
             // Empty return
-            Stmt::Return(_, None, pos) => Err(EvalAltResult::Return(Dynamic::UNIT, *pos).into()),
+            Stmt::Return(_, None, pos) => Err(ERR::Return(Dynamic::UNIT, *pos).into()),
 
             // Let/const statement
             Stmt::Var(expr, x, options, _) => {
@@ -3178,7 +3159,7 @@ impl Engine {
                 // Guard against too many modules
                 #[cfg(not(feature = "unchecked"))]
                 if mods.num_modules >= self.max_modules() {
-                    return Err(EvalAltResult::ErrorTooManyModules(*_pos).into());
+                    return Err(ERR::ErrorTooManyModules(*_pos).into());
                 }
 
                 if let Some(path) = self
@@ -3194,11 +3175,7 @@ impl Engine {
                         .embedded_module_resolver
                         .as_ref()
                         .and_then(|r| match r.resolve(self, source, &path, path_pos) {
-                            Err(err)
-                                if matches!(*err, EvalAltResult::ErrorModuleNotFound(_, _)) =>
-                            {
-                                None
-                            }
+                            Err(err) if matches!(*err, ERR::ErrorModuleNotFound(_, _)) => None,
                             result => Some(result),
                         })
                         .or_else(|| {
@@ -3207,10 +3184,7 @@ impl Engine {
                                 .map(|r| r.resolve(self, source, &path, path_pos))
                         })
                         .unwrap_or_else(|| {
-                            Err(
-                                EvalAltResult::ErrorModuleNotFound(path.to_string(), path_pos)
-                                    .into(),
-                            )
+                            Err(ERR::ErrorModuleNotFound(path.to_string(), path_pos).into())
                         })?;
 
                     if let Some(name) = export.as_ref().map(|x| x.name.clone()) {
@@ -3245,7 +3219,7 @@ impl Engine {
                             );
                             Ok(()) as RhaiResultOf<_>
                         } else {
-                            Err(EvalAltResult::ErrorVariableNotFound(name.to_string(), *pos).into())
+                            Err(ERR::ErrorVariableNotFound(name.to_string(), *pos).into())
                         }
                     },
                 )?;
@@ -3380,11 +3354,9 @@ impl Engine {
             .max_string_size
             .map_or(usize::MAX, NonZeroUsize::get)
         {
-            return Err(EvalAltResult::ErrorDataTooLarge(
-                "Length of string".to_string(),
-                Position::NONE,
-            )
-            .into());
+            return Err(
+                ERR::ErrorDataTooLarge("Length of string".to_string(), Position::NONE).into(),
+            );
         }
 
         #[cfg(not(feature = "no_index"))]
@@ -3394,11 +3366,7 @@ impl Engine {
                 .max_array_size
                 .map_or(usize::MAX, NonZeroUsize::get)
         {
-            return Err(EvalAltResult::ErrorDataTooLarge(
-                "Size of array".to_string(),
-                Position::NONE,
-            )
-            .into());
+            return Err(ERR::ErrorDataTooLarge("Size of array".to_string(), Position::NONE).into());
         }
 
         #[cfg(not(feature = "no_object"))]
@@ -3408,11 +3376,9 @@ impl Engine {
                 .max_map_size
                 .map_or(usize::MAX, NonZeroUsize::get)
         {
-            return Err(EvalAltResult::ErrorDataTooLarge(
-                "Size of object map".to_string(),
-                Position::NONE,
-            )
-            .into());
+            return Err(
+                ERR::ErrorDataTooLarge("Size of object map".to_string(), Position::NONE).into(),
+            );
         }
 
         Ok(())
@@ -3429,14 +3395,14 @@ impl Engine {
 
         // Guard against too many operations
         if self.max_operations() > 0 && *num_operations > self.max_operations() {
-            return Err(EvalAltResult::ErrorTooManyOperations(pos).into());
+            return Err(ERR::ErrorTooManyOperations(pos).into());
         }
 
         // Report progress - only in steps
         if let Some(ref progress) = self.progress {
             if let Some(token) = progress(*num_operations) {
                 // Terminate script if progress returns a termination token
-                return Err(EvalAltResult::ErrorTerminated(token, pos).into());
+                return Err(ERR::ErrorTerminated(token, pos).into());
             }
         }
 
@@ -3456,15 +3422,11 @@ impl Engine {
             .unwrap_or_else(|| map_std_type_name(name))
     }
 
-    /// Make a `Box<`[`EvalAltResult<ErrorMismatchDataType>`][EvalAltResult::ErrorMismatchDataType]`>`.
+    /// Make a `Box<`[`EvalAltResult<ErrorMismatchDataType>`][ERR::ErrorMismatchDataType]`>`.
     #[inline]
     #[must_use]
     pub(crate) fn make_type_mismatch_err<T>(&self, typ: &str, pos: Position) -> RhaiError {
-        EvalAltResult::ErrorMismatchDataType(
-            self.map_type_name(type_name::<T>()).into(),
-            typ.into(),
-            pos,
-        )
-        .into()
+        ERR::ErrorMismatchDataType(self.map_type_name(type_name::<T>()).into(), typ.into(), pos)
+            .into()
     }
 }

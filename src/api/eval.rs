@@ -3,9 +3,7 @@
 use crate::engine::{EvalState, Imports};
 use crate::parser::ParseState;
 use crate::types::dynamic::Variant;
-use crate::{
-    Dynamic, Engine, EvalAltResult, Module, Position, RhaiResult, RhaiResultOf, Scope, AST,
-};
+use crate::{Dynamic, Engine, Module, Position, RhaiResult, RhaiResultOf, Scope, AST, ERR};
 use std::any::type_name;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -193,7 +191,7 @@ impl Engine {
         let typ = self.map_type_name(result.type_name());
 
         result.try_cast::<T>().ok_or_else(|| {
-            EvalAltResult::ErrorMismatchOutputType(
+            ERR::ErrorMismatchOutputType(
                 self.map_type_name(type_name::<T>()).into(),
                 typ.into(),
                 Position::NONE,

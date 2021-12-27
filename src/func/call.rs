@@ -12,8 +12,8 @@ use crate::engine::{
 use crate::module::Namespace;
 use crate::tokenizer::Token;
 use crate::{
-    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, EvalAltResult, FnPtr,
-    Identifier, ImmutableString, Module, Position, RhaiResult, RhaiResultOf, Scope, StaticVec,
+    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnPtr, Identifier,
+    ImmutableString, Module, Position, RhaiResult, RhaiResultOf, Scope, StaticVec, ERR,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -114,7 +114,7 @@ pub fn ensure_no_data_race(
         .skip(if is_method_call { 1 } else { 0 })
         .find(|(_, a)| a.is_locked())
     {
-        return Err(EvalAltResult::ErrorDataRace(
+        return Err(ERR::ErrorDataRace(
             format!("argument #{} of function '{}'", n + 1, fn_name.as_ref()),
             Position::NONE,
         )
@@ -195,7 +195,7 @@ impl Engine {
                 let max_bitmask = if !allow_dynamic {
                     0
                 } else {
-                    1usize << num_args.min(MAX_DYNAMIC_PARAMETERS)
+                    1usize << usize::min(num_args, MAX_DYNAMIC_PARAMETERS)
                 };
                 let mut bitmask = 1usize; // Bitmask of which parameter to replace with `Dynamic`
 
@@ -369,7 +369,7 @@ impl Engine {
                 KEYWORD_PRINT => {
                     if let Some(ref print) = self.print {
                         let text = result.into_immutable_string().map_err(|typ| {
-                            EvalAltResult::ErrorMismatchOutputType(
+                            ERR::ErrorMismatchOutputType(
                                 self.map_type_name(type_name::<ImmutableString>()).into(),
                                 typ.into(),
                                 pos,
@@ -383,7 +383,7 @@ impl Engine {
                 KEYWORD_DEBUG => {
                     if let Some(ref debug) = self.debug {
                         let text = result.into_immutable_string().map_err(|typ| {
-                            EvalAltResult::ErrorMismatchOutputType(
+                            ERR::ErrorMismatchOutputType(
                                 self.map_type_name(type_name::<ImmutableString>()).into(),
                                 typ.into(),
                                 pos,
@@ -407,7 +407,7 @@ impl Engine {
             crate::engine::FN_IDX_GET => {
                 assert!(args.len() == 2);
 
-                Err(EvalAltResult::ErrorIndexingType(
+                Err(ERR::ErrorIndexingType(
                     format!(
                         "{} [{}]",
                         self.map_type_name(args[0].type_name()),
@@ -423,7 +423,7 @@ impl Engine {
             crate::engine::FN_IDX_SET => {
                 assert!(args.len() == 3);
 
-                Err(EvalAltResult::ErrorIndexingType(
+                Err(ERR::ErrorIndexingType(
                     format!(
                         "{} [{}] = {}",
                         self.map_type_name(args[0].type_name()),
@@ -440,7 +440,7 @@ impl Engine {
             _ if name.starts_with(crate::engine::FN_GET) => {
                 assert!(args.len() == 1);
 
-                Err(EvalAltResult::ErrorDotExpr(
+                Err(ERR::ErrorDotExpr(
                     format!(
                         "Unknown property '{}' - a getter is not registered for type '{}'",
                         &name[crate::engine::FN_GET.len()..],
@@ -456,7 +456,7 @@ impl Engine {
             _ if name.starts_with(crate::engine::FN_SET) => {
                 assert!(args.len() == 2);
 
-                Err(EvalAltResult::ErrorDotExpr(
+                Err(ERR::ErrorDotExpr(
                     format!(
                         "No writable property '{}' - a setter is not registered for type '{}' to handle '{}'",
                         &name[crate::engine::FN_SET.len()..],
@@ -469,11 +469,9 @@ impl Engine {
             }
 
             // Raise error
-            _ => Err(EvalAltResult::ErrorFunctionNotFound(
-                self.gen_call_signature(None, name, args),
-                pos,
-            )
-            .into()),
+            _ => Err(
+                ERR::ErrorFunctionNotFound(self.gen_call_signature(None, name, args), pos).into(),
+            ),
         }
     }
 
@@ -501,7 +499,7 @@ impl Engine {
     ) -> RhaiResultOf<(Dynamic, bool)> {
         fn no_method_err(name: &str, pos: Position) -> RhaiResultOf<(Dynamic, bool)> {
             let msg = format!("'{0}' should not be called this way. Try {0}(...);", name);
-            Err(EvalAltResult::ErrorRuntime(msg.into(), pos).into())
+            Err(ERR::ErrorRuntime(msg.into(), pos).into())
         }
 
         let fn_name = fn_name.as_ref();
@@ -669,8 +667,8 @@ impl Engine {
             scope, mods, state, lib, &mut None, statements, false, false, level,
         )
         .or_else(|err| match *err {
-            EvalAltResult::Return(out, _) => Ok(out),
-            EvalAltResult::LoopBreak(_, _) => {
+            ERR::Return(out, _) => Ok(out),
+            ERR::LoopBreak(_, _) => {
                 unreachable!("no outer loop scope to break out of")
             }
             _ => Err(err),
@@ -707,7 +705,7 @@ impl Engine {
         // If new functions are defined within the eval string, it is an error
         #[cfg(not(feature = "no_function"))]
         if !ast.shared_lib().is_empty() {
-            return Err(crate::ParseErrorType::WrongFnDefinition.into());
+            return Err(crate::PERR::WrongFnDefinition.into());
         }
 
         let statements = ast.statements();
@@ -1071,7 +1069,7 @@ impl Engine {
                 }
 
                 return result.map_err(|err| {
-                    EvalAltResult::ErrorInFunctionCall(
+                    ERR::ErrorInFunctionCall(
                         KEYWORD_EVAL.to_string(),
                         mods.source
                             .as_ref()
@@ -1241,9 +1239,9 @@ impl Engine {
             }
         }
 
-        let module = self.search_imports(mods, state, namespace).ok_or_else(|| {
-            EvalAltResult::ErrorModuleNotFound(namespace.to_string(), namespace[0].pos)
-        })?;
+        let module = self
+            .search_imports(mods, state, namespace)
+            .ok_or_else(|| ERR::ErrorModuleNotFound(namespace.to_string(), namespace[0].pos))?;
 
         // First search in script-defined functions (can override built-in)
         let func = match module.get_qualified_fn(hash) {
@@ -1310,7 +1308,7 @@ impl Engine {
 
             Some(f) => unreachable!("unknown function type: {:?}", f),
 
-            None => Err(EvalAltResult::ErrorFunctionNotFound(
+            None => Err(ERR::ErrorFunctionNotFound(
                 self.gen_call_signature(Some(namespace), fn_name, &args),
                 pos,
             )

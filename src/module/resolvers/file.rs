@@ -3,7 +3,7 @@
 
 use crate::func::native::shared_write_lock;
 use crate::{
-    Engine, EvalAltResult, Identifier, Module, ModuleResolver, Position, RhaiResultOf, Scope,
+    Engine,ERR, Identifier, Module, ModuleResolver, Position, RhaiResultOf, Scope,
     Shared,
 };
 
@@ -288,17 +288,17 @@ impl ModuleResolver for FileModuleResolver {
         let mut ast = engine
             .compile_file(file_path.clone())
             .map_err(|err| match *err {
-                EvalAltResult::ErrorSystem(_, err) if err.is::<IoError>() => {
-                    Box::new(EvalAltResult::ErrorModuleNotFound(path.to_string(), pos))
+                ERR::ErrorSystem(_, err) if err.is::<IoError>() => {
+                    Box::new(ERR::ErrorModuleNotFound(path.to_string(), pos))
                 }
-                _ => Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos)),
+                _ => Box::new(ERR::ErrorInModule(path.to_string(), err, pos)),
             })?;
 
         ast.set_source(path);
 
         // Make a module from the AST
         let m: Shared<Module> = Module::eval_ast_as_new(scope, &ast, engine)
-            .map_err(|err| Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos)))?
+            .map_err(|err| Box::new(ERR::ErrorInModule(path.to_string(), err, pos)))?
             .into();
 
         // Put it into the cache
@@ -331,10 +331,10 @@ impl ModuleResolver for FileModuleResolver {
                     ast
                 })
                 .map_err(|err| match *err {
-                    EvalAltResult::ErrorSystem(_, err) if err.is::<IoError>() => {
-                        EvalAltResult::ErrorModuleNotFound(path.to_string(), pos).into()
+                    ERR::ErrorSystem(_, err) if err.is::<IoError>() => {
+                        ERR::ErrorModuleNotFound(path.to_string(), pos).into()
                     }
-                    _ => EvalAltResult::ErrorInModule(path.to_string(), err, pos).into(),
+                    _ => ERR::ErrorInModule(path.to_string(), err, pos).into(),
                 }),
         )
     }

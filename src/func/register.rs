@@ -8,7 +8,7 @@ use super::native::{FnAny, SendSync};
 use crate::r#unsafe::unsafe_try_cast;
 use crate::tokenizer::Position;
 use crate::types::dynamic::{DynamicWriteLock, Variant};
-use crate::{Dynamic, EvalAltResult, NativeCallContext, RhaiResultOf};
+use crate::{Dynamic, ERR, NativeCallContext, RhaiResultOf};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{any::TypeId, mem};
@@ -124,7 +124,7 @@ macro_rules! def_register {
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
                     if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {
-                        return Err(EvalAltResult::ErrorAssignmentToConstant(String::new(), Position::NONE).into());
+                        return Err(ERR::ErrorAssignmentToConstant(String::new(), Position::NONE).into());
                     }
 
                     // The arguments are assumed to be of the correct number and types!
@@ -152,7 +152,7 @@ macro_rules! def_register {
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
                     if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {
-                        return Err(EvalAltResult::ErrorAssignmentToConstant(String::new(), Position::NONE).into());
+                        return Err(ERR::ErrorAssignmentToConstant(String::new(), Position::NONE).into());
                     }
 
                     // The arguments are assumed to be of the correct number and types!
@@ -180,7 +180,7 @@ macro_rules! def_register {
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
                     if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {
-                        return Err(EvalAltResult::ErrorAssignmentToConstant(String::new(), Position::NONE).into());
+                        return Err(ERR::ErrorAssignmentToConstant(String::new(), Position::NONE).into());
                     }
 
                     // The arguments are assumed to be of the correct number and types!
@@ -205,7 +205,7 @@ macro_rules! def_register {
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
                     if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {
-                        return Err(EvalAltResult::ErrorAssignmentToConstant(String::new(), Position::NONE).into());
+                        return Err(ERR::ErrorAssignmentToConstant(String::new(), Position::NONE).into());
                     }
 
                     // The arguments are assumed to be of the correct number and types!

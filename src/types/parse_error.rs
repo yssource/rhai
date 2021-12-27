@@ -1,7 +1,7 @@
 //! Module containing error definitions for the parsing process.
 
 use crate::tokenizer::is_valid_identifier;
-use crate::{EvalAltResult, Position, RhaiError};
+use crate::{Position, RhaiError, ERR};
 #[cfg(feature = "no_std")]
 use core_error::Error;
 #[cfg(not(feature = "no_std"))]
@@ -66,7 +66,7 @@ impl LexError {
     }
 }
 
-/// Type of error encountered when parsing a script.
+/// Error encountered when parsing a script.
 ///
 /// Some errors never appear when certain features are turned on.
 /// They still exist so that the application can turn features on and off without going through
@@ -317,10 +317,10 @@ impl From<ParseErrorType> for RhaiError {
     }
 }
 
-impl From<ParseErrorType> for EvalAltResult {
+impl From<ParseErrorType> for ERR {
     #[inline(always)]
     fn from(err: ParseErrorType) -> Self {
-        EvalAltResult::ErrorParsing(err, Position::NONE)
+        ERR::ErrorParsing(err, Position::NONE)
     }
 }
 
@@ -331,9 +331,9 @@ impl From<ParseError> for RhaiError {
     }
 }
 
-impl From<ParseError> for EvalAltResult {
+impl From<ParseError> for ERR {
     #[inline(always)]
     fn from(err: ParseError) -> Self {
-        EvalAltResult::ErrorParsing(*err.0, err.1)
+        ERR::ErrorParsing(*err.0, err.1)
     }
 }

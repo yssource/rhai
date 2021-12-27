@@ -4,8 +4,8 @@
 use crate::engine::OP_EQUALS;
 use crate::plugin::*;
 use crate::{
-    def_package, Array, Dynamic, EvalAltResult, ExclusiveRange, FnPtr, InclusiveRange,
-    NativeCallContext, Position, RhaiResultOf, INT,
+    def_package, Array, Dynamic, ExclusiveRange, FnPtr, InclusiveRange, NativeCallContext,
+    Position, RhaiResultOf, ERR, INT,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -90,11 +90,7 @@ pub mod array_functions {
         // Check if array will be over max size limit
         #[cfg(not(feature = "unchecked"))]
         if _ctx.engine().max_array_size() > 0 && (len as usize) > _ctx.engine().max_array_size() {
-            return Err(EvalAltResult::ErrorDataTooLarge(
-                "Size of array".to_string(),
-                Position::NONE,
-            )
-            .into());
+            return Err(ERR::ErrorDataTooLarge("Size of array".to_string(), Position::NONE).into());
         }
 
         if len as usize > array.len() {
@@ -174,7 +170,7 @@ pub mod array_functions {
             let arr_len = array.len();
             start
                 .checked_abs()
-                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
+                .map_or(0, |n| arr_len - usize::min(n as usize, arr_len))
         } else if start as usize >= array.len() {
             array.extend(replace);
             return;
@@ -213,7 +209,7 @@ pub mod array_functions {
             let arr_len = array.len();
             start
                 .checked_abs()
-                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
+                .map_or(0, |n| arr_len - usize::min(n as usize, arr_len))
         } else if start as usize >= array.len() {
             return Array::new();
         } else {
@@ -275,7 +271,7 @@ pub mod array_functions {
                 mapper
                     .call_raw(&ctx, None, [item.clone()])
                     .or_else(|err| match *err {
-                        EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                        ERR::ErrorFunctionNotFound(fn_sig, _)
                             if fn_sig.starts_with(mapper.fn_name()) =>
                         {
                             mapper.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
@@ -283,7 +279,7 @@ pub mod array_functions {
                         _ => Err(err),
                     })
                     .map_err(|err| {
-                        Box::new(EvalAltResult::ErrorInFunctionCall(
+                        Box::new(ERR::ErrorInFunctionCall(
                             "map".to_string(),
                             ctx.source().unwrap_or("").to_string(),
                             err,
@@ -316,7 +312,7 @@ pub mod array_functions {
             if filter
                 .call_raw(&ctx, None, [item.clone()])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
                         filter.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
@@ -324,7 +320,7 @@ pub mod array_functions {
                     _ => Err(err),
                 })
                 .map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                    Box::new(ERR::ErrorInFunctionCall(
                         "filter".to_string(),
                         ctx.source().unwrap_or("").to_string(),
                         err,
@@ -362,9 +358,7 @@ pub mod array_functions {
             if ctx
                 .call_fn_raw(OP_EQUALS, true, false, &mut [item, &mut value.clone()])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(ref fn_sig, _)
-                        if fn_sig.starts_with(OP_EQUALS) =>
-                    {
+                    ERR::ErrorFunctionNotFound(ref fn_sig, _) if fn_sig.starts_with(OP_EQUALS) => {
                         if item.type_id() == value.type_id() {
                             // No default when comparing same type
                             Err(err)
@@ -410,7 +404,7 @@ pub mod array_functions {
             let arr_len = array.len();
             start
                 .checked_abs()
-                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
+                .map_or(0, |n| arr_len - usize::min(n as usize, arr_len))
         } else if start as usize >= array.len() {
             return Ok(-1);
         } else {
@@ -421,9 +415,7 @@ pub mod array_functions {
             if ctx
                 .call_fn_raw(OP_EQUALS, true, false, &mut [item, &mut value.clone()])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(ref fn_sig, _)
-                        if fn_sig.starts_with(OP_EQUALS) =>
-                    {
+                    ERR::ErrorFunctionNotFound(ref fn_sig, _) if fn_sig.starts_with(OP_EQUALS) => {
                         if item.type_id() == value.type_id() {
                             // No default when comparing same type
                             Err(err)
@@ -477,7 +469,7 @@ pub mod array_functions {
             let arr_len = array.len();
             start
                 .checked_abs()
-                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
+                .map_or(0, |n| arr_len - usize::min(n as usize, arr_len))
         } else if start as usize >= array.len() {
             return Ok(-1);
         } else {
@@ -488,7 +480,7 @@ pub mod array_functions {
             if filter
                 .call_raw(&ctx, None, [item.clone()])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
                         filter.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
@@ -496,7 +488,7 @@ pub mod array_functions {
                     _ => Err(err),
                 })
                 .map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                    Box::new(ERR::ErrorInFunctionCall(
                         "index_of".to_string(),
                         ctx.source().unwrap_or("").to_string(),
                         err,
@@ -531,7 +523,7 @@ pub mod array_functions {
             if filter
                 .call_raw(&ctx, None, [item.clone()])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
                         filter.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
@@ -539,7 +531,7 @@ pub mod array_functions {
                     _ => Err(err),
                 })
                 .map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                    Box::new(ERR::ErrorInFunctionCall(
                         "some".to_string(),
                         ctx.source().unwrap_or("").to_string(),
                         err,
@@ -573,7 +565,7 @@ pub mod array_functions {
             if !filter
                 .call_raw(&ctx, None, [item.clone()])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
                         filter.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
@@ -581,7 +573,7 @@ pub mod array_functions {
                     _ => Err(err),
                 })
                 .map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                    Box::new(ERR::ErrorInFunctionCall(
                         "all".to_string(),
                         ctx.source().unwrap_or("").to_string(),
                         err,
@@ -668,7 +660,7 @@ pub mod array_functions {
             result = reducer
                 .call_raw(&ctx, None, [result.clone(), item.clone()])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(reducer.fn_name()) =>
                     {
                         reducer.call_raw(&ctx, None, [result, item, (i as INT).into()])
@@ -676,7 +668,7 @@ pub mod array_functions {
                     _ => Err(err),
                 })
                 .map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                    Box::new(ERR::ErrorInFunctionCall(
                         "reduce".to_string(),
                         ctx.source().unwrap_or("").to_string(),
                         err,
@@ -728,7 +720,7 @@ pub mod array_functions {
             result = reducer
                 .call_raw(&ctx, None, [result.clone(), item.clone()])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(reducer.fn_name()) =>
                     {
                         reducer.call_raw(&ctx, None, [result, item, ((len - 1 - i) as INT).into()])
@@ -736,7 +728,7 @@ pub mod array_functions {
                     _ => Err(err),
                 })
                 .map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                    Box::new(ERR::ErrorInFunctionCall(
                         "reduce_rev".to_string(),
                         ctx.source().unwrap_or("").to_string(),
                         err,
@@ -795,7 +787,7 @@ pub mod array_functions {
         let type_id = array[0].type_id();
 
         if array.iter().any(|a| a.type_id() != type_id) {
-            return Err(EvalAltResult::ErrorFunctionNotFound(
+            return Err(ERR::ErrorFunctionNotFound(
                 "sort() cannot be called with elements of different types".into(),
                 Position::NONE,
             )
@@ -873,7 +865,7 @@ pub mod array_functions {
             if filter
                 .call_raw(&ctx, None, [array[x].clone()])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
                         filter.call_raw(&ctx, None, [array[x].clone(), (i as INT).into()])
@@ -881,7 +873,7 @@ pub mod array_functions {
                     _ => Err(err),
                 })
                 .map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                    Box::new(ERR::ErrorInFunctionCall(
                         "drain".to_string(),
                         ctx.source().unwrap_or("").to_string(),
                         err,
@@ -931,7 +923,7 @@ pub mod array_functions {
             let arr_len = array.len();
             start
                 .checked_abs()
-                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
+                .map_or(0, |n| arr_len - usize::min(n as usize, arr_len))
         } else if start as usize >= array.len() {
             return Array::new();
         } else {
@@ -963,7 +955,7 @@ pub mod array_functions {
             if !filter
                 .call_raw(&ctx, None, [array[x].clone()])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
                         filter.call_raw(&ctx, None, [array[x].clone(), (i as INT).into()])
@@ -971,7 +963,7 @@ pub mod array_functions {
                     _ => Err(err),
                 })
                 .map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                    Box::new(ERR::ErrorInFunctionCall(
                         "retain".to_string(),
                         ctx.source().unwrap_or("").to_string(),
                         err,
@@ -1021,7 +1013,7 @@ pub mod array_functions {
             let arr_len = array.len();
             start
                 .checked_abs()
-                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
+                .map_or(0, |n| arr_len - usize::min(n as usize, arr_len))
         } else if start as usize >= array.len() {
             return mem::take(array);
         } else {
@@ -1056,9 +1048,7 @@ pub mod array_functions {
             if !ctx
                 .call_fn_raw(OP_EQUALS, true, false, &mut [a1, a2])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(ref fn_sig, _)
-                        if fn_sig.starts_with(OP_EQUALS) =>
-                    {
+                    ERR::ErrorFunctionNotFound(ref fn_sig, _) if fn_sig.starts_with(OP_EQUALS) => {
                         if a1.type_id() == a2.type_id() {
                             // No default when comparing same type
                             Err(err)

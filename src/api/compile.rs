@@ -366,7 +366,7 @@ impl Engine {
             } else if json_text.starts_with(Token::LeftBrace.literal_syntax()) {
                 ["#", json_text]
             } else {
-                return Err(crate::ParseErrorType::MissingToken(
+                return Err(crate::PERR::MissingToken(
                     Token::LeftBrace.syntax().into(),
                     "to start a JSON object hash".into(),
                 )

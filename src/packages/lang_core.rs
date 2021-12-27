@@ -1,7 +1,7 @@
 use crate::def_package;
 use crate::plugin::*;
 use crate::types::dynamic::Tag;
-use crate::{Dynamic, EvalAltResult, RhaiResultOf, INT};
+use crate::{Dynamic, RhaiResultOf, ERR, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -23,7 +23,7 @@ mod core_functions {
     #[rhai_fn(name = "set_tag", set = "tag", return_raw)]
     pub fn set_tag(value: &mut Dynamic, tag: INT) -> RhaiResultOf<()> {
         if tag < Tag::MIN as INT {
-            Err(EvalAltResult::ErrorArithmetic(
+            Err(ERR::ErrorArithmetic(
                 format!(
                     "{} is too small to fit into a tag (must be between {} and {})",
                     tag,
@@ -34,7 +34,7 @@ mod core_functions {
             )
             .into())
         } else if tag > Tag::MAX as INT {
-            Err(EvalAltResult::ErrorArithmetic(
+            Err(ERR::ErrorArithmetic(
                 format!(
                     "{} is too large to fit into a tag (must be between {} and {})",
                     tag,

@@ -3,7 +3,7 @@
 #![cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 
 use crate::types::dynamic::Variant;
-use crate::{Engine, EvalAltResult, RhaiResultOf, Scope, AST};
+use crate::{Engine, RhaiResultOf, Scope, AST, ERR};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -13,7 +13,7 @@ impl Engine {
         use std::io::Read;
 
         let mut f = std::fs::File::open(path.clone()).map_err(|err| {
-            EvalAltResult::ErrorSystem(
+            ERR::ErrorSystem(
                 format!("Cannot open script file '{}'", path.to_string_lossy()),
                 err.into(),
             )
@@ -22,7 +22,7 @@ impl Engine {
         let mut contents = String::new();
 
         f.read_to_string(&mut contents).map_err(|err| {
-            EvalAltResult::ErrorSystem(
+            ERR::ErrorSystem(
                 format!("Cannot read script file '{}'", path.to_string_lossy()),
                 err.into(),
             )

@@ -1,6 +1,6 @@
 //! Implement deserialization support of [`ImmutableString`][crate::ImmutableString] for [`serde`].
 
-use crate::{EvalAltResult, Position, RhaiError, RhaiResultOf};
+use crate::{Position, RhaiError, RhaiResultOf, ERR};
 use serde::de::{Deserializer, Visitor};
 use std::any::type_name;
 #[cfg(feature = "no_std")]
@@ -19,12 +19,10 @@ impl<'a> StringSliceDeserializer<'a> {
     }
     /// Shortcut for a type conversion error.
     fn type_error<T>(&self) -> RhaiResultOf<T> {
-        Err(EvalAltResult::ErrorMismatchOutputType(
-            type_name::<T>().into(),
-            "string".into(),
-            Position::NONE,
+        Err(
+            ERR::ErrorMismatchOutputType(type_name::<T>().into(), "string".into(), Position::NONE)
+                .into(),
         )
-        .into())
     }
 }
 

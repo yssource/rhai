@@ -509,7 +509,7 @@ mod string_functions {
         // Check if string will be over max size limit
         #[cfg(not(feature = "unchecked"))]
         if _ctx.engine().max_string_size() > 0 && len as usize > _ctx.engine().max_string_size() {
-            return Err(crate::EvalAltResult::ErrorDataTooLarge(
+            return Err(crate::ERR::ErrorDataTooLarge(
                 "Length of string".to_string(),
                 crate::Position::NONE,
             )
@@ -528,7 +528,7 @@ mod string_functions {
             #[cfg(not(feature = "unchecked"))]
             if _ctx.engine().max_string_size() > 0 && string.len() > _ctx.engine().max_string_size()
             {
-                return Err(crate::EvalAltResult::ErrorDataTooLarge(
+                return Err(crate::ERR::ErrorDataTooLarge(
                     "Length of string".to_string(),
                     crate::Position::NONE,
                 )
@@ -553,7 +553,7 @@ mod string_functions {
         // Check if string will be over max size limit
         #[cfg(not(feature = "unchecked"))]
         if _ctx.engine().max_string_size() > 0 && len as usize > _ctx.engine().max_string_size() {
-            return Err(crate::EvalAltResult::ErrorDataTooLarge(
+            return Err(crate::ERR::ErrorDataTooLarge(
                 "Length of string".to_string(),
                 crate::Position::NONE,
             )
@@ -579,7 +579,7 @@ mod string_functions {
             #[cfg(not(feature = "unchecked"))]
             if _ctx.engine().max_string_size() > 0 && string.len() > _ctx.engine().max_string_size()
             {
-                return Err(crate::EvalAltResult::ErrorDataTooLarge(
+                return Err(crate::ERR::ErrorDataTooLarge(
                     "Length of string".to_string(),
                     crate::Position::NONE,
                 )

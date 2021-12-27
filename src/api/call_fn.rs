@@ -4,8 +4,7 @@
 use crate::engine::{EvalState, Imports};
 use crate::types::dynamic::Variant;
 use crate::{
-    Dynamic, Engine, EvalAltResult, FuncArgs, Position, RhaiResult, RhaiResultOf, Scope, StaticVec,
-    AST,
+    Dynamic, Engine, FuncArgs, Position, RhaiResult, RhaiResultOf, Scope, StaticVec, AST, ERR,
 };
 use std::any::type_name;
 #[cfg(feature = "no_std")]
@@ -70,7 +69,7 @@ impl Engine {
         let typ = self.map_type_name(result.type_name());
 
         result.try_cast().ok_or_else(|| {
-            EvalAltResult::ErrorMismatchOutputType(
+            ERR::ErrorMismatchOutputType(
                 self.map_type_name(type_name::<T>()).into(),
                 typ.into(),
                 Position::NONE,
@@ -176,7 +175,7 @@ impl Engine {
         let fn_def = ast
             .shared_lib()
             .get_script_fn(name, args.len())
-            .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::NONE))?;
+            .ok_or_else(|| ERR::ErrorFunctionNotFound(name.into(), Position::NONE))?;
 
         // Check for data race.
         #[cfg(not(feature = "no_closure"))]

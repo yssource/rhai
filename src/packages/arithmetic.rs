@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::{def_package, EvalAltResult, Position, RhaiError, RhaiResultOf, INT};
+use crate::{def_package, Position, RhaiError, RhaiResultOf, ERR, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -11,7 +11,7 @@ use num_traits::Float;
 
 #[inline(never)]
 pub fn make_err(msg: impl Into<String>) -> RhaiError {
-    EvalAltResult::ErrorArithmetic(msg.into(), Position::NONE).into()
+    ERR::ErrorArithmetic(msg.into(), Position::NONE).into()
 }
 
 macro_rules! gen_arithmetic_functions {

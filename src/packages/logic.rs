@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::{def_package, EvalAltResult, ExclusiveRange, InclusiveRange, RhaiResultOf, INT};
+use crate::{def_package, ExclusiveRange, InclusiveRange, RhaiResultOf, ERR, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -207,7 +207,7 @@ mod bit_field_functions {
             let offset = index as usize;
 
             if offset >= BITS {
-                Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
+                Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
             } else {
                 Ok((value & (1 << offset)) != 0)
             }
@@ -216,12 +216,12 @@ mod bit_field_functions {
 
             // Count from end if negative
             if offset > BITS {
-                Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
+                Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
             } else {
                 Ok((value & (1 << (BITS - offset))) != 0)
             }
         } else {
-            Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
+            Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
         }
     }
     #[rhai_fn(return_raw)]
@@ -230,7 +230,7 @@ mod bit_field_functions {
             let offset = index as usize;
 
             if offset >= BITS {
-                Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
+                Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
             } else {
                 let mask = 1 << offset;
                 if new_value {
@@ -245,7 +245,7 @@ mod bit_field_functions {
 
             // Count from end if negative
             if offset > BITS {
-                Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
+                Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
             } else {
                 let mask = 1 << offset;
                 if new_value {
@@ -256,7 +256,7 @@ mod bit_field_functions {
                 Ok(())
             }
         } else {
-            Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
+            Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
         }
     }
     #[rhai_fn(name = "get_bits", return_raw)]
@@ -281,7 +281,7 @@ mod bit_field_functions {
             let offset = index as usize;
 
             if offset >= BITS {
-                return Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
+                return Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
             }
 
             offset
@@ -290,11 +290,11 @@ mod bit_field_functions {
 
             // Count from end if negative
             if offset > BITS {
-                return Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
+                return Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
             }
             BITS - offset
         } else {
-            return Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
+            return Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
         };
 
         let bits = if offset + bits as usize > BITS {
@@ -343,7 +343,7 @@ mod bit_field_functions {
             let offset = index as usize;
 
             if offset >= BITS {
-                return Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
+                return Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
             }
 
             offset
@@ -352,11 +352,11 @@ mod bit_field_functions {
 
             // Count from end if negative
             if offset > BITS {
-                return Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
+                return Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
             }
             BITS - offset
         } else {
-            return Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
+            return Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
         };
 
         let bits = if offset + bits as usize > BITS {

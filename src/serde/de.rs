@@ -1,7 +1,7 @@
 //! Implement deserialization support of [`Dynamic`][crate::Dynamic] for [`serde`].
 
 use crate::types::dynamic::Union;
-use crate::{Dynamic, EvalAltResult, ImmutableString, LexError, Position, RhaiError, RhaiResultOf};
+use crate::{Dynamic, ImmutableString, LexError, Position, RhaiError, RhaiResultOf, ERR};
 use serde::de::{Error, IntoDeserializer, Visitor};
 use serde::{Deserialize, Deserializer};
 #[cfg(feature = "no_std")]
@@ -31,7 +31,7 @@ impl<'de> DynamicDeserializer<'de> {
     }
     /// Shortcut for a type conversion error.
     fn type_error_str<T>(&self, error: &str) -> RhaiResultOf<T> {
-        Err(EvalAltResult::ErrorMismatchOutputType(
+        Err(ERR::ErrorMismatchOutputType(
             error.into(),
             self.value.type_name().into(),
             Position::NONE,

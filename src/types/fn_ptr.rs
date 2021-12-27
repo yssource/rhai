@@ -3,8 +3,8 @@
 use crate::tokenizer::is_valid_identifier;
 use crate::types::dynamic::Variant;
 use crate::{
-    Dynamic, Engine, EvalAltResult, FuncArgs, Identifier, Module, NativeCallContext, Position,
-    RhaiError, RhaiResult, RhaiResultOf, StaticVec, AST,
+    Dynamic, Engine, FuncArgs, Identifier, Module, NativeCallContext, Position, RhaiError,
+    RhaiResult, RhaiResultOf, StaticVec, AST, ERR,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -157,7 +157,7 @@ impl FnPtr {
         let typ = engine.map_type_name(result.type_name());
 
         result.try_cast().ok_or_else(|| {
-            EvalAltResult::ErrorMismatchOutputType(
+            ERR::ErrorMismatchOutputType(
                 engine.map_type_name(type_name::<T>()).into(),
                 typ.into(),
                 Position::NONE,
@@ -185,7 +185,7 @@ impl FnPtr {
         let typ = context.engine().map_type_name(result.type_name());
 
         result.try_cast().ok_or_else(|| {
-            EvalAltResult::ErrorMismatchOutputType(
+            ERR::ErrorMismatchOutputType(
                 context.engine().map_type_name(type_name::<T>()).into(),
                 typ.into(),
                 Position::NONE,
@@ -255,7 +255,7 @@ impl TryFrom<Identifier> for FnPtr {
         if is_valid_identifier(value.chars()) {
             Ok(Self(value, StaticVec::new_const()))
         } else {
-            Err(EvalAltResult::ErrorFunctionNotFound(value.to_string(), Position::NONE).into())
+            Err(ERR::ErrorFunctionNotFound(value.to_string(), Position::NONE).into())
         }
     }
 }

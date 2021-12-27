@@ -7,8 +7,8 @@ use crate::plugin::PluginFunction;
 use crate::tokenizer::{Token, TokenizeState};
 use crate::types::dynamic::Variant;
 use crate::{
-    calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, FuncArgs, Module, Position,
-    RhaiResult, RhaiResultOf, StaticVec,
+    calc_fn_hash, Dynamic, Engine, EvalContext, FuncArgs, Module, Position, RhaiResult,
+    RhaiResultOf, StaticVec, ERR,
 };
 use std::any::type_name;
 #[cfg(feature = "no_std")]
@@ -244,7 +244,7 @@ impl<'a> NativeCallContext<'a> {
         let typ = self.engine().map_type_name(result.type_name());
 
         result.try_cast().ok_or_else(|| {
-            EvalAltResult::ErrorMismatchOutputType(
+            ERR::ErrorMismatchOutputType(
                 self.engine().map_type_name(type_name::<T>()).into(),
                 typ.into(),
                 Position::NONE,

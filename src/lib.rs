@@ -82,8 +82,12 @@ mod tokenizer;
 mod types;
 mod r#unsafe;
 
+/// Error encountered when parsing a script.
+type PERR = ParseErrorType;
+/// Evaluation result.
+type ERR = EvalAltResult;
 /// General evaluation error for Rhai scripts.
-type RhaiError = Box<EvalAltResult>;
+type RhaiError = Box<ERR>;
 /// Generic [`Result`] type for Rhai functions.
 type RhaiResultOf<T> = Result<T, RhaiError>;
 /// General [`Result`] type for Rhai functions returning [`Dynamic`] values.

@@ -1,4 +1,4 @@
-use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, RhaiResultOf, Shared};
+use crate::{Engine,ERR, Module, ModuleResolver, Position, RhaiResultOf, Shared};
 use std::ops::AddAssign;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -128,14 +128,14 @@ impl ModuleResolver for ModuleResolversCollection {
             match resolver.resolve(engine, source_path, path, pos) {
                 Ok(module) => return Ok(module),
                 Err(err) => match *err {
-                    EvalAltResult::ErrorModuleNotFound(_, _) => continue,
-                    EvalAltResult::ErrorInModule(_, err, _) => return Err(err),
+                    ERR::ErrorModuleNotFound(_, _) => continue,
+                    ERR::ErrorInModule(_, err, _) => return Err(err),
                     _ => panic!("ModuleResolver::resolve returns error that is not ErrorModuleNotFound or ErrorInModule"),
                 },
             }
         }
 
-        Err(EvalAltResult::ErrorModuleNotFound(path.into(), pos).into())
+        Err(ERR::ErrorModuleNotFound(path.into(), pos).into())
     }
 }
 

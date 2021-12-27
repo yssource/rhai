@@ -5,9 +5,7 @@ use super::call::FnCallArgs;
 use crate::ast::ScriptFnDef;
 use crate::engine::{EvalState, Imports};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
-use crate::{
-    Dynamic, Engine, EvalAltResult, Module, Position, RhaiError, RhaiResult, Scope, StaticVec,
-};
+use crate::{Dynamic, Engine, Module, Position, RhaiError, RhaiResult, Scope, StaticVec, ERR};
 use std::mem;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -44,7 +42,7 @@ impl Engine {
             err: RhaiError,
             pos: Position,
         ) -> RhaiResult {
-            Err(EvalAltResult::ErrorInFunctionCall(
+            Err(ERR::ErrorInFunctionCall(
                 name,
                 fn_def
                     .lib
@@ -70,7 +68,7 @@ impl Engine {
         // Check for stack overflow
         #[cfg(not(feature = "unchecked"))]
         if level > self.max_call_levels() {
-            return Err(EvalAltResult::ErrorStackOverflow(pos).into());
+            return Err(ERR::ErrorStackOverflow(pos).into());
         }
 
         let orig_scope_len = scope.len();
@@ -131,9 +129,9 @@ impl Engine {
             )
             .or_else(|err| match *err {
                 // Convert return statement to return value
-                EvalAltResult::Return(x, _) => Ok(x),
+                ERR::Return(x, _) => Ok(x),
                 // Error in sub function call
-                EvalAltResult::ErrorInFunctionCall(name, src, err, _) => {
+                ERR::ErrorInFunctionCall(name, src, err, _) => {
                     let fn_name = if src.is_empty() {
                         format!("{} < {}", name, fn_def.name)
                     } else {

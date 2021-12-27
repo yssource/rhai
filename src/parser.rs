@@ -16,8 +16,8 @@ use crate::tokenizer::{
 use crate::types::dynamic::AccessMode;
 use crate::{
     calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Dynamic, Engine, ExclusiveRange,
-    Identifier, ImmutableString, InclusiveRange, LexError, ParseError, ParseErrorType, Position,
-    Scope, Shared, StaticVec, AST, INT,
+    Identifier, ImmutableString, InclusiveRange, LexError, ParseError, Position, Scope, Shared,
+    StaticVec, AST, INT, PERR,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -29,8 +29,6 @@ use std::{
 };
 
 pub type ParseResult<T> = Result<T, ParseError>;
-
-type PERR = ParseErrorType;
 
 type FnLib = BTreeMap<u64, Shared<ScriptFnDef>>;
 
@@ -498,7 +496,7 @@ fn parse_fn_call(
                     let relax = false;
 
                     if !relax && settings.strict_var && index.is_none() {
-                        return Err(ParseErrorType::ModuleUndefined(modules[0].name.to_string())
+                        return Err(PERR::ModuleUndefined(modules[0].name.to_string())
                             .into_err(modules[0].pos));
                     }
 
@@ -557,10 +555,8 @@ fn parse_fn_call(
                         let relax = false;
 
                         if !relax && settings.strict_var && index.is_none() {
-                            return Err(ParseErrorType::ModuleUndefined(
-                                modules[0].name.to_string(),
-                            )
-                            .into_err(modules[0].pos));
+                            return Err(PERR::ModuleUndefined(modules[0].name.to_string())
+                                .into_err(modules[0].pos));
                         }
 
                         modules.set_index(index);
@@ -1259,8 +1255,7 @@ fn parse_primary(
 
                     if !settings.is_closure && settings.strict_var && index.is_none() {
                         // If the parent scope is not inside another capturing closure
-                        Err(ParseErrorType::VariableUndefined(captured_var.to_string())
-                            .into_err(pos))
+                        Err(PERR::VariableUndefined(captured_var.to_string()).into_err(pos))
                     } else {
                         Ok(())
                     }
@@ -1384,9 +1379,7 @@ fn parse_primary(
                     let index = state.access_var(&s, settings.pos);
 
                     if settings.strict_var && index.is_none() {
-                        return Err(
-                            ParseErrorType::VariableUndefined(s.to_string()).into_err(settings.pos)
-                        );
+                        return Err(PERR::VariableUndefined(s.to_string()).into_err(settings.pos));
                     }
 
                     let short_index = index.and_then(|x| {
@@ -1586,8 +1579,7 @@ fn parse_postfix(
 
             if !relax && settings.strict_var && index.is_none() {
                 return Err(
-                    ParseErrorType::ModuleUndefined(namespace[0].name.to_string())
-                        .into_err(namespace[0].pos),
+                    PERR::ModuleUndefined(namespace[0].name.to_string()).into_err(namespace[0].pos)
                 );
             }
 

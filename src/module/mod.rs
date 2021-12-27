@@ -458,7 +458,7 @@ impl Module {
     #[inline]
     pub(crate) fn get_qualified_var(&self, hash_var: u64) -> RhaiResultOf<&Dynamic> {
         self.all_variables.get(&hash_var).ok_or_else(|| {
-            crate::EvalAltResult::ErrorVariableNotFound(String::new(), crate::Position::NONE).into()
+            crate::ERR::ErrorVariableNotFound(String::new(), crate::Position::NONE).into()
         })
     }
 
