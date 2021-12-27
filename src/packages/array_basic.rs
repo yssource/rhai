@@ -305,11 +305,7 @@ pub mod array_functions {
     }
 
     #[rhai_fn(return_raw, pure)]
-    pub fn filter(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        filter: FnPtr,
-    ) -> RhaiResultOf<Array> {
+    pub fn filter(ctx: NativeCallContext, array: &mut Array, filter: FnPtr) -> RhaiResultOf<Array> {
         if array.is_empty() {
             return Ok(array.clone());
         }
@@ -863,11 +859,7 @@ pub mod array_functions {
         Ok(())
     }
     #[rhai_fn(return_raw)]
-    pub fn drain(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        filter: FnPtr,
-    ) -> RhaiResultOf<Array> {
+    pub fn drain(ctx: NativeCallContext, array: &mut Array, filter: FnPtr) -> RhaiResultOf<Array> {
         if array.is_empty() {
             return Ok(Array::new());
         }
@@ -957,11 +949,7 @@ pub mod array_functions {
         array.drain(start..start + len).collect()
     }
     #[rhai_fn(return_raw)]
-    pub fn retain(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        filter: FnPtr,
-    ) -> RhaiResultOf<Array> {
+    pub fn retain(ctx: NativeCallContext, array: &mut Array, filter: FnPtr) -> RhaiResultOf<Array> {
         if array.is_empty() {
             return Ok(Array::new());
         }
@@ -1054,11 +1042,7 @@ pub mod array_functions {
         drained
     }
     #[rhai_fn(name = "==", return_raw, pure)]
-    pub fn equals(
-        ctx: NativeCallContext,
-        array1: &mut Array,
-        array2: Array,
-    ) -> RhaiResultOf<bool> {
+    pub fn equals(ctx: NativeCallContext, array1: &mut Array, array2: Array) -> RhaiResultOf<bool> {
         if array1.len() != array2.len() {
             return Ok(false);
         }

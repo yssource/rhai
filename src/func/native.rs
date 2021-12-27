@@ -411,6 +411,5 @@ pub type OnVarCallback =
     Box<dyn Fn(&str, usize, &EvalContext) -> RhaiResultOf<Option<Dynamic>> + 'static>;
 /// A standard callback function for variable access.
 #[cfg(feature = "sync")]
-pub type OnVarCallback = Box<
-    dyn Fn(&str, usize, &EvalContext) -> RhaiResultOf<Option<Dynamic>> + Send + Sync + 'static,
->;
+pub type OnVarCallback =
+    Box<dyn Fn(&str, usize, &EvalContext) -> RhaiResultOf<Option<Dynamic>> + Send + Sync + 'static>;

@@ -110,12 +110,7 @@ pub mod blob_functions {
         }
     }
     #[rhai_fn(return_raw)]
-    pub fn pad(
-        ctx: NativeCallContext,
-        blob: &mut Blob,
-        len: INT,
-        item: INT,
-    ) -> RhaiResultOf<()> {
+    pub fn pad(ctx: NativeCallContext, blob: &mut Blob, len: INT, item: INT) -> RhaiResultOf<()> {
         if len <= 0 {
             return Ok(());
         }

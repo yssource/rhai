@@ -91,10 +91,11 @@ impl Engine {
     ///
     /// This function is very low level.
     ///
-    /// ## Arguments
+    /// # Arguments
     ///
     /// All the arguments are _consumed_, meaning that they're replaced by `()`.
     /// This is to avoid unnecessarily cloning the arguments.
+    ///
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
     ///
@@ -130,10 +131,10 @@ impl Engine {
     /// let result = engine.call_fn_raw(&mut scope, &ast, true, true, "bar", None, [])?;
     /// assert_eq!(result.cast::<i64>(), 21);
     ///
-    /// let mut value: Dynamic = 1_i64.into();
+    /// let mut value = 1_i64.into();
     /// let result = engine.call_fn_raw(&mut scope, &ast, true, true, "action", Some(&mut value), [ 41_i64.into() ])?;
     /// //                                                                      ^^^^^^^^^^^^^^^^ binding the 'this' pointer
-    /// assert_eq!(value.as_int().expect("value should be INT"), 42);
+    /// assert_eq!(value.as_int().unwrap(), 42);
     ///
     /// engine.call_fn_raw(&mut scope, &ast, true, false, "decl", None, [ 42_i64.into() ])?;
     /// //                                         ^^^^^ do not rewind scope

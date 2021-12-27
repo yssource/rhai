@@ -1,6 +1,6 @@
 //! Module containing error definitions for the evaluation process.
 
-use crate::{Dynamic, ImmutableString, ParseErrorType, Position, INT, RhaiError};
+use crate::{Dynamic, ImmutableString, ParseErrorType, Position, RhaiError, INT};
 #[cfg(feature = "no_std")]
 use core_error::Error;
 #[cfg(not(feature = "no_std"))]
