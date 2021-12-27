@@ -206,14 +206,14 @@ impl Engine {
                         .find_map(|m| {
                             m.get_fn(hash).cloned().map(|func| FnResolutionCacheEntry {
                                 func,
-                                source: m.id_raw().cloned(),
+                                source: m.id_raw().map(|s| s.to_string().into_boxed_str()),
                             })
                         })
                         .or_else(|| {
                             self.global_modules.iter().find_map(|m| {
                                 m.get_fn(hash).cloned().map(|func| FnResolutionCacheEntry {
                                     func,
-                                    source: m.id_raw().cloned(),
+                                    source: m.id_raw().map(|s| s.to_string().into_boxed_str()),
                                 })
                             })
                         })
@@ -222,7 +222,7 @@ impl Engine {
                                 .get_fn(hash)
                                 .map(|(func, source)| FnResolutionCacheEntry {
                                     func: func.clone(),
-                                    source: source.cloned(),
+                                    source: source.map(|s| s.to_string().into_boxed_str()),
                                 })
                         })
                         .or_else(|| {
@@ -230,7 +230,7 @@ impl Engine {
                                 m.get_qualified_fn(hash).cloned().map(|func| {
                                     FnResolutionCacheEntry {
                                         func,
-                                        source: m.id_raw().cloned(),
+                                        source: m.id_raw().map(|s| s.to_string().into_boxed_str()),
                                     }
                                 })
                             })
@@ -355,8 +355,8 @@ impl Engine {
             // Run external function
             let source = source
                 .as_ref()
-                .or_else(|| parent_source.as_ref())
-                .map(|s| s.as_str());
+                .map(|s| &**s)
+                .or_else(|| parent_source.as_ref().map(|s| s.as_str()));
 
             let context = (self, name, source, &*global, lib, pos).into();
 
@@ -608,7 +608,7 @@ impl Engine {
                 let (first_arg, rest_args) = args.split_first_mut().expect("not empty");
 
                 let orig_source = global.source.take();
-                global.source = source;
+                global.source = source.map(Into::into);
 
                 let level = _level + 1;
 
@@ -642,7 +642,7 @@ impl Engine {
                 }
 
                 let orig_source = global.source.take();
-                global.source = source;
+                global.source = source.map(Into::into);
 
                 let level = _level + 1;
 
