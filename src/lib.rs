@@ -70,7 +70,6 @@ use std::prelude::v1::*;
 
 mod api;
 mod ast;
-mod custom_syntax;
 mod engine;
 mod func;
 mod module;
@@ -140,8 +139,8 @@ pub type FLOAT = f32;
 pub type ExclusiveRange = std::ops::Range<INT>;
 pub type InclusiveRange = std::ops::RangeInclusive<INT>;
 
+pub use api::custom_syntax::Expression;
 pub use ast::{FnAccess, AST};
-pub use custom_syntax::Expression;
 pub use engine::{
     Engine, EvalContext, OP_CONTAINS, OP_EQUALS, OP_EXCLUSIVE_RANGE, OP_INCLUSIVE_RANGE,
 };

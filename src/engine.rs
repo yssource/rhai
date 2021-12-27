@@ -1,7 +1,7 @@
 //! Main module defining the script evaluation [`Engine`].
 
+use crate::api::custom_syntax::CustomSyntax;
 use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
-use crate::custom_syntax::CustomSyntax;
 use crate::func::native::{OnDebugCallback, OnParseTokenCallback, OnPrintCallback, OnVarCallback};
 use crate::func::{get_hasher, CallableFunction, IteratorFn};
 use crate::module::Namespace;

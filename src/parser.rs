@@ -1,11 +1,11 @@
 //! Main module defining the lexer and parser.
 
+use crate::api::custom_syntax::{markers::*, CustomSyntax};
 use crate::api::options::LanguageOptions;
 use crate::ast::{
     BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment, ScriptFnDef, Stmt,
     StmtBlock, AST_OPTION_FLAGS::*,
 };
-use crate::custom_syntax::{markers::*, CustomSyntax};
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::func::hashing::get_hasher;
 use crate::module::Namespace;
@@ -2190,24 +2190,19 @@ fn parse_custom_syntax(
                 }
             },
             #[cfg(not(feature = "no_float"))]
-            crate::custom_syntax::markers::CUSTOM_SYNTAX_MARKER_FLOAT => {
-                match input.next().expect(NEVER_ENDS) {
-                    (Token::FloatConstant(f), pos) => {
-                        inputs.push(Expr::FloatConstant(f, pos));
-                        segments.push(f.to_string().into());
-                        tokens.push(state.get_identifier(
-                            "",
-                            crate::custom_syntax::markers::CUSTOM_SYNTAX_MARKER_FLOAT,
-                        ));
-                    }
-                    (_, pos) => {
-                        return Err(PERR::MissingSymbol(
-                            "Expecting a floating-point number".to_string(),
-                        )
-                        .into_err(pos))
-                    }
+            CUSTOM_SYNTAX_MARKER_FLOAT => match input.next().expect(NEVER_ENDS) {
+                (Token::FloatConstant(f), pos) => {
+                    inputs.push(Expr::FloatConstant(f, pos));
+                    segments.push(f.to_string().into());
+                    tokens.push(state.get_identifier("", CUSTOM_SYNTAX_MARKER_FLOAT));
                 }
-            }
+                (_, pos) => {
+                    return Err(PERR::MissingSymbol(
+                        "Expecting a floating-point number".to_string(),
+                    )
+                    .into_err(pos))
+                }
+            },
             CUSTOM_SYNTAX_MARKER_STRING => match input.next().expect(NEVER_ENDS) {
                 (Token::StringConstant(s), pos) => {
                     let s: ImmutableString = state.get_identifier("", s).into();

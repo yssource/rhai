@@ -18,6 +18,8 @@ pub mod limits;
 
 pub mod events;
 
+pub mod custom_syntax;
+
 pub mod deprecated;
 
 use crate::engine::Precedence;
