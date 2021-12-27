@@ -8,7 +8,7 @@ use super::native::{FnAny, SendSync};
 use crate::r#unsafe::unsafe_try_cast;
 use crate::tokenizer::Position;
 use crate::types::dynamic::{DynamicWriteLock, Variant};
-use crate::{Dynamic, ERR, NativeCallContext, RhaiResultOf};
+use crate::{Dynamic, NativeCallContext, RhaiResultOf, ERR};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{any::TypeId, mem};

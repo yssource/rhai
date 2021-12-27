@@ -1,4 +1,4 @@
-use crate::{Engine,ERR, Module, ModuleResolver, Position, RhaiResultOf, Shared};
+use crate::{Engine, Module, ModuleResolver, Position, RhaiResultOf, Shared, ERR};
 use std::ops::AddAssign;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;

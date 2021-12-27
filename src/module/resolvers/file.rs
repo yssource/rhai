@@ -3,8 +3,7 @@
 
 use crate::func::native::shared_write_lock;
 use crate::{
-    Engine,ERR, Identifier, Module, ModuleResolver, Position, RhaiResultOf, Scope,
-    Shared,
+    Engine, Identifier, Module, ModuleResolver, Position, RhaiResultOf, Scope, Shared, ERR,
 };
 
 use std::{
