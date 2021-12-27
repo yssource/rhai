@@ -1,7 +1,7 @@
 //! Module that defines the `call_fn` API of [`Engine`].
 #![cfg(not(feature = "no_function"))]
 
-use crate::engine::{EvalState, Imports};
+use crate::engine::{EvalState, GlobalRuntimeState};
 use crate::types::dynamic::Variant;
 use crate::{
     Dynamic, Engine, FuncArgs, Position, RhaiResult, RhaiResultOf, Scope, StaticVec, AST, ERR,
@@ -154,13 +154,13 @@ impl Engine {
         arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {
         let state = &mut EvalState::new();
-        let mods = &mut Imports::new();
+        let global = &mut GlobalRuntimeState::new();
         let statements = ast.statements();
 
         let orig_scope_len = scope.len();
 
         if eval_ast && !statements.is_empty() {
-            self.eval_global_statements(scope, mods, state, statements, &[ast.as_ref()], 0)?;
+            self.eval_global_statements(scope, global, state, statements, &[ast.as_ref()], 0)?;
 
             if rewind_scope {
                 scope.rewind(orig_scope_len);
@@ -183,7 +183,7 @@ impl Engine {
 
         let result = self.call_script_fn(
             scope,
-            mods,
+            global,
             state,
             &[ast.as_ref()],
             &mut this_ptr,

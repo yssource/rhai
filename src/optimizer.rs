@@ -3,7 +3,8 @@
 
 use crate::ast::{Expr, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
 use crate::engine::{
-    EvalState, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    EvalState, GlobalRuntimeState, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT,
+    KEYWORD_TYPE_OF,
 };
 use crate::func::builtin::get_builtin_binary_op_fn;
 use crate::func::hashing::get_hasher;
@@ -141,7 +142,7 @@ impl<'a> OptimizerState<'a> {
 
         self.engine
             .call_native_fn(
-                &mut Imports::new(),
+                &mut GlobalRuntimeState::new(),
                 &mut EvalState::new(),
                 lib,
                 &fn_name,
@@ -1154,7 +1155,7 @@ pub fn optimize_into_ast(
                     params: fn_def.params.clone(),
                     lib: None,
                     #[cfg(not(feature = "no_module"))]
-                    mods: Imports::new(),
+                    global: GlobalRuntimeState::new(),
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(feature = "metadata")]
                     comments: None,

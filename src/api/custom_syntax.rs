@@ -163,7 +163,7 @@ impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_> {
     pub fn eval_expression_tree(&mut self, expr: &Expression) -> RhaiResult {
         self.engine.eval_expr(
             self.scope,
-            self.mods,
+            self.global,
             self.state,
             self.lib,
             self.this_ptr,

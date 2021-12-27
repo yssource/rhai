@@ -3,7 +3,7 @@
 
 use super::call::FnCallArgs;
 use crate::ast::ScriptFnDef;
-use crate::engine::{EvalState, Imports};
+use crate::engine::{EvalState, GlobalRuntimeState};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::{Dynamic, Engine, Module, Position, RhaiError, RhaiResult, Scope, StaticVec, ERR};
 use std::mem;
@@ -24,7 +24,7 @@ impl Engine {
     pub(crate) fn call_script_fn(
         &self,
         scope: &mut Scope,
-        mods: &mut Imports,
+        global: &mut GlobalRuntimeState,
         state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
@@ -38,7 +38,7 @@ impl Engine {
         fn make_error(
             name: String,
             fn_def: &ScriptFnDef,
-            mods: &Imports,
+            global: &GlobalRuntimeState,
             err: RhaiError,
             pos: Position,
         ) -> RhaiResult {
@@ -48,7 +48,7 @@ impl Engine {
                     .lib
                     .as_ref()
                     .and_then(|m| m.id().map(|id| id.to_string()))
-                    .or_else(|| mods.source.as_ref().map(|s| s.to_string()))
+                    .or_else(|| global.source.as_ref().map(|s| s.to_string()))
                     .unwrap_or_default(),
                 err,
                 pos,
@@ -59,7 +59,7 @@ impl Engine {
         assert!(fn_def.params.len() == args.len());
 
         #[cfg(not(feature = "unchecked"))]
-        self.inc_operations(&mut mods.num_operations, pos)?;
+        self.inc_operations(&mut global.num_operations, pos)?;
 
         if fn_def.body.is_empty() {
             return Ok(Dynamic::UNIT);
@@ -72,7 +72,7 @@ impl Engine {
         }
 
         let orig_scope_len = scope.len();
-        let orig_mods_len = mods.len();
+        let orig_mods_len = global.num_imported_modules();
 
         // Put arguments into scope as variables
         // Actually consume the arguments instead of cloning them
@@ -106,11 +106,11 @@ impl Engine {
         };
 
         #[cfg(not(feature = "no_module"))]
-        if !fn_def.mods.is_empty() {
+        if fn_def.global.num_imported_modules() > 0 {
             fn_def
-                .mods
-                .iter_raw()
-                .for_each(|(n, m)| mods.push(n.clone(), m.clone()));
+                .global
+                .iter_modules_raw()
+                .for_each(|(n, m)| global.push_module(n.clone(), m.clone()));
         }
 
         // Evaluate the function
@@ -118,7 +118,7 @@ impl Engine {
         let result = self
             .eval_stmt_block(
                 scope,
-                mods,
+                global,
                 state,
                 lib,
                 this_ptr,
@@ -138,7 +138,7 @@ impl Engine {
                         format!("{} @ '{}' < {}", name, src, fn_def.name)
                     };
 
-                    make_error(fn_name, fn_def, mods, err, pos)
+                    make_error(fn_name, fn_def, global, err, pos)
                 }
                 // System errors are passed straight-through
                 mut err if err.is_system_exception() => {
@@ -146,7 +146,7 @@ impl Engine {
                     Err(err.into())
                 }
                 // Other errors are wrapped in `ErrorInFunctionCall`
-                _ => make_error(fn_def.name.to_string(), fn_def, mods, err, pos),
+                _ => make_error(fn_def.name.to_string(), fn_def, global, err, pos),
             });
 
         // Remove all local variables
@@ -157,7 +157,7 @@ impl Engine {
             scope.remove_range(orig_scope_len, args.len())
         }
 
-        mods.truncate(orig_mods_len);
+        global.truncate_modules(orig_mods_len);
         state.rewind_fn_resolution_caches(orig_fn_resolution_caches_len);
 
         result
@@ -167,7 +167,7 @@ impl Engine {
     #[must_use]
     pub(crate) fn has_script_fn(
         &self,
-        mods: Option<&Imports>,
+        global: Option<&GlobalRuntimeState>,
         state: &mut EvalState,
         lib: &[&Module],
         hash_script: u64,
@@ -183,7 +183,7 @@ impl Engine {
             // Then check the global namespace and packages
             || self.global_modules.iter().any(|m| m.contains_fn(hash_script))
             // Then check imported modules
-            || mods.map_or(false, |m| m.contains_fn(hash_script))
+            || global.map_or(false, |m| m.contains_fn(hash_script))
             // Then check sub-modules
             || self.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash_script));
 

@@ -2,7 +2,7 @@
 
 use super::call::FnCallArgs;
 use crate::ast::FnCallHashes;
-use crate::engine::{EvalState, Imports};
+use crate::engine::{EvalState, GlobalRuntimeState};
 use crate::plugin::PluginFunction;
 use crate::tokenizer::{Token, TokenizeState};
 use crate::types::dynamic::Variant;
@@ -61,7 +61,7 @@ pub struct NativeCallContext<'a> {
     engine: &'a Engine,
     fn_name: &'a str,
     source: Option<&'a str>,
-    mods: Option<&'a Imports>,
+    global: Option<&'a GlobalRuntimeState>,
     lib: &'a [&'a Module],
     pos: Position,
 }
@@ -71,7 +71,7 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized, S: AsRef<str> + 'a + ?Sized>
         &'a Engine,
         &'a S,
         Option<&'a S>,
-        &'a Imports,
+        &'a GlobalRuntimeState,
         &'a M,
         Position,
     )> for NativeCallContext<'a>
@@ -82,7 +82,7 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized, S: AsRef<str> + 'a + ?Sized>
             &'a Engine,
             &'a S,
             Option<&'a S>,
-            &'a Imports,
+            &'a GlobalRuntimeState,
             &'a M,
             Position,
         ),
@@ -91,7 +91,7 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized, S: AsRef<str> + 'a + ?Sized>
             engine: value.0,
             fn_name: value.1.as_ref(),
             source: value.2.map(|v| v.as_ref()),
-            mods: Some(value.3),
+            global: Some(value.3),
             lib: value.4.as_ref(),
             pos: value.5,
         }
@@ -107,7 +107,7 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized, S: AsRef<str> + 'a + ?Sized>
             engine: value.0,
             fn_name: value.1.as_ref(),
             source: None,
-            mods: None,
+            global: None,
             lib: value.2.as_ref(),
             pos: Position::NONE,
         }
@@ -132,7 +132,7 @@ impl<'a> NativeCallContext<'a> {
             engine,
             fn_name: fn_name.as_ref(),
             source: None,
-            mods: None,
+            global: None,
             lib,
             pos: Position::NONE,
         }
@@ -149,7 +149,7 @@ impl<'a> NativeCallContext<'a> {
         engine: &'a Engine,
         fn_name: &'a (impl AsRef<str> + 'a + ?Sized),
         source: Option<&'a (impl AsRef<str> + 'a + ?Sized)>,
-        imports: &'a Imports,
+        global: &'a GlobalRuntimeState,
         lib: &'a [&Module],
         pos: Position,
     ) -> Self {
@@ -157,7 +157,7 @@ impl<'a> NativeCallContext<'a> {
             engine,
             fn_name: fn_name.as_ref(),
             source: source.map(|v| v.as_ref()),
-            mods: Some(imports),
+            global: Some(global),
             lib,
             pos,
         }
@@ -192,7 +192,7 @@ impl<'a> NativeCallContext<'a> {
     #[cfg(not(feature = "no_module"))]
     #[inline]
     pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
-        self.mods.iter().flat_map(|&m| m.iter())
+        self.global.iter().flat_map(|&m| m.iter_modules())
     }
     /// Get an iterator over the current set of modules imported via `import` statements.
     #[cfg(not(feature = "no_module"))]
@@ -201,9 +201,9 @@ impl<'a> NativeCallContext<'a> {
     pub(crate) fn iter_imports_raw(
         &self,
     ) -> impl Iterator<Item = (&crate::Identifier, &Shared<Module>)> {
-        self.mods.iter().flat_map(|&m| m.iter_raw())
+        self.global.iter().flat_map(|&m| m.iter_modules_raw())
     }
-    /// _(internals)_ The current set of modules imported via `import` statements.
+    /// _(internals)_ The current [`GlobalRuntimeState`].
     /// Exported under the `internals` feature only.
     ///
     /// Not available under `no_module`.
@@ -211,8 +211,8 @@ impl<'a> NativeCallContext<'a> {
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     #[must_use]
-    pub const fn imports(&self) -> Option<&Imports> {
-        self.mods
+    pub const fn global_runtime_state(&self) -> Option<&GlobalRuntimeState> {
+        self.global
     }
     /// Get an iterator over the namespaces containing definitions of all script-defined functions.
     #[inline]
@@ -292,7 +292,10 @@ impl<'a> NativeCallContext<'a> {
 
         self.engine()
             .exec_fn_call(
-                &mut self.mods.cloned().unwrap_or_else(|| Imports::new()),
+                &mut self
+                    .global
+                    .cloned()
+                    .unwrap_or_else(|| GlobalRuntimeState::new()),
                 &mut EvalState::new(),
                 self.lib,
                 fn_name,

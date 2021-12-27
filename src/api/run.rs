@@ -1,6 +1,6 @@
 //! Module that defines the public evaluation API of [`Engine`].
 
-use crate::engine::{EvalState, Imports};
+use crate::engine::{EvalState, GlobalRuntimeState};
 use crate::parser::ParseState;
 use crate::{Engine, Module, RhaiResultOf, Scope, AST};
 #[cfg(feature = "no_std")]
@@ -44,14 +44,14 @@ impl Engine {
     /// Evaluate an [`AST`] with own scope, returning any error (if any).
     #[inline]
     pub fn run_ast_with_scope(&self, scope: &mut Scope, ast: &AST) -> RhaiResultOf<()> {
-        let mods = &mut Imports::new();
+        let global = &mut GlobalRuntimeState::new();
         let mut state = EvalState::new();
         if ast.source_raw().is_some() {
-            mods.source = ast.source_raw().cloned();
+            global.source = ast.source_raw().cloned();
         }
         #[cfg(not(feature = "no_module"))]
         {
-            mods.embedded_module_resolver = ast.resolver().cloned();
+            global.embedded_module_resolver = ast.resolver().cloned();
         }
 
         let statements = ast.statements();
@@ -65,7 +65,7 @@ impl Engine {
             } else {
                 &lib
             };
-            self.eval_global_statements(scope, mods, &mut state, statements, lib, 0)?;
+            self.eval_global_statements(scope, global, &mut state, statements, lib, 0)?;
         }
         Ok(())
     }

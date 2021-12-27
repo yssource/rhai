@@ -1549,11 +1549,11 @@ impl Module {
         engine: &crate::Engine,
     ) -> RhaiResultOf<Self> {
         let mut scope = scope;
-        let mut mods = crate::engine::Imports::new();
-        let orig_mods_len = mods.len();
+        let mut global = crate::engine::GlobalRuntimeState::new();
+        let orig_mods_len = global.num_imported_modules();
 
         // Run the script
-        engine.eval_ast_with_scope_raw(&mut scope, &mut mods, &ast, 0)?;
+        engine.eval_ast_with_scope_raw(&mut scope, &mut global, &ast, 0)?;
 
         // Create new module
         let mut module =
@@ -1580,12 +1580,15 @@ impl Module {
                 });
 
         // Extra modules left in the scope become sub-modules
-        let mut func_mods = crate::engine::Imports::new();
+        let mut func_global = crate::engine::GlobalRuntimeState::new();
 
-        mods.into_iter().skip(orig_mods_len).for_each(|(alias, m)| {
-            func_mods.push(alias.clone(), m.clone());
-            module.set_sub_module(alias, m);
-        });
+        global
+            .into_iter()
+            .skip(orig_mods_len)
+            .for_each(|(alias, m)| {
+                func_global.push_module(alias.clone(), m.clone());
+                module.set_sub_module(alias, m);
+            });
 
         // Non-private functions defined become module functions
         #[cfg(not(feature = "no_function"))]
@@ -1606,7 +1609,7 @@ impl Module {
                         .as_ref()
                         .clone();
                     func.lib = Some(ast.shared_lib().clone());
-                    func.mods = func_mods.clone();
+                    func.global = func_global.clone();
                     module.set_script_fn(func);
                 });
         }
@@ -1790,13 +1793,14 @@ impl Module {
     }
 }
 
-/// _(internals)_ A chain of [module][Module] names to namespace-qualify a variable or function call.
-/// Exported under the `internals` feature only.
+/// _(internals)_ A chain of [module][Module] names to namespace-qualify a variable or function
+/// call. Exported under the `internals` feature only.
 ///
-/// A [`u64`] offset to the current [`Scope`][crate::Scope] is cached for quick search purposes.
+/// A [`u64`] offset to the current [stack of imported modules][crate::GlobalRuntimeState] is
+/// cached for quick search purposes.
 ///
-/// A [`StaticVec`] is used because most namespace-qualified access contains only one level,
-/// and it is wasteful to always allocate a [`Vec`] with one element.
+/// A [`StaticVec`] is used because the vast majority of namespace-qualified access contains only
+/// one level, and it is wasteful to always allocate a [`Vec`] with one element.
 #[derive(Clone, Eq, PartialEq, Default, Hash)]
 pub struct Namespace {
     index: Option<NonZeroUsize>,

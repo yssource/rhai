@@ -1,6 +1,6 @@
 //! Module that defines the public evaluation API of [`Engine`].
 
-use crate::engine::{EvalState, Imports};
+use crate::engine::{EvalState, GlobalRuntimeState};
 use crate::parser::ParseState;
 use crate::types::dynamic::Variant;
 use crate::{Dynamic, Engine, Module, Position, RhaiResult, RhaiResultOf, Scope, AST, ERR};
@@ -184,9 +184,9 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> RhaiResultOf<T> {
-        let mods = &mut Imports::new();
+        let global = &mut GlobalRuntimeState::new();
 
-        let result = self.eval_ast_with_scope_raw(scope, mods, ast, 0)?;
+        let result = self.eval_ast_with_scope_raw(scope, global, ast, 0)?;
 
         let typ = self.map_type_name(result.type_name());
 
@@ -204,17 +204,17 @@ impl Engine {
     pub(crate) fn eval_ast_with_scope_raw<'a>(
         &self,
         scope: &mut Scope,
-        mods: &mut Imports,
+        global: &mut GlobalRuntimeState,
         ast: &'a AST,
         level: usize,
     ) -> RhaiResult {
         let mut state = EvalState::new();
         if ast.source_raw().is_some() {
-            mods.source = ast.source_raw().cloned();
+            global.source = ast.source_raw().cloned();
         }
         #[cfg(not(feature = "no_module"))]
         {
-            mods.embedded_module_resolver = ast.resolver().cloned();
+            global.embedded_module_resolver = ast.resolver().cloned();
         }
 
         let statements = ast.statements();
@@ -232,6 +232,6 @@ impl Engine {
         } else {
             &lib
         };
-        self.eval_global_statements(scope, mods, &mut state, statements, lib, level)
+        self.eval_global_statements(scope, global, &mut state, statements, lib, level)
     }
 }

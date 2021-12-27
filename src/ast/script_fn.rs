@@ -15,11 +15,11 @@ pub struct ScriptFnDef {
     pub body: StmtBlock,
     /// Encapsulated running environment, if any.
     pub lib: Option<Shared<Module>>,
-    /// Encapsulated imported modules.
+    /// Encapsulated [`GlobalRuntimeState`][crate::GlobalRuntimeState].
     ///
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
-    pub mods: crate::engine::Imports,
+    pub global: crate::engine::GlobalRuntimeState,
     /// Function name.
     pub name: Identifier,
     /// Function access mode.
