@@ -2,19 +2,16 @@
 
 use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
 use crate::custom_syntax::CustomSyntax;
-use crate::func::{
-    get_hasher,
-    native::{OnDebugCallback, OnParseTokenCallback, OnPrintCallback, OnVarCallback},
-    CallableFunction, IteratorFn,
-};
+use crate::func::native::{OnDebugCallback, OnParseTokenCallback, OnPrintCallback, OnVarCallback};
+use crate::func::{get_hasher, CallableFunction, IteratorFn};
 use crate::module::Namespace;
 use crate::packages::{Package, StandardPackage};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::tokenizer::Token;
 use crate::types::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::{
-    calc_fn_params_hash, combine_hashes, Dynamic, Identifier, ImmutableString, Module, Position,
-    RhaiError, RhaiResult, RhaiResultOf, Scope, Shared, StaticVec, ERR, INT,
+    calc_fn_params_hash, combine_hashes, Dynamic, FnArgsVec, Identifier, ImmutableString, Module,
+    Position, RhaiError, RhaiResult, RhaiResultOf, Scope, Shared, StaticVec, ERR, INT,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -372,7 +369,7 @@ enum ChainArgument {
     /// Arguments to a dot method call.
     /// Wrapped values are the arguments plus the [position][Position] of the first argument.
     #[cfg(not(feature = "no_object"))]
-    MethodCallArgs(StaticVec<Dynamic>, Position),
+    MethodCallArgs(FnArgsVec<Dynamic>, Position),
     /// Index value and [position][Position].
     #[cfg(not(feature = "no_index"))]
     IndexValue(Dynamic, Position),
@@ -395,7 +392,7 @@ impl ChainArgument {
     #[inline(always)]
     #[cfg(not(feature = "no_object"))]
     #[must_use]
-    pub fn into_fn_call_args(self) -> Option<(StaticVec<Dynamic>, Position)> {
+    pub fn into_fn_call_args(self) -> Option<(FnArgsVec<Dynamic>, Position)> {
         match self {
             Self::MethodCallArgs(values, pos) => Some((values, pos)),
             _ => None,
@@ -418,9 +415,9 @@ impl ChainArgument {
 }
 
 #[cfg(not(feature = "no_object"))]
-impl From<(StaticVec<Dynamic>, Position)> for ChainArgument {
+impl From<(FnArgsVec<Dynamic>, Position)> for ChainArgument {
     #[inline(always)]
-    fn from((values, pos): (StaticVec<Dynamic>, Position)) -> Self {
+    fn from((values, pos): (FnArgsVec<Dynamic>, Position)) -> Self {
         Self::MethodCallArgs(values, pos)
     }
 }
@@ -1325,7 +1322,7 @@ impl Engine {
         root: (&str, Position),
         rhs: &Expr,
         terminate_chaining: bool,
-        idx_values: &mut StaticVec<ChainArgument>,
+        idx_values: &mut FnArgsVec<ChainArgument>,
         chain_type: ChainType,
         level: usize,
         new_val: Option<((Dynamic, Position), (Option<OpAssignment>, Position))>,
@@ -1790,7 +1787,7 @@ impl Engine {
             _ => unreachable!("index or dot chain expected, but gets {:?}", expr),
         };
 
-        let idx_values = &mut StaticVec::new_const();
+        let idx_values = &mut FnArgsVec::new_const();
 
         self.eval_dot_index_chain_arguments(
             scope, mods, state, lib, this_ptr, rhs, term, chain_type, idx_values, 0, level,
@@ -1846,7 +1843,7 @@ impl Engine {
         expr: &Expr,
         terminate_chaining: bool,
         parent_chain_type: ChainType,
-        idx_values: &mut StaticVec<ChainArgument>,
+        idx_values: &mut FnArgsVec<ChainArgument>,
         size: usize,
         level: usize,
     ) -> RhaiResultOf<()> {
@@ -1863,7 +1860,7 @@ impl Engine {
                 } = x.as_ref();
 
                 let (values, pos) = args.iter().try_fold(
-                    (StaticVec::with_capacity(args.len()), Position::NONE),
+                    (FnArgsVec::with_capacity(args.len()), Position::NONE),
                     |(mut values, mut pos), expr| -> RhaiResultOf<_> {
                         let (value, arg_pos) = self.get_arg_value(
                             scope, mods, state, lib, this_ptr, level, expr, constants,
@@ -1910,7 +1907,7 @@ impl Engine {
 
                         args.iter()
                             .try_fold(
-                                (StaticVec::with_capacity(args.len()), Position::NONE),
+                                (FnArgsVec::with_capacity(args.len()), Position::NONE),
                                 |(mut values, mut pos), expr| -> RhaiResultOf<_> {
                                     let (value, arg_pos) = self.get_arg_value(
                                         scope, mods, state, lib, this_ptr, level, expr, constants,

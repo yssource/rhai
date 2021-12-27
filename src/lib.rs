@@ -313,6 +313,29 @@ type StaticVec<T> = smallvec::SmallVec<[T; 3]>;
 #[cfg(feature = "internals")]
 pub type StaticVec<T> = smallvec::SmallVec<[T; 3]>;
 
+/// Inline arguments storage for function calls.
+///
+/// # Notes
+///
+/// Since most usage of this is during a function call to gather up arguments, this is mostly
+/// allocated on the stack, so we can tolerate a larger number of values stored inline.
+///
+/// Most functions have few parameters, but closures with a lot of captured variables can
+/// potentially have many.  Having a larger inline storage for arguments reduces allocations in
+/// scripts with heavy closure usage.
+///
+/// Under `no_closure`, this type aliases to [`StaticVec`][crate::StaticVec] instead.
+#[cfg(not(feature = "no_closure"))]
+type FnArgsVec<T> = smallvec::SmallVec<[T; 8]>;
+
+/// Inline arguments storage for function calls.
+///
+/// # Notes
+///
+/// This type aliases to [`StaticVec`][crate::StaticVec] under `no_closure`.
+#[cfg(feature = "no_closure")]
+type FnArgsVec<T> = crate::StaticVec<T>;
+
 pub(crate) type SmartString = smartstring::SmartString<smartstring::LazyCompact>;
 
 // Compiler guards against mutually-exclusive feature flags

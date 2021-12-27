@@ -12,8 +12,8 @@ use crate::engine::{
 use crate::module::Namespace;
 use crate::tokenizer::Token;
 use crate::{
-    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnPtr, Identifier,
-    ImmutableString, Module, Position, RhaiResult, RhaiResultOf, Scope, StaticVec, ERR,
+    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnArgsVec, FnPtr,
+    Identifier, ImmutableString, Module, Position, RhaiResult, RhaiResultOf, Scope, ERR,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -149,7 +149,7 @@ impl Engine {
                 } else {
                     self.map_type_name(a.type_name())
                 })
-                .collect::<StaticVec<_>>()
+                .collect::<FnArgsVec<_>>()
                 .join(", ")
         )
     }
@@ -727,7 +727,7 @@ impl Engine {
         fn_name: impl AsRef<str>,
         mut hash: FnCallHashes,
         target: &mut crate::engine::Target,
-        (call_args, call_arg_pos): &mut (StaticVec<Dynamic>, Position),
+        (call_args, call_arg_pos): &mut (FnArgsVec<Dynamic>, Position),
         pos: Position,
         level: usize,
     ) -> RhaiResultOf<(Dynamic, bool)> {
@@ -744,9 +744,9 @@ impl Engine {
                 // Recalculate hashes
                 let new_hash = calc_fn_hash(fn_name, args_len).into();
                 // Arguments are passed as-is, adding the curried arguments
-                let mut curry = StaticVec::with_capacity(fn_ptr.num_curried());
+                let mut curry = FnArgsVec::with_capacity(fn_ptr.num_curried());
                 curry.extend(fn_ptr.curry().iter().cloned());
-                let mut args = StaticVec::with_capacity(curry.len() + call_args.len());
+                let mut args = FnArgsVec::with_capacity(curry.len() + call_args.len());
                 args.extend(curry.iter_mut());
                 args.extend(call_args.iter_mut());
 
@@ -782,9 +782,9 @@ impl Engine {
                     calc_fn_hash(fn_name, args_len + 1),
                 );
                 // Replace the first argument with the object pointer, adding the curried arguments
-                let mut curry = StaticVec::with_capacity(fn_ptr.num_curried());
+                let mut curry = FnArgsVec::with_capacity(fn_ptr.num_curried());
                 curry.extend(fn_ptr.curry().iter().cloned());
-                let mut args = StaticVec::with_capacity(curry.len() + call_args.len() + 1);
+                let mut args = FnArgsVec::with_capacity(curry.len() + call_args.len() + 1);
                 args.push(target.as_mut());
                 args.extend(curry.iter_mut());
                 args.extend(call_args.iter_mut());
@@ -858,7 +858,7 @@ impl Engine {
                 };
 
                 // Attached object pointer in front of the arguments
-                let mut args = StaticVec::with_capacity(call_args.len() + 1);
+                let mut args = FnArgsVec::with_capacity(call_args.len() + 1);
                 args.push(target.as_mut());
                 args.extend(call_args.iter_mut());
 
@@ -918,7 +918,7 @@ impl Engine {
         let fn_name = fn_name.as_ref();
         let mut a_expr = args_expr;
         let mut total_args = a_expr.len();
-        let mut curry = StaticVec::new_const();
+        let mut curry = FnArgsVec::new_const();
         let mut name = fn_name;
         let mut hashes = hashes;
         let redirected; // Handle call() - Redirect function call
@@ -1086,8 +1086,8 @@ impl Engine {
         }
 
         // Normal function call - except for Fn, curry, call and eval (handled above)
-        let mut arg_values = StaticVec::with_capacity(a_expr.len());
-        let mut args = StaticVec::with_capacity(a_expr.len() + curry.len());
+        let mut arg_values = FnArgsVec::with_capacity(a_expr.len());
+        let mut args = FnArgsVec::with_capacity(a_expr.len() + curry.len());
         let mut is_ref_mut = false;
 
         // Capture parent scope?
@@ -1187,8 +1187,8 @@ impl Engine {
         level: usize,
     ) -> RhaiResult {
         let fn_name = fn_name.as_ref();
-        let mut arg_values = StaticVec::with_capacity(args_expr.len());
-        let mut args = StaticVec::with_capacity(args_expr.len());
+        let mut arg_values = FnArgsVec::with_capacity(args_expr.len());
+        let mut args = FnArgsVec::with_capacity(args_expr.len());
         let mut first_arg_value = None;
 
         if args_expr.is_empty() {
