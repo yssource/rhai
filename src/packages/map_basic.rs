@@ -102,7 +102,7 @@ mod map_functions {
         if map.is_empty() {
             Array::new()
         } else {
-            map.keys().cloned().map(Into::<Dynamic>::into).collect()
+            map.keys().cloned().map(Into::into).collect()
         }
     }
     #[cfg(not(feature = "no_index"))]

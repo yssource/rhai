@@ -71,7 +71,7 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
             f.params
                 .iter()
                 .cloned()
-                .map(Into::<Dynamic>::into)
+                .map(Into::into)
                 .collect::<Array>()
                 .into(),
         );

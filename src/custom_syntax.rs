@@ -211,9 +211,9 @@ impl Engine {
     /// Replacing one variable with another (i.e. adding a new variable and removing one variable at
     /// the same time so that the total _size_ of the [`Scope`][crate::Scope] is unchanged) also
     /// does NOT count, so `false` should be passed.
-    pub fn register_custom_syntax<S: AsRef<str> + Into<Identifier>>(
+    pub fn register_custom_syntax(
         &mut self,
-        symbols: &[S],
+        symbols: &[impl AsRef<str> + Into<Identifier>],
         scope_may_be_changed: bool,
         func: impl Fn(&mut EvalContext, &[Expression]) -> RhaiResult + SendSync + 'static,
     ) -> ParseResult<&mut Self> {

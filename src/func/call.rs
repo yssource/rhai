@@ -967,7 +967,7 @@ impl Engine {
                     .into_immutable_string()
                     .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, arg_pos))
                     .and_then(FnPtr::try_from)
-                    .map(Into::<Dynamic>::into)
+                    .map(Into::into)
                     .map_err(|err| err.fill_position(arg_pos));
             }
 

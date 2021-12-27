@@ -286,7 +286,7 @@ impl<F: Float + FromStr> FromStr for FloatWrapper<F> {
 
     #[inline]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        F::from_str(s).map(Into::<Self>::into)
+        F::from_str(s).map(Into::into)
     }
 }
 

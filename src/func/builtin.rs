@@ -89,7 +89,7 @@ pub fn get_builtin_binary_op_fn(op: &str, x: &Dynamic, y: &Dynamic) -> Option<Fn
         ($base:ty => $func:ident ( $xx:ident, $yy:ident )) => { |_, args| {
             let x = args[0].$xx().expect(BUILTIN) as $base;
             let y = args[1].$yy().expect(BUILTIN) as $base;
-            $func(x, y).map(Into::<Dynamic>::into)
+            $func(x, y).map(Into::into)
         } };
         (from $base:ty => $xx:ident $op:tt $yy:ident) => { |_, args| {
             let x = <$base>::from(args[0].$xx().expect(BUILTIN));
@@ -104,7 +104,7 @@ pub fn get_builtin_binary_op_fn(op: &str, x: &Dynamic, y: &Dynamic) -> Option<Fn
         (from $base:ty => $func:ident ( $xx:ident, $yy:ident )) => { |_, args| {
             let x = <$base>::from(args[0].$xx().expect(BUILTIN));
             let y = <$base>::from(args[1].$yy().expect(BUILTIN));
-            $func(x, y).map(Into::<Dynamic>::into)
+            $func(x, y).map(Into::into)
         } };
     }
 
