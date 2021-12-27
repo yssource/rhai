@@ -193,8 +193,12 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { field: 1 } }
-    ///     fn update(&mut self, offset: i64) { self.field += offset; }
+    ///     fn new() -> Self {
+    ///         Self { field: 1 }
+    ///     }
+    ///     fn update(&mut self, offset: i64) {
+    ///         self.field += offset;
+    ///     }
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
@@ -233,7 +237,9 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { field: 1 } }
+    ///     fn new() -> Self {
+    ///         Self { field: 1 }
+    ///     }
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
@@ -308,9 +314,13 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { field: 1 } }
+    ///     fn new() -> Self {
+    ///         Self { field: 1 }
+    ///     }
     ///     // Even a getter must start with `&mut self` and not `&self`.
-    ///     fn get_field(&mut self) -> i64  { self.field }
+    ///     fn get_field(&mut self) -> i64  {
+    ///         self.field
+    ///     }
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
@@ -336,7 +346,7 @@ impl Engine {
         name: impl AsRef<str>,
         get_fn: impl Fn(&mut T) -> V + SendSync + 'static,
     ) -> &mut Self {
-        self.register_fn(&crate::engine::make_getter(name), get_fn)
+        self.register_fn(&crate::engine::make_getter(name.as_ref()), get_fn)
     }
     /// Register a getter function for a member of a registered type with the [`Engine`].
     ///
@@ -355,7 +365,9 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { field: 1 } }
+    ///     fn new() -> Self {
+    ///         Self { field: 1 }
+    ///     }
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self) -> Result<i64, Box<EvalAltResult>> {
     ///         Ok(self.field)
@@ -383,7 +395,7 @@ impl Engine {
         name: impl AsRef<str>,
         get_fn: impl Fn(&mut T) -> RhaiResultOf<V> + SendSync + 'static,
     ) -> &mut Self {
-        self.register_result_fn(&crate::engine::make_getter(name), get_fn)
+        self.register_result_fn(&crate::engine::make_getter(name.as_ref()), get_fn)
     }
     /// Register a setter function for a member of a registered type with the [`Engine`].
     ///
@@ -398,8 +410,12 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { field: 1 } }
-    ///     fn set_field(&mut self, new_val: i64) { self.field = new_val; }
+    ///     fn new() -> Self {
+    ///         Self { field: 1 }
+    ///     }
+    ///     fn set_field(&mut self, new_val: i64) {
+    ///         self.field = new_val;
+    ///     }
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
@@ -429,7 +445,7 @@ impl Engine {
         name: impl AsRef<str>,
         set_fn: impl Fn(&mut T, V) + SendSync + 'static,
     ) -> &mut Self {
-        self.register_fn(&crate::engine::make_setter(name), set_fn)
+        self.register_fn(&crate::engine::make_setter(name.as_ref()), set_fn)
     }
     /// Register a setter function for a member of a registered type with the [`Engine`].
     ///
@@ -446,7 +462,9 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { field: 1 } }
+    ///     fn new() -> Self {
+    ///         Self { field: 1 }
+    ///     }
     ///     fn set_field(&mut self, new_val: i64) -> Result<(), Box<rhai::EvalAltResult>> {
     ///         self.field = new_val;
     ///         Ok(())
@@ -478,7 +496,7 @@ impl Engine {
         name: impl AsRef<str>,
         set_fn: impl Fn(&mut T, V) -> RhaiResultOf<()> + SendSync + 'static,
     ) -> &mut Self {
-        self.register_result_fn(&crate::engine::make_setter(name), set_fn)
+        self.register_result_fn(&crate::engine::make_setter(name.as_ref()), set_fn)
     }
     /// Short-hand for registering both getter and setter functions
     /// of a registered type with the [`Engine`].
@@ -496,10 +514,16 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { field: 1 } }
+    ///     fn new() -> Self {
+    ///         Self { field: 1 }
+    ///     }
     ///     // Even a getter must start with `&mut self` and not `&self`.
-    ///     fn get_field(&mut self) -> i64 { self.field }
-    ///     fn set_field(&mut self, new_val: i64) { self.field = new_val; }
+    ///     fn get_field(&mut self) -> i64 {
+    ///         self.field
+    ///     }
+    ///     fn set_field(&mut self, new_val: i64) {
+    ///         self.field = new_val;
+    ///     }
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
@@ -550,9 +574,13 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
+    ///     fn new() -> Self {
+    ///         Self { fields: vec![1, 2, 3, 4, 5] }
+    ///     }
     ///     // Even a getter must start with `&mut self` and not `&self`.
-    ///     fn get_field(&mut self, index: i64) -> i64 { self.fields[index as usize] }
+    ///     fn get_field(&mut self, index: i64) -> i64 {
+    ///         self.fields[index as usize]
+    ///     }
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
@@ -623,7 +651,9 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
+    ///     fn new() -> Self {
+    ///         Self { fields: vec![1, 2, 3, 4, 5] }
+    ///     }
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self, index: i64) -> Result<i64, Box<EvalAltResult>> {
     ///         Ok(self.fields[index as usize])
@@ -696,8 +726,12 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
-    ///     fn set_field(&mut self, index: i64, value: i64) { self.fields[index as usize] = value; }
+    ///     fn new() -> Self {
+    ///         Self { fields: vec![1, 2, 3, 4, 5] }
+    ///     }
+    ///     fn set_field(&mut self, index: i64, value: i64) {
+    ///         self.fields[index as usize] = value;
+    ///     }
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
@@ -715,10 +749,10 @@ impl Engine {
     ///     .register_indexer_set(TestStruct::set_field);
     ///
     /// # #[cfg(not(feature = "no_index"))]
-    /// assert_eq!(
-    ///     engine.eval::<TestStruct>("let a = new_ts(); a[2] = 42; a")?.fields[2],
-    ///     42
-    /// );
+    /// let result = engine.eval::<TestStruct>("let a = new_ts(); a[2] = 42; a")?;
+    ///
+    /// # #[cfg(not(feature = "no_index"))]
+    /// assert_eq!(result.fields[2], 42);
     /// # Ok(())
     /// # }
     /// ```
@@ -769,7 +803,9 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
+    ///     fn new() -> Self {
+    ///         Self { fields: vec![1, 2, 3, 4, 5] }
+    ///     }
     ///     fn set_field(&mut self, index: i64, value: i64) -> Result<(), Box<rhai::EvalAltResult>> {
     ///         self.fields[index as usize] = value;
     ///         Ok(())
@@ -789,10 +825,10 @@ impl Engine {
     ///     .register_indexer_set_result(TestStruct::set_field);
     ///
     /// # #[cfg(not(feature = "no_index"))]
-    /// assert_eq!(
-    ///     engine.eval::<TestStruct>("let a = new_ts(); a[2] = 42; a")?.fields[2],
-    ///     42
-    /// );
+    /// let result = engine.eval::<TestStruct>("let a = new_ts(); a[2] = 42; a")?;
+    ///
+    /// # #[cfg(not(feature = "no_index"))]
+    /// assert_eq!(result.fields[2], 42);
     /// # Ok(())
     /// # }
     /// ```
@@ -845,10 +881,16 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
+    ///     fn new() -> Self {
+    ///         Self { fields: vec![1, 2, 3, 4, 5] }
+    ///     }
     ///     // Even a getter must start with `&mut self` and not `&self`.
-    ///     fn get_field(&mut self, index: i64) -> i64 { self.fields[index as usize] }
-    ///     fn set_field(&mut self, index: i64, value: i64) { self.fields[index as usize] = value; }
+    ///     fn get_field(&mut self, index: i64) -> i64 {
+    ///         self.fields[index as usize]
+    ///     }
+    ///     fn set_field(&mut self, index: i64, value: i64) {
+    ///         self.fields[index as usize] = value;
+    ///     }
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {

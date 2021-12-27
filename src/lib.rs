@@ -226,7 +226,10 @@ pub use tokenizer::{
 };
 
 #[cfg(feature = "internals")]
-pub use parser::{IdentifierBuilder, ParseState};
+pub use types::StringsInterner;
+
+#[cfg(feature = "internals")]
+pub use parser::ParseState;
 
 #[cfg(feature = "internals")]
 pub use ast::{

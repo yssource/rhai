@@ -1013,16 +1013,16 @@ impl Default for Engine {
 #[cfg(not(feature = "no_object"))]
 #[inline]
 #[must_use]
-pub fn make_getter(id: impl AsRef<str>) -> String {
-    format!("{}{}", FN_GET, id.as_ref())
+pub fn make_getter(id: &str) -> String {
+    format!("{}{}", FN_GET, id)
 }
 
 /// Make setter function
 #[cfg(not(feature = "no_object"))]
 #[inline]
 #[must_use]
-pub fn make_setter(id: impl AsRef<str>) -> String {
-    format!("{}{}", FN_SET, id.as_ref())
+pub fn make_setter(id: &str) -> String {
+    format!("{}{}", FN_SET, id)
 }
 
 /// Is this function an anonymous function?

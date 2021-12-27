@@ -5,9 +5,9 @@ use crate::func::{
     shared_take_or_clone, CallableFunction, FnCallArgs, IteratorFn, RegisterNativeFunction,
     SendSync,
 };
-use crate::parser::IdentifierBuilder;
 use crate::tokenizer::Token;
 use crate::types::dynamic::Variant;
+use crate::types::StringsInterner;
 use crate::{
     calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes, Dynamic, Identifier,
     ImmutableString, NativeCallContext, RhaiResultOf, Shared, StaticVec,
@@ -155,8 +155,8 @@ pub struct Module {
     indexed: bool,
     /// Does the [`Module`] contain indexed functions that have been exposed to the global namespace?
     contains_indexed_global_functions: bool,
-    /// Interned strings
-    identifiers: IdentifierBuilder,
+    /// Interned strings.
+    interner: StringsInterner,
 }
 
 impl Default for Module {
@@ -253,7 +253,7 @@ impl Module {
             all_type_iterators: BTreeMap::new(),
             indexed: true,
             contains_indexed_global_functions: false,
-            identifiers: IdentifierBuilder::new(),
+            interner: StringsInterner::new(),
         }
     }
 
@@ -477,7 +477,7 @@ impl Module {
         let param_names_and_types = fn_def
             .params
             .iter()
-            .map(|v| self.identifiers.get(v.as_str()))
+            .map(|v| self.interner.get("", v.as_str()).into())
             .collect();
         self.functions.insert(
             hash_script,
@@ -490,7 +490,7 @@ impl Module {
                 #[cfg(feature = "metadata")]
                 param_names_and_types,
                 #[cfg(feature = "metadata")]
-                return_type_name: self.identifiers.get("Dynamic"),
+                return_type_name: self.interner.get("", "Dynamic").into(),
                 #[cfg(feature = "metadata")]
                 comments: None,
                 func: Into::<CallableFunction>::into(fn_def).into(),
@@ -639,7 +639,7 @@ impl Module {
     pub fn update_fn_metadata(&mut self, hash_fn: u64, arg_names: &[impl AsRef<str>]) -> &mut Self {
         let mut param_names: StaticVec<_> = arg_names
             .iter()
-            .map(|name| self.identifiers.get(name.as_ref()))
+            .map(|name| self.interner.get("", name.as_ref()).into())
             .collect();
 
         if let Some(f) = self.functions.get_mut(&hash_fn) {
@@ -771,7 +771,7 @@ impl Module {
             let mut names = _arg_names
                 .iter()
                 .flat_map(|&p| p.iter())
-                .map(|&arg| self.identifiers.get(arg))
+                .map(|&arg| self.interner.get("", arg).into())
                 .collect::<StaticVec<_>>();
             let return_type = if names.len() > arg_types.len() {
                 names.pop().expect("exists")
@@ -787,7 +787,7 @@ impl Module {
         self.functions.insert(
             hash_fn,
             FuncInfo {
-                name: self.identifiers.get(name),
+                name: self.interner.get("", name.as_ref()).into(),
                 namespace,
                 access,
                 params: param_types.len(),
@@ -1017,7 +1017,7 @@ impl Module {
         F: Fn(&mut A) -> RhaiResultOf<T> + SendSync + 'static,
     {
         self.set_fn(
-            &crate::engine::make_getter(name),
+            &crate::engine::make_getter(name.as_ref()),
             FnNamespace::Global,
             FnAccess::Public,
             None,
@@ -1059,7 +1059,7 @@ impl Module {
         F: Fn(&mut A, B) -> RhaiResultOf<()> + SendSync + 'static,
     {
         self.set_fn(
-            &crate::engine::make_setter(name),
+            &crate::engine::make_setter(name.as_ref()),
             FnNamespace::Global,
             FnAccess::Public,
             None,
@@ -1285,7 +1285,7 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
-        self.identifiers += other.identifiers;
+        self.interner += other.interner;
         self
     }
 
@@ -1305,7 +1305,7 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
-        self.identifiers += other.identifiers;
+        self.interner += other.interner;
         self
     }
 
@@ -1334,7 +1334,7 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
-        self.identifiers.merge(&other.identifiers);
+        self.interner.merge(&other.interner);
         self
     }
 
@@ -1384,7 +1384,7 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
-        self.identifiers.merge(&other.identifiers);
+        self.interner.merge(&other.interner);
         self
     }
 
