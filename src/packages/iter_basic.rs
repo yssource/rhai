@@ -1,6 +1,6 @@
 use crate::plugin::*;
 use crate::types::dynamic::Variant;
-use crate::{def_package, ExclusiveRange, InclusiveRange, RhaiResultOf, ERR, INT};
+use crate::{def_package, ExclusiveRange, InclusiveRange, RhaiResultOf, INT};
 use std::iter::{ExactSizeIterator, FusedIterator};
 use std::ops::{Range, RangeInclusive};
 #[cfg(feature = "no_std")]
@@ -26,15 +26,15 @@ where
         #[cfg(not(feature = "unchecked"))]
         if let Some(r) = from.checked_add(&step) {
             if r == from {
-                return Err(ERR::ErrorInFunctionCall(
+                return Err(crate::ERR::ErrorInFunctionCall(
                     "range".to_string(),
                     String::new(),
-                    ERR::ErrorArithmetic(
+                    crate::ERR::ErrorArithmetic(
                         "step value cannot be zero".to_string(),
-                        crate::Position::NONE,
+                        Position::NONE,
                     )
                     .into(),
-                    crate::Position::NONE,
+                    Position::NONE,
                 )
                 .into());
             }
@@ -123,18 +123,18 @@ impl BitRange {
 
             #[cfg(not(feature = "unchecked"))]
             if offset >= BITS {
-                return Err(ERR::ErrorBitFieldBounds(BITS, from, crate::Position::NONE).into());
+                return Err(crate::ERR::ErrorBitFieldBounds(BITS, from, Position::NONE).into());
             }
             offset
         } else {
             #[cfg(not(feature = "unchecked"))]
             if let Some(abs_from) = from.checked_abs() {
                 if (abs_from as usize) > BITS {
-                    return Err(ERR::ErrorBitFieldBounds(BITS, from, crate::Position::NONE).into());
+                    return Err(crate::ERR::ErrorBitFieldBounds(BITS, from, Position::NONE).into());
                 }
                 BITS - (abs_from as usize)
             } else {
-                return Err(ERR::ErrorBitFieldBounds(BITS, from, crate::Position::NONE).into());
+                return Err(crate::ERR::ErrorBitFieldBounds(BITS, from, Position::NONE).into());
             }
 
             #[cfg(feature = "unchecked")]
@@ -328,9 +328,9 @@ def_package! {
                 pub fn new(from: FLOAT, to: FLOAT, step: FLOAT) -> RhaiResultOf<Self> {
                     #[cfg(not(feature = "unchecked"))]
                     if step == 0.0 {
-                        return Err(ERR::ErrorInFunctionCall("range".to_string(), "".to_string(),
-                            ERR::ErrorArithmetic("step value cannot be zero".to_string(), crate::Position::NONE).into(),
-                            crate::Position::NONE,
+                        return Err(crate::ERR::ErrorInFunctionCall("range".to_string(), "".to_string(),
+                            crate::ERR::ErrorArithmetic("step value cannot be zero".to_string(), Position::NONE).into(),
+                            Position::NONE,
                         ).into());
                     }
 
@@ -390,9 +390,9 @@ def_package! {
                 pub fn new(from: Decimal, to: Decimal, step: Decimal) -> RhaiResultOf<Self> {
                     #[cfg(not(feature = "unchecked"))]
                     if step.is_zero() {
-                        return Err(ERR::ErrorInFunctionCall("range".to_string(), "".to_string(),
-                            ERR::ErrorArithmetic("step value cannot be zero".to_string(), crate::Position::NONE).into(),
-                            crate::Position::NONE,
+                        return Err(crate::ERR::ErrorInFunctionCall("range".to_string(), "".to_string(),
+                            crate::ERR::ErrorArithmetic("step value cannot be zero".to_string(), Position::NONE).into(),
+                            Position::NONE,
                         ).into());
                     }
 

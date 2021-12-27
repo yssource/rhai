@@ -1,8 +1,9 @@
+#[cfg(not(feature = "no_object"))]
 use crate::engine::{make_getter, make_setter, FN_GET, FN_SET};
 use crate::{Identifier, ImmutableString};
+use std::ops::AddAssign;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-use std::{collections::BTreeMap, ops::AddAssign};
 
 /// _(internals)_ A factory of identifiers from text strings.
 /// Exported under the `internals` feature only.
@@ -14,9 +15,11 @@ use std::{collections::BTreeMap, ops::AddAssign};
 #[derive(Debug, Clone, Default, Hash)]
 pub struct StringsInterner {
     /// Property getters.
-    getters: BTreeMap<Identifier, ImmutableString>,
+    #[cfg(not(feature = "no_object"))]
+    getters: std::collections::BTreeMap<Identifier, ImmutableString>,
     /// Property setters.
-    setters: BTreeMap<Identifier, ImmutableString>,
+    #[cfg(not(feature = "no_object"))]
+    setters: std::collections::BTreeMap<Identifier, ImmutableString>,
 }
 
 impl StringsInterner {
@@ -25,8 +28,10 @@ impl StringsInterner {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            getters: BTreeMap::new(),
-            setters: BTreeMap::new(),
+            #[cfg(not(feature = "no_object"))]
+            getters: std::collections::BTreeMap::new(),
+            #[cfg(not(feature = "no_object"))]
+            setters: std::collections::BTreeMap::new(),
         }
     }
     /// Get an identifier from a text string and prefix, adding it to the interner if necessary.
@@ -41,20 +46,29 @@ impl StringsInterner {
         prefix: &'static str,
         text: impl AsRef<str> + Into<Identifier> + Into<ImmutableString>,
     ) -> ImmutableString {
-        let (dict, mapper) = match prefix {
-            "" => return text.into(),
-            FN_GET => (&mut self.getters, make_getter as fn(&str) -> String),
-            FN_SET => (&mut self.setters, make_setter as fn(&str) -> String),
-            _ => unreachable!("unsupported prefix {}", prefix),
-        };
+        #[cfg(not(feature = "no_object"))]
+        {
+            let (dict, mapper) = match prefix {
+                "" => return text.into(),
+                FN_GET => (&mut self.getters, make_getter as fn(&str) -> String),
+                FN_SET => (&mut self.setters, make_setter as fn(&str) -> String),
+                _ => unreachable!("unsupported prefix {}", prefix),
+            };
 
-        if dict.contains_key(text.as_ref()) {
-            self.getters.get(text.as_ref()).expect("exists").clone()
-        } else {
-            let value: ImmutableString = mapper(text.as_ref()).into();
-            let text = text.into();
-            dict.insert(text, value.clone());
-            value
+            if dict.contains_key(text.as_ref()) {
+                self.getters.get(text.as_ref()).expect("exists").clone()
+            } else {
+                let value: ImmutableString = mapper(text.as_ref()).into();
+                let text = text.into();
+                dict.insert(text, value.clone());
+                value
+            }
+        }
+
+        #[cfg(feature = "no_object")]
+        match prefix {
+            "" => return text.into(),
+            _ => unreachable!("unsupported prefix {}", prefix),
         }
     }
     /// Merge another [`IdentifierBuilder`] into this.
@@ -65,7 +79,12 @@ impl StringsInterner {
 impl AddAssign for StringsInterner {
     #[inline(always)]
     fn add_assign(&mut self, rhs: Self) {
-        self.getters.extend(rhs.getters.into_iter());
-        self.setters.extend(rhs.setters.into_iter());
+        let _rhs = rhs;
+
+        #[cfg(not(feature = "no_object"))]
+        {
+            self.getters.extend(_rhs.getters.into_iter());
+            self.setters.extend(_rhs.setters.into_iter());
+        }
     }
 }

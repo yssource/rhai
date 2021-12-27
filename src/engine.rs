@@ -10,8 +10,8 @@ use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::tokenizer::Token;
 use crate::types::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::{
-    calc_fn_params_hash, combine_hashes, Dynamic, FnArgsVec, Identifier, ImmutableString, Module,
-    Position, RhaiError, RhaiResult, RhaiResultOf, Scope, Shared, StaticVec, ERR, INT,
+    Dynamic, Identifier, ImmutableString, Module, Position, RhaiError, RhaiResult, RhaiResultOf,
+    Scope, Shared, StaticVec, ERR, INT,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -399,9 +399,9 @@ impl ChainArgument {
     #[inline(always)]
     #[cfg(not(feature = "no_object"))]
     #[must_use]
-    pub fn into_fn_call_args(self) -> (FnArgsVec<Dynamic>, Position) {
+    pub fn into_fn_call_args(self) -> (crate::FnArgsVec<Dynamic>, Position) {
         match self {
-            Self::MethodCallArgs(None, pos) => (FnArgsVec::new_const(), pos),
+            Self::MethodCallArgs(None, pos) => (crate::FnArgsVec::new_const(), pos),
             Self::MethodCallArgs(Some(mut values), pos) => {
                 (values.iter_mut().map(std::mem::take).collect(), pos)
             }
@@ -426,7 +426,7 @@ impl ChainArgument {
     #[inline(always)]
     #[cfg(not(feature = "no_object"))]
     #[must_use]
-    pub fn from_fn_call_args(values: FnArgsVec<Dynamic>, pos: Position) -> Self {
+    pub fn from_fn_call_args(values: crate::FnArgsVec<Dynamic>, pos: Position) -> Self {
         if values.is_empty() {
             Self::MethodCallArgs(None, pos)
         } else {
@@ -435,6 +435,7 @@ impl ChainArgument {
     }
     /// Create an [`IndexValue`][ChainArgument::IndexValue].
     #[inline(always)]
+    #[cfg(not(feature = "no_index"))]
     #[must_use]
     pub const fn from_index_value(value: Dynamic, pos: Position) -> Self {
         Self::IndexValue(value, pos)
@@ -1865,7 +1866,7 @@ impl Engine {
                 } = x.as_ref();
 
                 let (values, pos) = args.iter().try_fold(
-                    (FnArgsVec::with_capacity(args.len()), Position::NONE),
+                    (crate::FnArgsVec::with_capacity(args.len()), Position::NONE),
                     |(mut values, mut pos), expr| -> RhaiResultOf<_> {
                         let (value, arg_pos) = self.get_arg_value(
                             scope, mods, state, lib, this_ptr, level, expr, constants,
@@ -1911,7 +1912,7 @@ impl Engine {
                         } = x.as_ref();
 
                         let (values, pos) = args.iter().try_fold(
-                            (FnArgsVec::with_capacity(args.len()), Position::NONE),
+                            (crate::FnArgsVec::with_capacity(args.len()), Position::NONE),
                             |(mut values, mut pos), expr| -> RhaiResultOf<_> {
                                 let (value, arg_pos) = self.get_arg_value(
                                     scope, mods, state, lib, this_ptr, level, expr, constants,
@@ -3244,18 +3245,6 @@ impl Engine {
 
         self.check_return_value(result)
             .map_err(|err| err.fill_position(stmt.position()))
-    }
-
-    // Has a system function a Rust-native override?
-    pub(crate) fn has_native_fn_override(&self, hash_script: u64, arg_types: &[TypeId]) -> bool {
-        let hash_params = calc_fn_params_hash(arg_types.iter().cloned());
-        let hash = combine_hashes(hash_script, hash_params);
-
-        // First check the global namespace and packages, but skip modules that are standard because
-        // they should never conflict with system functions.
-        self.global_modules.iter().filter(|m| !m.standard).any(|m| m.contains_fn(hash))
-            // Then check sub-modules
-            || self.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash))
     }
 
     /// Check a result to ensure that the data size is within allowable limit.

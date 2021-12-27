@@ -182,6 +182,7 @@ impl<'e> ParseState<'e> {
 
     /// Get an interned string, creating one if it is not yet interned.
     #[inline(always)]
+    #[allow(dead_code)]
     #[must_use]
     pub fn get_interned_string(
         &mut self,

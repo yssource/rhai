@@ -1,7 +1,7 @@
 //! Module that defines the public compilation API of [`Engine`].
 
 use crate::parser::{ParseResult, ParseState};
-use crate::{Engine, RhaiResultOf, Scope, AST};
+use crate::{Engine, Scope, AST};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -84,7 +84,7 @@ impl Engine {
         &self,
         scope: &Scope,
         script: impl AsRef<str>,
-    ) -> RhaiResultOf<AST> {
+    ) -> crate::RhaiResultOf<AST> {
         use crate::{
             ast::{ASTNode, Expr, Stmt},
             func::native::shared_take_or_clone,
@@ -351,14 +351,18 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
-    pub fn parse_json(&self, json: impl AsRef<str>, has_null: bool) -> RhaiResultOf<crate::Map> {
+    pub fn parse_json(
+        &self,
+        json: impl AsRef<str>,
+        has_null: bool,
+    ) -> crate::RhaiResultOf<crate::Map> {
         use crate::tokenizer::Token;
 
         fn parse_json_inner(
             engine: &Engine,
             json: &str,
             has_null: bool,
-        ) -> RhaiResultOf<crate::Map> {
+        ) -> crate::RhaiResultOf<crate::Map> {
             let mut scope = Scope::new();
             let json_text = json.trim_start();
             let scripts = if json_text.starts_with(Token::MapStart.literal_syntax()) {

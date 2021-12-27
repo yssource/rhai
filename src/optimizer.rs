@@ -9,10 +9,14 @@ use crate::func::builtin::get_builtin_binary_op_fn;
 use crate::func::hashing::get_hasher;
 use crate::tokenizer::Token;
 use crate::types::dynamic::AccessMode;
-use crate::{calc_fn_hash, Dynamic, Engine, FnPtr, Position, Scope, StaticVec, AST, INT};
+use crate::{
+    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnPtr, Position, Scope,
+    StaticVec, AST, INT,
+};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
+    any::TypeId,
     convert::TryFrom,
     hash::{Hash, Hasher},
     mem,
@@ -150,6 +154,18 @@ impl<'a> OptimizerState<'a> {
             .ok()
             .map(|(v, _)| v)
     }
+}
+
+// Has a system function a Rust-native override?
+fn has_native_fn_override(engine: &Engine, hash_script: u64, arg_types: &[TypeId]) -> bool {
+    let hash_params = calc_fn_params_hash(arg_types.iter().cloned());
+    let hash = combine_hashes(hash_script, hash_params);
+
+    // First check the global namespace and packages, but skip modules that are standard because
+    // they should never conflict with system functions.
+    engine.global_modules.iter().filter(|m| !m.standard).any(|m| m.contains_fn(hash))
+            // Then check sub-modules
+            || engine.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash))
 }
 
 /// Optimize a block of [statements][Stmt].
@@ -970,7 +986,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                     return;
                 }
                 // Overloaded operators can override built-in.
-                _ if x.args.len() == 2 && !state.engine.has_native_fn_override(x.hashes.native, arg_types.as_ref()) => {
+                _ if x.args.len() == 2 && !has_native_fn_override(state.engine, x.hashes.native, arg_types.as_ref()) => {
                     if let Some(result) = get_builtin_binary_op_fn(x.name.as_ref(), &arg_values[0], &arg_values[1])
                         .and_then(|f| {
                             #[cfg(not(feature = "no_function"))]
