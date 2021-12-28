@@ -1046,7 +1046,7 @@ impl Engine {
                 // IMPORTANT! If the eval defines new variables in the current scope,
                 //            all variable offsets from this point on will be mis-aligned.
                 if scope.len() != orig_scope_len {
-                    state.data.always_search_scope = true;
+                    state.always_search_scope = true;
                 }
 
                 return result.map_err(|err| {

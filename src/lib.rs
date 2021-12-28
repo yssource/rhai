@@ -241,9 +241,7 @@ pub use ast::{
 pub use ast::FloatWrapper;
 
 #[cfg(feature = "internals")]
-pub use engine::{
-    EvalState, EvalStateData, FnResolutionCache, FnResolutionCacheEntry, GlobalRuntimeState,
-};
+pub use engine::{EvalState, FnResolutionCache, FnResolutionCacheEntry, GlobalRuntimeState};
 
 #[cfg(feature = "internals")]
 pub use module::Namespace;

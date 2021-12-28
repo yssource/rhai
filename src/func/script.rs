@@ -3,7 +3,7 @@
 
 use super::call::FnCallArgs;
 use crate::ast::ScriptFnDef;
-use crate::engine::{EvalState, EvalStateData, GlobalRuntimeState};
+use crate::engine::{EvalState, GlobalRuntimeState};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::{Dynamic, Engine, Module, Position, RhaiError, RhaiResult, Scope, StaticVec, ERR};
 use std::mem;
@@ -91,8 +91,6 @@ impl Engine {
         // Merge in encapsulated environment, if any
         let mut lib_merged = StaticVec::with_capacity(lib.len() + 1);
         let orig_fn_resolution_caches_len = state.fn_resolution_caches_len();
-        let orig_states_data = state.data;
-        state.data = EvalStateData::new();
 
         let lib = if let Some(ref fn_lib) = fn_def.lib {
             if fn_lib.is_empty() {
@@ -160,7 +158,6 @@ impl Engine {
         global.truncate_modules(orig_mods_len);
 
         // Restore state
-        state.data = orig_states_data;
         state.rewind_fn_resolution_caches(orig_fn_resolution_caches_len);
 
         result
