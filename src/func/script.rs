@@ -196,47 +196,4 @@ impl Engine {
 
         result
     }
-
-    /// Evaluate a text script in place - used primarily for 'eval'.
-    pub(crate) fn eval_script_expr_in_place(
-        &self,
-        scope: &mut Scope,
-        global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
-        lib: &[&Module],
-        script: impl AsRef<str>,
-        _pos: Position,
-        level: usize,
-    ) -> RhaiResult {
-        #[cfg(not(feature = "unchecked"))]
-        self.inc_operations(&mut global.num_operations, _pos)?;
-
-        let script = script.as_ref().trim();
-        if script.is_empty() {
-            return Ok(Dynamic::UNIT);
-        }
-
-        // Compile the script text
-        // No optimizations because we only run it once
-        let ast = self.compile_with_scope_and_optimization_level(
-            &Scope::new(),
-            &[script],
-            #[cfg(not(feature = "no_optimize"))]
-            crate::OptimizationLevel::None,
-        )?;
-
-        // If new functions are defined within the eval string, it is an error
-        #[cfg(not(feature = "no_function"))]
-        if !ast.shared_lib().is_empty() {
-            return Err(crate::PERR::WrongFnDefinition.into());
-        }
-
-        let statements = ast.statements();
-        if statements.is_empty() {
-            return Ok(Dynamic::UNIT);
-        }
-
-        // Evaluate the AST
-        self.eval_global_statements(scope, global, state, statements, lib, level)
-    }
 }
