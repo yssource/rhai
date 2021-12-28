@@ -18,9 +18,9 @@ fn test_eval_blocks() -> Result<(), Box<EvalAltResult>> {
             r#"
                 let x = 999;
 
-                eval("let x = x + 123");
+                eval("let x = x - 1000");
 
-                let y = if x > 0 {
+                let y = if x < 0 {
                     eval("let x = 42");
                     x
                 } else {
@@ -30,7 +30,7 @@ fn test_eval_blocks() -> Result<(), Box<EvalAltResult>> {
                 x + y
             "#
         )?,
-        1164
+        41
     );
 
     Ok(())

@@ -122,7 +122,6 @@ impl Engine {
                 lib,
                 this_ptr,
                 &fn_def.body,
-                true,
                 rewind_scope,
                 level,
             )

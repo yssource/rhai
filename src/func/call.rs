@@ -684,7 +684,7 @@ impl Engine {
         level: usize,
     ) -> RhaiResult {
         self.eval_stmt_block(
-            scope, global, state, lib, &mut None, statements, false, false, level,
+            scope, global, state, lib, &mut None, statements, false, level,
         )
         .or_else(|err| match *err {
             ERR::Return(out, _) => Ok(out),
