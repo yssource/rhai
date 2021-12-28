@@ -1155,7 +1155,7 @@ pub fn optimize_into_ast(
                     params: fn_def.params.clone(),
                     lib: None,
                     #[cfg(not(feature = "no_module"))]
-                    global: GlobalRuntimeState::new(),
+                    global: None,
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(feature = "metadata")]
                     comments: None,

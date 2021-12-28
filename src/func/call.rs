@@ -695,48 +695,6 @@ impl Engine {
         })
     }
 
-    /// Evaluate a text script in place - used primarily for 'eval'.
-    fn eval_script_expr_in_place(
-        &self,
-        scope: &mut Scope,
-        global: &mut GlobalRuntimeState,
-        lib: &[&Module],
-        script: impl AsRef<str>,
-        _pos: Position,
-        level: usize,
-    ) -> RhaiResult {
-        #[cfg(not(feature = "unchecked"))]
-        self.inc_operations(&mut global.num_operations, _pos)?;
-
-        let script = script.as_ref().trim();
-        if script.is_empty() {
-            return Ok(Dynamic::UNIT);
-        }
-
-        // Compile the script text
-        // No optimizations because we only run it once
-        let ast = self.compile_with_scope_and_optimization_level(
-            &Scope::new(),
-            &[script],
-            #[cfg(not(feature = "no_optimize"))]
-            crate::OptimizationLevel::None,
-        )?;
-
-        // If new functions are defined within the eval string, it is an error
-        #[cfg(not(feature = "no_function"))]
-        if !ast.shared_lib().is_empty() {
-            return Err(crate::PERR::WrongFnDefinition.into());
-        }
-
-        let statements = ast.statements();
-        if statements.is_empty() {
-            return Ok(Dynamic::UNIT);
-        }
-
-        // Evaluate the AST
-        self.eval_global_statements(scope, global, &mut EvalState::new(), statements, lib, level)
-    }
-
     /// Call a dot method.
     #[cfg(not(feature = "no_object"))]
     pub(crate) fn make_method_call(
@@ -1081,13 +1039,14 @@ impl Engine {
                 let script = &value
                     .into_immutable_string()
                     .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, pos))?;
+                let level = level + 1;
                 let result =
-                    self.eval_script_expr_in_place(scope, global, lib, script, pos, level + 1);
+                    self.eval_script_expr_in_place(scope, global, state, lib, script, pos, level);
 
                 // IMPORTANT! If the eval defines new variables in the current scope,
                 //            all variable offsets from this point on will be mis-aligned.
                 if scope.len() != orig_scope_len {
-                    state.always_search_scope = true;
+                    state.data.always_search_scope = true;
                 }
 
                 return result.map_err(|err| {

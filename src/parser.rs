@@ -3129,7 +3129,7 @@ fn parse_fn(
         body,
         lib: None,
         #[cfg(not(feature = "no_module"))]
-        global: crate::engine::GlobalRuntimeState::new(),
+        global: None,
         #[cfg(not(feature = "no_function"))]
         #[cfg(feature = "metadata")]
         comments: if comments.is_empty() {
@@ -3280,7 +3280,7 @@ fn parse_anon_fn(
         body: body.into(),
         lib: None,
         #[cfg(not(feature = "no_module"))]
-        global: crate::engine::GlobalRuntimeState::new(),
+        global: None,
         #[cfg(not(feature = "no_function"))]
         #[cfg(feature = "metadata")]
         comments: None,

@@ -771,10 +771,10 @@ pub struct FnResolutionCacheEntry {
 /// Exported under the `internals` feature only.
 pub type FnResolutionCache = BTreeMap<u64, Option<Box<FnResolutionCacheEntry>>>;
 
-/// _(internals)_ A type that holds all the current states of the [`Engine`].
+/// _(internals)_ A type that holds all volatile evaluation states data.
 /// Exported under the `internals` feature only.
-#[derive(Debug, Clone)]
-pub struct EvalState {
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Default, Hash)]
+pub struct EvalStateData {
     /// Normally, access to variables are parsed with a relative offset into the [`Scope`] to avoid a lookup.
     /// In some situation, e.g. after running an `eval` statement, or after a custom syntax statement,
     /// subsequent offsets may become mis-aligned.
@@ -783,6 +783,24 @@ pub struct EvalState {
     /// Level of the current scope.  The global (root) level is zero, a new block (or function call)
     /// is one level higher, and so on.
     pub scope_level: usize,
+}
+
+impl EvalStateData {
+    /// Create a new [`EvalStateData`].
+    pub const fn new() -> Self {
+        Self {
+            always_search_scope: false,
+            scope_level: 0,
+        }
+    }
+}
+
+/// _(internals)_ A type that holds all the current states of the [`Engine`].
+/// Exported under the `internals` feature only.
+#[derive(Debug, Clone)]
+pub struct EvalState {
+    /// Volatile states data.
+    pub data: EvalStateData,
     /// Stack of function resolution caches.
     fn_resolution_caches: StaticVec<FnResolutionCache>,
 }
@@ -793,8 +811,7 @@ impl EvalState {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            always_search_scope: false,
-            scope_level: 0,
+            data: EvalStateData::new(),
             fn_resolution_caches: StaticVec::new_const(),
         }
     }
@@ -802,7 +819,7 @@ impl EvalState {
     #[inline(always)]
     #[must_use]
     pub const fn is_global(&self) -> bool {
-        self.scope_level == 0
+        self.data.scope_level == 0
     }
     /// Get the number of function resolution cache(s) in the stack.
     #[inline(always)]
@@ -1142,7 +1159,7 @@ impl Engine {
         let root = &namespace[0].name;
 
         // Qualified - check if the root module is directly indexed
-        let index = if state.always_search_scope {
+        let index = if state.data.always_search_scope {
             None
         } else {
             namespace.index()
@@ -1267,7 +1284,7 @@ impl Engine {
                     Err(ERR::ErrorUnboundThis(*pos).into())
                 }
             }
-            _ if state.always_search_scope => (0, expr.position()),
+            _ if state.data.always_search_scope => (0, expr.position()),
             Expr::Variable(Some(i), pos, _) => (i.get() as usize, *pos),
             Expr::Variable(None, pos, v) => (v.0.map(NonZeroUsize::get).unwrap_or(0), *pos),
             _ => unreachable!("Expr::Variable expected, but gets {:?}", expr),
@@ -2454,13 +2471,13 @@ impl Engine {
             return Ok(Dynamic::UNIT);
         }
 
-        let orig_always_search_scope = state.always_search_scope;
+        let orig_always_search_scope = state.data.always_search_scope;
         let orig_scope_len = scope.len();
         let orig_mods_len = global.num_imported_modules();
         let orig_fn_resolution_caches_len = state.fn_resolution_caches_len();
 
         if rewind_scope {
-            state.scope_level += 1;
+            state.data.scope_level += 1;
         }
 
         let result = statements.iter().try_fold(Dynamic::UNIT, |_, stmt| {
@@ -2500,14 +2517,14 @@ impl Engine {
 
         if rewind_scope {
             scope.rewind(orig_scope_len);
-            state.scope_level -= 1;
+            state.data.scope_level -= 1;
         }
         if restore_orig_state {
             global.truncate_modules(orig_mods_len);
 
             // The impact of new local variables goes away at the end of a block
             // because any new variables introduced will go out of scope
-            state.always_search_scope = orig_always_search_scope;
+            state.data.always_search_scope = orig_always_search_scope;
         }
 
         result

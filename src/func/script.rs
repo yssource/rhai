@@ -3,7 +3,7 @@
 
 use super::call::FnCallArgs;
 use crate::ast::ScriptFnDef;
-use crate::engine::{EvalState, GlobalRuntimeState};
+use crate::engine::{EvalState, EvalStateData, GlobalRuntimeState};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::{Dynamic, Engine, Module, Position, RhaiError, RhaiResult, Scope, StaticVec, ERR};
 use std::mem;
@@ -91,6 +91,8 @@ impl Engine {
         // Merge in encapsulated environment, if any
         let mut lib_merged = StaticVec::with_capacity(lib.len() + 1);
         let orig_fn_resolution_caches_len = state.fn_resolution_caches_len();
+        let orig_states_data = state.data;
+        state.data = EvalStateData::new();
 
         let lib = if let Some(ref fn_lib) = fn_def.lib {
             if fn_lib.is_empty() {
@@ -106,15 +108,14 @@ impl Engine {
         };
 
         #[cfg(not(feature = "no_module"))]
-        if fn_def.global.num_imported_modules() > 0 {
-            fn_def
-                .global
-                .iter_modules_raw()
-                .for_each(|(n, m)| global.push_module(n.clone(), m.clone()));
+        if let Some(ref modules) = fn_def.global {
+            modules
+                .iter()
+                .cloned()
+                .for_each(|(n, m)| global.push_module(n, m));
         }
 
         // Evaluate the function
-        let body = &fn_def.body;
         let result = self
             .eval_stmt_block(
                 scope,
@@ -122,7 +123,7 @@ impl Engine {
                 state,
                 lib,
                 this_ptr,
-                body,
+                &fn_def.body,
                 true,
                 rewind_scope,
                 level,
@@ -149,15 +150,17 @@ impl Engine {
                 _ => make_error(fn_def.name.to_string(), fn_def, global, err, pos),
             });
 
-        // Remove all local variables
+        // Remove all local variables and imported modules
         if rewind_scope {
             scope.rewind(orig_scope_len);
         } else if !args.is_empty() {
             // Remove arguments only, leaving new variables in the scope
             scope.remove_range(orig_scope_len, args.len())
         }
-
         global.truncate_modules(orig_mods_len);
+
+        // Restore state
+        state.data = orig_states_data;
         state.rewind_fn_resolution_caches(orig_fn_resolution_caches_len);
 
         result
@@ -192,5 +195,48 @@ impl Engine {
         }
 
         result
+    }
+
+    /// Evaluate a text script in place - used primarily for 'eval'.
+    pub(crate) fn eval_script_expr_in_place(
+        &self,
+        scope: &mut Scope,
+        global: &mut GlobalRuntimeState,
+        state: &mut EvalState,
+        lib: &[&Module],
+        script: impl AsRef<str>,
+        _pos: Position,
+        level: usize,
+    ) -> RhaiResult {
+        #[cfg(not(feature = "unchecked"))]
+        self.inc_operations(&mut global.num_operations, _pos)?;
+
+        let script = script.as_ref().trim();
+        if script.is_empty() {
+            return Ok(Dynamic::UNIT);
+        }
+
+        // Compile the script text
+        // No optimizations because we only run it once
+        let ast = self.compile_with_scope_and_optimization_level(
+            &Scope::new(),
+            &[script],
+            #[cfg(not(feature = "no_optimize"))]
+            crate::OptimizationLevel::None,
+        )?;
+
+        // If new functions are defined within the eval string, it is an error
+        #[cfg(not(feature = "no_function"))]
+        if !ast.shared_lib().is_empty() {
+            return Err(crate::PERR::WrongFnDefinition.into());
+        }
+
+        let statements = ast.statements();
+        if statements.is_empty() {
+            return Ok(Dynamic::UNIT);
+        }
+
+        // Evaluate the AST
+        self.eval_global_statements(scope, global, state, statements, lib, level)
     }
 }

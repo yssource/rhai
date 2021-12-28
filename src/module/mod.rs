@@ -1580,15 +1580,17 @@ impl Module {
                 });
 
         // Extra modules left in the scope become sub-modules
-        let mut func_global = crate::engine::GlobalRuntimeState::new();
+        let mut func_global = None;
 
-        global
-            .into_iter()
-            .skip(orig_mods_len)
-            .for_each(|(alias, m)| {
-                func_global.push_module(alias.clone(), m.clone());
-                module.set_sub_module(alias, m);
-            });
+        global.into_iter().skip(orig_mods_len).for_each(|kv| {
+            if func_global.is_none() {
+                func_global = Some(StaticVec::new());
+            }
+            func_global.as_mut().expect("`Some`").push(kv.clone());
+            module.set_sub_module(kv.0, kv.1);
+        });
+
+        let func_global = func_global.map(|v| v.into_boxed_slice());
 
         // Non-private functions defined become module functions
         #[cfg(not(feature = "no_function"))]

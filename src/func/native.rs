@@ -186,7 +186,8 @@ impl<'a> NativeCallContext<'a> {
     pub const fn source(&self) -> Option<&str> {
         self.source
     }
-    /// Get an iterator over the current set of modules imported via `import` statements.
+    /// Get an iterator over the current set of modules imported via `import` statements
+    /// in reverse order.
     ///
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
@@ -194,7 +195,7 @@ impl<'a> NativeCallContext<'a> {
     pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.global.iter().flat_map(|&m| m.iter_modules())
     }
-    /// Get an iterator over the current set of modules imported via `import` statements.
+    /// Get an iterator over the current set of modules imported via `import` statements in reverse order.
     #[cfg(not(feature = "no_module"))]
     #[allow(dead_code)]
     #[inline]
@@ -214,10 +215,11 @@ impl<'a> NativeCallContext<'a> {
     pub const fn global_runtime_state(&self) -> Option<&GlobalRuntimeState> {
         self.global
     }
-    /// Get an iterator over the namespaces containing definitions of all script-defined functions.
+    /// Get an iterator over the namespaces containing definitions of all script-defined functions
+    /// in reverse order.
     #[inline]
     pub fn iter_namespaces(&self) -> impl Iterator<Item = &Module> {
-        self.lib.iter().cloned()
+        self.lib.iter().rev().cloned()
     }
     /// _(internals)_ The current set of namespaces containing definitions of all script-defined functions.
     /// Exported under the `internals` feature only.
