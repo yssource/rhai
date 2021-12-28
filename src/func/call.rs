@@ -1039,9 +1039,15 @@ impl Engine {
                 let script = &value
                     .into_immutable_string()
                     .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, pos))?;
-                let level = level + 1;
-                let result =
-                    self.eval_script_expr_in_place(scope, global, state, lib, script, pos, level);
+                let result = self.eval_script_expr_in_place(
+                    scope,
+                    global,
+                    state,
+                    lib,
+                    script,
+                    pos,
+                    level + 1,
+                );
 
                 // IMPORTANT! If the eval defines new variables in the current scope,
                 //            all variable offsets from this point on will be mis-aligned.
@@ -1339,7 +1345,19 @@ impl Engine {
             return Ok(Dynamic::UNIT);
         }
 
+        // Backup the original state
+        let orig_scope_level = state.scope_level;
+
+        // Scope level is set to zero in order to retain all variables
+        state.scope_level = 0;
+
         // Evaluate the AST
-        self.eval_global_statements(scope, global, state, statements, lib, level)
+        let result = self.eval_global_statements(scope, global, state, statements, lib, level);
+
+        // Restore original state
+        state.scope_level = orig_scope_level;
+
+        // Return result
+        result
     }
 }
