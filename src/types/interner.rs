@@ -8,8 +8,9 @@ use std::prelude::v1::*;
 /// _(internals)_ A factory of identifiers from text strings.
 /// Exported under the `internals` feature only.
 ///
-/// Since [`SmartString`](https://crates.io/crates/smartstring) is used as [`Identifier`],
-/// this just returns a copy because most identifiers in Rhai are short and ASCII-based.
+/// Normal identifiers are not interned since [`SmartString`][crate::SmartString] and thus copying
+/// is relatively fast , this just returns a copy
+/// because most identifiers in Rhai are short and ASCII-based.
 ///
 /// Property getters and setters are interned separately.
 #[derive(Debug, Clone, Default, Hash)]
@@ -71,12 +72,9 @@ impl StringsInterner {
             _ => unreachable!("unsupported prefix {}", prefix),
         }
     }
-    /// Merge another [`IdentifierBuilder`] into this.
-    #[inline(always)]
-    pub fn merge(&mut self, _other: &Self) {}
 }
 
-impl AddAssign for StringsInterner {
+impl AddAssign<Self> for StringsInterner {
     #[inline(always)]
     fn add_assign(&mut self, rhs: Self) {
         let _rhs = rhs;
@@ -85,6 +83,21 @@ impl AddAssign for StringsInterner {
         {
             self.getters.extend(_rhs.getters.into_iter());
             self.setters.extend(_rhs.setters.into_iter());
+        }
+    }
+}
+
+impl AddAssign<&Self> for StringsInterner {
+    #[inline(always)]
+    fn add_assign(&mut self, rhs: &Self) {
+        let _rhs = rhs;
+
+        #[cfg(not(feature = "no_object"))]
+        {
+            self.getters
+                .extend(_rhs.getters.iter().map(|(k, v)| (k.clone(), v.clone())));
+            self.setters
+                .extend(_rhs.setters.iter().map(|(k, v)| (k.clone(), v.clone())));
         }
     }
 }
