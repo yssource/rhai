@@ -1345,19 +1345,7 @@ impl Engine {
             return Ok(Dynamic::UNIT);
         }
 
-        // Backup the original state
-        let orig_scope_level = state.scope_level;
-
-        // Scope level is set to zero in order to retain all variables
-        state.scope_level = 0;
-
         // Evaluate the AST
-        let result = self.eval_global_statements(scope, global, state, statements, lib, level);
-
-        // Restore original state
-        state.scope_level = orig_scope_level;
-
-        // Return result
-        result
+        self.eval_global_statements(scope, global, state, statements, lib, level)
     }
 }

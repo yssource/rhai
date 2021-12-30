@@ -501,35 +501,24 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
 pub struct GlobalRuntimeState {
     /// Stack of module names.
     //
-    // # Implementation Notes
-    //
     // We cannot use Cow<str> here because `eval` may load a [module][Module] and
     // the module name will live beyond the AST of the eval script text.
     keys: StaticVec<Identifier>,
-    /// Stack of imported modules.
+    /// Stack of imported [modules][Module].
     modules: StaticVec<Shared<Module>>,
-
     /// Source of the current context.
     pub source: Option<Identifier>,
     /// Number of operations performed.
     pub num_operations: u64,
     /// Number of modules loaded.
     pub num_modules_loaded: usize,
-
     /// Function call hashes to index getters and setters.
-    ///
-    /// Not available under `no_index` and `no_object`.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn_hash_indexing: (u64, u64),
-    /// Embedded module resolver.
-    ///
-    /// Not available under `no_module`.
+    /// Embedded [module][Module] resolver.
     #[cfg(not(feature = "no_module"))]
     pub embedded_module_resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
-
     /// Cache of globally-defined constants.
-    ///
-    /// Not available under `no_module` and `no_function`.
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
     constants: Option<Shared<crate::Locked<BTreeMap<Identifier, Dynamic>>>>,
@@ -775,13 +764,18 @@ pub type FnResolutionCache = BTreeMap<u64, Option<Box<FnResolutionCacheEntry>>>;
 /// Exported under the `internals` feature only.
 #[derive(Debug, Clone)]
 pub struct EvalState {
+    /// Force a [`Scope`] search by name.
+    ///
     /// Normally, access to variables are parsed with a relative offset into the [`Scope`] to avoid a lookup.
+    ///
     /// In some situation, e.g. after running an `eval` statement, or after a custom syntax statement,
     /// subsequent offsets may become mis-aligned.
-    /// When that happens, this flag is turned on to force a [`Scope`] search by name.
+    ///
+    /// When that happens, this flag is turned on.
     pub always_search_scope: bool,
-    /// Level of the current scope.  The global (root) level is zero, a new block (or function call)
-    /// is one level higher, and so on.
+    /// Level of the current scope.
+    ///
+    /// The global (root) level is zero, a new block (or function call) is one level higher, and so on.
     pub scope_level: usize,
     /// Stack of function resolution caches.
     fn_resolution_caches: StaticVec<FnResolutionCache>,
@@ -797,12 +791,6 @@ impl EvalState {
             scope_level: 0,
             fn_resolution_caches: StaticVec::new_const(),
         }
-    }
-    /// Is the state currently at global (root) level?
-    #[inline(always)]
-    #[must_use]
-    pub const fn is_global(&self) -> bool {
-        self.scope_level == 0
     }
     /// Get the number of function resolution cache(s) in the stack.
     #[inline(always)]
@@ -2465,7 +2453,16 @@ impl Engine {
         let result = statements.iter().try_fold(Dynamic::UNIT, |_, stmt| {
             let _mods_len = global.num_imported_modules();
 
-            let r = self.eval_stmt(scope, global, state, lib, this_ptr, stmt, level)?;
+            let r = self.eval_stmt(
+                scope,
+                global,
+                state,
+                lib,
+                this_ptr,
+                stmt,
+                restore_orig_state,
+                level,
+            )?;
 
             #[cfg(not(feature = "no_module"))]
             if matches!(stmt, Stmt::Import(_, _, _)) {
@@ -2593,6 +2590,7 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         stmt: &Stmt,
+        rewind_scope: bool,
         level: usize,
     ) -> RhaiResult {
         #[cfg(not(feature = "unchecked"))]
@@ -3119,10 +3117,14 @@ impl Engine {
                     .eval_expr(scope, global, state, lib, this_ptr, expr, level)?
                     .flatten();
 
-                let (var_name, _alias): (Cow<'_, str>, _) = if state.is_global() {
+                let (var_name, _alias): (Cow<'_, str>, _) = if !rewind_scope {
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(not(feature = "no_module"))]
-                    if entry_type == AccessMode::ReadOnly && lib.iter().any(|&m| !m.is_empty()) {
+                    if state.scope_level == 0
+                        && entry_type == AccessMode::ReadOnly
+                        && lib.iter().any(|&m| !m.is_empty())
+                    {
+                        // Add a global constant if at top level and there are functions
                         global.set_constant(name.clone(), value.clone());
                     }
 
