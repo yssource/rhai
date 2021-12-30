@@ -1,6 +1,7 @@
 //! Module defining script statements.
 
 use super::{ASTNode, Expr, FnCallExpr, Ident, OptionFlags, AST_OPTION_FLAGS};
+use crate::engine::KEYWORD_EVAL;
 use crate::tokenizer::Token;
 use crate::{calc_fn_hash, Position, StaticVec, INT};
 #[cfg(feature = "no_std")]
@@ -466,12 +467,33 @@ impl Stmt {
             Self::Share(_) => false,
         }
     }
+    /// Does this statement's behavior depend on its containing block?
+    ///
+    /// A statement that depends on its containing block behaves differently when promoted
+    /// to an upper block.
+    ///
+    /// Currently only variable definitions (i.e. `let` and `const`), `import`/`export` statements,
+    /// and `eval` calls (which may in turn call define variables) fall under this category.
+    #[inline]
+    #[must_use]
+    pub fn is_block_dependent(&self) -> bool {
+        match self {
+            Self::Var(_, _, _, _) => true,
+
+            Self::FnCall(x, _) if x.name == KEYWORD_EVAL => true,
+
+            #[cfg(not(feature = "no_module"))]
+            Self::Import(_, _, _) | Self::Export(_, _) => true,
+
+            _ => false,
+        }
+    }
     /// Is this statement _pure_ within the containing block?
     ///
     /// An internally pure statement only has side effects that disappear outside the block.
     ///
     /// Currently only variable definitions (i.e. `let` and `const`) and `import`/`export`
-    /// statements are internally pure.
+    /// statements are internally pure, other than pure expressions.
     #[inline]
     #[must_use]
     pub fn is_internally_pure(&self) -> bool {

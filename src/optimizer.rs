@@ -189,6 +189,32 @@ fn optimize_stmt_block(
         Stmt::is_pure
     };
 
+    // Flatten blocks
+    loop {
+        if let Some(n) = statements.iter().enumerate().find_map(|(i, s)| match s {
+            Stmt::Block(block, _) if !block.iter().any(Stmt::is_block_dependent) => Some(i),
+            _ => None,
+        }) {
+            let (first, second) = statements.split_at_mut(n);
+            let stmt = mem::take(&mut second[0]);
+            let mut stmts = match stmt {
+                Stmt::Block(block, _) => block,
+                _ => unreachable!("Stmt::Block expected but gets {:?}", stmt),
+            };
+            statements = first
+                .iter_mut()
+                .map(mem::take)
+                .chain(stmts.iter_mut().map(mem::take))
+                .chain(second.iter_mut().skip(1).map(mem::take))
+                .collect();
+        } else {
+            break;
+        }
+
+        is_dirty = true;
+    }
+
+    // Optimize
     loop {
         state.clear_dirty();
 
@@ -411,7 +437,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                         x.2 = value;
                     }
                 }
-                _ => unreachable!(),
+                ref expr => unreachable!("Expr::FnCall expected but gets {:?}", expr),
             }
         }
 
@@ -695,8 +721,8 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                     state.set_dirty();
                     *stmt = Stmt::Noop(*pos);
                 }
-                // Only one statement - promote
-                [s] => {
+                // Only one statement which is not block-dependent - promote
+                [s] if !s.is_block_dependent() => {
                     state.set_dirty();
                     *stmt = mem::take(s);
                 }
