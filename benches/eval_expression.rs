@@ -108,12 +108,12 @@ fn bench_eval_call(bench: &mut Bencher) {
 
 #[bench]
 fn bench_eval_loop_number(bench: &mut Bencher) {
-    let script = r#"
+    let script = "
         let s = 0;
         for x in 0..10000 {
             s += 1;
         }
-    "#;
+    ";
 
     let mut engine = Engine::new();
     engine.set_optimization_level(OptimizationLevel::None);
@@ -159,7 +159,7 @@ fn bench_eval_loop_strings_no_build(bench: &mut Bencher) {
 
 #[bench]
 fn bench_eval_switch(bench: &mut Bencher) {
-    let script = r#"
+    let script = "
         let sum = 0;
         let rem = 0;
 
@@ -179,7 +179,7 @@ fn bench_eval_switch(bench: &mut Bencher) {
                 9 => 1,
             }
         }
-    "#;
+    ";
 
     let mut engine = Engine::new();
     engine.set_optimization_level(OptimizationLevel::None);
@@ -191,7 +191,7 @@ fn bench_eval_switch(bench: &mut Bencher) {
 
 #[bench]
 fn bench_eval_nested_if(bench: &mut Bencher) {
-    let script = r#"
+    let script = "
         let sum = 0;
         let rem = 0;
 
@@ -209,7 +209,7 @@ fn bench_eval_nested_if(bench: &mut Bencher) {
             else if rem == 8 { 42 }
             else if rem == 9 { 1 };
         }
-    "#;
+    ";
 
     let mut engine = Engine::new();
     engine.set_optimization_level(OptimizationLevel::None);

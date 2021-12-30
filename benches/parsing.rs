@@ -64,7 +64,7 @@ fn bench_parse_map(bench: &mut Bencher) {
 
 #[bench]
 fn bench_parse_primes(bench: &mut Bencher) {
-    let script = r#"
+    let script = "
             // This script uses the Sieve of Eratosthenes to calculate prime numbers.
 
             let now = timestamp();
@@ -79,7 +79,7 @@ fn bench_parse_primes(bench: &mut Bencher) {
             
             let total_primes_found = 0;
             
-            for p in 2..=MAX_NUMBER_TO_CHECK {
+            for p in 2..MAX_NUMBER_TO_CHECK {
                 if prime_mask[p] {
                     print(p);
             
@@ -95,7 +95,7 @@ fn bench_parse_primes(bench: &mut Bencher) {
             
             print(`Total ${total_primes_found} primes.`);
             print(`Run time = ${now.elapsed} seconds.`);
-        "#;
+        ";
 
     let mut engine = Engine::new();
     engine.set_optimization_level(OptimizationLevel::None);

@@ -8,10 +8,10 @@ use test::Bencher;
 
 #[bench]
 fn bench_eval_module(bench: &mut Bencher) {
-    let script = r#"
+    let script = "
         fn foo(x) { x + 1 }
         fn bar(x) { foo(x) }
-    "#;
+    ";
 
     let mut engine = Engine::new();
     engine.set_optimization_level(OptimizationLevel::None);
@@ -24,10 +24,10 @@ fn bench_eval_module(bench: &mut Bencher) {
 
     let ast = engine
         .compile(
-            r#"
+            "
                 fn foo(x) { x - 1 }
                 testing::bar(41)
-    "#,
+            ",
         )
         .unwrap();
 
@@ -41,11 +41,11 @@ fn bench_eval_function_call(bench: &mut Bencher) {
 
     let ast = engine
         .compile(
-            r#"
+            "
                 fn foo(x) { x - 1 }
                 fn bar(x) { foo(x) }
                 bar(41)
-    "#,
+            ",
         )
         .unwrap();
 
