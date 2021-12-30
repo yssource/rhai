@@ -771,7 +771,7 @@ pub mod array_functions {
                     v if v > 0 => Ordering::Greater,
                     v if v < 0 => Ordering::Less,
                     0 => Ordering::Equal,
-                    _ => unreachable!(),
+                    _ => unreachable!("v is {}", v),
                 })
                 .unwrap_or_else(|| x.type_id().cmp(&y.type_id()))
         });

@@ -469,7 +469,10 @@ impl fmt::Debug for Expr {
                     Self::Dot(_, _, _) => "Dot",
                     Self::And(_, _) => "And",
                     Self::Or(_, _) => "Or",
-                    _ => unreachable!(),
+                    expr => unreachable!(
+                        "Self::Dot or Self::And or Self::Or expected but gets {:?}",
+                        expr
+                    ),
                 };
 
                 display_pos = *pos;

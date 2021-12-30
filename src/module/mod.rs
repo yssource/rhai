@@ -1334,7 +1334,7 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
-        self.interner.merge(&other.interner);
+        self.interner += &other.interner;
         self
     }
 
@@ -1384,7 +1384,7 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
-        self.interner.merge(&other.interner);
+        self.interner += &other.interner;
         self
     }
 

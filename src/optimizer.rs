@@ -199,7 +199,7 @@ fn optimize_stmt_block(
             let stmt = mem::take(&mut second[0]);
             let mut stmts = match stmt {
                 Stmt::Block(block, _) => block,
-                _ => unreachable!("Stmt::Block expected but gets {:?}", stmt),
+                stmt => unreachable!("Stmt::Block expected but gets {:?}", stmt),
             };
             statements = first
                 .iter_mut()

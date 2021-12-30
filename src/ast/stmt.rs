@@ -480,7 +480,11 @@ impl Stmt {
         match self {
             Self::Var(_, _, _, _) => true,
 
-            Self::FnCall(x, _) if x.name == KEYWORD_EVAL => true,
+            Self::Expr(Expr::Stmt(s)) => s.iter().all(Stmt::is_block_dependent),
+
+            Self::FnCall(x, _) | Self::Expr(Expr::FnCall(x, _)) => {
+                x.namespace.is_none() && x.name == KEYWORD_EVAL
+            }
 
             #[cfg(not(feature = "no_module"))]
             Self::Import(_, _, _) | Self::Export(_, _) => true,
@@ -499,6 +503,8 @@ impl Stmt {
     pub fn is_internally_pure(&self) -> bool {
         match self {
             Self::Var(expr, _, _, _) => expr.is_pure(),
+
+            Self::Expr(Expr::Stmt(s)) => s.iter().all(Stmt::is_internally_pure),
 
             #[cfg(not(feature = "no_module"))]
             Self::Import(expr, _, _) => expr.is_pure(),

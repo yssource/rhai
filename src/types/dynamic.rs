@@ -9,6 +9,7 @@ use std::{
     any::{type_name, Any, TypeId},
     fmt,
     hash::{Hash, Hasher},
+    mem,
     ops::{Deref, DerefMut},
     str::FromStr,
 };
@@ -472,7 +473,7 @@ impl Hash for Dynamic {
     ///
     /// Panics if the [`Dynamic`] value contains an unrecognized trait object.
     fn hash<H: Hasher>(&self, state: &mut H) {
-        std::mem::discriminant(&self.0).hash(state);
+        mem::discriminant(&self.0).hash(state);
 
         match self.0 {
             Union::Unit(_, _, _) => ().hash(state),
@@ -1614,21 +1615,19 @@ impl Dynamic {
     pub(crate) fn flatten_in_place(&mut self) -> &mut Self {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(_, _, _) => match std::mem::take(self).0 {
-                Union::Shared(cell, _, _) => {
-                    *self = crate::func::native::shared_try_take(cell).map_or_else(
-                        #[cfg(not(feature = "sync"))]
-                        |cell| cell.borrow().clone(),
-                        #[cfg(feature = "sync")]
-                        |cell| cell.read().unwrap().clone(),
-                        #[cfg(not(feature = "sync"))]
-                        |value| value.into_inner(),
-                        #[cfg(feature = "sync")]
-                        |value| value.into_inner().unwrap(),
-                    );
-                }
-                _ => unreachable!(),
-            },
+            Union::Shared(ref mut cell, _, _) => {
+                let cell = mem::take(cell);
+                *self = crate::func::native::shared_try_take(cell).map_or_else(
+                    #[cfg(not(feature = "sync"))]
+                    |cell| cell.borrow().clone(),
+                    #[cfg(feature = "sync")]
+                    |cell| cell.read().unwrap().clone(),
+                    #[cfg(not(feature = "sync"))]
+                    |value| value.into_inner(),
+                    #[cfg(feature = "sync")]
+                    |value| value.into_inner().unwrap(),
+                );
+            }
             _ => (),
         }
         self

@@ -250,7 +250,7 @@ impl fmt::Display for Position {
             #[cfg(not(feature = "no_position"))]
             write!(f, "line {}, position {}", self.line, self.pos)?;
             #[cfg(feature = "no_position")]
-            unreachable!();
+            unreachable!("no position");
         }
 
         Ok(())
@@ -285,7 +285,7 @@ impl Add for Position {
                 },
             };
             #[cfg(feature = "no_position")]
-            unreachable!();
+            unreachable!("no position");
         }
     }
 }
@@ -1159,7 +1159,7 @@ pub fn parse_string_literal(
                     'x' => 2,
                     'u' => 4,
                     'U' => 8,
-                    _ => unreachable!(),
+                    c => unreachable!("x or u or U expected but gets '{}'", c),
                 };
 
                 for _ in 0..len {
@@ -1506,14 +1506,14 @@ fn get_next_token_inner(
                                 'x' | 'X' => is_hex_digit,
                                 'o' | 'O' => is_numeric_digit,
                                 'b' | 'B' => is_numeric_digit,
-                                _ => unreachable!(),
+                                c => unreachable!("x/X or o/O or b/B expected but gets '{}'", c),
                             };
 
                             radix_base = Some(match ch {
                                 'x' | 'X' => 16,
                                 'o' | 'O' => 8,
                                 'b' | 'B' => 2,
-                                _ => unreachable!(),
+                                c => unreachable!("x/X or o/O or b/B expected but gets '{}'", c),
                             });
                         }
 
@@ -2238,7 +2238,7 @@ impl<'a> Iterator for TokenIterator<'a> {
                     (Token::Custom(token.syntax().into()), pos)
                 } else {
                     // Active standard keyword - should never be a custom keyword!
-                    unreachable!("`{:?}` is an active keyword", token)
+                    unreachable!("{:?} is an active keyword", token)
                 }
             }
             // Disabled symbol

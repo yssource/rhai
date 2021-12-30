@@ -349,7 +349,7 @@ fn eat_token(input: &mut TokenStream, expected_token: Token) -> Position {
 
     if t != expected_token {
         unreachable!(
-            "expecting {} (found {}) at {}",
+            "{} expected but gets {} at {}",
             expected_token.syntax(),
             t.syntax(),
             pos
@@ -1098,7 +1098,7 @@ fn parse_switch(
                 None
             }
             (None, None) => Some(stmt.into()),
-            _ => unreachable!("both hash and range in `switch` statement case"),
+            _ => unreachable!("both hash and range in switch statement case"),
         };
 
         match input.peek().expect(NEVER_ENDS) {
@@ -1163,7 +1163,7 @@ fn parse_primary(
             }
             Token::True => Expr::BoolConstant(true, settings.pos),
             Token::False => Expr::BoolConstant(false, settings.pos),
-            _ => unreachable!(),
+            token => unreachable!("token is {:?}", token),
         },
         #[cfg(not(feature = "no_float"))]
         Token::FloatConstant(x) => {
@@ -1182,7 +1182,7 @@ fn parse_primary(
         Token::LeftBrace if settings.allow_stmt_expr => {
             match parse_block(input, state, lib, settings.level_up())? {
                 block @ Stmt::Block(_, _) => Expr::Stmt(Box::new(block.into())),
-                stmt => unreachable!("expecting Stmt::Block, but gets {:?}", stmt),
+                stmt => unreachable!("Stmt::Block expected but gets {:?}", stmt),
             }
         }
         // ( - grouped expression
@@ -1253,16 +1253,17 @@ fn parse_primary(
         Token::InterpolatedString(_) => {
             let mut segments = StaticVec::<Expr>::new();
 
-            if let (Token::InterpolatedString(s), pos) = input.next().expect(NEVER_ENDS) {
-                segments.push(Expr::StringConstant(s.into(), pos));
-            } else {
-                unreachable!();
+            match input.next().expect(NEVER_ENDS) {
+                (Token::InterpolatedString(s), pos) => {
+                    segments.push(Expr::StringConstant(s.into(), pos));
+                }
+                token => unreachable!("Token::InterpolatedString expected but gets {:?}", token),
             }
 
             loop {
                 let expr = match parse_block(input, state, lib, settings.level_up())? {
                     block @ Stmt::Block(_, _) => Expr::Stmt(Box::new(block.into())),
-                    stmt => unreachable!("expecting Stmt::Block, but gets {:?}", stmt),
+                    stmt => unreachable!("Stmt::Block expected but gets {:?}", stmt),
                 };
                 segments.push(expr);
 
@@ -1288,7 +1289,7 @@ fn parse_primary(
                         return Err(err.into_err(pos))
                     }
                     (token, _) => unreachable!(
-                        "expected a string within an interpolated string literal, but gets {:?}",
+                        "string within an interpolated string literal expected but gets {:?}",
                         token
                     ),
                 }
@@ -1324,7 +1325,7 @@ fn parse_primary(
         Token::Identifier(_) => {
             let s = match input.next().expect(NEVER_ENDS) {
                 (Token::Identifier(s), _) => s,
-                _ => unreachable!(),
+                token => unreachable!("Token::Identifier expected but gets {:?}", token),
             };
 
             match input.peek().expect(NEVER_ENDS).0 {
@@ -1383,7 +1384,7 @@ fn parse_primary(
         Token::Reserved(_) => {
             let s = match input.next().expect(NEVER_ENDS) {
                 (Token::Reserved(s), _) => s,
-                _ => unreachable!(),
+                token => unreachable!("Token::Reserved expected but gets {:?}", token),
             };
 
             match input.peek().expect(NEVER_ENDS).0 {
@@ -1411,7 +1412,7 @@ fn parse_primary(
 
         Token::LexError(_) => match input.next().expect(NEVER_ENDS) {
             (Token::LexError(err), _) => return Err(err.into_err(settings.pos)),
-            _ => unreachable!(),
+            token => unreachable!("Token::LexError expected but gets {:?}", token),
         },
 
         _ => {
@@ -1694,12 +1695,12 @@ fn make_assignment_stmt(
                 ref e => Some(e.position()),
             },
             Expr::Index(x, term, _) | Expr::Dot(x, term, _) => match x.lhs {
-                Expr::Property(_) => unreachable!("unexpected `Expr::Property` in indexing"),
+                Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
                 _ if !term => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _, _))),
                 _ => None,
             },
             Expr::Property(_) if parent_is_dot => None,
-            Expr::Property(_) => unreachable!("unexpected `Expr::Property` in indexing"),
+            Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
             e if parent_is_dot => Some(e.position()),
             _ => None,
         }
@@ -1838,7 +1839,7 @@ fn make_dot_expr(
             let (x, term, pos, is_dot) = match rhs {
                 Expr::Dot(x, term, pos) => (x, term, pos, true),
                 Expr::Index(x, term, pos) => (x, term, pos, false),
-                _ => unreachable!(),
+                expr => unreachable!("Expr::Dot or Expr::Index expected but gets {:?}", expr),
             };
 
             match x.lhs {
@@ -1877,7 +1878,7 @@ fn make_dot_expr(
                     };
                     Ok(Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos))
                 }
-                _ => unreachable!("invalid dot expression: {:?}", x.lhs),
+                expr => unreachable!("invalid dot expression: {:?}", expr),
             }
         }
         // lhs.nnn::func(...)
@@ -2162,7 +2163,7 @@ fn parse_custom_syntax(
                     segments.push(keyword.clone().into());
                     tokens.push(keyword);
                 }
-                stmt => unreachable!("expecting Stmt::Block, but gets {:?}", stmt),
+                stmt => unreachable!("Stmt::Block expected but gets {:?}", stmt),
             },
             CUSTOM_SYNTAX_MARKER_BOOL => match input.next().expect(NEVER_ENDS) {
                 (b @ Token::True, pos) | (b @ Token::False, pos) => {
@@ -2338,7 +2339,7 @@ fn parse_while_loop(
             (expr, pos)
         }
         (Token::Loop, pos) => (Expr::Unit(Position::NONE), pos),
-        _ => unreachable!(),
+        token => unreachable!("Token::While or Token::Loop expected but gets {:?}", token),
     };
     settings.pos = token_pos;
     settings.is_breakable = true;
@@ -2789,7 +2790,7 @@ fn parse_stmt(
             }
 
             if !crate::tokenizer::is_doc_comment(comment) {
-                unreachable!("expecting doc-comment, but gets {:?}", comment);
+                unreachable!("doc-comment expected but gets {:?}", comment);
             }
 
             if !settings.is_global {
@@ -2806,7 +2807,7 @@ fn parse_stmt(
                         _ => return Err(PERR::WrongDocComment.into_err(comments_pos)),
                     }
                 }
-                _ => unreachable!(),
+                token => unreachable!("Token::Comment expected but gets {:?}", token),
             }
         }
 
@@ -2933,14 +2934,15 @@ fn parse_stmt(
             let (return_type, token_pos) = input
                 .next()
                 .map(|(token, pos)| {
-                    (
-                        match token {
-                            Token::Return => AST_OPTION_NONE,
-                            Token::Throw => AST_OPTION_BREAK_OUT,
-                            _ => unreachable!(),
-                        },
-                        pos,
-                    )
+                    let flags = match token {
+                        Token::Return => AST_OPTION_NONE,
+                        Token::Throw => AST_OPTION_BREAK_OUT,
+                        token => unreachable!(
+                            "Token::Return or Token::Throw expected but gets {:?}",
+                            token
+                        ),
+                    };
+                    (flags, pos)
                 })
                 .expect(NEVER_ENDS);
 

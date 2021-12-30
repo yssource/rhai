@@ -129,7 +129,7 @@ impl ChainArgument {
             Self::MethodCallArgs(Some(mut values), pos) => {
                 (values.iter_mut().map(std::mem::take).collect(), pos)
             }
-            _ => unreachable!("`MethodCallArgs` expected"),
+            x => unreachable!("ChainArgument::MethodCallArgs expected but gets {:?}", x),
         }
     }
     /// Return the [position][Position].
@@ -174,7 +174,7 @@ fn match_chaining_type(expr: &Expr) -> ChainType {
         Expr::Index(_, _, _) => ChainType::Indexing,
         #[cfg(not(feature = "no_object"))]
         Expr::Dot(_, _, _) => ChainType::Dotting,
-        _ => unreachable!("`expr` should only be `Index` or `Dot`, but got {:?}", expr),
+        expr => unreachable!("Expr::Index or Expr::Dot expected but gets {:?}", expr),
     }
 }
 
@@ -1226,7 +1226,7 @@ impl Engine {
                 #[cfg(feature = "no_module")]
                 (_, Some((_, _)), _) => unreachable!("qualified access under no_module"),
             },
-            _ => unreachable!("Expr::Variable expected, but gets {:?}", expr),
+            _ => unreachable!("Expr::Variable expected but gets {:?}", expr),
         }
     }
 
@@ -1258,7 +1258,7 @@ impl Engine {
             _ if state.always_search_scope => (0, expr.position()),
             Expr::Variable(Some(i), pos, _) => (i.get() as usize, *pos),
             Expr::Variable(None, pos, v) => (v.0.map(NonZeroUsize::get).unwrap_or(0), *pos),
-            _ => unreachable!("Expr::Variable expected, but gets {:?}", expr),
+            _ => unreachable!("Expr::Variable expected but gets {:?}", expr),
         };
 
         // Check the variable resolver, if any
@@ -1774,7 +1774,7 @@ impl Engine {
             Expr::Index(x, term, pos) => (x.as_ref(), ChainType::Indexing, *term, *pos),
             #[cfg(not(feature = "no_object"))]
             Expr::Dot(x, term, pos) => (x.as_ref(), ChainType::Dotting, *term, *pos),
-            _ => unreachable!("index or dot chain expected, but gets {:?}", expr),
+            expr => unreachable!("Expr::Index or Expr::Dot expected but gets {:?}", expr),
         };
 
         let idx_values = &mut StaticVec::new_const();
@@ -2123,7 +2123,7 @@ impl Engine {
                         )
                     }
                 } else {
-                    unreachable!("`Range` or `RangeInclusive`");
+                    unreachable!("Range or RangeInclusive expected but gets {:?}", idx);
                 };
 
                 let field_value = (*value & mask) >> shift;
@@ -2655,7 +2655,7 @@ impl Engine {
                 match lhs_expr {
                     // name op= rhs (handled above)
                     Expr::Variable(_, _, _) => {
-                        unreachable!("Expr::Variable case should already been handled")
+                        unreachable!("Expr::Variable case is already handled")
                     }
                     // idx_lhs[idx_expr] op= rhs
                     #[cfg(not(feature = "no_index"))]
