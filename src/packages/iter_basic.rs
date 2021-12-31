@@ -1,10 +1,12 @@
 use crate::plugin::*;
 use crate::types::dynamic::Variant;
 use crate::{def_package, ExclusiveRange, InclusiveRange, RhaiResultOf, INT};
-use std::iter::{ExactSizeIterator, FusedIterator};
-use std::ops::{Range, RangeInclusive};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
+use std::{
+    iter::{ExactSizeIterator, FusedIterator},
+    ops::{Range, RangeInclusive},
+};
 
 #[cfg(not(feature = "unchecked"))]
 use num_traits::{CheckedAdd as Add, CheckedSub as Sub};
@@ -159,12 +161,10 @@ impl Iterator for BitRange {
     type Item = bool;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let Self(value, mask, len) = *self;
-
-        if len == 0 {
+        if self.2 == 0 {
             None
         } else {
-            let r = (value & mask) != 0;
+            let r = (self.0 & self.1) != 0;
             self.1 <<= 1;
             self.2 -= 1;
             Some(r)
@@ -263,7 +263,6 @@ macro_rules! reg_range {
     ($lib:ident | $x:expr => $( $y:ty ),*) => {
         $(
             $lib.set_iterator::<Range<$y>>();
-            $lib.set_iterator::<RangeInclusive<$y>>();
             let _hash = $lib.set_native_fn($x, |from: $y, to: $y| Ok(from..to));
 
             #[cfg(feature = "metadata")]
@@ -272,6 +271,8 @@ macro_rules! reg_range {
                     concat!("to: ", stringify!($y)),
                     concat!("Iterator<Item=", stringify!($y), ">")
             ]);
+
+            $lib.set_iterator::<RangeInclusive<$y>>();
         )*
     };
     ($lib:ident | step $x:expr => $( $y:ty ),*) => {
@@ -450,7 +451,7 @@ def_package! {
             Ok(CharsStream::new(string, from, to - from))
         });
         #[cfg(feature = "metadata")]
-        lib.update_fn_metadata(_hash, &["string: &str", "range: Range", "Iterator<Item=char>"]);
+        lib.update_fn_metadata(_hash, &["string: &str", "range: Range<INT>", "Iterator<Item=char>"]);
 
         let _hash = lib.set_native_fn("chars", |string, range: InclusiveRange| {
             let from = INT::max(*range.start(), 0);
@@ -458,7 +459,7 @@ def_package! {
             Ok(CharsStream::new(string, from, to-from + 1))
         });
         #[cfg(feature = "metadata")]
-        lib.update_fn_metadata(_hash, &["string: &str", "range: RangeInclusive", "Iterator<Item=char>"]);
+        lib.update_fn_metadata(_hash, &["string: &str", "range: RangeInclusive<INT>", "Iterator<Item=char>"]);
 
         let _hash = lib.set_native_fn("chars", |string, from, len| Ok(CharsStream::new(string, from, len)));
         #[cfg(feature = "metadata")]
@@ -488,7 +489,7 @@ def_package! {
             BitRange::new(value, from, to - from)
         });
         #[cfg(feature = "metadata")]
-        lib.update_fn_metadata(_hash, &["value: INT", "range: Range", "Iterator<Item=bool>"]);
+        lib.update_fn_metadata(_hash, &["value: INT", "range: Range<INT>", "Iterator<Item=bool>"]);
 
         let _hash = lib.set_native_fn("bits", |value, range: InclusiveRange| {
             let from = INT::max(*range.start(), 0);
@@ -496,7 +497,7 @@ def_package! {
             BitRange::new(value, from, to - from + 1)
         });
         #[cfg(feature = "metadata")]
-        lib.update_fn_metadata(_hash, &["value: INT", "range: RangeInclusive", "Iterator<Item=bool>"]);
+        lib.update_fn_metadata(_hash, &["value: INT", "range: RangeInclusive<INT>", "Iterator<Item=bool>"]);
 
         let _hash = lib.set_native_fn("bits", BitRange::new);
         #[cfg(feature = "metadata")]
@@ -514,7 +515,7 @@ def_package! {
         {
             let _hash = lib.set_getter_fn("bits", |value: &mut INT| BitRange::new(*value, 0, INT::MAX) );
             #[cfg(feature = "metadata")]
-            lib.update_fn_metadata(_hash, &["value: &mut INT", "range: Range", "Iterator<Item=bool>"]);
+            lib.update_fn_metadata(_hash, &["value: &mut INT", "range: Range<INT>", "Iterator<Item=bool>"]);
         }
 
         combine_with_exported_module!(lib, "range", range_functions);
