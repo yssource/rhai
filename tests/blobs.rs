@@ -170,13 +170,30 @@ fn test_blobs_parse() -> Result<(), Box<EvalAltResult>> {
     );
 
     assert_eq!(
-        engine.eval::<Blob>(r#"let x = blob(16, 0); write(x, 0, 14, "hello, world!"); x"#)?,
+        engine.eval::<Blob>(r#"let x = blob(16, 0); write_ascii(x, 0, 14, "hello, world!"); x"#)?,
         "hello, world!\0\0\0".as_bytes()
     );
 
     assert_eq!(
-        engine.eval::<Blob>(r#"let x = blob(10, 0); write(x, 3, 5, "hello, world!"); x"#)?,
+        engine.eval::<Blob>(r#"let x = blob(10, 0); write_ascii(x, 3..8, "hello, world!"); x"#)?,
         "\0\0\0hello\0\0".as_bytes()
+    );
+
+    assert_eq!(
+        engine.eval::<Blob>(
+            r#"let x = blob(10, 0); write_ascii(x, 0..9, "❤ hello, ❤ world! ❤❤❤"); x"#
+        )?,
+        " hello,  \0".as_bytes()
+    );
+
+    assert_eq!(
+        engine.eval::<Blob>(r#"let x = blob(10, 0); write_utf8(x, 3..9, "❤❤❤❤"); x"#)?,
+        "\0\0\0\u{2764}\u{2764}\0".as_bytes()
+    );
+
+    assert_eq!(
+        engine.eval::<Blob>(r#"let x = blob(10, 0); write_utf8(x, 3..7, "❤❤❤❤"); x"#)?,
+        vec![0, 0, 0, 226, 157, 164, 226, 0, 0, 0]
     );
 
     Ok(())

@@ -645,8 +645,8 @@ pub mod blob_functions {
     pub fn write_be_float(blob: &mut Blob, start: INT, len: INT, value: FLOAT) {
         write_float(blob, start, len, value, false)
     }
-    #[rhai_fn(name = "write")]
-    pub fn write_string(blob: &mut Blob, start: INT, len: INT, string: &str) {
+    #[inline]
+    fn write_string(blob: &mut Blob, start: INT, len: INT, string: &str, ascii_only: bool) {
         if len <= 0 || blob.is_empty() || string.is_empty() {
             return;
         }
@@ -670,18 +670,52 @@ pub mod blob_functions {
 
         let len = usize::min(len, string.len());
 
-        blob[start..][..len].copy_from_slice(string[..len].as_bytes());
+        if ascii_only {
+            string
+                .chars()
+                .filter(char::is_ascii)
+                .take(len)
+                .map(|ch| ch as u8)
+                .enumerate()
+                .for_each(|(i, x)| blob[start + i] = x);
+        } else {
+            blob[start..][..len].copy_from_slice(&string.as_bytes()[..len]);
+        }
     }
-    #[rhai_fn(name = "write")]
-    pub fn write_string_range(blob: &mut Blob, range: ExclusiveRange, string: &str) {
+    #[rhai_fn(name = "write_utf8")]
+    pub fn write_utf8_string(blob: &mut Blob, start: INT, len: INT, string: &str) {
+        write_string(blob, start, len, string, false)
+    }
+    #[rhai_fn(name = "write_utf8")]
+    pub fn write_utf8_string_range(blob: &mut Blob, range: ExclusiveRange, string: &str) {
         let start = INT::max(range.start, 0);
         let end = INT::max(range.end, start);
-        write_string(blob, start, end - start, string)
+        write_string(blob, start, end - start, string, false)
     }
-    #[rhai_fn(name = "write")]
-    pub fn write_string_range_inclusive(blob: &mut Blob, range: InclusiveRange, string: &str) {
+    #[rhai_fn(name = "write_utf8")]
+    pub fn write_utf8_string_range_inclusive(blob: &mut Blob, range: InclusiveRange, string: &str) {
         let start = INT::max(*range.start(), 0);
         let end = INT::max(*range.end(), start);
-        write_string(blob, start, end - start + 1, string)
+        write_string(blob, start, end - start + 1, string, false)
+    }
+    #[rhai_fn(name = "write_ascii")]
+    pub fn write_ascii_string(blob: &mut Blob, start: INT, len: INT, string: &str) {
+        write_string(blob, start, len, string, true)
+    }
+    #[rhai_fn(name = "write_ascii")]
+    pub fn write_ascii_string_range(blob: &mut Blob, range: ExclusiveRange, string: &str) {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        write_string(blob, start, end - start, string, true)
+    }
+    #[rhai_fn(name = "write_ascii")]
+    pub fn write_ascii_string_range_inclusive(
+        blob: &mut Blob,
+        range: InclusiveRange,
+        string: &str,
+    ) {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        write_string(blob, start, end - start + 1, string, true)
     }
 }
