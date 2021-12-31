@@ -105,19 +105,19 @@ pub type INT = i64;
 #[cfg(feature = "only_i32")]
 pub type INT = i32;
 
-/// The system base integer type. It is defined as [`u64`].
+/// The unsigned system base integer type. It is defined as [`u64`].
 ///
 /// If the `only_i32` feature is enabled, this will be [`u32`] instead.
 #[cfg(not(feature = "only_i32"))]
 #[allow(non_camel_case_types)]
-type INT_BASE = u64;
-/// The system integer base type.
+type UNSIGNED_INT = u64;
+/// The unsigned system integer base type.
 /// It is defined as [`u32`] since the `only_i32` feature is used.
 ///
 /// If the `only_i32` feature is not used, this will be `u64` instead.
 #[cfg(feature = "only_i32")]
 #[allow(non_camel_case_types)]
-type INT_BASE = u32;
+type UNSIGNED_INT = u32;
 
 /// The system floating-point type. It is defined as [`f64`].
 /// Not available under `no_float`.
@@ -136,8 +136,11 @@ pub type FLOAT = f64;
 #[cfg(feature = "f32_float")]
 pub type FLOAT = f32;
 
-pub type ExclusiveRange = std::ops::Range<INT>;
-pub type InclusiveRange = std::ops::RangeInclusive<INT>;
+/// An exclusive integer range.
+type ExclusiveRange = std::ops::Range<INT>;
+
+/// An inclusive integer range.
+type InclusiveRange = std::ops::RangeInclusive<INT>;
 
 pub use api::custom_syntax::Expression;
 pub use ast::{FnAccess, AST};
@@ -192,8 +195,11 @@ pub type Array = Vec<Dynamic>;
 #[cfg(not(feature = "no_index"))]
 pub type Blob = Vec<u8>;
 
-/// Hash map of [`Dynamic`] values with [`SmartString`](https://crates.io/crates/smartstring) keys.
+/// A dictionary of [`Dynamic`] values with string keys.
 /// Not available under `no_object`.
+///
+/// [`SmartString`](https://crates.io/crates/smartstring) is used as the key type because most
+/// property names are ASCII and short, fewer than 23 characters, so they can be stored inline.
 #[cfg(not(feature = "no_object"))]
 pub type Map = std::collections::BTreeMap<Identifier, Dynamic>;
 

@@ -353,7 +353,7 @@ impl Engine {
     ///
     /// * `Ok(None)`: parsing complete and there are no more symbols to match.
     /// * `Ok(Some(symbol))`: the next symbol to match, which can also be `$expr$`, `$ident$` or `$block$`.
-    /// * `Err(ParseError)`: error that is reflected back to the [`Engine`], normally `ParseError(ParseErrorType::BadInput(LexError::ImproperSymbol(message)), Position::NONE)` to indicate a syntax error, but it can be any [`ParseError`].
+    /// * `Err(ParseError)`: error that is reflected back to the [`Engine`], normally `ParseError(ParseErrorType::BadInput(LexError::ImproperSymbol(message)), Position::NONE)` to indicate a syntax error, but it can be any [`ParseError`][crate::ParseError].
     pub fn register_custom_syntax_raw(
         &mut self,
         key: impl Into<Identifier>,

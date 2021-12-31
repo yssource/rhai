@@ -8,9 +8,8 @@ use std::prelude::v1::*;
 /// _(internals)_ A factory of identifiers from text strings.
 /// Exported under the `internals` feature only.
 ///
-/// Normal identifiers are not interned since [`SmartString`][crate::SmartString] and thus copying
-/// is relatively fast , this just returns a copy
-/// because most identifiers in Rhai are short and ASCII-based.
+/// Normal identifiers are not interned since they use `SmartString` because most identifiers in
+/// Rhai are short and ASCII-based. Thus copying is relatively fast.
 ///
 /// Property getters and setters are interned separately.
 #[derive(Debug, Clone, Default, Hash)]
@@ -24,7 +23,7 @@ pub struct StringsInterner {
 }
 
 impl StringsInterner {
-    /// Create a new [`IdentifierBuilder`].
+    /// Create a new [`StringsInterner`].
     #[inline]
     #[must_use]
     pub fn new() -> Self {
