@@ -373,6 +373,7 @@ fn test_for_module_iterator() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
+#[cfg(not(feature = "no_index"))]
 #[cfg(not(feature = "no_closure"))]
 fn test_for_capture() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
@@ -389,7 +390,7 @@ fn test_for_capture() -> Result<(), Box<EvalAltResult>> {
                 let sum = 0;
 
                 for fp in a {
-                    sum += fp.call();
+                    sum += call(fp);
                 }
 
                 sum
