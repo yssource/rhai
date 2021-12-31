@@ -2892,16 +2892,18 @@ impl Engine {
                 if let Some(func) = func {
                     // Add the loop variables
                     let orig_scope_len = scope.len();
-                    let counter_index = counter.as_ref().map(|Ident { name, .. }| {
-                        scope.push(unsafe_cast_var_name_to_lifetime(name), 0 as INT);
+                    let counter_index = if let Some(counter) = counter {
+                        scope.push(unsafe_cast_var_name_to_lifetime(&counter.name), 0 as INT);
                         scope.len() - 1
-                    });
+                    } else {
+                        usize::MAX
+                    };
                     scope.push(unsafe_cast_var_name_to_lifetime(name), ());
                     let index = scope.len() - 1;
 
                     for (x, iter_value) in func(iter_obj).enumerate() {
                         // Increment counter
-                        if let Some(c) = counter_index {
+                        if counter_index < usize::MAX {
                             #[cfg(not(feature = "unchecked"))]
                             if x > INT::MAX as usize {
                                 return Err(ERR::ErrorArithmetic(
@@ -2911,26 +2913,37 @@ impl Engine {
                                 .into());
                             }
 
-                            let mut counter_var = scope
-                                .get_mut_by_index(c)
-                                .write_lock::<INT>()
-                                .expect("`INT`");
-                            *counter_var = x as INT;
+                            let index_value = (x as INT).into();
+
+                            #[cfg(not(feature = "no_closure"))]
+                            {
+                                let index_var = scope.get_mut_by_index(counter_index);
+                                if index_var.is_shared() {
+                                    *index_var.write_lock().expect("`Dynamic`") = index_value;
+                                } else {
+                                    *index_var = index_value;
+                                }
+                            }
+                            #[cfg(feature = "no_closure")]
+                            {
+                                *scope.get_mut_by_index(counter_index) = index_value;
+                            }
                         }
 
-                        let loop_var = scope.get_mut_by_index(index);
                         let value = iter_value.flatten();
 
                         #[cfg(not(feature = "no_closure"))]
-                        let loop_var_is_shared = loop_var.is_shared();
+                        {
+                            let loop_var = scope.get_mut_by_index(index);
+                            if loop_var.is_shared() {
+                                *loop_var.write_lock().expect("`Dynamic`") = value;
+                            } else {
+                                *loop_var = value;
+                            }
+                        }
                         #[cfg(feature = "no_closure")]
-                        let loop_var_is_shared = false;
-
-                        if loop_var_is_shared {
-                            let mut value_ref = loop_var.write_lock().expect("`Dynamic`");
-                            *value_ref = value;
-                        } else {
-                            *loop_var = value;
+                        {
+                            *scope.get_mut_by_index(index) = value;
                         }
 
                         #[cfg(not(feature = "unchecked"))]
