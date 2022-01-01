@@ -90,7 +90,7 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized, S: AsRef<str> + 'a + ?Sized>
         Self {
             engine: value.0,
             fn_name: value.1.as_ref(),
-            source: value.2.map(|v| v.as_ref()),
+            source: value.2.map(S::as_ref),
             global: Some(value.3),
             lib: value.4.as_ref(),
             pos: value.5,
@@ -156,7 +156,7 @@ impl<'a> NativeCallContext<'a> {
         Self {
             engine,
             fn_name: fn_name.as_ref(),
-            source: source.map(|v| v.as_ref()),
+            source: source.map(S::as_ref),
             global: Some(global),
             lib,
             pos,

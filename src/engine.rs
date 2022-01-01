@@ -2,6 +2,7 @@
 
 use crate::api::custom_syntax::CustomSyntax;
 use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
+use crate::func::call::FnResolutionCache;
 use crate::func::native::{OnDebugCallback, OnParseTokenCallback, OnPrintCallback, OnVarCallback};
 use crate::func::{get_hasher, CallableFunction, IteratorFn};
 use crate::module::Namespace;
@@ -507,7 +508,8 @@ pub struct GlobalRuntimeState {
     /// Stack of imported [modules][Module].
     modules: StaticVec<Shared<Module>>,
     /// Source of the current context.
-    pub source: Option<Identifier>,
+    /// No source if the string is empty.
+    pub source: Identifier,
     /// Number of operations performed.
     pub num_operations: u64,
     /// Number of modules loaded.
@@ -539,7 +541,7 @@ impl GlobalRuntimeState {
         Self {
             keys: StaticVec::new_const(),
             modules: StaticVec::new_const(),
-            source: None,
+            source: Identifier::new_const(),
             num_operations: 0,
             num_modules_loaded: 0,
             #[cfg(not(feature = "no_module"))]
@@ -629,11 +631,11 @@ impl GlobalRuntimeState {
     /// Get the specified function via its hash key from the stack of globally-imported [modules][Module].
     #[inline]
     #[must_use]
-    pub fn get_fn(&self, hash: u64) -> Option<(&CallableFunction, Option<&Identifier>)> {
+    pub fn get_fn(&self, hash: u64) -> Option<(&CallableFunction, Option<&str>)> {
         self.modules
             .iter()
             .rev()
-            .find_map(|m| m.get_qualified_fn(hash).map(|f| (f, m.id_raw())))
+            .find_map(|m| m.get_qualified_fn(hash).map(|f| (f, m.id())))
     }
     /// Does the specified [`TypeId`][std::any::TypeId] iterator exist in the stack of
     /// globally-imported [modules][Module]?
@@ -746,20 +748,6 @@ impl fmt::Debug for GlobalRuntimeState {
     }
 }
 
-/// _(internals)_ An entry in a function resolution cache.
-/// Exported under the `internals` feature only.
-#[derive(Debug, Clone)]
-pub struct FnResolutionCacheEntry {
-    /// Function.
-    pub func: CallableFunction,
-    /// Optional source.
-    pub source: Option<Box<str>>,
-}
-
-/// _(internals)_ A function resolution cache.
-/// Exported under the `internals` feature only.
-pub type FnResolutionCache = BTreeMap<u64, Option<Box<FnResolutionCacheEntry>>>;
-
 /// _(internals)_ A type that holds all the current states of the [`Engine`].
 /// Exported under the `internals` feature only.
 #[derive(Debug, Clone)]
@@ -844,7 +832,11 @@ impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, 'pt> {
     #[inline(always)]
     #[must_use]
     pub fn source(&self) -> Option<&str> {
-        self.global.source.as_ref().map(|s| s.as_str())
+        if self.global.source.is_empty() {
+            None
+        } else {
+            Some(&self.global.source)
+        }
     }
     /// The current [`Scope`].
     #[inline(always)]
@@ -3041,8 +3033,8 @@ impl Engine {
 
                                 err_map.insert("message".into(), err.to_string().into());
 
-                                if let Some(ref source) = global.source {
-                                    err_map.insert("source".into(), source.as_str().into());
+                                if !global.source.is_empty() {
+                                    err_map.insert("source".into(), global.source.clone().into());
                                 }
 
                                 if err_pos.is_none() {
@@ -3174,7 +3166,11 @@ impl Engine {
                 {
                     use crate::ModuleResolver;
 
-                    let source = global.source.as_ref().map(|s| s.as_str());
+                    let source = if global.source.is_empty() {
+                        None
+                    } else {
+                        Some(global.source.as_str())
+                    };
                     let path_pos = expr.position();
 
                     let module = global

@@ -131,7 +131,8 @@ pub fn calc_native_fn_hash(
 #[derive(Clone)]
 pub struct Module {
     /// ID identifying the module.
-    id: Option<Identifier>,
+    /// No ID if string is empty.
+    id: Identifier,
     /// Is this module internal?
     pub(crate) internal: bool,
     /// Is this module part of a standard library?
@@ -170,8 +171,9 @@ impl fmt::Debug for Module {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut d = f.debug_struct("Module");
 
-        self.id.as_ref().map(|id| d.field("id", id));
-
+        if !self.id.is_empty() {
+            d.field("id", &self.id);
+        }
         if !self.modules.is_empty() {
             d.field(
                 "modules",
@@ -241,7 +243,7 @@ impl Module {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            id: None,
+            id: Identifier::new_const(),
             internal: false,
             standard: false,
             modules: BTreeMap::new(),
@@ -270,17 +272,23 @@ impl Module {
     #[inline]
     #[must_use]
     pub fn id(&self) -> Option<&str> {
-        self.id_raw().map(|s| s.as_str())
+        if self.id_raw().is_empty() {
+            None
+        } else {
+            Some(self.id_raw())
+        }
     }
 
     /// Get the ID of the [`Module`] as an [`Identifier`], if any.
     #[inline(always)]
     #[must_use]
-    pub(crate) const fn id_raw(&self) -> Option<&Identifier> {
-        self.id.as_ref()
+    pub(crate) const fn id_raw(&self) -> &Identifier {
+        &self.id
     }
 
     /// Set the ID of the [`Module`].
+    ///
+    /// If the string is empty, it is equivalent to clearing the ID.
     ///
     /// # Example
     ///
@@ -292,7 +300,7 @@ impl Module {
     /// ```
     #[inline(always)]
     pub fn set_id(&mut self, id: impl Into<Identifier>) -> &mut Self {
-        self.id = Some(id.into());
+        self.id = id.into();
         self
     }
     /// Clear the ID of the [`Module`].
@@ -309,7 +317,7 @@ impl Module {
     /// ```
     #[inline(always)]
     pub fn clear_id(&mut self) -> &mut Self {
-        self.id = None;
+        self.id.clear();
         self
     }
 
@@ -1616,11 +1624,7 @@ impl Module {
                 });
         }
 
-        if let Some(s) = ast.source_raw() {
-            module.set_id(s.clone());
-        } else {
-            module.clear_id();
-        }
+        module.set_id(ast.source_raw().clone());
 
         module.build_index();
 

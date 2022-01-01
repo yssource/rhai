@@ -47,9 +47,8 @@ impl Engine {
                 fn_def
                     .lib
                     .as_ref()
-                    .and_then(|m| m.id().map(|id| id.to_string()))
-                    .or_else(|| global.source.as_ref().map(|s| s.to_string()))
-                    .unwrap_or_default(),
+                    .and_then(|m| m.id().map(str::to_string))
+                    .unwrap_or_else(|| global.source.to_string()),
                 err,
                 pos,
             )

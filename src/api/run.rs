@@ -46,9 +46,8 @@ impl Engine {
     pub fn run_ast_with_scope(&self, scope: &mut Scope, ast: &AST) -> RhaiResultOf<()> {
         let global = &mut GlobalRuntimeState::new();
         let mut state = EvalState::new();
-        if ast.source_raw().is_some() {
-            global.source = ast.source_raw().cloned();
-        }
+        global.source = ast.source_raw().clone();
+
         #[cfg(not(feature = "no_module"))]
         {
             global.embedded_module_resolver = ast.resolver().cloned();

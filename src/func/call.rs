@@ -6,9 +6,8 @@ use super::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
 use crate::api::default_limits::MAX_DYNAMIC_PARAMETERS;
 use crate::ast::{Expr, FnCallHashes, Stmt};
 use crate::engine::{
-    EvalState, FnResolutionCacheEntry, GlobalRuntimeState, KEYWORD_DEBUG, KEYWORD_EVAL,
-    KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT,
-    KEYWORD_TYPE_OF,
+    EvalState, GlobalRuntimeState, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
+    KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
 use crate::module::Namespace;
 use crate::tokenizer::Token;
@@ -20,6 +19,7 @@ use crate::{
 use std::prelude::v1::*;
 use std::{
     any::{type_name, TypeId},
+    collections::BTreeMap,
     convert::TryFrom,
     mem,
 };
@@ -125,6 +125,24 @@ pub fn ensure_no_data_race(
     Ok(())
 }
 
+/// _(internals)_ An entry in a function resolution cache.
+/// Exported under the `internals` feature only.
+#[derive(Debug, Clone)]
+pub struct FnResolutionCacheEntry {
+    /// Function.
+    pub func: CallableFunction,
+    /// Optional source.
+    /// No source if the string is empty.
+    pub source: Identifier,
+}
+
+/// _(internals)_ A function resolution cache.
+/// Exported under the `internals` feature only.
+///
+/// [`FnResolutionCacheEntry`] is [`Box`]ed in order to pack as many entries inside a single B-Tree
+/// level as possible.
+pub type FnResolutionCache = BTreeMap<u64, Option<Box<FnResolutionCacheEntry>>>;
+
 impl Engine {
     /// Generate the signature for a function call.
     #[inline]
@@ -206,14 +224,14 @@ impl Engine {
                         .find_map(|m| {
                             m.get_fn(hash).cloned().map(|func| FnResolutionCacheEntry {
                                 func,
-                                source: m.id_raw().map(|s| s.to_string().into_boxed_str()),
+                                source: m.id_raw().clone(),
                             })
                         })
                         .or_else(|| {
                             self.global_modules.iter().find_map(|m| {
                                 m.get_fn(hash).cloned().map(|func| FnResolutionCacheEntry {
                                     func,
-                                    source: m.id_raw().map(|s| s.to_string().into_boxed_str()),
+                                    source: m.id_raw().clone(),
                                 })
                             })
                         })
@@ -222,7 +240,8 @@ impl Engine {
                                 .get_fn(hash)
                                 .map(|(func, source)| FnResolutionCacheEntry {
                                     func: func.clone(),
-                                    source: source.map(|s| s.to_string().into_boxed_str()),
+                                    source: source
+                                        .map_or_else(|| Identifier::new_const(), Into::into),
                                 })
                         })
                         .or_else(|| {
@@ -230,7 +249,7 @@ impl Engine {
                                 m.get_qualified_fn(hash).cloned().map(|func| {
                                     FnResolutionCacheEntry {
                                         func,
-                                        source: m.id_raw().map(|s| s.to_string().into_boxed_str()),
+                                        source: m.id_raw().clone(),
                                     }
                                 })
                             })
@@ -253,7 +272,7 @@ impl Engine {
                                             func: CallableFunction::from_method(
                                                 Box::new(f) as Box<FnAny>
                                             ),
-                                            source: None,
+                                            source: Identifier::new_const(),
                                         }
                                     })
                                 } else {
@@ -265,7 +284,7 @@ impl Engine {
                                             func: CallableFunction::from_method(
                                                 Box::new(f) as Box<FnAny>
                                             ),
-                                            source: None,
+                                            source: Identifier::new_const(),
                                         })
                                 }
                                 .map(Box::new)
@@ -353,10 +372,15 @@ impl Engine {
             }
 
             // Run external function
-            let source = source
-                .as_ref()
-                .map(|s| &**s)
-                .or_else(|| parent_source.as_ref().map(|s| s.as_str()));
+            let source = if source.is_empty() {
+                if parent_source.is_empty() {
+                    None
+                } else {
+                    Some(parent_source.as_str())
+                }
+            } else {
+                Some(source.as_str())
+            };
 
             let context = (self, name, source, &*global, lib, pos).into();
 
@@ -400,7 +424,11 @@ impl Engine {
                                 pos,
                             )
                         })?;
-                        let source = global.source.as_ref().map(|s| s.as_str());
+                        let source = if global.source.is_empty() {
+                            None
+                        } else {
+                            Some(global.source.as_str())
+                        };
                         (debug(&text, source, pos).into(), false)
                     } else {
                         (Dynamic::UNIT, false)
@@ -572,7 +600,7 @@ impl Engine {
 
         // Script-defined function call?
         #[cfg(not(feature = "no_function"))]
-        if let Some(FnResolutionCacheEntry { func, source }) = self
+        if let Some(FnResolutionCacheEntry { func, mut source }) = self
             .resolve_fn(
                 global,
                 state,
@@ -603,12 +631,11 @@ impl Engine {
                 }
             };
 
+            mem::swap(&mut global.source, &mut source);
+
             let result = if _is_method_call {
                 // Method call of script function - map first argument to `this`
                 let (first_arg, rest_args) = args.split_first_mut().expect("not empty");
-
-                let orig_source = global.source.take();
-                global.source = source.map(Into::into);
 
                 let level = _level + 1;
 
@@ -625,9 +652,6 @@ impl Engine {
                     level,
                 );
 
-                // Restore the original source
-                global.source = orig_source;
-
                 result?
             } else {
                 // Normal call of script function
@@ -641,17 +665,11 @@ impl Engine {
                         .change_first_arg_to_copy(args);
                 }
 
-                let orig_source = global.source.take();
-                global.source = source.map(Into::into);
-
                 let level = _level + 1;
 
                 let result = self.call_script_fn(
                     scope, global, state, lib, &mut None, func, args, pos, true, level,
                 );
-
-                // Restore the original source
-                global.source = orig_source;
 
                 // Restore the original reference
                 if let Some(bk) = backup {
@@ -660,6 +678,9 @@ impl Engine {
 
                 result?
             };
+
+            // Restore the original source
+            mem::swap(&mut global.source, &mut source);
 
             return Ok((result, false));
         }
@@ -1058,11 +1079,7 @@ impl Engine {
                 return result.map_err(|err| {
                     ERR::ErrorInFunctionCall(
                         KEYWORD_EVAL.to_string(),
-                        global
-                            .source
-                            .as_ref()
-                            .map(Identifier::to_string)
-                            .unwrap_or_default(),
+                        global.source.to_string(),
                         err,
                         pos,
                     )
@@ -1265,7 +1282,7 @@ impl Engine {
                 } else {
                     let new_scope = &mut Scope::new();
 
-                    let mut source = module.id_raw().cloned();
+                    let mut source = module.id_raw().clone();
                     mem::swap(&mut global.source, &mut source);
 
                     let level = level + 1;

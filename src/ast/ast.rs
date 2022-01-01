@@ -17,7 +17,8 @@ use std::{
 #[derive(Debug, Clone)]
 pub struct AST {
     /// Source of the [`AST`].
-    source: Option<Identifier>,
+    /// No source if string is empty.
+    source: Identifier,
     /// Global statements.
     body: StmtBlock,
     /// Script-defined functions.
@@ -45,7 +46,7 @@ impl AST {
         #[cfg(not(feature = "no_function"))] functions: impl Into<crate::Shared<crate::Module>>,
     ) -> Self {
         Self {
-            source: None,
+            source: Identifier::new_const(),
             body: StmtBlock::new(statements, Position::NONE),
             #[cfg(not(feature = "no_function"))]
             functions: functions.into(),
@@ -63,7 +64,7 @@ impl AST {
         #[cfg(not(feature = "no_function"))] functions: impl Into<crate::Shared<crate::Module>>,
     ) -> Self {
         Self {
-            source: None,
+            source: Identifier::new_const(),
             body: StmtBlock::new(statements, Position::NONE),
             #[cfg(not(feature = "no_function"))]
             functions: functions.into(),
@@ -111,7 +112,7 @@ impl AST {
     #[must_use]
     pub fn empty() -> Self {
         Self {
-            source: None,
+            source: Identifier::new_const(),
             body: StmtBlock::NONE,
             #[cfg(not(feature = "no_function"))]
             functions: crate::Module::new().into(),
@@ -123,13 +124,17 @@ impl AST {
     #[inline(always)]
     #[must_use]
     pub fn source(&self) -> Option<&str> {
-        self.source.as_ref().map(|s| s.as_str())
+        if self.source.is_empty() {
+            None
+        } else {
+            Some(&self.source)
+        }
     }
     /// Get a reference to the source.
     #[inline(always)]
     #[must_use]
-    pub(crate) fn source_raw(&self) -> Option<&Identifier> {
-        self.source.as_ref()
+    pub(crate) fn source_raw(&self) -> &Identifier {
+        &self.source
     }
     /// Set the source.
     #[inline]
@@ -139,13 +144,13 @@ impl AST {
         crate::Shared::get_mut(&mut self.functions)
             .as_mut()
             .map(|m| m.set_id(source.clone()));
-        self.source = Some(source);
+        self.source = source;
         self
     }
     /// Clear the source.
     #[inline(always)]
     pub fn clear_source(&mut self) -> &mut Self {
-        self.source = None;
+        self.source.clear();
         self
     }
     /// Get the statements.
@@ -467,8 +472,6 @@ impl AST {
             (true, true) => StmtBlock::NONE,
         };
 
-        let source = other.source.clone().or_else(|| self.source.clone());
-
         #[cfg(not(feature = "no_function"))]
         let functions = {
             let mut functions = self.functions.as_ref().clone();
@@ -476,12 +479,12 @@ impl AST {
             functions
         };
 
-        if let Some(source) = source {
+        if !other.source.is_empty() {
             Self::new_with_source(
                 merged,
                 #[cfg(not(feature = "no_function"))]
                 functions,
-                source,
+                other.source.clone(),
             )
         } else {
             Self::new(

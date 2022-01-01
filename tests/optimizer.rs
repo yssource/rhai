@@ -80,21 +80,21 @@ fn test_optimizer_parse() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         format!("{:?}", ast),
-        "AST { source: None, body: Block[Expr(123 @ 1:53)], functions: Module, resolver: None }"
+        "AST { source: \"\", body: Block[Expr(123 @ 1:53)], functions: Module, resolver: None }"
     );
 
     let ast = engine.compile("const DECISION = false; if DECISION { 42 } else { 123 }")?;
 
     assert_eq!(
         format!("{:?}", ast),
-        r#"AST { source: None, body: Block[Var(false @ 1:18, "DECISION" @ 1:7, (Constant), 1:1), Expr(123 @ 1:51)], functions: Module, resolver: None }"#
+        r#"AST { source: "", body: Block[Var(false @ 1:18, "DECISION" @ 1:7, (Constant), 1:1), Expr(123 @ 1:51)], functions: Module, resolver: None }"#
     );
 
     let ast = engine.compile("if 1 == 2 { 42 }")?;
 
     assert_eq!(
         format!("{:?}", ast),
-        "AST { source: None, body: Block[], functions: Module, resolver: None }"
+        "AST { source: \"\", body: Block[], functions: Module, resolver: None }"
     );
 
     engine.set_optimization_level(OptimizationLevel::Full);
@@ -103,7 +103,7 @@ fn test_optimizer_parse() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         format!("{:?}", ast),
-        "AST { source: None, body: Block[Expr(42 @ 1:1)], functions: Module, resolver: None }"
+        "AST { source: \"\", body: Block[Expr(42 @ 1:1)], functions: Module, resolver: None }"
     );
 
     Ok(())
