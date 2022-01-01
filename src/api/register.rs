@@ -79,7 +79,7 @@ impl Engine {
             name,
             FnNamespace::Global,
             FnAccess::Public,
-            param_type_names.as_ref().map(|v| v.as_ref()),
+            param_type_names.as_ref().map(<_>::as_ref),
             &param_types,
             func.into_callable_function(),
         );
@@ -137,7 +137,7 @@ impl Engine {
             name,
             FnNamespace::Global,
             FnAccess::Public,
-            param_type_names.as_ref().map(|v| v.as_ref()),
+            param_type_names.as_ref().map(<_>::as_ref),
             &param_types,
             func.into_callable_function(),
         );

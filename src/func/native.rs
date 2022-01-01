@@ -156,7 +156,7 @@ impl<'a> NativeCallContext<'a> {
         Self {
             engine,
             fn_name: fn_name.as_ref(),
-            source: source.map(S::as_ref),
+            source: source.map(<_>::as_ref),
             global: Some(global),
             lib,
             pos,

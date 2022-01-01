@@ -225,7 +225,7 @@ impl FileModuleResolver {
         path: impl AsRef<str>,
         source_path: Option<impl AsRef<str>>,
     ) -> Option<Shared<Module>> {
-        let file_path = self.get_file_path(path.as_ref(), source_path.as_ref().map(|v| v.as_ref()));
+        let file_path = self.get_file_path(path.as_ref(), source_path.as_ref().map(<_>::as_ref));
 
         shared_write_lock(&self.cache)
             .remove_entry(&file_path)

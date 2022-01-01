@@ -2623,7 +2623,7 @@ fn parse_export(
                 pos: id_pos,
             },
             Ident {
-                name: state.get_identifier("", rename.as_ref().map_or("", |s| s.as_ref())),
+                name: state.get_identifier("", rename.as_ref().map_or("", <_>::as_ref)),
                 pos: rename_pos,
             },
         ));

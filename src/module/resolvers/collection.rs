@@ -77,7 +77,7 @@ impl ModuleResolversCollection {
     /// Get an iterator of all the [module resolvers][ModuleResolver].
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = &dyn ModuleResolver> {
-        self.0.iter().map(|v| v.as_ref())
+        self.0.iter().map(<_>::as_ref)
     }
     /// Remove all [module resolvers][ModuleResolver].
     #[inline(always)]
