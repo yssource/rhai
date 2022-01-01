@@ -144,9 +144,7 @@ type InclusiveRange = std::ops::RangeInclusive<INT>;
 
 pub use api::custom_syntax::Expression;
 pub use ast::{FnAccess, AST};
-pub use engine::{
-    Engine, EvalContext, OP_CONTAINS, OP_EQUALS, OP_EXCLUSIVE_RANGE, OP_INCLUSIVE_RANGE,
-};
+pub use engine::{Engine, EvalContext, OP_CONTAINS, OP_EQUALS};
 pub use func::{NativeCallContext, RegisterNativeFunction};
 pub use module::{FnNamespace, Module};
 pub use tokenizer::Position;

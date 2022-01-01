@@ -61,7 +61,7 @@ pub trait FuncArgs {
 impl<T: Variant + Clone> FuncArgs for Vec<T> {
     #[inline]
     fn parse<ARGS: Extend<Dynamic>>(self, args: &mut ARGS) {
-        args.extend(self.into_iter().map(Variant::into_dynamic));
+        args.extend(self.into_iter().map(Dynamic::from));
     }
 }
 
@@ -75,7 +75,7 @@ macro_rules! impl_args {
             #[allow(unused_variables)]
             fn parse<ARGS: Extend<Dynamic>>(self, args: &mut ARGS) {
                 let ($($p,)*) = self;
-                $(args.extend(Some($p.into_dynamic()));)*
+                $(args.extend(Some(Dynamic::from($p)));)*
             }
         }
 

@@ -1026,7 +1026,7 @@ pub trait InputStream {
     fn peek_next(&mut self) -> Option<char>;
 }
 
-/// _(internals)_ Parse a string literal ended by `termination_char`.
+/// _(internals)_ Parse a string literal ended by a specified termination character.
 /// Exported under the `internals` feature only.
 ///
 /// Returns the parsed string and a boolean indicating whether the string is
@@ -1034,7 +1034,7 @@ pub trait InputStream {
 ///
 /// # Returns
 ///
-/// |Type                             |Return Value                |`state.is_within_text_terminated_by`|
+/// | Type                            | Return Value               |`state.is_within_text_terminated_by`|
 /// |---------------------------------|:--------------------------:|:----------------------------------:|
 /// |`"hello"`                        |`StringConstant("hello")`   |`None`                              |
 /// |`"hello`_{LF}_ or _{EOF}_        |`LexError`                  |`None`                              |
@@ -1061,8 +1061,8 @@ pub fn parse_string_literal(
     state: &mut TokenizeState,
     pos: &mut Position,
     termination_char: char,
-    continuation: bool,
     verbatim: bool,
+    allow_line_continuation: bool,
     allow_interpolation: bool,
 ) -> Result<(Box<str>, bool), (LexError, Position)> {
     let mut result = String::with_capacity(12);
@@ -1091,7 +1091,7 @@ pub fn parse_string_literal(
                 pos.advance();
                 break;
             }
-            None if continuation && !escape.is_empty() => {
+            None if allow_line_continuation && !escape.is_empty() => {
                 assert_eq!(escape, "\\", "unexpected escape {} at end of line", escape);
                 pos.advance();
                 break;
@@ -1211,7 +1211,7 @@ pub fn parse_string_literal(
             }
 
             // Line continuation
-            '\n' if continuation && !escape.is_empty() => {
+            '\n' if allow_line_continuation && !escape.is_empty() => {
                 assert_eq!(escape, "\\", "unexpected escape {} at end of line", escape);
                 escape.clear();
                 pos.new_line();
@@ -1319,7 +1319,7 @@ fn scan_block_comment(
     level
 }
 
-/// _(internals)_ Get the next token from the `stream`.
+/// _(internals)_ Get the next token from the input stream.
 /// Exported under the `internals` feature only.
 #[inline]
 #[must_use]
@@ -1400,7 +1400,7 @@ fn get_next_token_inner(
     if let Some(ch) = state.is_within_text_terminated_by.take() {
         let start_pos = *pos;
 
-        return parse_string_literal(stream, state, pos, ch, false, true, true).map_or_else(
+        return parse_string_literal(stream, state, pos, ch, true, false, true).map_or_else(
             |(err, err_pos)| Some((Token::LexError(err), err_pos)),
             |(result, interpolated)| {
                 if interpolated {
@@ -1584,7 +1584,7 @@ fn get_next_token_inner(
 
             // " - string literal
             ('"', _) => {
-                return parse_string_literal(stream, state, pos, c, true, false, false)
+                return parse_string_literal(stream, state, pos, c, false, true, false)
                     .map_or_else(
                         |(err, err_pos)| Some((Token::LexError(err), err_pos)),
                         |(result, _)| Some((Token::StringConstant(result), start_pos)),
@@ -1611,7 +1611,7 @@ fn get_next_token_inner(
                     _ => (),
                 }
 
-                return parse_string_literal(stream, state, pos, c, false, true, true).map_or_else(
+                return parse_string_literal(stream, state, pos, c, true, false, true).map_or_else(
                     |(err, err_pos)| Some((Token::LexError(err), err_pos)),
                     |(result, interpolated)| {
                         if interpolated {

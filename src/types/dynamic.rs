@@ -52,7 +52,7 @@ pub trait Variant: Any + private::Sealed {
     #[must_use]
     fn as_mut_any(&mut self) -> &mut dyn Any;
 
-    /// Convert this [`Variant`] trait object to an [`Any`] trait object.
+    /// Convert this [`Variant`] trait object to [`Box<dyn Any>`].
     #[must_use]
     fn as_box_any(self: Box<Self>) -> Box<dyn Any>;
 
@@ -60,13 +60,9 @@ pub trait Variant: Any + private::Sealed {
     #[must_use]
     fn type_name(&self) -> &'static str;
 
-    /// Convert into [`Dynamic`].
+    /// Clone this [`Variant`] trait object.
     #[must_use]
-    fn into_dynamic(self) -> Dynamic;
-
-    /// Clone into [`Dynamic`].
-    #[must_use]
-    fn clone_into_dynamic(&self) -> Dynamic;
+    fn clone_object(&self) -> Box<dyn Variant>;
 }
 
 /// _(internals)_ Trait to represent any type.
@@ -83,7 +79,7 @@ pub trait Variant: Any + Send + Sync + private::Sealed {
     #[must_use]
     fn as_mut_any(&mut self) -> &mut dyn Any;
 
-    /// Convert this [`Variant`] trait object to an [`Any`] trait object.
+    /// Convert this [`Variant`] trait object to [`Box<dyn Any>`].
     #[must_use]
     fn as_box_any(self: Box<Self>) -> Box<dyn Any>;
 
@@ -91,13 +87,9 @@ pub trait Variant: Any + Send + Sync + private::Sealed {
     #[must_use]
     fn type_name(&self) -> &'static str;
 
-    /// Convert into [`Dynamic`].
+    /// Clone this [`Variant`] trait object.
     #[must_use]
-    fn into_dynamic(self) -> Dynamic;
-
-    /// Clone into [`Dynamic`].
-    #[must_use]
-    fn clone_into_dynamic(&self) -> Dynamic;
+    fn clone_object(&self) -> Box<dyn Variant>;
 }
 
 impl<T: Any + Clone + SendSync> Variant for T {
@@ -118,12 +110,8 @@ impl<T: Any + Clone + SendSync> Variant for T {
         type_name::<T>()
     }
     #[inline(always)]
-    fn into_dynamic(self) -> Dynamic {
-        Dynamic::from(self)
-    }
-    #[inline(always)]
-    fn clone_into_dynamic(&self) -> Dynamic {
-        Dynamic::from(self.clone())
+    fn clone_object(&self) -> Box<dyn Variant> {
+        Box::new(self.clone()) as Box<dyn Variant>
     }
 }
 
@@ -818,11 +806,11 @@ impl Clone for Dynamic {
                 Self(Union::TimeStamp(value.clone(), tag, ReadWrite))
             }
 
-            Union::Variant(ref value, tag, _) => {
-                let mut x = value.as_ref().as_ref().clone_into_dynamic();
-                x.set_tag(tag);
-                x
-            }
+            Union::Variant(ref value, tag, _) => Self(Union::Variant(
+                value.as_ref().as_ref().clone_object().into(),
+                tag,
+                ReadWrite,
+            )),
 
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(ref cell, tag, _) => Self(Union::Shared(cell.clone(), tag, ReadWrite)),

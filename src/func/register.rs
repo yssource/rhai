@@ -135,7 +135,7 @@ macro_rules! def_register {
                     let r = self($($arg),*);
 
                     // Map the result
-                    Ok(r.into_dynamic())
+                    Ok(Dynamic::from(r))
                 }) as Box<FnAny>)
             }
         }
@@ -163,7 +163,7 @@ macro_rules! def_register {
                     let r = self(ctx, $($arg),*);
 
                     // Map the result
-                    Ok(r.into_dynamic())
+                    Ok(Dynamic::from(r))
                 }) as Box<FnAny>)
             }
         }
