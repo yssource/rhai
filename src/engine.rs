@@ -90,6 +90,20 @@ enum ChainType {
     Dotting,
 }
 
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+impl From<&Expr> for ChainType {
+    #[inline]
+    fn from(expr: &Expr) -> Self {
+        match expr {
+            #[cfg(not(feature = "no_index"))]
+            Expr::Index(_, _, _) => Self::Indexing,
+            #[cfg(not(feature = "no_object"))]
+            Expr::Dot(_, _, _) => Self::Dotting,
+            expr => unreachable!("Expr::Index or Expr::Dot expected but gets {:?}", expr),
+        }
+    }
+}
+
 /// Value of a chaining argument.
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 #[derive(Debug, Clone, Hash)]
@@ -173,50 +187,67 @@ impl ChainArgument {
     }
 }
 
-/// Get the chaining type for an [`Expr`].
-#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-fn match_chaining_type(expr: &Expr) -> ChainType {
-    match expr {
-        #[cfg(not(feature = "no_index"))]
-        Expr::Index(_, _, _) => ChainType::Indexing,
-        #[cfg(not(feature = "no_object"))]
-        Expr::Dot(_, _, _) => ChainType::Dotting,
-        expr => unreachable!("Expr::Index or Expr::Dot expected but gets {:?}", expr),
-    }
-}
-
 /// A type that encapsulates a mutation target for an expression with side effects.
 #[derive(Debug)]
 pub enum Target<'a> {
-    /// The target is a mutable reference to a `Dynamic` value somewhere.
+    /// The target is a mutable reference to a [`Dynamic`].
     RefMut(&'a mut Dynamic),
-    /// The target is a mutable reference to a Shared `Dynamic` value.
-    /// It holds both the access guard and the original shared value.
+    /// The target is a mutable reference to a _shared_ [`Dynamic`].
     #[cfg(not(feature = "no_closure"))]
-    LockGuard(
-        (
-            crate::types::dynamic::DynamicWriteLock<'a, Dynamic>,
-            Dynamic,
-        ),
-    ),
-    /// The target is a temporary `Dynamic` value (i.e. its mutation can cause no side effects).
+    SharedValue {
+        /// Lock guard to the shared [`Dynamic`].
+        source: crate::types::dynamic::DynamicWriteLock<'a, Dynamic>,
+        /// Copy of the value.
+        value: Dynamic,
+    },
+    /// The target is a temporary [`Dynamic`] value (i.e. its mutation can cause no side effects).
     TempValue(Dynamic),
     /// The target is a bit inside an [`INT`][crate::INT].
     /// This is necessary because directly pointing to a bit inside an [`INT`][crate::INT] is impossible.
     #[cfg(not(feature = "no_index"))]
-    Bit(&'a mut Dynamic, Dynamic, u8),
+    Bit {
+        /// Mutable reference to the source [`Dynamic`].
+        source: &'a mut Dynamic,
+        /// Copy of the boolean bit, as a [`Dynamic`].
+        value: Dynamic,
+        /// Bit offset.
+        bit: u8,
+    },
     /// The target is a range of bits inside an [`INT`][crate::INT].
     /// This is necessary because directly pointing to a range of bits inside an [`INT`][crate::INT] is impossible.
     #[cfg(not(feature = "no_index"))]
-    BitField(&'a mut Dynamic, INT, Dynamic, u8),
-    /// The target is a byte inside a Blob.
+    BitField {
+        /// Mutable reference to the source [`Dynamic`].
+        source: &'a mut Dynamic,
+        /// Copy of the integer value of the bits, as a [`Dynamic`].
+        value: Dynamic,
+        /// Bitmask to apply to the source value (i.e. shifted)
+        mask: INT,
+        /// Number of bits to right-shift the source value.
+        shift: u8,
+    },
+    /// The target is a byte inside a [`Blob`][crate::Blob].
     /// This is necessary because directly pointing to a byte (in [`Dynamic`] form) inside a blob is impossible.
     #[cfg(not(feature = "no_index"))]
-    BlobByte(&'a mut Dynamic, usize, Dynamic),
-    /// The target is a character inside a String.
+    BlobByte {
+        /// Mutable reference to the source [`Dynamic`].
+        source: &'a mut Dynamic,
+        /// Copy of the byte at the index, as a [`Dynamic`].
+        value: Dynamic,
+        /// Offset index.
+        index: usize,
+    },
+    /// The target is a character inside a string.
     /// This is necessary because directly pointing to a char inside a String is impossible.
     #[cfg(not(feature = "no_index"))]
-    StringChar(&'a mut Dynamic, usize, Dynamic),
+    StringChar {
+        /// Mutable reference to the source [`Dynamic`].
+        source: &'a mut Dynamic,
+        /// Copy of the character at the offset, as a [`Dynamic`].
+        value: Dynamic,
+        /// Offset index.
+        index: usize,
+    },
 }
 
 impl<'a> Target<'a> {
@@ -228,13 +259,13 @@ impl<'a> Target<'a> {
         match self {
             Self::RefMut(_) => true,
             #[cfg(not(feature = "no_closure"))]
-            Self::LockGuard(_) => true,
+            Self::SharedValue { .. } => true,
             Self::TempValue(_) => false,
             #[cfg(not(feature = "no_index"))]
-            Self::Bit(_, _, _)
-            | Self::BitField(_, _, _, _)
-            | Self::BlobByte(_, _, _)
-            | Self::StringChar(_, _, _) => false,
+            Self::Bit { .. }
+            | Self::BitField { .. }
+            | Self::BlobByte { .. }
+            | Self::StringChar { .. } => false,
         }
     }
     /// Is the `Target` a temp value?
@@ -244,13 +275,13 @@ impl<'a> Target<'a> {
         match self {
             Self::RefMut(_) => false,
             #[cfg(not(feature = "no_closure"))]
-            Self::LockGuard(_) => false,
+            Self::SharedValue { .. } => false,
             Self::TempValue(_) => true,
             #[cfg(not(feature = "no_index"))]
-            Self::Bit(_, _, _)
-            | Self::BitField(_, _, _, _)
-            | Self::BlobByte(_, _, _)
-            | Self::StringChar(_, _, _) => false,
+            Self::Bit { .. }
+            | Self::BitField { .. }
+            | Self::BlobByte { .. }
+            | Self::StringChar { .. } => false,
         }
     }
     /// Is the `Target` a shared value?
@@ -261,13 +292,13 @@ impl<'a> Target<'a> {
         match self {
             Self::RefMut(r) => r.is_shared(),
             #[cfg(not(feature = "no_closure"))]
-            Self::LockGuard(_) => true,
+            Self::SharedValue { .. } => true,
             Self::TempValue(r) => r.is_shared(),
             #[cfg(not(feature = "no_index"))]
-            Self::Bit(_, _, _)
-            | Self::BitField(_, _, _, _)
-            | Self::BlobByte(_, _, _)
-            | Self::StringChar(_, _, _) => false,
+            Self::Bit { .. }
+            | Self::BitField { .. }
+            | Self::BlobByte { .. }
+            | Self::StringChar { .. } => false,
         }
     }
     /// Is the `Target` a specific type?
@@ -278,16 +309,16 @@ impl<'a> Target<'a> {
         match self {
             Self::RefMut(r) => r.is::<T>(),
             #[cfg(not(feature = "no_closure"))]
-            Self::LockGuard((r, _)) => r.is::<T>(),
+            Self::SharedValue { source, .. } => source.is::<T>(),
             Self::TempValue(r) => r.is::<T>(),
             #[cfg(not(feature = "no_index"))]
-            Self::Bit(_, _, _) => TypeId::of::<T>() == TypeId::of::<bool>(),
+            Self::Bit { .. } => TypeId::of::<T>() == TypeId::of::<bool>(),
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, _, _) => TypeId::of::<T>() == TypeId::of::<INT>(),
+            Self::BitField { .. } => TypeId::of::<T>() == TypeId::of::<INT>(),
             #[cfg(not(feature = "no_index"))]
-            Self::BlobByte(_, _, _) => TypeId::of::<T>() == TypeId::of::<crate::Blob>(),
+            Self::BlobByte { .. } => TypeId::of::<T>() == TypeId::of::<crate::Blob>(),
             #[cfg(not(feature = "no_index"))]
-            Self::StringChar(_, _, _) => TypeId::of::<T>() == TypeId::of::<char>(),
+            Self::StringChar { .. } => TypeId::of::<T>() == TypeId::of::<char>(),
         }
     }
     /// Get the value of the `Target` as a `Dynamic`, cloning a referenced value if necessary.
@@ -297,16 +328,16 @@ impl<'a> Target<'a> {
         match self {
             Self::RefMut(r) => r.clone(), // Referenced value is cloned
             #[cfg(not(feature = "no_closure"))]
-            Self::LockGuard((_, shared)) => shared, // Original shared value is simply taken
+            Self::SharedValue { value, .. } => value, // Original shared value is simply taken
             Self::TempValue(v) => v,      // Owned value is simply taken
             #[cfg(not(feature = "no_index"))]
-            Self::Bit(_, value, _) => value, // Boolean is taken
+            Self::Bit { value, .. } => value, // boolean is taken
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, value, _) => value, // INT is taken
+            Self::BitField { value, .. } => value, // INT is taken
             #[cfg(not(feature = "no_index"))]
-            Self::BlobByte(_, _, value) => value, // Byte is taken
+            Self::BlobByte { value, .. } => value, // byte is taken
             #[cfg(not(feature = "no_index"))]
-            Self::StringChar(_, _, ch) => ch, // Character is taken
+            Self::StringChar { value, .. } => value, // char is taken
         }
     }
     /// Take a `&mut Dynamic` reference from the `Target`.
@@ -331,11 +362,11 @@ impl<'a> Target<'a> {
         match self {
             Self::RefMut(_) | Self::TempValue(_) => (),
             #[cfg(not(feature = "no_closure"))]
-            Self::LockGuard(_) => (),
+            Self::SharedValue { .. } => (),
             #[cfg(not(feature = "no_index"))]
-            Self::Bit(value, new_val, index) => {
+            Self::Bit { source, value, bit } => {
                 // Replace the bit at the specified index position
-                let new_bit = new_val.as_bool().map_err(|err| {
+                let new_bit = value.as_bool().map_err(|err| {
                     Box::new(ERR::ErrorMismatchDataType(
                         "bool".to_string(),
                         err.to_string(),
@@ -343,9 +374,9 @@ impl<'a> Target<'a> {
                     ))
                 })?;
 
-                let value = &mut *value.write_lock::<crate::INT>().expect("`INT`");
+                let value = &mut *source.write_lock::<crate::INT>().expect("`INT`");
 
-                let index = *index;
+                let index = *bit;
 
                 let mask = 1 << index;
                 if new_bit {
@@ -355,12 +386,17 @@ impl<'a> Target<'a> {
                 }
             }
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(value, mask, new_val, shift) => {
+            Self::BitField {
+                source,
+                value,
+                mask,
+                shift,
+            } => {
                 let shift = *shift;
                 let mask = *mask;
 
                 // Replace the bit at the specified index position
-                let new_value = new_val.as_int().map_err(|err| {
+                let new_value = value.as_int().map_err(|err| {
                     Box::new(ERR::ErrorMismatchDataType(
                         "integer".to_string(),
                         err.to_string(),
@@ -369,15 +405,19 @@ impl<'a> Target<'a> {
                 })?;
 
                 let new_value = (new_value << shift) & mask;
-                let value = &mut *value.write_lock::<crate::INT>().expect("`INT`");
+                let value = &mut *source.write_lock::<crate::INT>().expect("`INT`");
 
                 *value &= !mask;
                 *value |= new_value;
             }
             #[cfg(not(feature = "no_index"))]
-            Self::BlobByte(value, index, new_val) => {
+            Self::BlobByte {
+                source,
+                value,
+                index,
+            } => {
                 // Replace the byte at the specified index position
-                let new_byte = new_val.as_int().map_err(|err| {
+                let new_byte = value.as_int().map_err(|err| {
                     Box::new(ERR::ErrorMismatchDataType(
                         "INT".to_string(),
                         err.to_string(),
@@ -385,7 +425,7 @@ impl<'a> Target<'a> {
                     ))
                 })?;
 
-                let value = &mut *value.write_lock::<crate::Blob>().expect("`Blob`");
+                let value = &mut *source.write_lock::<crate::Blob>().expect("`Blob`");
 
                 let index = *index;
 
@@ -396,9 +436,13 @@ impl<'a> Target<'a> {
                 }
             }
             #[cfg(not(feature = "no_index"))]
-            Self::StringChar(s, index, new_val) => {
+            Self::StringChar {
+                source,
+                value,
+                index,
+            } => {
                 // Replace the character at the specified index position
-                let new_ch = new_val.as_char().map_err(|err| {
+                let new_ch = value.as_char().map_err(|err| {
                     Box::new(ERR::ErrorMismatchDataType(
                         "char".to_string(),
                         err.to_string(),
@@ -406,7 +450,7 @@ impl<'a> Target<'a> {
                     ))
                 })?;
 
-                let s = &mut *s
+                let s = &mut *source
                     .write_lock::<ImmutableString>()
                     .expect("`ImmutableString`");
 
@@ -430,8 +474,9 @@ impl<'a> From<&'a mut Dynamic> for Target<'a> {
         #[cfg(not(feature = "no_closure"))]
         if value.is_shared() {
             // Cloning is cheap for a shared value
-            let container = value.clone();
-            return Self::LockGuard((value.write_lock::<Dynamic>().expect("`Dynamic`"), container));
+            let val = value.clone();
+            let source = value.write_lock::<Dynamic>().expect("`Dynamic`");
+            return Self::SharedValue { source, value: val };
         }
 
         Self::RefMut(value)
@@ -446,13 +491,13 @@ impl Deref for Target<'_> {
         match self {
             Self::RefMut(r) => *r,
             #[cfg(not(feature = "no_closure"))]
-            Self::LockGuard((r, _)) => &**r,
+            Self::SharedValue { source, .. } => &**source,
             Self::TempValue(ref r) => r,
             #[cfg(not(feature = "no_index"))]
-            Self::Bit(_, ref r, _)
-            | Self::BitField(_, _, ref r, _)
-            | Self::BlobByte(_, _, ref r)
-            | Self::StringChar(_, _, ref r) => r,
+            Self::Bit { ref value, .. }
+            | Self::BitField { ref value, .. }
+            | Self::BlobByte { ref value, .. }
+            | Self::StringChar { ref value, .. } => value,
         }
     }
 }
@@ -470,13 +515,13 @@ impl DerefMut for Target<'_> {
         match self {
             Self::RefMut(r) => *r,
             #[cfg(not(feature = "no_closure"))]
-            Self::LockGuard((r, _)) => &mut *r,
+            Self::SharedValue { source, .. } => &mut *source,
             Self::TempValue(ref mut r) => r,
             #[cfg(not(feature = "no_index"))]
-            Self::Bit(_, ref mut r, _)
-            | Self::BitField(_, _, ref mut r, _)
-            | Self::BlobByte(_, _, ref mut r)
-            | Self::StringChar(_, _, ref mut r) => r,
+            Self::Bit { ref mut value, .. }
+            | Self::BitField { ref mut value, .. }
+            | Self::BlobByte { ref mut value, .. }
+            | Self::StringChar { ref mut value, .. } => value,
         }
     }
 }
@@ -1345,7 +1390,7 @@ impl Engine {
                     {
                         let mut idx_val_for_setter = idx_val.clone();
                         let idx_pos = x.lhs.position();
-                        let rhs_chain = match_chaining_type(rhs);
+                        let rhs_chain = rhs.into();
 
                         let (try_setter, result) = {
                             let mut obj = self.get_indexed_mut(
@@ -1623,7 +1668,7 @@ impl Engine {
                             // Others - syntax error
                             ref expr => unreachable!("invalid dot expression: {:?}", expr),
                         };
-                        let rhs_chain = match_chaining_type(rhs);
+                        let rhs_chain = rhs.into();
 
                         self.eval_dot_index_chain_helper(
                             global, state, lib, this_ptr, val_target, root, &x.rhs, *term,
@@ -1638,7 +1683,7 @@ impl Engine {
                             Expr::Property(ref p) => {
                                 let ((getter, hash_get), (setter, hash_set), (name, pos)) =
                                     p.as_ref();
-                                let rhs_chain = match_chaining_type(rhs);
+                                let rhs_chain = rhs.into();
                                 let hash_get = crate::ast::FnCallHashes::from_native(*hash_get);
                                 let hash_set = crate::ast::FnCallHashes::from_native(*hash_set);
                                 let mut arg_values = [target.as_mut(), &mut Dynamic::UNIT.clone()];
@@ -1732,7 +1777,7 @@ impl Engine {
                             // xxx.fn_name(arg_expr_list)[expr] | xxx.fn_name(arg_expr_list).expr
                             Expr::FnCall(ref f, pos) if !f.is_qualified() => {
                                 let FnCallExpr { name, hashes, .. } = f.as_ref();
-                                let rhs_chain = match_chaining_type(rhs);
+                                let rhs_chain = rhs.into();
                                 let args = &mut idx_val.into_fn_call_args();
                                 let (mut val, _) = self.make_method_call(
                                     global, state, lib, name, *hashes, target, args, pos, level,
@@ -1931,7 +1976,7 @@ impl Engine {
                 };
 
                 // Push in reverse order
-                let chain_type = match_chaining_type(expr);
+                let chain_type = expr.into();
 
                 self.eval_dot_index_chain_arguments(
                     scope, global, state, lib, this_ptr, rhs, *term, chain_type, idx_values, size,
@@ -2055,7 +2100,11 @@ impl Engine {
                     .get(arr_idx)
                     .map(|&v| (v as INT).into())
                     .ok_or_else(|| Box::new(ERR::ErrorArrayBounds(arr_len, index, idx_pos)))?;
-                Ok(Target::BlobByte(target, arr_idx, value))
+                Ok(Target::BlobByte {
+                    source: target,
+                    value,
+                    index: arr_idx,
+                })
             }
 
             #[cfg(not(feature = "no_object"))]
@@ -2133,7 +2182,12 @@ impl Engine {
 
                 let field_value = (*value & mask) >> shift;
 
-                Ok(Target::BitField(target, mask, field_value.into(), shift))
+                Ok(Target::BitField {
+                    source: target,
+                    value: field_value.into(),
+                    mask,
+                    shift,
+                })
             }
 
             #[cfg(not(feature = "no_index"))]
@@ -2170,7 +2224,11 @@ impl Engine {
                     return Err(ERR::ErrorBitFieldBounds(BITS, index, idx_pos).into());
                 };
 
-                Ok(Target::Bit(target, bit_value.into(), offset))
+                Ok(Target::Bit {
+                    source: target,
+                    value: bit_value.into(),
+                    bit: offset,
+                })
             }
 
             #[cfg(not(feature = "no_index"))]
@@ -2204,7 +2262,11 @@ impl Engine {
                     return Err(ERR::ErrorStringBounds(chars_len, index, idx_pos).into());
                 };
 
-                Ok(Target::StringChar(target, offset, ch.into()))
+                Ok(Target::StringChar {
+                    source: target,
+                    value: ch.into(),
+                    index: offset,
+                })
             }
 
             _ if use_indexers => {
