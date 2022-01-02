@@ -58,11 +58,17 @@ pub type LockGuard<'a, T> = std::sync::RwLockWriteGuard<'a, T>;
 /// Context of a native Rust function call.
 #[derive(Debug)]
 pub struct NativeCallContext<'a> {
+    /// The current [`Engine`].
     engine: &'a Engine,
+    /// Name of function called.
     fn_name: &'a str,
+    /// Function source, if any.
     source: Option<&'a str>,
+    /// The current [`GlobalRuntimeState`], if any.
     global: Option<&'a GlobalRuntimeState>,
+    /// The current stack of loaded [modules][Module].
     lib: &'a [&'a Module],
+    /// [Position] of the function call.
     pos: Position,
 }
 
@@ -174,7 +180,7 @@ impl<'a> NativeCallContext<'a> {
     pub const fn fn_name(&self) -> &str {
         self.fn_name
     }
-    /// [Position][`Position`] of the function call.
+    /// [Position] of the function call.
     #[inline(always)]
     #[must_use]
     pub const fn position(&self) -> Position {
@@ -204,7 +210,7 @@ impl<'a> NativeCallContext<'a> {
     ) -> impl Iterator<Item = (&crate::Identifier, &Shared<Module>)> {
         self.global.iter().flat_map(|&m| m.iter_modules_raw())
     }
-    /// _(internals)_ The current [`GlobalRuntimeState`].
+    /// _(internals)_ The current [`GlobalRuntimeState`], if any.
     /// Exported under the `internals` feature only.
     ///
     /// Not available under `no_module`.

@@ -818,12 +818,19 @@ impl EvalState {
 /// Context of a script evaluation process.
 #[derive(Debug)]
 pub struct EvalContext<'a, 'x, 'px, 'm, 's, 'b, 't, 'pt> {
+    /// The current [`Engine`].
     pub(crate) engine: &'a Engine,
+    /// The current [`Scope`].
     pub(crate) scope: &'x mut Scope<'px>,
+    /// The current [`GlobalRuntimeState`].
     pub(crate) global: &'m mut GlobalRuntimeState,
+    /// The current [evaluation state][EvalState].
     pub(crate) state: &'s mut EvalState,
+    /// The current stack of imported [modules][Module].
     pub(crate) lib: &'b [&'b Module],
+    /// The current bound `this` pointer, if any.
     pub(crate) this_ptr: &'t mut Option<&'pt mut Dynamic>,
+    /// The current nesting level of function calls.
     pub(crate) level: usize,
 }
 
