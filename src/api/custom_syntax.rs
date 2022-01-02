@@ -95,41 +95,39 @@ impl Expression<'_> {
 
         if TypeId::of::<T>() == TypeId::of::<INT>() {
             return match self.0 {
-                Expr::IntegerConstant(x, _) => unsafe_try_cast(*x).ok(),
+                Expr::IntegerConstant(x, _) => unsafe_try_cast(*x),
                 _ => None,
             };
         }
         #[cfg(not(feature = "no_float"))]
         if TypeId::of::<T>() == TypeId::of::<crate::FLOAT>() {
             return match self.0 {
-                Expr::FloatConstant(x, _) => unsafe_try_cast(*x).ok(),
+                Expr::FloatConstant(x, _) => unsafe_try_cast(*x),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<char>() {
             return match self.0 {
-                Expr::CharConstant(x, _) => unsafe_try_cast(*x).ok(),
+                Expr::CharConstant(x, _) => unsafe_try_cast(*x),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<ImmutableString>() {
             return match self.0 {
-                Expr::StringConstant(x, _) => unsafe_try_cast(x.clone()).ok(),
-                Expr::Variable(_, _, x) => {
-                    unsafe_try_cast(Into::<ImmutableString>::into(&x.2)).ok()
-                }
+                Expr::StringConstant(x, _) => unsafe_try_cast(x.clone()),
+                Expr::Variable(_, _, x) => unsafe_try_cast(Into::<ImmutableString>::into(&x.2)),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<bool>() {
             return match self.0 {
-                Expr::BoolConstant(x, _) => unsafe_try_cast(*x).ok(),
+                Expr::BoolConstant(x, _) => unsafe_try_cast(*x),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<()>() {
             return match self.0 {
-                Expr::Unit(_) => unsafe_try_cast(()).ok(),
+                Expr::Unit(_) => unsafe_try_cast(()),
                 _ => None,
             };
         }

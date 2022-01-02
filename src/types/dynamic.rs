@@ -1,7 +1,7 @@
 //! Helper module which defines the [`Any`] trait to to allow dynamic value handling.
 
 use crate::func::native::SendSync;
-use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
+use crate::r#unsafe::{unsafe_cast, unsafe_cast_box, unsafe_try_cast};
 use crate::{ExclusiveRange, FnPtr, ImmutableString, InclusiveRange, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -1209,11 +1209,11 @@ impl Dynamic {
     /// ```
     #[inline]
     #[must_use]
-    pub fn from<T: Variant + Clone>(mut value: T) -> Self {
+    pub fn from<T: Variant + Clone>(value: T) -> Self {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
 
         if TypeId::of::<T>() == TypeId::of::<Dynamic>() {
-            return unsafe_try_cast::<_, Dynamic>(value).ok().expect(CHECKED);
+            return unsafe_cast::<_, Dynamic>(value);
         }
 
         let val = value.as_any();
@@ -1249,52 +1249,36 @@ impl Dynamic {
             return ().into();
         }
 
-        value = match unsafe_try_cast::<_, String>(value) {
-            Ok(s) => return s.into(),
-            Err(value) => value,
-        };
-        #[cfg(not(feature = "no_index"))]
-        {
-            value = match unsafe_try_cast::<_, crate::Array>(value) {
-                Ok(array) => return array.into(),
-                Err(value) => value,
-            };
+        if TypeId::of::<T>() == TypeId::of::<String>() {
+            return unsafe_cast::<_, String>(value).into();
+        }
+        #[cfg(not(feature = "no_float"))]
+        if TypeId::of::<T>() == TypeId::of::<crate::FLOAT>() {
+            return unsafe_cast::<_, crate::FLOAT>(value).into();
         }
         #[cfg(not(feature = "no_index"))]
-        {
-            value = match unsafe_try_cast::<_, crate::Blob>(value) {
-                Ok(blob) => return Dynamic::from_blob(blob), // don't use blob.into() because it'll be converted into an Array
-                Err(value) => value,
-            };
+        if TypeId::of::<T>() == TypeId::of::<crate::Array>() {
+            return unsafe_cast::<_, crate::Array>(value).into();
         }
-
+        #[cfg(not(feature = "no_index"))]
+        if TypeId::of::<T>() == TypeId::of::<crate::Blob>() {
+            return Dynamic::from_blob(unsafe_cast::<_, crate::Blob>(value)); // don't use blob.into() because it'll be converted into an Array
+        }
         #[cfg(not(feature = "no_object"))]
-        {
-            value = match unsafe_try_cast::<_, crate::Map>(value) {
-                Ok(map) => return map.into(),
-                Err(value) => value,
-            };
+        if TypeId::of::<T>() == TypeId::of::<crate::Map>() {
+            return unsafe_cast::<_, crate::Map>(value).into();
         }
-
-        value = match unsafe_try_cast::<_, FnPtr>(value) {
-            Ok(fn_ptr) => return fn_ptr.into(),
-            Err(value) => value,
-        };
+        if TypeId::of::<T>() == TypeId::of::<FnPtr>() {
+            return unsafe_cast::<_, FnPtr>(value).into();
+        }
 
         #[cfg(not(feature = "no_std"))]
-        {
-            value = match unsafe_try_cast::<_, Instant>(value) {
-                Ok(timestamp) => return timestamp.into(),
-                Err(value) => value,
-            };
+        if TypeId::of::<T>() == TypeId::of::<Instant>() {
+            return unsafe_cast::<_, Instant>(value).into();
         }
-
         #[cfg(not(feature = "no_closure"))]
-        {
-            value = match unsafe_try_cast::<_, crate::Shared<crate::Locked<Dynamic>>>(value) {
-                Ok(value) => return value.into(),
-                Err(value) => value,
-            };
+        if TypeId::of::<T>() == TypeId::of::<crate::Shared<crate::Locked<Dynamic>>>() {
+            return unsafe_cast::<_, crate::Shared<crate::Locked<Dynamic>>>(value).into();
         }
 
         Self(Union::Variant(
@@ -1365,12 +1349,12 @@ impl Dynamic {
         }
 
         if TypeId::of::<T>() == TypeId::of::<Dynamic>() {
-            return unsafe_try_cast::<_, T>(self).ok();
+            return unsafe_try_cast::<_, T>(self);
         }
 
         if TypeId::of::<T>() == TypeId::of::<INT>() {
             return match self.0 {
-                Union::Int(value, _, _) => unsafe_try_cast(value).ok(),
+                Union::Int(value, _, _) => unsafe_try_cast(value),
                 _ => None,
             };
         }
@@ -1378,7 +1362,7 @@ impl Dynamic {
         #[cfg(not(feature = "no_float"))]
         if TypeId::of::<T>() == TypeId::of::<crate::FLOAT>() {
             return match self.0 {
-                Union::Float(value, _, _) => unsafe_try_cast(*value).ok(),
+                Union::Float(value, _, _) => unsafe_try_cast(*value),
                 _ => None,
             };
         }
@@ -1386,35 +1370,35 @@ impl Dynamic {
         #[cfg(feature = "decimal")]
         if TypeId::of::<T>() == TypeId::of::<rust_decimal::Decimal>() {
             return match self.0 {
-                Union::Decimal(value, _, _) => unsafe_try_cast(*value).ok(),
+                Union::Decimal(value, _, _) => unsafe_try_cast(*value),
                 _ => None,
             };
         }
 
         if TypeId::of::<T>() == TypeId::of::<bool>() {
             return match self.0 {
-                Union::Bool(value, _, _) => unsafe_try_cast(value).ok(),
+                Union::Bool(value, _, _) => unsafe_try_cast(value),
                 _ => None,
             };
         }
 
         if TypeId::of::<T>() == TypeId::of::<ImmutableString>() {
             return match self.0 {
-                Union::Str(value, _, _) => unsafe_try_cast(value).ok(),
+                Union::Str(value, _, _) => unsafe_try_cast(value),
                 _ => None,
             };
         }
 
         if TypeId::of::<T>() == TypeId::of::<String>() {
             return match self.0 {
-                Union::Str(value, _, _) => unsafe_try_cast(value.into_owned()).ok(),
+                Union::Str(value, _, _) => unsafe_try_cast(value.into_owned()),
                 _ => None,
             };
         }
 
         if TypeId::of::<T>() == TypeId::of::<char>() {
             return match self.0 {
-                Union::Char(value, _, _) => unsafe_try_cast(value).ok(),
+                Union::Char(value, _, _) => unsafe_try_cast(value),
                 _ => None,
             };
         }
@@ -1422,7 +1406,7 @@ impl Dynamic {
         #[cfg(not(feature = "no_index"))]
         if TypeId::of::<T>() == TypeId::of::<crate::Array>() {
             return match self.0 {
-                Union::Array(value, _, _) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
+                Union::Array(value, _, _) => unsafe_cast_box::<_, T>(value).map(|v| *v),
                 _ => None,
             };
         }
@@ -1430,7 +1414,7 @@ impl Dynamic {
         #[cfg(not(feature = "no_index"))]
         if TypeId::of::<T>() == TypeId::of::<crate::Blob>() {
             return match self.0 {
-                Union::Blob(value, _, _) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
+                Union::Blob(value, _, _) => unsafe_cast_box::<_, T>(value).map(|v| *v),
                 _ => None,
             };
         }
@@ -1438,14 +1422,14 @@ impl Dynamic {
         #[cfg(not(feature = "no_object"))]
         if TypeId::of::<T>() == TypeId::of::<crate::Map>() {
             return match self.0 {
-                Union::Map(value, _, _) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
+                Union::Map(value, _, _) => unsafe_cast_box::<_, T>(value).map(|v| *v),
                 _ => None,
             };
         }
 
         if TypeId::of::<T>() == TypeId::of::<FnPtr>() {
             return match self.0 {
-                Union::FnPtr(value, _, _) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
+                Union::FnPtr(value, _, _) => unsafe_cast_box::<_, T>(value).map(|v| *v),
                 _ => None,
             };
         }
@@ -1453,20 +1437,20 @@ impl Dynamic {
         #[cfg(not(feature = "no_std"))]
         if TypeId::of::<T>() == TypeId::of::<Instant>() {
             return match self.0 {
-                Union::TimeStamp(value, _, _) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
+                Union::TimeStamp(value, _, _) => unsafe_cast_box::<_, T>(value).map(|v| *v),
                 _ => None,
             };
         }
 
         if TypeId::of::<T>() == TypeId::of::<()>() {
             return match self.0 {
-                Union::Unit(value, _, _) => unsafe_try_cast(value).ok(),
+                Union::Unit(value, _, _) => unsafe_try_cast(value),
                 _ => None,
             };
         }
 
         match self.0 {
-            Union::Variant(value, _, _) => (*value).as_box_any().downcast().map(|x| *x).ok(),
+            Union::Variant(value, _, _) => (*value).as_box_any().downcast().ok().map(|x| *x),
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(_, _, _) => unreachable!("Union::Shared case should be already handled"),
             _ => None,

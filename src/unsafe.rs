@@ -8,35 +8,48 @@ use std::{
 };
 
 /// Cast a type into another type.
-#[inline]
-pub fn unsafe_try_cast<A: Any, B: Any>(a: A) -> Result<B, A> {
+///
+/// # Undefined Behavior
+///
+/// It is UB if the types are not compatible.
+#[inline(always)]
+#[must_use]
+pub fn unsafe_cast<A: Any, B: Any>(a: A) -> B {
+    unsafe {
+        let ret: B = ptr::read(&a as *const _ as *const B);
+        // We explicitly forget the value immediately after moving out,
+        // removing any chance of a destructor running or value otherwise
+        // being used again.
+        mem::forget(a);
+        ret
+    }
+}
+
+/// Cast a type into another type.
+#[inline(always)]
+#[must_use]
+pub fn unsafe_try_cast<A: Any, B: Any>(a: A) -> Option<B> {
     if TypeId::of::<B>() == a.type_id() {
-        // SAFETY: Just checked we have the right type. We explicitly forget the
-        // value immediately after moving out, removing any chance of a destructor
-        // running or value otherwise being used again.
-        unsafe {
-            let ret: B = ptr::read(&a as *const _ as *const B);
-            mem::forget(a);
-            Ok(ret)
-        }
+        // SAFETY: Just checked we have the right type.
+        Some(unsafe_cast(a))
     } else {
-        Err(a)
+        None
     }
 }
 
 /// Cast a Boxed type into another type.
-#[inline]
-pub fn unsafe_cast_box<X: Any, T: Any>(item: Box<X>) -> Result<Box<T>, Box<X>> {
+#[inline(always)]
+#[must_use]
+pub fn unsafe_cast_box<X: Any, T: Any>(item: Box<X>) -> Option<Box<T>> {
     // Only allow casting to the exact same type
     if TypeId::of::<X>() == TypeId::of::<T>() {
         // SAFETY: just checked whether we are pointing to the correct type
         unsafe {
             let raw: *mut dyn Any = Box::into_raw(item as Box<dyn Any>);
-            Ok(Box::from_raw(raw as *mut T))
+            Some(Box::from_raw(raw as *mut T))
         }
     } else {
-        // Return the consumed item for chaining.
-        Err(item)
+        None
     }
 }
 
