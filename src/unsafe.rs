@@ -40,13 +40,13 @@ pub fn unsafe_try_cast<A: Any, B: Any>(a: A) -> Option<B> {
 /// Cast a Boxed type into another type.
 #[inline(always)]
 #[must_use]
-pub fn unsafe_cast_box<X: Any, T: Any>(item: Box<X>) -> Option<Box<T>> {
+pub fn unsafe_cast_box<X: Any, T: Any>(item: Box<X>) -> Option<T> {
     // Only allow casting to the exact same type
     if TypeId::of::<X>() == TypeId::of::<T>() {
         // SAFETY: just checked whether we are pointing to the correct type
         unsafe {
             let raw: *mut dyn Any = Box::into_raw(item as Box<dyn Any>);
-            Some(Box::from_raw(raw as *mut T))
+            Some(*Box::from_raw(raw as *mut T))
         }
     } else {
         None
