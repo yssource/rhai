@@ -16,6 +16,10 @@ def_package! {
 
 #[export_module]
 mod core_functions {
+    #[rhai_fn(name = "!")]
+    pub fn not(x: bool) -> bool {
+        !x
+    }
     #[rhai_fn(name = "tag", get = "tag", pure)]
     pub fn get_tag(value: &mut Dynamic) -> INT {
         value.tag() as INT

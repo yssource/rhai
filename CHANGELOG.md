@@ -12,6 +12,12 @@ Script-breaking changes
 
 * `is` is (pun intended) now a reserved keyword to prepare for possible future type checking expressions (e.g. `x is "string"`).
 
+Breaking changes
+----------------
+
+* `LogicPackage` is removed from `CorePackage`.
+* Bit-field functions are moved into a new `BitFieldPackage` (used to be in `LogicPackage`) which makes more sense.
+
 New features
 ------------
 

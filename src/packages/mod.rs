@@ -4,6 +4,7 @@ use crate::{Module, Shared};
 
 pub(crate) mod arithmetic;
 pub(crate) mod array_basic;
+mod bit_field;
 pub(crate) mod blob_basic;
 mod fn_basic;
 mod iter_basic;
@@ -20,6 +21,7 @@ mod time_basic;
 pub use arithmetic::ArithmeticPackage;
 #[cfg(not(feature = "no_index"))]
 pub use array_basic::BasicArrayPackage;
+pub use bit_field::BitFieldPackage;
 #[cfg(not(feature = "no_index"))]
 pub use blob_basic::BasicBlobPackage;
 pub use fn_basic::BasicFnPackage;

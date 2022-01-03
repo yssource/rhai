@@ -10,7 +10,6 @@ def_package! {
     ///
     /// * [`LanguageCorePackage`][super::LanguageCorePackage]
     /// * [`ArithmeticPackage`][super::ArithmeticPackage]
-    /// * [`LogicPackage`][super::LogicPackage]
     /// * [`BasicStringPackage`][super::BasicStringPackage]
     /// * [`BasicIteratorPackage`][super::BasicIteratorPackage]
     /// * [`BasicFnPackage`][super::BasicFnPackage]
@@ -19,7 +18,6 @@ def_package! {
 
         super::LanguageCorePackage::init(lib);
         super::ArithmeticPackage::init(lib);
-        super::LogicPackage::init(lib);
         super::BasicStringPackage::init(lib);
         super::BasicIteratorPackage::init(lib);
         super::BasicFnPackage::init(lib);

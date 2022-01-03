@@ -9,6 +9,8 @@ def_package! {
     /// # Contents
     ///
     /// * [`CorePackage`][super::CorePackage]
+    /// * [`BitFieldPackage`][super::BitFieldPackage]
+    /// * [`LogicPackage`][super::LogicPackage]
     /// * [`BasicMathPackage`][super::BasicMathPackage]
     /// * [`BasicArrayPackage`][super::BasicArrayPackage]
     /// * [`BasicBlobPackage`][super::BasicBlobPackage]
@@ -19,6 +21,8 @@ def_package! {
         lib.standard = true;
 
         super::CorePackage::init(lib);
+        super::BitFieldPackage::init(lib);
+        super::LogicPackage::init(lib);
         super::BasicMathPackage::init(lib);
         #[cfg(not(feature = "no_index"))]
         super::BasicArrayPackage::init(lib);
