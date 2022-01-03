@@ -1,6 +1,6 @@
 #![cfg(not(feature = "no_std"))]
 
-use super::{arithmetic::make_err as make_arithmetic_err, math_basic::MAX_INT};
+use super::arithmetic::make_err as make_arithmetic_err;
 use crate::plugin::*;
 use crate::{def_package, Dynamic, EvalAltResult, RhaiResult, RhaiResultOf, INT};
 
@@ -42,7 +42,7 @@ mod time_functions {
         {
             let seconds = timestamp.elapsed().as_secs();
 
-            if cfg!(not(feature = "unchecked")) && seconds > (MAX_INT as u64) {
+            if cfg!(not(feature = "unchecked")) && seconds > (INT::MAX as u64) {
                 Err(make_arithmetic_err(format!(
                     "Integer overflow for timestamp.elapsed: {}",
                     seconds
@@ -69,7 +69,7 @@ mod time_functions {
         if timestamp2 > timestamp1 {
             let seconds = (timestamp2 - timestamp1).as_secs();
 
-            if cfg!(not(feature = "unchecked")) && seconds > (MAX_INT as u64) {
+            if cfg!(not(feature = "unchecked")) && seconds > (INT::MAX as u64) {
                 Err(make_arithmetic_err(format!(
                     "Integer overflow for timestamp duration: -{}",
                     seconds
@@ -80,7 +80,7 @@ mod time_functions {
         } else {
             let seconds = (timestamp1 - timestamp2).as_secs();
 
-            if cfg!(not(feature = "unchecked")) && seconds > (MAX_INT as u64) {
+            if cfg!(not(feature = "unchecked")) && seconds > (INT::MAX as u64) {
                 Err(make_arithmetic_err(format!(
                     "Integer overflow for timestamp duration: {}",
                     seconds
@@ -97,7 +97,7 @@ mod time_functions {
             if seconds < 0.0 {
                 subtract_impl(timestamp, -seconds)
             } else if cfg!(not(feature = "unchecked")) {
-                if seconds > (MAX_INT as FLOAT) {
+                if seconds > (INT::MAX as FLOAT) {
                     Err(make_arithmetic_err(format!(
                         "Integer overflow for timestamp add: {}",
                         seconds
@@ -120,7 +120,7 @@ mod time_functions {
             if seconds < 0.0 {
                 add_impl(timestamp, -seconds)
             } else if cfg!(not(feature = "unchecked")) {
-                if seconds > (MAX_INT as FLOAT) {
+                if seconds > (INT::MAX as FLOAT) {
                     Err(make_arithmetic_err(format!(
                         "Integer overflow for timestamp add: {}",
                         seconds

@@ -50,7 +50,7 @@ impl fmt::Display for CallableFunction {
             Self::Plugin(_) => write!(f, "PluginFunction"),
 
             #[cfg(not(feature = "no_function"))]
-            CallableFunction::Script(s) => fmt::Display::fmt(s, f),
+            Self::Script(s) => fmt::Display::fmt(s, f),
         }
     }
 }

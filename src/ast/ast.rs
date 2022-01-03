@@ -124,10 +124,9 @@ impl AST {
     #[inline(always)]
     #[must_use]
     pub fn source(&self) -> Option<&str> {
-        if self.source.is_empty() {
-            None
-        } else {
-            Some(&self.source)
+        match self.source.as_str() {
+            "" => None,
+            s => Some(s),
         }
     }
     /// Get a reference to the source.

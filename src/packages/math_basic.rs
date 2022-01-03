@@ -18,13 +18,6 @@ use rust_decimal::Decimal;
 #[cfg(feature = "decimal")]
 use super::arithmetic::make_err;
 
-#[allow(dead_code)]
-#[cfg(feature = "only_i32")]
-pub const MAX_INT: INT = i32::MAX;
-#[allow(dead_code)]
-#[cfg(not(feature = "only_i32"))]
-pub const MAX_INT: INT = i64::MAX;
-
 macro_rules! gen_conversion_as_functions {
     ($root:ident => $func_name:ident ( $($arg_type:ident),+ ) -> $result_type:ty) => {
         pub mod $root { $(pub mod $arg_type {
@@ -264,7 +257,7 @@ mod float_functions {
     }
     #[rhai_fn(name = "to_int", return_raw)]
     pub fn f32_to_int(x: f32) -> RhaiResultOf<INT> {
-        if cfg!(not(feature = "unchecked")) && x > (MAX_INT as f32) {
+        if cfg!(not(feature = "unchecked")) && x > (INT::MAX as f32) {
             Err(
                 ERR::ErrorArithmetic(format!("Integer overflow: to_int({})", x), Position::NONE)
                     .into(),
@@ -275,7 +268,7 @@ mod float_functions {
     }
     #[rhai_fn(name = "to_int", return_raw)]
     pub fn f64_to_int(x: f64) -> RhaiResultOf<INT> {
-        if cfg!(not(feature = "unchecked")) && x > (MAX_INT as f64) {
+        if cfg!(not(feature = "unchecked")) && x > (INT::MAX as f64) {
             Err(
                 ERR::ErrorArithmetic(format!("Integer overflow: to_int({})", x), Position::NONE)
                     .into(),

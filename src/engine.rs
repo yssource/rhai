@@ -890,10 +890,9 @@ impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, 'pt> {
     #[inline(always)]
     #[must_use]
     pub fn source(&self) -> Option<&str> {
-        if self.global.source.is_empty() {
-            None
-        } else {
-            Some(&self.global.source)
+        match self.global.source.as_str() {
+            "" => None,
+            s => Some(s),
         }
     }
     /// The current [`Scope`].
@@ -3241,10 +3240,9 @@ impl Engine {
                 {
                     use crate::ModuleResolver;
 
-                    let source = if global.source.is_empty() {
-                        None
-                    } else {
-                        Some(global.source.as_str())
+                    let source = match global.source.as_str() {
+                        "" => None,
+                        s => Some(s),
                     };
                     let path_pos = expr.position();
 

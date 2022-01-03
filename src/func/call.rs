@@ -155,7 +155,7 @@ impl Engine {
     ) -> String {
         format!(
             "{}{}{} ({})",
-            namespace.map_or(String::new(), |ns| ns.to_string()),
+            namespace.map_or_else(|| String::new(), |ns| ns.to_string()),
             if namespace.is_some() {
                 Token::DoubleColon.literal_syntax()
             } else {
@@ -372,14 +372,9 @@ impl Engine {
             }
 
             // Run external function
-            let source = if source.is_empty() {
-                if parent_source.is_empty() {
-                    None
-                } else {
-                    Some(parent_source.as_str())
-                }
-            } else {
-                Some(source.as_str())
+            let source = match (source.as_str(), parent_source.as_str()) {
+                ("", "") => None,
+                ("", s) | (s, _) => Some(s),
             };
 
             let context = (self, name, source, &*global, lib, pos).into();
@@ -424,10 +419,9 @@ impl Engine {
                                 pos,
                             )
                         })?;
-                        let source = if global.source.is_empty() {
-                            None
-                        } else {
-                            Some(global.source.as_str())
+                        let source = match global.source.as_str() {
+                            "" => None,
+                            s => Some(s),
                         };
                         (debug(&text, source, pos).into(), false)
                     } else {
