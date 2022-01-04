@@ -165,7 +165,7 @@ impl Engine {
     pub fn register_raw_fn<N, T>(
         &mut self,
         name: N,
-        arg_types: &[TypeId],
+        arg_types: impl AsRef<[TypeId]>,
         func: impl Fn(NativeCallContext, &mut FnCallArgs) -> RhaiResultOf<T> + SendSync + 'static,
     ) -> &mut Self
     where
@@ -346,7 +346,7 @@ impl Engine {
         name: impl AsRef<str>,
         get_fn: impl Fn(&mut T) -> V + SendSync + 'static,
     ) -> &mut Self {
-        self.register_fn(&crate::engine::make_getter(name.as_ref()), get_fn)
+        self.register_fn(crate::engine::make_getter(name.as_ref()).as_str(), get_fn)
     }
     /// Register a getter function for a member of a registered type with the [`Engine`].
     ///
@@ -395,7 +395,7 @@ impl Engine {
         name: impl AsRef<str>,
         get_fn: impl Fn(&mut T) -> RhaiResultOf<V> + SendSync + 'static,
     ) -> &mut Self {
-        self.register_result_fn(&crate::engine::make_getter(name.as_ref()), get_fn)
+        self.register_result_fn(crate::engine::make_getter(name.as_ref()).as_str(), get_fn)
     }
     /// Register a setter function for a member of a registered type with the [`Engine`].
     ///
@@ -445,7 +445,7 @@ impl Engine {
         name: impl AsRef<str>,
         set_fn: impl Fn(&mut T, V) + SendSync + 'static,
     ) -> &mut Self {
-        self.register_fn(&crate::engine::make_setter(name.as_ref()), set_fn)
+        self.register_fn(crate::engine::make_setter(name.as_ref()).as_str(), set_fn)
     }
     /// Register a setter function for a member of a registered type with the [`Engine`].
     ///
@@ -496,7 +496,7 @@ impl Engine {
         name: impl AsRef<str>,
         set_fn: impl Fn(&mut T, V) -> RhaiResultOf<()> + SendSync + 'static,
     ) -> &mut Self {
-        self.register_result_fn(&crate::engine::make_setter(name.as_ref()), set_fn)
+        self.register_result_fn(crate::engine::make_setter(name.as_ref()).as_str(), set_fn)
     }
     /// Short-hand for registering both getter and setter functions
     /// of a registered type with the [`Engine`].
@@ -975,17 +975,17 @@ impl Engine {
     #[cfg(not(feature = "no_module"))]
     pub fn register_static_module(
         &mut self,
-        name: impl AsRef<str> + Into<Identifier>,
+        name: impl AsRef<str>,
         module: Shared<Module>,
     ) -> &mut Self {
         fn register_static_module_raw(
             root: &mut std::collections::BTreeMap<Identifier, Shared<Module>>,
-            name: impl AsRef<str> + Into<Identifier>,
+            name: &str,
             module: Shared<Module>,
         ) {
             let separator = crate::tokenizer::Token::DoubleColon.syntax();
 
-            if !name.as_ref().contains(separator.as_ref()) {
+            if !name.contains(separator.as_ref()) {
                 if !module.is_indexed() {
                     // Index the module (making a clone copy if necessary) if it is not indexed
                     let mut module = crate::func::native::shared_take_or_clone(module);
@@ -995,7 +995,7 @@ impl Engine {
                     root.insert(name.into(), module);
                 }
             } else {
-                let mut iter = name.as_ref().splitn(2, separator.as_ref());
+                let mut iter = name.splitn(2, separator.as_ref());
                 let sub_module = iter.next().expect("contains separator").trim();
                 let remainder = iter.next().expect("contains separator").trim();
 
@@ -1014,7 +1014,7 @@ impl Engine {
             }
         }
 
-        register_static_module_raw(&mut self.global_sub_modules, name, module);
+        register_static_module_raw(&mut self.global_sub_modules, name.as_ref(), module);
         self
     }
     /// _(metadata)_ Generate a list of all registered functions.

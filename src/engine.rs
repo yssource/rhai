@@ -626,8 +626,7 @@ impl GlobalRuntimeState {
     /// Get the index of a globally-imported [module][Module] by name.
     #[inline]
     #[must_use]
-    pub fn find_module(&self, name: impl AsRef<str>) -> Option<usize> {
-        let name = name.as_ref();
+    pub fn find_module(&self, name: &str) -> Option<usize> {
         let len = self.keys.len();
 
         self.keys.iter().rev().enumerate().find_map(|(i, key)| {
@@ -1041,26 +1040,32 @@ impl Default for Engine {
 
 /// Make getter function
 #[cfg(not(feature = "no_object"))]
-#[inline]
+#[inline(always)]
 #[must_use]
-pub fn make_getter(id: &str) -> String {
-    format!("{}{}", FN_GET, id)
+pub fn make_getter(id: &str) -> Identifier {
+    let mut buf = Identifier::new_const();
+    buf.push_str(FN_GET);
+    buf.push_str(id);
+    buf
 }
 
 /// Make setter function
 #[cfg(not(feature = "no_object"))]
-#[inline]
+#[inline(always)]
 #[must_use]
-pub fn make_setter(id: &str) -> String {
-    format!("{}{}", FN_SET, id)
+pub fn make_setter(id: &str) -> Identifier {
+    let mut buf = Identifier::new_const();
+    buf.push_str(FN_SET);
+    buf.push_str(id);
+    buf
 }
 
 /// Is this function an anonymous function?
 #[cfg(not(feature = "no_function"))]
 #[inline(always)]
 #[must_use]
-pub fn is_anonymous_fn(fn_name: impl AsRef<str>) -> bool {
-    fn_name.as_ref().starts_with(FN_ANONYMOUS)
+pub fn is_anonymous_fn(fn_name: &str) -> bool {
+    fn_name.starts_with(FN_ANONYMOUS)
 }
 
 /// Print to `stdout`

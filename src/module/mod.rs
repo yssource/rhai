@@ -116,12 +116,12 @@ impl FuncInfo {
 ///
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
 #[inline]
-pub fn calc_native_fn_hash(
-    modules: impl Iterator<Item = impl AsRef<str>>,
-    fn_name: impl AsRef<str>,
+pub fn calc_native_fn_hash<'a>(
+    modules: impl Iterator<Item = &'a str>,
+    fn_name: &str,
     params: &[TypeId],
 ) -> u64 {
-    let hash_script = calc_qualified_fn_hash(modules, fn_name.as_ref(), params.len());
+    let hash_script = calc_qualified_fn_hash(modules, fn_name, params.len());
     let hash_params = calc_fn_params_hash(params.iter().cloned());
     combine_hashes(hash_script, hash_params)
 }
@@ -644,8 +644,13 @@ impl Module {
     /// In other words, the number of entries should be one larger than the number of parameters.
     #[cfg(feature = "metadata")]
     #[inline]
-    pub fn update_fn_metadata(&mut self, hash_fn: u64, arg_names: &[impl AsRef<str>]) -> &mut Self {
+    pub fn update_fn_metadata<S: AsRef<str>>(
+        &mut self,
+        hash_fn: u64,
+        arg_names: impl AsRef<[S]>,
+    ) -> &mut Self {
         let mut param_names: StaticVec<_> = arg_names
+            .as_ref()
             .iter()
             .map(|name| self.interner.get("", name.as_ref()).into())
             .collect();
@@ -689,17 +694,23 @@ impl Module {
     /// doc-comment leader: `///` or `/**`.
     #[cfg(feature = "metadata")]
     #[inline]
-    pub fn update_fn_metadata_with_comments(
+    pub fn update_fn_metadata_with_comments<A: AsRef<str>, C: AsRef<str>>(
         &mut self,
         hash_fn: u64,
-        arg_names: &[impl AsRef<str>],
-        comments: &[impl AsRef<str>],
+        arg_names: impl AsRef<[A]>,
+        comments: impl AsRef<[C]>,
     ) -> &mut Self {
         self.update_fn_metadata(hash_fn, arg_names);
 
-        if !comments.is_empty() {
+        if !comments.as_ref().is_empty() {
             let f = self.functions.get_mut(&hash_fn).expect("exists");
-            f.comments = Some(comments.iter().map(|s| s.as_ref().into()).collect());
+            f.comments = Some(
+                comments
+                    .as_ref()
+                    .iter()
+                    .map(|s| s.as_ref().into())
+                    .collect(),
+            );
         }
 
         self
@@ -756,17 +767,18 @@ impl Module {
     #[inline]
     pub fn set_fn(
         &mut self,
-        name: impl AsRef<str> + Into<Identifier>,
+        name: impl AsRef<str>,
         namespace: FnNamespace,
         access: FnAccess,
         arg_names: Option<&[&str]>,
-        arg_types: &[TypeId],
+        arg_types: impl AsRef<[TypeId]>,
         func: CallableFunction,
     ) -> u64 {
         let _arg_names = arg_names;
         let is_method = func.is_method();
 
         let mut param_types: StaticVec<_> = arg_types
+            .as_ref()
             .iter()
             .cloned()
             .enumerate()
@@ -781,7 +793,7 @@ impl Module {
                 .flat_map(|&p| p.iter())
                 .map(|&arg| self.interner.get("", arg).into())
                 .collect::<StaticVec<_>>();
-            let return_type = if names.len() > arg_types.len() {
+            let return_type = if names.len() > arg_types.as_ref().len() {
                 names.pop().expect("exists")
             } else {
                 Default::default()
@@ -795,7 +807,7 @@ impl Module {
         self.functions.insert(
             hash_fn,
             FuncInfo {
-                name: self.interner.get("", name.as_ref()).into(),
+                name: self.interner.get("", name).into(),
                 namespace,
                 access,
                 params: param_types.len(),
@@ -845,21 +857,27 @@ impl Module {
     /// doc-comment leader: `///` or `/**`.
     #[cfg(feature = "metadata")]
     #[inline]
-    pub fn set_fn_with_comments(
+    pub fn set_fn_with_comments<S: AsRef<str>>(
         &mut self,
-        name: impl AsRef<str> + Into<Identifier>,
+        name: impl AsRef<str>,
         namespace: FnNamespace,
         access: FnAccess,
         arg_names: Option<&[&str]>,
-        arg_types: &[TypeId],
-        comments: &[impl AsRef<str>],
+        arg_types: impl AsRef<[TypeId]>,
+        comments: impl AsRef<[S]>,
         func: CallableFunction,
     ) -> u64 {
         let hash = self.set_fn(name, namespace, access, arg_names, arg_types, func);
 
-        if !comments.is_empty() {
+        if !comments.as_ref().is_empty() {
             let f = self.functions.get_mut(&hash).expect("exists");
-            f.comments = Some(comments.iter().map(|s| s.as_ref().into()).collect());
+            f.comments = Some(
+                comments
+                    .as_ref()
+                    .iter()
+                    .map(|s| s.as_ref().into())
+                    .collect(),
+            );
         }
 
         hash
@@ -932,16 +950,15 @@ impl Module {
     /// assert!(module.contains_fn(hash));
     /// ```
     #[inline(always)]
-    pub fn set_raw_fn<N, T, F>(
+    pub fn set_raw_fn<T, F>(
         &mut self,
-        name: N,
+        name: impl AsRef<str>,
         namespace: FnNamespace,
         access: FnAccess,
-        arg_types: &[TypeId],
+        arg_types: impl AsRef<[TypeId]>,
         func: F,
     ) -> u64
     where
-        N: AsRef<str> + Into<Identifier>,
         T: Variant + Clone,
         F: Fn(NativeCallContext, &mut FnCallArgs) -> RhaiResultOf<T> + SendSync + 'static,
     {
@@ -1025,7 +1042,7 @@ impl Module {
         F: Fn(&mut A) -> RhaiResultOf<T> + SendSync + 'static,
     {
         self.set_fn(
-            &crate::engine::make_getter(name.as_ref()),
+            crate::engine::make_getter(name.as_ref()).as_str(),
             FnNamespace::Global,
             FnAccess::Public,
             None,
@@ -1067,7 +1084,7 @@ impl Module {
         F: Fn(&mut A, B) -> RhaiResultOf<()> + SendSync + 'static,
     {
         self.set_fn(
-            &crate::engine::make_setter(name.as_ref()),
+            crate::engine::make_setter(name.as_ref()).as_str(),
             FnNamespace::Global,
             FnAccess::Public,
             None,

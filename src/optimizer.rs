@@ -110,12 +110,10 @@ impl<'a> OptimizerState<'a> {
     }
     /// Look up a constant from the list.
     #[inline]
-    pub fn find_constant(&self, name: impl AsRef<str>) -> Option<&Dynamic> {
+    pub fn find_constant(&self, name: &str) -> Option<&Dynamic> {
         if !self.propagate_constants {
             return None;
         }
-
-        let name = name.as_ref();
 
         for (n, access, value) in self.variables.iter().rev() {
             if n == name {
@@ -132,7 +130,7 @@ impl<'a> OptimizerState<'a> {
     #[inline]
     pub fn call_fn_with_constant_arguments(
         &self,
-        fn_name: impl AsRef<str>,
+        fn_name: &str,
         arg_values: &mut [Dynamic],
     ) -> Option<Dynamic> {
         #[cfg(not(feature = "no_function"))]
@@ -145,7 +143,7 @@ impl<'a> OptimizerState<'a> {
                 &mut GlobalRuntimeState::new(),
                 &mut EvalState::new(),
                 lib,
-                &fn_name,
+                fn_name,
                 calc_fn_hash(&fn_name, arg_values.len()),
                 &mut arg_values.iter_mut().collect::<StaticVec<_>>(),
                 false,
@@ -158,8 +156,12 @@ impl<'a> OptimizerState<'a> {
 }
 
 // Has a system function a Rust-native override?
-fn has_native_fn_override(engine: &Engine, hash_script: u64, arg_types: &[TypeId]) -> bool {
-    let hash_params = calc_fn_params_hash(arg_types.iter().cloned());
+fn has_native_fn_override(
+    engine: &Engine,
+    hash_script: u64,
+    arg_types: impl AsRef<[TypeId]>,
+) -> bool {
+    let hash_params = calc_fn_params_hash(arg_types.as_ref().iter().cloned());
     let hash = combine_hashes(hash_script, hash_params);
 
     // First check the global namespace and packages, but skip modules that are standard because

@@ -108,8 +108,7 @@ impl<'e> ParseState<'e> {
     /// Return `None` when the variable name is not found in the `stack`.
     #[inline]
     #[must_use]
-    pub fn access_var(&mut self, name: impl AsRef<str>, pos: Position) -> Option<NonZeroUsize> {
-        let name = name.as_ref();
+    pub fn access_var(&mut self, name: &str, pos: Position) -> Option<NonZeroUsize> {
         let mut barrier = false;
         let _pos = pos;
 
@@ -158,9 +157,7 @@ impl<'e> ParseState<'e> {
     #[cfg(not(feature = "no_module"))]
     #[inline]
     #[must_use]
-    pub fn find_module(&self, name: impl AsRef<str>) -> Option<NonZeroUsize> {
-        let name = name.as_ref();
-
+    pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
         self.modules
             .iter()
             .rev()
@@ -172,11 +169,7 @@ impl<'e> ParseState<'e> {
     /// Get an interned identifier, creating one if it is not yet interned.
     #[inline(always)]
     #[must_use]
-    pub fn get_identifier(
-        &mut self,
-        prefix: &'static str,
-        text: impl AsRef<str> + Into<Identifier> + Into<ImmutableString>,
-    ) -> Identifier {
+    pub fn get_identifier(&mut self, prefix: impl AsRef<str>, text: impl AsRef<str>) -> Identifier {
         self.interned_strings.get(prefix, text).into()
     }
 
@@ -186,8 +179,8 @@ impl<'e> ParseState<'e> {
     #[must_use]
     pub fn get_interned_string(
         &mut self,
-        prefix: &'static str,
-        text: impl AsRef<str> + Into<Identifier> + Into<ImmutableString>,
+        prefix: impl AsRef<str>,
+        text: impl AsRef<str>,
     ) -> ImmutableString {
         self.interned_strings.get(prefix, text)
     }
@@ -259,15 +252,15 @@ impl Expr {
         match self {
             Self::Variable(_, pos, x) if x.1.is_none() => {
                 let ident = x.2;
-                let getter = state.get_identifier(crate::engine::FN_GET, ident.as_str());
+                let getter = state.get_identifier(crate::engine::FN_GET, &ident);
                 let hash_get = calc_fn_hash(&getter, 1);
-                let setter = state.get_identifier(crate::engine::FN_SET, ident.as_str());
+                let setter = state.get_identifier(crate::engine::FN_SET, &ident);
                 let hash_set = calc_fn_hash(&setter, 2);
 
                 Self::Property(Box::new((
                     (getter, hash_get),
                     (setter, hash_set),
-                    (state.get_interned_string("", ident.as_str()), pos),
+                    (state.get_interned_string("", &ident), pos),
                 )))
             }
             _ => self,
@@ -1159,7 +1152,7 @@ fn parse_primary(
             Token::IntegerConstant(x) => Expr::IntegerConstant(x, settings.pos),
             Token::CharConstant(c) => Expr::CharConstant(c, settings.pos),
             Token::StringConstant(s) => {
-                Expr::StringConstant(state.get_identifier("", s).into(), settings.pos)
+                Expr::StringConstant(state.get_interned_string("", s), settings.pos)
             }
             Token::True => Expr::BoolConstant(true, settings.pos),
             Token::False => Expr::BoolConstant(false, settings.pos),
@@ -1998,7 +1991,7 @@ fn parse_binary_op(
         let hash = calc_fn_hash(&op, 2);
 
         let op_base = FnCallExpr {
-            name: state.get_identifier("", op.as_ref()),
+            name: state.get_identifier("", op),
             hashes: FnCallHashes::from_native(hash),
             ..Default::default()
         };
@@ -2125,7 +2118,7 @@ fn parse_custom_syntax(
                     && seg.len() > CUSTOM_SYNTAX_MARKER_SYNTAX_VARIANT.len() =>
             {
                 inputs.push(Expr::StringConstant(
-                    state.get_identifier("", seg).into(),
+                    state.get_interned_string("", seg),
                     pos,
                 ));
                 break;
@@ -2145,7 +2138,7 @@ fn parse_custom_syntax(
             }
             CUSTOM_SYNTAX_MARKER_SYMBOL => {
                 let (symbol, pos) = parse_symbol(input)?;
-                let symbol: ImmutableString = state.get_identifier("", symbol).into();
+                let symbol = state.get_interned_string("", symbol);
                 segments.push(symbol.clone());
                 tokens.push(state.get_identifier("", CUSTOM_SYNTAX_MARKER_SYMBOL));
                 inputs.push(Expr::StringConstant(symbol, pos));
@@ -2168,7 +2161,7 @@ fn parse_custom_syntax(
             CUSTOM_SYNTAX_MARKER_BOOL => match input.next().expect(NEVER_ENDS) {
                 (b @ Token::True, pos) | (b @ Token::False, pos) => {
                     inputs.push(Expr::BoolConstant(b == Token::True, pos));
-                    segments.push(state.get_identifier("", b.literal_syntax()).into());
+                    segments.push(state.get_interned_string("", b.literal_syntax()));
                     tokens.push(state.get_identifier("", CUSTOM_SYNTAX_MARKER_BOOL));
                 }
                 (_, pos) => {
@@ -2207,7 +2200,7 @@ fn parse_custom_syntax(
             },
             CUSTOM_SYNTAX_MARKER_STRING => match input.next().expect(NEVER_ENDS) {
                 (Token::StringConstant(s), pos) => {
-                    let s: ImmutableString = state.get_identifier("", s).into();
+                    let s = state.get_interned_string("", s);
                     inputs.push(Expr::StringConstant(s.clone(), pos));
                     segments.push(s);
                     tokens.push(state.get_identifier("", CUSTOM_SYNTAX_MARKER_STRING));
@@ -3268,11 +3261,7 @@ fn parse_anon_fn(
     params.iter().for_each(|p| p.hash(hasher));
     body.hash(hasher);
     let hash = hasher.finish();
-
-    let fn_name = state.get_identifier(
-        "",
-        &(format!("{}{:016x}", crate::engine::FN_ANONYMOUS, hash)),
-    );
+    let fn_name = state.get_identifier("", format!("{}{:016x}", crate::engine::FN_ANONYMOUS, hash));
 
     // Define the function
     let script = ScriptFnDef {

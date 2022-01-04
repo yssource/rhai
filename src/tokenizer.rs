@@ -694,10 +694,8 @@ impl Token {
 
     /// Reverse lookup a token from a piece of syntax.
     #[must_use]
-    pub fn lookup_from_syntax(syntax: impl AsRef<str>) -> Option<Self> {
+    pub fn lookup_from_syntax(syntax: &str) -> Option<Self> {
         use Token::*;
-
-        let syntax = syntax.as_ref();
 
         Some(match syntax {
             "{" => LeftBrace,
@@ -1355,9 +1353,7 @@ fn is_numeric_digit(c: char) -> bool {
 #[cfg(feature = "metadata")]
 #[inline]
 #[must_use]
-pub fn is_doc_comment(comment: impl AsRef<str>) -> bool {
-    let comment = comment.as_ref();
-
+pub fn is_doc_comment(comment: &str) -> bool {
     (comment.starts_with("///") && !comment.starts_with("////"))
         || (comment.starts_with("/**") && !comment.starts_with("/***"))
 }
@@ -2018,8 +2014,8 @@ fn get_identifier(
 /// Is this keyword allowed as a function?
 #[inline]
 #[must_use]
-pub fn is_keyword_function(name: impl AsRef<str>) -> bool {
-    match name.as_ref() {
+pub fn is_keyword_function(name: &str) -> bool {
+    match name {
         KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
         | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_IS_DEF_VAR => true,
 
@@ -2051,8 +2047,8 @@ pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
 /// Is a text string a valid script-defined function name?
 #[inline(always)]
 #[must_use]
-pub fn is_valid_function_name(name: impl AsRef<str>) -> bool {
-    is_valid_identifier(name.as_ref().chars())
+pub fn is_valid_function_name(name: &str) -> bool {
+    is_valid_identifier(name.chars())
 }
 
 /// Is a character valid to start an identifier?

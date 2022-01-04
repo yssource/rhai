@@ -213,7 +213,7 @@ impl Engine {
     /// ```
     pub fn register_custom_operator(
         &mut self,
-        keyword: impl AsRef<str> + Into<Identifier>,
+        keyword: impl AsRef<str>,
         precedence: u8,
     ) -> Result<&mut Self, String> {
         let precedence = Precedence::new(precedence);
@@ -247,7 +247,8 @@ impl Engine {
         }
 
         // Add to custom keywords
-        self.custom_keywords.insert(keyword.into(), precedence);
+        self.custom_keywords
+            .insert(keyword.as_ref().into(), precedence);
 
         Ok(self)
     }

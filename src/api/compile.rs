@@ -193,10 +193,10 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    pub fn compile_scripts_with_scope(
+    pub fn compile_scripts_with_scope<S: AsRef<str>>(
         &self,
         scope: &Scope,
-        scripts: &[impl AsRef<str>],
+        scripts: impl AsRef<[S]>,
     ) -> ParseResult<AST> {
         self.compile_with_scope_and_optimization_level(
             scope,
@@ -213,14 +213,16 @@ impl Engine {
     /// throughout the script _including_ functions. This allows functions to be optimized based on
     /// dynamic global constants.
     #[inline]
-    pub(crate) fn compile_with_scope_and_optimization_level(
+    pub(crate) fn compile_with_scope_and_optimization_level<S: AsRef<str>>(
         &self,
         scope: &Scope,
-        scripts: &[impl AsRef<str>],
+        scripts: impl AsRef<[S]>,
         #[cfg(not(feature = "no_optimize"))] optimization_level: crate::OptimizationLevel,
     ) -> ParseResult<AST> {
-        let (stream, tokenizer_control) =
-            self.lex_raw(scripts, self.token_mapper.as_ref().map(Box::as_ref));
+        let (stream, tokenizer_control) = self.lex_raw(
+            scripts.as_ref(),
+            self.token_mapper.as_ref().map(Box::as_ref),
+        );
         let mut state = ParseState::new(self, tokenizer_control);
         self.parse(
             &mut stream.peekable(),

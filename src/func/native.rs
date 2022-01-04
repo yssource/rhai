@@ -287,15 +287,16 @@ impl<'a> NativeCallContext<'a> {
         args: &mut [&mut Dynamic],
     ) -> RhaiResult {
         let fn_name = fn_name.as_ref();
+        let len = args.len();
 
         let hash = if is_method_call {
             FnCallHashes::from_all(
                 #[cfg(not(feature = "no_function"))]
-                calc_fn_hash(fn_name, args.len() - 1),
-                calc_fn_hash(fn_name, args.len()),
+                calc_fn_hash(fn_name, len - 1),
+                calc_fn_hash(fn_name, len),
             )
         } else {
-            calc_fn_hash(fn_name, args.len()).into()
+            calc_fn_hash(fn_name, len).into()
         };
 
         self.engine()
