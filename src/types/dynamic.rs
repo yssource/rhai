@@ -15,7 +15,8 @@ use std::{
 };
 
 #[cfg(not(feature = "no_std"))]
-#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm64"))]
 use std::time::Instant;
 
 #[cfg(not(feature = "no_std"))]
@@ -524,7 +525,8 @@ impl Hash for Dynamic {
                         value_any.downcast_ref::<i64>().expect(CHECKED).hash(state);
                     }
 
-                    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+                    #[cfg(not(target_arch = "wasm32"))]
+                    #[cfg(not(target_arch = "wasm64"))]
                     if type_id == TypeId::of::<u128>() {
                         TypeId::of::<u128>().hash(state);
                         value_any.downcast_ref::<u128>().expect(CHECKED).hash(state);
@@ -636,13 +638,20 @@ impl fmt::Display for Dynamic {
                 }
 
                 #[cfg(not(feature = "no_float"))]
+                #[cfg(not(feature = "f32_float"))]
                 if _type_id == TypeId::of::<f32>() {
                     return fmt::Display::fmt(_value_any.downcast_ref::<f32>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<f64>() {
+                }
+                #[cfg(not(feature = "no_float"))]
+                #[cfg(feature = "f32_float")]
+                if _type_id == TypeId::of::<f64>() {
                     return fmt::Display::fmt(_value_any.downcast_ref::<f64>().expect(CHECKED), f);
                 }
 
-                #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+                #[cfg(not(feature = "only_i32"))]
+                #[cfg(not(feature = "only_i64"))]
+                #[cfg(not(target_arch = "wasm32"))]
+                #[cfg(not(target_arch = "wasm64"))]
                 if _type_id == TypeId::of::<u128>() {
                     return fmt::Display::fmt(_value_any.downcast_ref::<u128>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<i128>() {
@@ -735,13 +744,20 @@ impl fmt::Debug for Dynamic {
                 }
 
                 #[cfg(not(feature = "no_float"))]
+                #[cfg(not(feature = "f32_float"))]
                 if _type_id == TypeId::of::<f32>() {
                     return fmt::Debug::fmt(_value_any.downcast_ref::<f32>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<f64>() {
+                }
+                #[cfg(not(feature = "no_float"))]
+                #[cfg(feature = "f32_float")]
+                if _type_id == TypeId::of::<f64>() {
                     return fmt::Debug::fmt(_value_any.downcast_ref::<f64>().expect(CHECKED), f);
                 }
 
-                #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+                #[cfg(not(feature = "only_i32"))]
+                #[cfg(not(feature = "only_i64"))]
+                #[cfg(not(target_arch = "wasm32"))]
+                #[cfg(not(target_arch = "wasm64"))]
                 if _type_id == TypeId::of::<u128>() {
                     return fmt::Debug::fmt(_value_any.downcast_ref::<u128>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<i128>() {
@@ -942,7 +958,6 @@ impl Dynamic {
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
-    #[cfg(not(feature = "f32_float"))]
     pub const FLOAT_PI: Self = Self::from_float(FloatConstants::PI);
     /// A [`Dynamic`] containing π/2.
     ///

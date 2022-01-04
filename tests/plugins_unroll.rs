@@ -1,4 +1,5 @@
-#![cfg(not(any(feature = "no_index", feature = "no_module")))]
+#![cfg(not(feature = "no_index"))]
+#![cfg(not(feature = "no_module"))]
 
 use rhai::plugin::*;
 use rhai::{Engine, EvalAltResult, Module, INT};

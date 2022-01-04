@@ -1,6 +1,7 @@
 //! Module that defines the public file-based API of [`Engine`].
 #![cfg(not(feature = "no_std"))]
-#![cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+#![cfg(not(target_arch = "wasm32"))]
+#![cfg(not(target_arch = "wasm64"))]
 
 use crate::types::dynamic::Variant;
 use crate::{Engine, RhaiResultOf, Scope, AST, ERR};
@@ -165,8 +166,6 @@ impl Engine {
     /// Evaluate a file, returning any error (if any).
     ///
     /// Not available under `no_std` or `WASM`.
-    #[cfg(not(feature = "no_std"))]
-    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     #[inline]
     pub fn run_file(&self, path: std::path::PathBuf) -> RhaiResultOf<()> {
         Self::read_file(path).and_then(|contents| self.run(&contents))
@@ -180,8 +179,6 @@ impl Engine {
     /// If not [`OptimizationLevel::None`][crate::OptimizationLevel::None], constants defined within
     /// the scope are propagated throughout the script _including_ functions. This allows functions
     /// to be optimized based on dynamic global constants.
-    #[cfg(not(feature = "no_std"))]
-    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     #[inline]
     pub fn run_file_with_scope(
         &self,

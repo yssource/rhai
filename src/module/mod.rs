@@ -702,15 +702,11 @@ impl Module {
     ) -> &mut Self {
         self.update_fn_metadata(hash_fn, arg_names);
 
-        if !comments.as_ref().is_empty() {
+        let comments = comments.as_ref();
+
+        if !comments.is_empty() {
             let f = self.functions.get_mut(&hash_fn).expect("exists");
-            f.comments = Some(
-                comments
-                    .as_ref()
-                    .iter()
-                    .map(|s| s.as_ref().into())
-                    .collect(),
-            );
+            f.comments = Some(comments.iter().map(|s| s.as_ref().into()).collect());
         }
 
         self
@@ -869,15 +865,11 @@ impl Module {
     ) -> u64 {
         let hash = self.set_fn(name, namespace, access, arg_names, arg_types, func);
 
-        if !comments.as_ref().is_empty() {
+        let comments = comments.as_ref();
+
+        if !comments.is_empty() {
             let f = self.functions.get_mut(&hash).expect("exists");
-            f.comments = Some(
-                comments
-                    .as_ref()
-                    .iter()
-                    .map(|s| s.as_ref().into())
-                    .collect(),
-            );
+            f.comments = Some(comments.iter().map(|s| s.as_ref().into()).collect());
         }
 
         hash

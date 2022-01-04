@@ -352,8 +352,13 @@ impl<'a> Target<'a> {
     /// Convert a shared or reference `Target` into a target with an owned value.
     #[inline(always)]
     #[must_use]
-    pub fn into_owned(self) -> Target<'static> {
-        self.take_or_clone().into()
+    pub fn into_owned(self) -> Self {
+        match self {
+            Self::RefMut(r) => Self::TempValue(r.clone()),
+            #[cfg(not(feature = "no_closure"))]
+            Self::SharedValue { value, .. } => Self::TempValue(value),
+            _ => self,
+        }
     }
     /// Propagate a changed value back to the original source.
     /// This has no effect for direct references.
@@ -1073,7 +1078,8 @@ pub fn is_anonymous_fn(fn_name: &str) -> bool {
 #[allow(unused_variables)]
 fn print_to_stdout(s: &str) {
     #[cfg(not(feature = "no_std"))]
-    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(target_arch = "wasm64"))]
     println!("{}", s);
 }
 
@@ -1082,7 +1088,8 @@ fn print_to_stdout(s: &str) {
 #[allow(unused_variables)]
 fn debug_to_stdout(s: &str, source: Option<&str>, pos: Position) {
     #[cfg(not(feature = "no_std"))]
-    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(target_arch = "wasm64"))]
     if let Some(source) = source {
         println!("{}{:?} | {}", source, pos, s);
     } else if pos.is_none() {
@@ -1102,7 +1109,8 @@ impl Engine {
 
         #[cfg(not(feature = "no_module"))]
         #[cfg(not(feature = "no_std"))]
-        #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(not(target_arch = "wasm64"))]
         {
             engine.module_resolver =
                 Some(Box::new(crate::module::resolvers::FileModuleResolver::new()));

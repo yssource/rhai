@@ -1142,7 +1142,7 @@ impl Engine {
                 } else {
                     // Turn it into a method call only if the object is not shared and not a simple value
                     is_ref_mut = true;
-                    let obj_ref = target.take_ref().expect("reference");
+                    let obj_ref = target.take_ref().expect("ref");
                     args.push(obj_ref);
                     args.extend(arg_values.iter_mut());
                 }
@@ -1217,7 +1217,7 @@ impl Engine {
                     // Turn it into a method call only if the object is not shared and not a simple value
                     let (first, rest) = arg_values.split_first_mut().expect("not empty");
                     first_arg_value = Some(first);
-                    let obj_ref = target.take_ref().expect("reference");
+                    let obj_ref = target.take_ref().expect("ref");
                     args.push(obj_ref);
                     args.extend(rest.iter_mut());
                 }

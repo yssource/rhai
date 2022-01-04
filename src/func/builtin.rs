@@ -25,7 +25,12 @@ const BUILTIN: &str = "data type was checked";
 #[inline]
 #[must_use]
 fn is_numeric(type_id: TypeId) -> bool {
-    let result = type_id == TypeId::of::<u8>()
+    let result = false;
+
+    #[cfg(not(feature = "only_i64"))]
+    #[cfg(not(feature = "only_i32"))]
+    let result = result
+        || type_id == TypeId::of::<u8>()
         || type_id == TypeId::of::<u16>()
         || type_id == TypeId::of::<u32>()
         || type_id == TypeId::of::<u64>()
@@ -34,7 +39,10 @@ fn is_numeric(type_id: TypeId) -> bool {
         || type_id == TypeId::of::<i32>()
         || type_id == TypeId::of::<i64>();
 
-    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+    #[cfg(not(feature = "only_i64"))]
+    #[cfg(not(feature = "only_i32"))]
+    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(target_arch = "wasm64"))]
     let result = result || type_id == TypeId::of::<u128>() || type_id == TypeId::of::<i128>();
 
     #[cfg(not(feature = "no_float"))]

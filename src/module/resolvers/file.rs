@@ -1,5 +1,6 @@
 #![cfg(not(feature = "no_std"))]
-#![cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+#![cfg(not(target_arch = "wasm32"))]
+#![cfg(not(target_arch = "wasm64"))]
 
 use crate::func::native::shared_write_lock;
 use crate::{

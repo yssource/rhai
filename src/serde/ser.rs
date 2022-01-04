@@ -93,7 +93,8 @@ impl Serializer for &mut DynamicSerializer {
     type SerializeSeq = DynamicSerializer;
     type SerializeTuple = DynamicSerializer;
     type SerializeTupleStruct = DynamicSerializer;
-    #[cfg(not(any(feature = "no_object", feature = "no_index")))]
+    #[cfg(not(feature = "no_object"))]
+    #[cfg(not(feature = "no_index"))]
     type SerializeTupleVariant = TupleVariantSerializer;
     #[cfg(any(feature = "no_object", feature = "no_index"))]
     type SerializeTupleVariant = serde::ser::Impossible<Dynamic, RhaiError>;
@@ -629,13 +630,15 @@ impl SerializeStruct for DynamicSerializer {
     }
 }
 
-#[cfg(not(any(feature = "no_object", feature = "no_index")))]
+#[cfg(not(feature = "no_object"))]
+#[cfg(not(feature = "no_index"))]
 struct TupleVariantSerializer {
     variant: &'static str,
     array: crate::Array,
 }
 
-#[cfg(not(any(feature = "no_object", feature = "no_index")))]
+#[cfg(not(feature = "no_object"))]
+#[cfg(not(feature = "no_index"))]
 impl serde::ser::SerializeTupleVariant for TupleVariantSerializer {
     type Ok = Dynamic;
     type Error = RhaiError;

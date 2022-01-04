@@ -193,7 +193,8 @@ def_package! {
             reg_functions!(lib += arith_numbers; i8, u8, i16, u16, i32, u32, u64);
             reg_functions!(lib += signed_numbers; i8, i16, i32);
 
-            #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(target_arch = "wasm64"))]
             {
                 reg_functions!(lib += arith_num_128; i128, u128);
                 reg_functions!(lib += signed_num_128; i128);
@@ -237,7 +238,8 @@ gen_arithmetic_functions!(arith_numbers => i8, u8, i16, u16, i32, u32, u64);
 
 #[cfg(not(feature = "only_i32"))]
 #[cfg(not(feature = "only_i64"))]
-#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm64"))]
 gen_arithmetic_functions!(arith_num_128 => i128, u128);
 
 gen_signed_functions!(signed_basic => INT);
@@ -248,7 +250,8 @@ gen_signed_functions!(signed_numbers => i8, i16, i32);
 
 #[cfg(not(feature = "only_i32"))]
 #[cfg(not(feature = "only_i64"))]
-#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm64"))]
 gen_signed_functions!(signed_num_128 => i128);
 
 #[cfg(not(feature = "no_float"))]

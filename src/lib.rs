@@ -41,7 +41,8 @@
 //!     engine.register_fn("compute", compute_something);
 //!
 //! #   #[cfg(not(feature = "no_std"))]
-//! #   #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+//! #   #[cfg(not(target_arch = "wasm32"))]
+//! #   #[cfg(not(target_arch = "wasm64"))]
 //!     // Evaluate the script, expecting a 'bool' result
 //!     let result = engine.eval_file::<bool>("my_script.rhai".into())?;
 //!
@@ -366,11 +367,13 @@ compile_error!("`stdweb` cannot be used with `no-std`");
 #[cfg(feature = "no_std")]
 compile_error!("`no_std` cannot be used for WASM target");
 
-#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm64"))]
 #[cfg(feature = "wasm-bindgen")]
 compile_error!("`wasm-bindgen` cannot be used for non-WASM target");
 
-#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm64"))]
 #[cfg(feature = "stdweb")]
 compile_error!("`stdweb` cannot be used non-WASM target");
 
