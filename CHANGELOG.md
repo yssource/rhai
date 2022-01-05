@@ -18,6 +18,12 @@ Breaking changes
 * `LogicPackage` is removed from `CorePackage`.
 * Bit-field functions are moved into a new `BitFieldPackage` (used to be in `LogicPackage`) which makes more sense.
 
+Bug fixes
+---------
+
+* Constructing a literal array or object map now checks for size limits for each item instead of at the very end when it is already too late.
+* Non-`INT` integer types are now treated exactly as custom types under `only_i64` and `only_i32`.
+
 New features
 ------------
 
