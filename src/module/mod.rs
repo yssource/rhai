@@ -7,7 +7,6 @@ use crate::func::{
 };
 use crate::tokenizer::Token;
 use crate::types::dynamic::Variant;
-use crate::types::StringsInterner;
 use crate::{
     calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes, Dynamic, Identifier,
     ImmutableString, NativeCallContext, RhaiResultOf, Shared, StaticVec,
@@ -156,8 +155,6 @@ pub struct Module {
     indexed: bool,
     /// Does the [`Module`] contain indexed functions that have been exposed to the global namespace?
     contains_indexed_global_functions: bool,
-    /// Interned strings.
-    interner: StringsInterner,
 }
 
 impl Default for Module {
@@ -255,7 +252,6 @@ impl Module {
             all_type_iterators: BTreeMap::new(),
             indexed: true,
             contains_indexed_global_functions: false,
-            interner: StringsInterner::new(),
         }
     }
 
@@ -482,11 +478,7 @@ impl Module {
         let num_params = fn_def.params.len();
         let hash_script = crate::calc_fn_hash(&fn_def.name, num_params);
         #[cfg(feature = "metadata")]
-        let param_names_and_types = fn_def
-            .params
-            .iter()
-            .map(|v| self.interner.get("", v.as_str()).into())
-            .collect();
+        let param_names_and_types = fn_def.params.iter().cloned().collect();
         self.functions.insert(
             hash_script,
             FuncInfo {
@@ -498,7 +490,7 @@ impl Module {
                 #[cfg(feature = "metadata")]
                 param_names_and_types,
                 #[cfg(feature = "metadata")]
-                return_type_name: self.interner.get("", "Dynamic").into(),
+                return_type_name: "Dynamic".into(),
                 #[cfg(feature = "metadata")]
                 comments: None,
                 func: Into::<CallableFunction>::into(fn_def).into(),
@@ -652,7 +644,7 @@ impl Module {
         let mut param_names: StaticVec<_> = arg_names
             .as_ref()
             .iter()
-            .map(|name| self.interner.get("", name.as_ref()).into())
+            .map(|s| s.as_ref().into())
             .collect();
 
         if let Some(f) = self.functions.get_mut(&hash_fn) {
@@ -787,7 +779,7 @@ impl Module {
             let mut names = _arg_names
                 .iter()
                 .flat_map(|&p| p.iter())
-                .map(|&arg| self.interner.get("", arg).into())
+                .map(|&s| s.into())
                 .collect::<StaticVec<_>>();
             let return_type = if names.len() > arg_types.as_ref().len() {
                 names.pop().expect("exists")
@@ -803,7 +795,7 @@ impl Module {
         self.functions.insert(
             hash_fn,
             FuncInfo {
-                name: self.interner.get("", name).into(),
+                name: name.as_ref().into(),
                 namespace,
                 access,
                 params: param_types.len(),
@@ -1302,7 +1294,6 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
-        self.interner += other.interner;
         self
     }
 
@@ -1322,7 +1313,6 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
-        self.interner += other.interner;
         self
     }
 
@@ -1351,7 +1341,6 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
-        self.interner += &other.interner;
         self
     }
 
@@ -1401,7 +1390,6 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
-        self.interner += &other.interner;
         self
     }
 
