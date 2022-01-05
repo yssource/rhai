@@ -1462,7 +1462,6 @@ impl Dynamic {
     /// Casting to a [`Dynamic`] just returns as is, but if it contains a shared value,
     /// it is cloned into a [`Dynamic`] with a normal value.
     ///
-    /// Returns [`None`] if types mismatched.
     ///
     /// # Panics or Deadlocks
     ///
