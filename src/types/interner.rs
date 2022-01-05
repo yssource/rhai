@@ -1,9 +1,7 @@
-#[cfg(not(feature = "no_object"))]
-use crate::engine::{make_getter, make_setter, FN_GET, FN_SET};
 use crate::{Identifier, ImmutableString};
-use std::ops::AddAssign;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
+use std::{collections::BTreeMap, ops::AddAssign};
 
 /// _(internals)_ A factory of identifiers from text strings.
 /// Exported under the `internals` feature only.
@@ -12,13 +10,13 @@ use std::prelude::v1::*;
 #[derive(Debug, Clone, Default, Hash)]
 pub struct StringsInterner {
     /// Normal strings.
-    strings: std::collections::BTreeMap<Identifier, ImmutableString>,
+    strings: BTreeMap<Identifier, ImmutableString>,
     /// Property getters.
     #[cfg(not(feature = "no_object"))]
-    getters: std::collections::BTreeMap<Identifier, ImmutableString>,
+    getters: BTreeMap<Identifier, ImmutableString>,
     /// Property setters.
     #[cfg(not(feature = "no_object"))]
-    setters: std::collections::BTreeMap<Identifier, ImmutableString>,
+    setters: BTreeMap<Identifier, ImmutableString>,
 }
 
 impl StringsInterner {
@@ -27,11 +25,11 @@ impl StringsInterner {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            strings: std::collections::BTreeMap::new(),
+            strings: BTreeMap::new(),
             #[cfg(not(feature = "no_object"))]
-            getters: std::collections::BTreeMap::new(),
+            getters: BTreeMap::new(),
             #[cfg(not(feature = "no_object"))]
-            setters: std::collections::BTreeMap::new(),
+            setters: BTreeMap::new(),
         }
     }
     /// Get an identifier from a text string and prefix, adding it to the interner if necessary.
@@ -54,9 +52,9 @@ impl StringsInterner {
             "" => (&mut self.strings, |s| s.into()),
 
             #[cfg(not(feature = "no_object"))]
-            FN_GET => (&mut self.getters, |s| make_getter(s)),
+            crate::engine::FN_GET => (&mut self.getters, crate::engine::make_getter),
             #[cfg(not(feature = "no_object"))]
-            FN_SET => (&mut self.setters, |s| make_setter(s)),
+            crate::engine::FN_SET => (&mut self.setters, crate::engine::make_setter),
 
             _ => unreachable!("unsupported prefix {}", prefix.as_ref()),
         };
