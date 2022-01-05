@@ -1440,8 +1440,7 @@ impl Engine {
                             }
                         }
 
-                        self.check_data_size(target.as_ref())
-                            .map_err(|err| err.fill_position(root.1))?;
+                        self.check_data_size(target.as_ref(), root.1)?;
 
                         Ok(result)
                     }
@@ -1482,8 +1481,7 @@ impl Engine {
                             )?;
                         }
 
-                        self.check_data_size(target.as_ref())
-                            .map_err(|err| err.fill_position(root.1))?;
+                        self.check_data_size(target.as_ref(), root.1)?;
 
                         Ok((Dynamic::UNIT, true))
                     }
@@ -1529,8 +1527,7 @@ impl Engine {
                             )
                             .map_err(|err| err.fill_position(new_pos))?;
                         }
-                        self.check_data_size(target.as_ref())
-                            .map_err(|err| err.fill_position(root.1))?;
+                        self.check_data_size(target.as_ref(), root.1)?;
                         Ok((Dynamic::UNIT, true))
                     }
                     // {xxx:map}.id
@@ -1586,8 +1583,7 @@ impl Engine {
                             )
                             .map_err(|err| err.fill_position(new_pos))?;
 
-                            self.check_data_size(target.as_ref())
-                                .map_err(|err| err.fill_position(root.1))?;
+                            self.check_data_size(target.as_ref(), root.1)?;
 
                             new_val = orig_val;
                         }
@@ -1780,8 +1776,7 @@ impl Engine {
                                             _ => Err(err),
                                         },
                                     )?;
-                                    self.check_data_size(target.as_ref())
-                                        .map_err(|err| err.fill_position(root.1))?;
+                                    self.check_data_size(target.as_ref(), root.1)?;
                                 }
 
                                 Ok((result, may_be_changed))
@@ -1845,7 +1840,9 @@ impl Engine {
             scope, global, state, lib, this_ptr, rhs, term, chain_type, idx_values, 0, level,
         )?;
 
-        match lhs {
+        let is_assignment = new_val.is_some();
+
+        let result = match lhs {
             // id.??? or id[???]
             Expr::Variable(_, var_pos, x) => {
                 #[cfg(not(feature = "unchecked"))]
@@ -1865,7 +1862,7 @@ impl Engine {
                 .map_err(|err| err.fill_position(op_pos))
             }
             // {expr}.??? = ??? or {expr}[???] = ???
-            _ if new_val.is_some() => unreachable!("cannot assign to an expression"),
+            _ if is_assignment => unreachable!("cannot assign to an expression"),
             // {expr}.??? or {expr}[???]
             expr => {
                 let value = self.eval_expr(scope, global, state, lib, this_ptr, expr, level)?;
@@ -1875,9 +1872,15 @@ impl Engine {
                     global, state, lib, this_ptr, obj_ptr, root, rhs, term, idx_values, chain_type,
                     level, new_val,
                 )
-                .map(|(v, _)| v)
+                .map(|(v, _)| if is_assignment { Dynamic::UNIT } else { v })
                 .map_err(|err| err.fill_position(op_pos))
             }
+        };
+
+        if is_assignment {
+            result.map(|_| Dynamic::UNIT)
+        } else {
+            self.check_return_value(result, expr.position())
         }
     }
 
@@ -2305,8 +2308,23 @@ impl Engine {
         }
     }
 
-    /// Evaluate an expression.
-    pub(crate) fn eval_expr(
+    /// Evaluate a constant expression.
+    fn eval_constant_expr(expr: &Expr) -> RhaiResult {
+        Ok(match expr {
+            Expr::DynamicConstant(x, _) => x.as_ref().clone(),
+            Expr::IntegerConstant(x, _) => (*x).into(),
+            #[cfg(not(feature = "no_float"))]
+            Expr::FloatConstant(x, _) => (*x).into(),
+            Expr::StringConstant(x, _) => x.clone().into(),
+            Expr::CharConstant(x, _) => (*x).into(),
+            Expr::BoolConstant(x, _) => (*x).into(),
+            Expr::Unit(_) => Dynamic::UNIT,
+            _ => unreachable!("constant expression expected but gets {:?}", expr),
+        })
+    }
+
+    /// Evaluate a literal expression.
+    fn eval_literal_expr(
         &self,
         scope: &mut Scope,
         global: &mut GlobalRuntimeState,
@@ -2316,49 +2334,13 @@ impl Engine {
         expr: &Expr,
         level: usize,
     ) -> RhaiResult {
-        #[cfg(not(feature = "unchecked"))]
-        self.inc_operations(&mut global.num_operations, expr.position())?;
-
-        let result = match expr {
-            Expr::DynamicConstant(x, _) => Ok(x.as_ref().clone()),
-            Expr::IntegerConstant(x, _) => Ok((*x).into()),
-            #[cfg(not(feature = "no_float"))]
-            Expr::FloatConstant(x, _) => Ok((*x).into()),
-            Expr::StringConstant(x, _) => Ok(x.clone().into()),
-            Expr::CharConstant(x, _) => Ok((*x).into()),
-
-            Expr::Variable(None, var_pos, x) if x.0.is_none() && x.2 == KEYWORD_THIS => this_ptr
-                .as_deref()
-                .cloned()
-                .ok_or_else(|| ERR::ErrorUnboundThis(*var_pos).into()),
-            Expr::Variable(_, _, _) => self
-                .search_namespace(scope, global, state, lib, this_ptr, expr)
-                .map(|(val, _)| val.take_or_clone()),
-
-            // Statement block
-            Expr::Stmt(x) if x.is_empty() => Ok(Dynamic::UNIT),
-            Expr::Stmt(x) => {
-                self.eval_stmt_block(scope, global, state, lib, this_ptr, x, true, level)
-            }
-
-            // lhs[idx_expr]
-            #[cfg(not(feature = "no_index"))]
-            Expr::Index(_, _, _) => {
-                self.eval_dot_index_chain(scope, global, state, lib, this_ptr, expr, level, None)
-            }
-
-            // lhs.dot_rhs
-            #[cfg(not(feature = "no_object"))]
-            Expr::Dot(_, _, _) => {
-                self.eval_dot_index_chain(scope, global, state, lib, this_ptr, expr, level, None)
-            }
-
+        match expr {
             // `... ${...} ...`
             Expr::InterpolatedString(x, pos) => {
                 let mut pos = *pos;
                 let mut result: Dynamic = self.const_empty_string().into();
 
-                x.iter().try_for_each(|expr| {
+                for expr in x.iter() {
                     let item = self.eval_expr(scope, global, state, lib, this_ptr, expr, level)?;
 
                     self.eval_op_assignment(
@@ -2375,83 +2357,67 @@ impl Engine {
 
                     pos = expr.position();
 
-                    self.check_data_size(&result)
-                        .map_err(|err| err.fill_position(pos))
-                })?;
+                    self.check_data_size(&result, pos)?;
+                }
 
                 assert!(
                     result.is::<ImmutableString>(),
                     "interpolated string must be a string"
                 );
 
-                Ok(result)
+                self.check_return_value(Ok(result), expr.position())
             }
 
             #[cfg(not(feature = "no_index"))]
-            Expr::Array(x, _) => Ok(x
-                .iter()
-                .try_fold(
-                    crate::Array::with_capacity(x.len()),
-                    |mut arr, item| -> RhaiResultOf<_> {
-                        arr.push(
-                            self.eval_expr(scope, global, state, lib, this_ptr, item, level)?
-                                .flatten(),
-                        );
-                        Ok(arr)
-                    },
-                )?
-                .into()),
+            Expr::Array(x, _) => {
+                let mut arr = Dynamic::from_array(crate::Array::with_capacity(x.len()));
+
+                for item_expr in x.iter() {
+                    arr.write_lock::<crate::Array>().expect("`Array`").push(
+                        self.eval_expr(scope, global, state, lib, this_ptr, item_expr, level)?
+                            .flatten(),
+                    );
+
+                    self.check_data_size(&arr, item_expr.position())?;
+                }
+
+                Ok(arr)
+            }
 
             #[cfg(not(feature = "no_object"))]
-            Expr::Map(x, _) => Ok(x
-                .0
-                .iter()
-                .try_fold(
-                    x.1.clone(),
-                    |mut map, (Ident { name: key, .. }, expr)| -> RhaiResultOf<_> {
-                        let value_ref = map.get_mut(key.as_str()).expect("contains all keys");
-                        *value_ref = self
-                            .eval_expr(scope, global, state, lib, this_ptr, expr, level)?
-                            .flatten();
-                        Ok(map)
-                    },
-                )?
-                .into()),
+            Expr::Map(x, _) => {
+                let mut map = Dynamic::from_map(x.1.clone());
 
-            // Namespace-qualified function call
-            Expr::FnCall(x, pos) if x.is_qualified() => {
-                let FnCallExpr {
-                    name,
-                    namespace,
-                    hashes,
-                    args,
-                    constants,
-                    ..
-                } = x.as_ref();
-                let namespace = namespace.as_ref().expect("qualified function call");
-                let hash = hashes.native;
-                self.make_qualified_function_call(
-                    scope, global, state, lib, this_ptr, namespace, name, args, constants, hash,
-                    *pos, level,
-                )
+                for (Ident { name, .. }, value_expr) in x.0.iter() {
+                    *map.write_lock::<crate::Map>()
+                        .expect("`Map`")
+                        .get_mut(name.as_str())
+                        .expect("exists") = self
+                        .eval_expr(scope, global, state, lib, this_ptr, value_expr, level)?
+                        .flatten();
+
+                    self.check_data_size(&map, value_expr.position())?;
+                }
+
+                Ok(map)
             }
 
-            // Normal function call
-            Expr::FnCall(x, pos) => {
-                let FnCallExpr {
-                    name,
-                    capture_parent_scope: capture,
-                    hashes,
-                    args,
-                    constants,
-                    ..
-                } = x.as_ref();
-                self.make_function_call(
-                    scope, global, state, lib, this_ptr, name, args, constants, *hashes, *pos,
-                    *capture, level,
-                )
-            }
+            _ => unreachable!("literal expression expected but gets {:?}", expr),
+        }
+    }
 
+    /// Evaluate a simple expression.
+    fn eval_simple_expr(
+        &self,
+        scope: &mut Scope,
+        global: &mut GlobalRuntimeState,
+        state: &mut EvalState,
+        lib: &[&Module],
+        this_ptr: &mut Option<&mut Dynamic>,
+        expr: &Expr,
+        level: usize,
+    ) -> RhaiResult {
+        match expr {
             Expr::And(x, _) => {
                 Ok((self
                     .eval_expr(scope, global, state, lib, this_ptr, &x.lhs, level)?
@@ -2478,9 +2444,6 @@ impl Engine {
                 .into())
             }
 
-            Expr::BoolConstant(x, _) => Ok((*x).into()),
-            Expr::Unit(_) => Ok(Dynamic::UNIT),
-
             Expr::Custom(custom, _) => {
                 let expressions: StaticVec<_> = custom.inputs.iter().map(Into::into).collect();
                 let key_token = custom.tokens.first().expect("not empty");
@@ -2494,14 +2457,166 @@ impl Engine {
                     this_ptr,
                     level,
                 };
-                (custom_def.func)(&mut context, &expressions)
+
+                let result = (custom_def.func)(&mut context, &expressions);
+
+                self.check_return_value(result, expr.position())
+            }
+
+            _ => unreachable!("simple expression expected but gets {:?}", expr),
+        }
+    }
+
+    /// Evaluate a variable expression.
+    fn eval_variable_expr(
+        &self,
+        scope: &mut Scope,
+        global: &mut GlobalRuntimeState,
+        state: &mut EvalState,
+        lib: &[&Module],
+        this_ptr: &mut Option<&mut Dynamic>,
+        expr: &Expr,
+        _level: usize,
+    ) -> RhaiResult {
+        let result = match expr {
+            Expr::Variable(None, var_pos, x) if x.0.is_none() && x.2 == KEYWORD_THIS => this_ptr
+                .as_deref()
+                .cloned()
+                .ok_or_else(|| ERR::ErrorUnboundThis(*var_pos).into()),
+
+            Expr::Variable(_, _, _) => self
+                .search_namespace(scope, global, state, lib, this_ptr, expr)
+                .map(|(val, _)| val.take_or_clone()),
+
+            _ => unreachable!("Expr::Variable expected but gets {:?}", expr),
+        };
+
+        self.check_return_value(result, expr.position())
+    }
+
+    /// Evaluate a function call expression.
+    fn eval_fn_call_expr(
+        &self,
+        scope: &mut Scope,
+        global: &mut GlobalRuntimeState,
+        state: &mut EvalState,
+        lib: &[&Module],
+        this_ptr: &mut Option<&mut Dynamic>,
+        expr: &FnCallExpr,
+        pos: Position,
+        level: usize,
+    ) -> RhaiResult {
+        let result = if expr.is_qualified() {
+            // Qualified function call
+            let FnCallExpr {
+                name,
+                namespace,
+                hashes,
+                args,
+                constants,
+                ..
+            } = expr;
+            let namespace = namespace.as_ref().expect("qualified function call");
+            let hash = hashes.native;
+
+            self.make_qualified_function_call(
+                scope, global, state, lib, this_ptr, namespace, name, args, constants, hash, pos,
+                level,
+            )
+        } else {
+            // Normal function call
+            let FnCallExpr {
+                name,
+                capture_parent_scope: capture,
+                hashes,
+                args,
+                constants,
+                ..
+            } = expr;
+
+            self.make_function_call(
+                scope, global, state, lib, this_ptr, name, args, constants, *hashes, pos, *capture,
+                level,
+            )
+        };
+
+        self.check_return_value(result, pos)
+    }
+
+    /// Evaluate an expression.
+    pub(crate) fn eval_expr(
+        &self,
+        scope: &mut Scope,
+        global: &mut GlobalRuntimeState,
+        state: &mut EvalState,
+        lib: &[&Module],
+        this_ptr: &mut Option<&mut Dynamic>,
+        expr: &Expr,
+        level: usize,
+    ) -> RhaiResult {
+        #[cfg(not(feature = "unchecked"))]
+        self.inc_operations(&mut global.num_operations, expr.position())?;
+
+        match expr {
+            Expr::DynamicConstant(_, _)
+            | Expr::IntegerConstant(_, _)
+            | Expr::StringConstant(_, _)
+            | Expr::CharConstant(_, _)
+            | Expr::BoolConstant(_, _)
+            | Expr::Unit(_) => Self::eval_constant_expr(expr),
+            #[cfg(not(feature = "no_float"))]
+            Expr::FloatConstant(_, _) => Self::eval_constant_expr(expr),
+
+            // Variable
+            Expr::Variable(_, _, _) => {
+                self.eval_variable_expr(scope, global, state, lib, this_ptr, expr, level)
+            }
+
+            // Statement block
+            Expr::Stmt(x) if x.is_empty() => Ok(Dynamic::UNIT),
+            Expr::Stmt(x) => {
+                self.eval_stmt_block(scope, global, state, lib, this_ptr, x, true, level)
+            }
+
+            // lhs[idx_expr]
+            #[cfg(not(feature = "no_index"))]
+            Expr::Index(_, _, _) => {
+                self.eval_dot_index_chain(scope, global, state, lib, this_ptr, expr, level, None)
+            }
+
+            // lhs.dot_rhs
+            #[cfg(not(feature = "no_object"))]
+            Expr::Dot(_, _, _) => {
+                self.eval_dot_index_chain(scope, global, state, lib, this_ptr, expr, level, None)
+            }
+
+            // `... ${...} ...`
+            Expr::InterpolatedString(_, _) => {
+                self.eval_literal_expr(scope, global, state, lib, this_ptr, expr, level)
+            }
+
+            #[cfg(not(feature = "no_index"))]
+            Expr::Array(_, _) => {
+                self.eval_literal_expr(scope, global, state, lib, this_ptr, expr, level)
+            }
+
+            #[cfg(not(feature = "no_object"))]
+            Expr::Map(_, _) => {
+                self.eval_literal_expr(scope, global, state, lib, this_ptr, expr, level)
+            }
+
+            // Function call
+            Expr::FnCall(x, pos) => {
+                self.eval_fn_call_expr(scope, global, state, lib, this_ptr, x, *pos, level)
+            }
+
+            // Simple expressions
+            Expr::And(_, _) | Expr::Or(_, _) | Expr::Custom(_, _) => {
+                self.eval_simple_expr(scope, global, state, lib, this_ptr, expr, level)
             }
 
             _ => unreachable!("expression cannot be evaluated: {:?}", expr),
-        };
-
-        self.check_return_value(result)
-            .map_err(|err| err.fill_position(expr.position()))
+        }
     }
 
     /// Evaluate a statements block.
@@ -2529,10 +2644,12 @@ impl Engine {
             state.scope_level += 1;
         }
 
-        let result = statements.iter().try_fold(Dynamic::UNIT, |_, stmt| {
+        let mut result = Dynamic::UNIT;
+
+        for stmt in statements {
             let _mods_len = global.num_imported_modules();
 
-            let r = self.eval_stmt(
+            result = self.eval_stmt(
                 scope,
                 global,
                 state,
@@ -2566,9 +2683,7 @@ impl Engine {
                     }
                 }
             }
-
-            Ok(r)
-        });
+        }
 
         // If imports list is modified, pop the functions lookup cache
         state.rewind_fn_resolution_caches(orig_fn_resolution_caches_len);
@@ -2583,7 +2698,7 @@ impl Engine {
             state.always_search_scope = orig_always_search_scope;
         }
 
-        result
+        Ok(result)
     }
 
     /// Evaluate an op-assignment statement.
@@ -2715,8 +2830,7 @@ impl Engine {
                 .map_err(|err| err.fill_position(rhs_expr.position()))?;
 
                 if op_info.is_some() {
-                    self.check_data_size(lhs_ptr.as_ref())
-                        .map_err(|err| err.fill_position(lhs_expr.position()))?;
+                    self.check_data_size(lhs_ptr.as_ref(), lhs_expr.position())?;
                 }
 
                 Ok(Dynamic::UNIT)
@@ -3058,38 +3172,9 @@ impl Engine {
                 Err(ERR::LoopBreak(options.contains(AST_OPTION_BREAK_OUT), *pos).into())
             }
 
-            // Namespace-qualified function call
-            Stmt::FnCall(x, pos) if x.is_qualified() => {
-                let FnCallExpr {
-                    name,
-                    namespace,
-                    hashes,
-                    args,
-                    constants,
-                    ..
-                } = x.as_ref();
-                let namespace = namespace.as_ref().expect("qualified function call");
-                let hash = hashes.native;
-                self.make_qualified_function_call(
-                    scope, global, state, lib, this_ptr, namespace, name, args, constants, hash,
-                    *pos, level,
-                )
-            }
-
-            // Normal function call
+            // Function call
             Stmt::FnCall(x, pos) => {
-                let FnCallExpr {
-                    name,
-                    capture_parent_scope: capture,
-                    hashes,
-                    args,
-                    constants,
-                    ..
-                } = x.as_ref();
-                self.make_function_call(
-                    scope, global, state, lib, this_ptr, name, args, constants, *hashes, *pos,
-                    *capture, level,
-                )
+                self.eval_fn_call_expr(scope, global, state, lib, this_ptr, x, *pos, level)
             }
 
             // Try/Catch statement
@@ -3329,12 +3414,11 @@ impl Engine {
             }
         };
 
-        self.check_return_value(result)
-            .map_err(|err| err.fill_position(stmt.position()))
+        self.check_return_value(result, stmt.position())
     }
 
     /// Check a result to ensure that the data size is within allowable limit.
-    fn check_return_value(&self, mut result: RhaiResult) -> RhaiResult {
+    fn check_return_value(&self, mut result: RhaiResult, pos: Position) -> RhaiResult {
         if let Ok(ref mut r) = result {
             // Concentrate all empty strings into one instance to save memory
             if let Dynamic(crate::types::dynamic::Union::Str(s, _, _)) = r {
@@ -3347,7 +3431,7 @@ impl Engine {
             }
 
             #[cfg(not(feature = "unchecked"))]
-            self.check_data_size(&r)?;
+            self.check_data_size(&r, pos)?;
         }
 
         result
@@ -3355,27 +3439,27 @@ impl Engine {
 
     #[cfg(feature = "unchecked")]
     #[inline(always)]
-    fn check_data_size(&self, _value: &Dynamic) -> RhaiResultOf<()> {
+    fn check_data_size(&self, _value: &Dynamic, _pos: Position) -> RhaiResultOf<()> {
         Ok(())
     }
 
     #[cfg(not(feature = "unchecked"))]
-    fn check_data_size(&self, value: &Dynamic) -> RhaiResultOf<()> {
+    fn check_data_size(&self, value: &Dynamic, pos: Position) -> RhaiResultOf<()> {
         // Recursively calculate the size of a value (especially `Array` and `Map`)
-        fn calc_size(value: &Dynamic) -> (usize, usize, usize) {
+        fn calc_size(value: &Dynamic, top: bool) -> (usize, usize, usize) {
             match value.0 {
                 #[cfg(not(feature = "no_index"))]
                 Union::Array(ref arr, _, _) => {
                     arr.iter()
                         .fold((0, 0, 0), |(arrays, maps, strings), value| match value.0 {
                             Union::Array(_, _, _) => {
-                                let (a, m, s) = calc_size(value);
+                                let (a, m, s) = calc_size(value, false);
                                 (arrays + a + 1, maps + m, strings + s)
                             }
                             Union::Blob(ref a, _, _) => (arrays + 1 + a.len(), maps, strings),
                             #[cfg(not(feature = "no_object"))]
                             Union::Map(_, _, _) => {
-                                let (a, m, s) = calc_size(value);
+                                let (a, m, s) = calc_size(value, false);
                                 (arrays + a + 1, maps + m, strings + s)
                             }
                             Union::Str(ref s, _, _) => (arrays + 1, maps, strings + s.len()),
@@ -3390,13 +3474,13 @@ impl Engine {
                         .fold((0, 0, 0), |(arrays, maps, strings), value| match value.0 {
                             #[cfg(not(feature = "no_index"))]
                             Union::Array(_, _, _) => {
-                                let (a, m, s) = calc_size(value);
+                                let (a, m, s) = calc_size(value, false);
                                 (arrays + a, maps + m + 1, strings + s)
                             }
                             #[cfg(not(feature = "no_index"))]
                             Union::Blob(ref a, _, _) => (arrays + a.len(), maps, strings),
                             Union::Map(_, _, _) => {
-                                let (a, m, s) = calc_size(value);
+                                let (a, m, s) = calc_size(value, false);
                                 (arrays + a, maps + m + 1, strings + s)
                             }
                             Union::Str(ref s, _, _) => (arrays, maps + 1, strings + s.len()),
@@ -3404,6 +3488,10 @@ impl Engine {
                         })
                 }
                 Union::Str(ref s, _, _) => (0, 0, s.len()),
+                #[cfg(not(feature = "no_closure"))]
+                Union::Shared(_, _, _) if !top => {
+                    unreachable!("shared values discovered within data: {}", value)
+                }
                 _ => (0, 0, 0),
             }
         }
@@ -3423,16 +3511,14 @@ impl Engine {
             return Ok(());
         }
 
-        let (_arr, _map, s) = calc_size(value);
+        let (_arr, _map, s) = calc_size(value, true);
 
         if s > self
             .limits
             .max_string_size
             .map_or(usize::MAX, NonZeroUsize::get)
         {
-            return Err(
-                ERR::ErrorDataTooLarge("Length of string".to_string(), Position::NONE).into(),
-            );
+            return Err(ERR::ErrorDataTooLarge("Length of string".to_string(), pos).into());
         }
 
         #[cfg(not(feature = "no_index"))]
@@ -3442,7 +3528,7 @@ impl Engine {
                 .max_array_size
                 .map_or(usize::MAX, NonZeroUsize::get)
         {
-            return Err(ERR::ErrorDataTooLarge("Size of array".to_string(), Position::NONE).into());
+            return Err(ERR::ErrorDataTooLarge("Size of array".to_string(), pos).into());
         }
 
         #[cfg(not(feature = "no_object"))]
@@ -3452,9 +3538,7 @@ impl Engine {
                 .max_map_size
                 .map_or(usize::MAX, NonZeroUsize::get)
         {
-            return Err(
-                ERR::ErrorDataTooLarge("Size of object map".to_string(), Position::NONE).into(),
-            );
+            return Err(ERR::ErrorDataTooLarge("Size of object map".to_string(), pos).into());
         }
 
         Ok(())
