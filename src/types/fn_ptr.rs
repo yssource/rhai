@@ -24,7 +24,12 @@ impl fmt::Debug for FnPtr {
         if !self.is_curried() {
             write!(f, "Fn({})", self.fn_name())
         } else {
-            f.debug_tuple("Fn").field(&self.0).field(&self.1).finish()
+            self.1
+                .iter()
+                .fold(f.debug_tuple("Fn").field(&self.0), |f, curry| {
+                    f.field(curry)
+                })
+                .finish()
         }
     }
 }
