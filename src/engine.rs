@@ -251,7 +251,7 @@ pub enum Target<'a> {
 }
 
 impl<'a> Target<'a> {
-    /// Is the `Target` a reference pointing to other data?
+    /// Is the [`Target`] a reference pointing to other data?
     #[allow(dead_code)]
     #[inline]
     #[must_use]
@@ -268,7 +268,7 @@ impl<'a> Target<'a> {
             | Self::StringChar { .. } => false,
         }
     }
-    /// Is the `Target` a temp value?
+    /// Is the [`Target`] a temp value?
     #[inline]
     #[must_use]
     pub const fn is_temp_value(&self) -> bool {
@@ -284,7 +284,7 @@ impl<'a> Target<'a> {
             | Self::StringChar { .. } => false,
         }
     }
-    /// Is the `Target` a shared value?
+    /// Is the [`Target`] a shared value?
     #[cfg(not(feature = "no_closure"))]
     #[inline]
     #[must_use]
@@ -301,7 +301,7 @@ impl<'a> Target<'a> {
             | Self::StringChar { .. } => false,
         }
     }
-    /// Is the `Target` a specific type?
+    /// Is the [`Target`] a specific type?
     #[allow(dead_code)]
     #[inline]
     #[must_use]
@@ -321,7 +321,7 @@ impl<'a> Target<'a> {
             Self::StringChar { .. } => TypeId::of::<T>() == TypeId::of::<char>(),
         }
     }
-    /// Get the value of the `Target` as a `Dynamic`, cloning a referenced value if necessary.
+    /// Get the value of the [`Target`] as a [`Dynamic`], cloning a referenced value if necessary.
     #[inline]
     #[must_use]
     pub fn take_or_clone(self) -> Dynamic {
@@ -349,7 +349,7 @@ impl<'a> Target<'a> {
             _ => None,
         }
     }
-    /// Convert a shared or reference `Target` into a target with an owned value.
+    /// Convert a shared or reference [`Target`] into a target with an owned value.
     #[inline(always)]
     #[must_use]
     pub fn into_owned(self) -> Self {
@@ -358,6 +358,25 @@ impl<'a> Target<'a> {
             #[cfg(not(feature = "no_closure"))]
             Self::SharedValue { value, .. } => Self::TempValue(value),
             _ => self,
+        }
+    }
+    /// Get the source [`Dynamic`] of the [`Target`].
+    #[inline]
+    #[must_use]
+    pub fn source(&self) -> &Dynamic {
+        match self {
+            Self::RefMut(r) => *r,
+            #[cfg(not(feature = "no_closure"))]
+            Self::SharedValue { source, .. } => source,
+            Self::TempValue(v) => v,
+            #[cfg(not(feature = "no_index"))]
+            Self::Bit { source, .. } => source,
+            #[cfg(not(feature = "no_index"))]
+            Self::BitField { source, .. } => source,
+            #[cfg(not(feature = "no_index"))]
+            Self::BlobByte { source, .. } => source,
+            #[cfg(not(feature = "no_index"))]
+            Self::StringChar { source, .. } => source,
         }
     }
     /// Propagate a changed value back to the original source.
@@ -2431,8 +2450,6 @@ impl Engine {
                     .map_err(|err| err.fill_position(expr.position()))?;
 
                     pos = expr.position();
-
-                    result = self.check_return_value(Ok(result), pos)?;
                 }
 
                 Ok(result)
@@ -2718,7 +2735,9 @@ impl Engine {
             *target.as_mut() = new_val;
         }
 
-        target.propagate_changed_value()
+        target.propagate_changed_value()?;
+
+        self.check_data_size(target.source(), Position::NONE)
     }
 
     /// Evaluate a statement.
@@ -2738,10 +2757,21 @@ impl Engine {
         rewind_scope: bool,
         level: usize,
     ) -> RhaiResult {
+        // Coded this way for better branch prediction.
+        // Popular branches are lifted out of the `match` statement into their own branches.
+
+        // Function calls should account for a relatively larger portion of statements.
+        if let Stmt::FnCall(x, pos) = stmt {
+            #[cfg(not(feature = "unchecked"))]
+            self.inc_operations(&mut global.num_operations, stmt.position())?;
+
+            return self.eval_fn_call_expr(scope, global, state, lib, this_ptr, x, *pos, level);
+        }
+
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(&mut global.num_operations, stmt.position())?;
 
-        let result = match stmt {
+        match stmt {
             // No-op
             Stmt::Noop(_) => Ok(Dynamic::UNIT),
 
@@ -3124,11 +3154,6 @@ impl Engine {
                 Err(ERR::LoopBreak(options.contains(AST_OPTION_BREAK_OUT), *pos).into())
             }
 
-            // Function call
-            Stmt::FnCall(x, pos) => {
-                self.eval_fn_call_expr(scope, global, state, lib, this_ptr, x, *pos, level)
-            }
-
             // Try/Catch statement
             Stmt::TryCatch(x, _) => {
                 let (try_stmt, err_var, catch_stmt) = x.as_ref();
@@ -3364,9 +3389,9 @@ impl Engine {
                 }
                 Ok(Dynamic::UNIT)
             }
-        };
 
-        self.check_return_value(result, stmt.position())
+            _ => unreachable!("statement cannot be evaluated: {:?}", stmt),
+        }
     }
 
     /// Check a result to ensure that the data size is within allowable limit.
@@ -3511,7 +3536,6 @@ impl Engine {
 
     /// Check whether the size of a [`Dynamic`] is within limits.
     #[cfg(not(feature = "unchecked"))]
-    #[inline]
     fn check_data_size(&self, value: &Dynamic, pos: Position) -> RhaiResultOf<()> {
         // If no data size limits, just return
         if !self.has_data_size_limit() {
