@@ -23,6 +23,7 @@ Bug fixes
 
 * Constructing a literal array or object map now checks for size limits for each item instead of at the very end when it is already too late.
 * Non-`INT` integer types are now treated exactly as custom types under `only_i64` and `only_i32`.
+* Calling `pad` on an array now checks for total size over limit after each item added.
 
 New features
 ------------

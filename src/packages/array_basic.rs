@@ -3,6 +3,7 @@
 
 use crate::engine::OP_EQUALS;
 use crate::plugin::*;
+use crate::types::dynamic::Union;
 use crate::{
     def_package, Array, Dynamic, ExclusiveRange, FnPtr, InclusiveRange, NativeCallContext,
     Position, RhaiResultOf, ERR, INT,
@@ -81,20 +82,42 @@ pub mod array_functions {
         len: INT,
         item: Dynamic,
     ) -> RhaiResultOf<()> {
-        if len <= 0 {
+        if len <= 0 || (len as usize) <= array.len() {
             return Ok(());
         }
 
         let _ctx = ctx;
+        let len = len as usize;
 
         // Check if array will be over max size limit
         #[cfg(not(feature = "unchecked"))]
-        if _ctx.engine().max_array_size() > 0 && (len as usize) > _ctx.engine().max_array_size() {
+        if _ctx.engine().max_array_size() > 0 && len > _ctx.engine().max_array_size() {
             return Err(ERR::ErrorDataTooLarge("Size of array".to_string(), Position::NONE).into());
         }
 
-        if len as usize > array.len() {
-            array.resize(len as usize, item);
+        #[cfg(not(feature = "unchecked"))]
+        let check_sizes = match item.0 {
+            Union::Array(_, _, _) | Union::Str(_, _, _) => true,
+            Union::Map(_, _, _) => true,
+            _ => false,
+        };
+        #[cfg(feature = "unchecked")]
+        let check_sizes = false;
+
+        if check_sizes {
+            let arr = mem::take(array);
+            let mut arr = Dynamic::from_array(arr);
+
+            while array.len() < len {
+                arr.write_lock::<Array>().unwrap().push(item.clone());
+
+                #[cfg(not(feature = "unchecked"))]
+                _ctx.engine().ensure_data_size_within_limits(&arr)?;
+            }
+
+            *array = arr.into_array().unwrap();
+        } else {
+            array.resize(len, item);
         }
 
         Ok(())
