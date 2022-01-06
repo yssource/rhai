@@ -1440,6 +1440,7 @@ impl Engine {
                             }
                         }
 
+                        #[cfg(not(feature = "unchecked"))]
                         self.check_data_size(target.as_ref(), root.1)?;
 
                         Ok(result)
@@ -1481,6 +1482,7 @@ impl Engine {
                             )?;
                         }
 
+                        #[cfg(not(feature = "unchecked"))]
                         self.check_data_size(target.as_ref(), root.1)?;
 
                         Ok((Dynamic::UNIT, true))
@@ -1527,6 +1529,7 @@ impl Engine {
                             )
                             .map_err(|err| err.fill_position(new_pos))?;
                         }
+                        #[cfg(not(feature = "unchecked"))]
                         self.check_data_size(target.as_ref(), root.1)?;
                         Ok((Dynamic::UNIT, true))
                     }
@@ -1583,6 +1586,7 @@ impl Engine {
                             )
                             .map_err(|err| err.fill_position(new_pos))?;
 
+                            #[cfg(not(feature = "unchecked"))]
                             self.check_data_size(target.as_ref(), root.1)?;
 
                             new_val = orig_val;
@@ -1776,6 +1780,8 @@ impl Engine {
                                             _ => Err(err),
                                         },
                                     )?;
+
+                                    #[cfg(not(feature = "unchecked"))]
                                     self.check_data_size(target.as_ref(), root.1)?;
                                 }
 
@@ -2360,6 +2366,36 @@ impl Engine {
         expr: &Expr,
         level: usize,
     ) -> RhaiResult {
+        // Coded this way for better branch prediction.
+        // Popular branches are lifted out of the `match` statement into their own branches.
+
+        // Function calls should account for a relatively larger portion of expressions because
+        // binary operators are also function calls.
+        if let Expr::FnCall(x, pos) = expr {
+            #[cfg(not(feature = "unchecked"))]
+            self.inc_operations(&mut global.num_operations, expr.position())?;
+
+            return self.eval_fn_call_expr(scope, global, state, lib, this_ptr, x, *pos, level);
+        }
+
+        // Then variable access.
+        // We shouldn't do this for too many variants because, soon or later, the added comparisons
+        // will cost more than the mis-predicted `match` branch.
+        if let Expr::Variable(index, var_pos, x) = expr {
+            #[cfg(not(feature = "unchecked"))]
+            self.inc_operations(&mut global.num_operations, expr.position())?;
+
+            return if index.is_none() && x.0.is_none() && x.2 == KEYWORD_THIS {
+                this_ptr
+                    .as_deref()
+                    .cloned()
+                    .ok_or_else(|| ERR::ErrorUnboundThis(*var_pos).into())
+            } else {
+                self.search_namespace(scope, global, state, lib, this_ptr, expr)
+                    .map(|(val, _)| val.take_or_clone())
+            };
+        }
+
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(&mut global.num_operations, expr.position())?;
 
@@ -2373,17 +2409,6 @@ impl Engine {
             Expr::CharConstant(x, _) => Ok((*x).into()),
             Expr::BoolConstant(x, _) => Ok((*x).into()),
             Expr::Unit(_) => Ok(Dynamic::UNIT),
-
-            // `this`
-            Expr::Variable(None, var_pos, x) if x.0.is_none() && x.2 == KEYWORD_THIS => this_ptr
-                .as_deref()
-                .cloned()
-                .ok_or_else(|| ERR::ErrorUnboundThis(*var_pos).into()),
-
-            // Normal variable
-            Expr::Variable(_, _, _) => self
-                .search_namespace(scope, global, state, lib, this_ptr, expr)
-                .map(|(val, _)| val.take_or_clone()),
 
             // `... ${...} ...`
             Expr::InterpolatedString(x, pos) => {
@@ -2539,10 +2564,6 @@ impl Engine {
             #[cfg(not(feature = "no_object"))]
             Expr::Dot(_, _, _) => {
                 self.eval_dot_index_chain(scope, global, state, lib, this_ptr, expr, level, None)
-            }
-
-            Expr::FnCall(x, pos) => {
-                self.eval_fn_call_expr(scope, global, state, lib, this_ptr, x, *pos, level)
             }
 
             _ => unreachable!("expression cannot be evaluated: {:?}", expr),
@@ -2759,6 +2780,7 @@ impl Engine {
                 )
                 .map_err(|err| err.fill_position(rhs_expr.position()))?;
 
+                #[cfg(not(feature = "unchecked"))]
                 if op_info.is_some() {
                     self.check_data_size(lhs_ptr.as_ref(), lhs_expr.position())?;
                 }
@@ -3489,6 +3511,7 @@ impl Engine {
 
     /// Check whether the size of a [`Dynamic`] is within limits.
     #[cfg(not(feature = "unchecked"))]
+    #[inline]
     fn check_data_size(&self, value: &Dynamic, pos: Position) -> RhaiResultOf<()> {
         // If no data size limits, just return
         if !self.has_data_size_limit() {
@@ -3500,11 +3523,13 @@ impl Engine {
         self.raise_err_if_over_data_size_limit(sizes, pos)
     }
 
-    /// Check whether the size of a [`Dynamic`] is within limits.
-    #[cfg(feature = "unchecked")]
+    /// Raise an error if the size of a [`Dynamic`] is out of limits (if any).
+    ///
+    /// Not available under `unchecked`.
+    #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
-    fn check_data_size(&self, _value: &Dynamic, _pos: Position) -> RhaiResultOf<()> {
-        Ok(())
+    pub fn ensure_data_size_within_limits(&self, value: &Dynamic) -> RhaiResultOf<()> {
+        self.check_data_size(value, Position::NONE)
     }
 
     /// Check if the number of operations stay within limit.
