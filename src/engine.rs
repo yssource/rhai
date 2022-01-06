@@ -2407,28 +2407,40 @@ impl Engine {
 
                     pos = expr.position();
 
-                    self.check_data_size(&result, pos)?;
+                    result = self.check_return_value(Ok(result), pos)?;
                 }
 
-                assert!(
-                    result.is::<ImmutableString>(),
-                    "interpolated string must be a string"
-                );
-
-                self.check_return_value(Ok(result), expr.position())
+                Ok(result)
             }
 
             #[cfg(not(feature = "no_index"))]
             Expr::Array(x, _) => {
                 let mut arr = Dynamic::from_array(crate::Array::with_capacity(x.len()));
 
-                for item_expr in x.iter() {
-                    arr.write_lock::<crate::Array>().expect("`Array`").push(
-                        self.eval_expr(scope, global, state, lib, this_ptr, item_expr, level)?
-                            .flatten(),
-                    );
+                #[cfg(not(feature = "unchecked"))]
+                let mut sizes = (0, 0, 0);
 
-                    self.check_data_size(&arr, item_expr.position())?;
+                for item_expr in x.iter() {
+                    let value = self
+                        .eval_expr(scope, global, state, lib, this_ptr, item_expr, level)?
+                        .flatten();
+
+                    #[cfg(not(feature = "unchecked"))]
+                    let val_sizes = Self::calc_data_sizes(&value, true);
+
+                    arr.write_lock::<crate::Array>()
+                        .expect("`Array`")
+                        .push(value);
+
+                    #[cfg(not(feature = "unchecked"))]
+                    if self.has_data_size_limit() {
+                        sizes = (
+                            sizes.0 + val_sizes.0,
+                            sizes.1 + val_sizes.1,
+                            sizes.2 + val_sizes.2,
+                        );
+                        self.raise_err_if_over_data_size_limit(sizes, item_expr.position())?;
+                    }
                 }
 
                 Ok(arr)
@@ -2438,18 +2450,32 @@ impl Engine {
             Expr::Map(x, _) => {
                 let mut map = Dynamic::from_map(x.1.clone());
 
+                #[cfg(not(feature = "unchecked"))]
+                let mut sizes = (0, 0, 0);
+
                 for (Ident { name, .. }, value_expr) in x.0.iter() {
                     let key = name.as_str();
                     let value = self
                         .eval_expr(scope, global, state, lib, this_ptr, value_expr, level)?
                         .flatten();
 
+                    #[cfg(not(feature = "unchecked"))]
+                    let val_sizes = Self::calc_data_sizes(&value, true);
+
                     *map.write_lock::<crate::Map>()
                         .expect("`Map`")
                         .get_mut(key)
                         .unwrap() = value;
 
-                    self.check_data_size(&map, value_expr.position())?;
+                    #[cfg(not(feature = "unchecked"))]
+                    if self.has_data_size_limit() {
+                        sizes = (
+                            sizes.0 + val_sizes.0,
+                            sizes.1 + val_sizes.1,
+                            sizes.2 + val_sizes.2,
+                        );
+                        self.raise_err_if_over_data_size_limit(sizes, value_expr.position())?;
+                    }
                 }
 
                 Ok(map)
@@ -3323,6 +3349,8 @@ impl Engine {
 
     /// Check a result to ensure that the data size is within allowable limit.
     fn check_return_value(&self, mut result: RhaiResult, pos: Position) -> RhaiResult {
+        let _pos = pos;
+
         match result {
             Ok(ref mut r) => {
                 // Concentrate all empty strings into one instance to save memory
@@ -3336,7 +3364,7 @@ impl Engine {
                 }
 
                 #[cfg(not(feature = "unchecked"))]
-                self.check_data_size(&r, pos)?;
+                self.check_data_size(&r, _pos)?;
             }
             _ => (),
         }
@@ -3344,81 +3372,89 @@ impl Engine {
         result
     }
 
-    #[cfg(feature = "unchecked")]
-    #[inline(always)]
-    fn check_data_size(&self, _value: &Dynamic, _pos: Position) -> RhaiResultOf<()> {
-        Ok(())
+    /// Recursively calculate the sizes of a value.
+    ///
+    /// Sizes returned are `(`[`Array`][crate::Array], [`Map`][crate::Map] and `String)`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any interior data is shared (should never happen).
+    #[cfg(not(feature = "unchecked"))]
+    fn calc_data_sizes(value: &Dynamic, top: bool) -> (usize, usize, usize) {
+        match value.0 {
+            #[cfg(not(feature = "no_index"))]
+            Union::Array(ref arr, _, _) => {
+                arr.iter()
+                    .fold((0, 0, 0), |(arrays, maps, strings), value| match value.0 {
+                        Union::Array(_, _, _) => {
+                            let (a, m, s) = Self::calc_data_sizes(value, false);
+                            (arrays + a + 1, maps + m, strings + s)
+                        }
+                        Union::Blob(ref a, _, _) => (arrays + 1 + a.len(), maps, strings),
+                        #[cfg(not(feature = "no_object"))]
+                        Union::Map(_, _, _) => {
+                            let (a, m, s) = Self::calc_data_sizes(value, false);
+                            (arrays + a + 1, maps + m, strings + s)
+                        }
+                        Union::Str(ref s, _, _) => (arrays + 1, maps, strings + s.len()),
+                        _ => (arrays + 1, maps, strings),
+                    })
+            }
+            #[cfg(not(feature = "no_index"))]
+            Union::Blob(ref arr, _, _) => (arr.len(), 0, 0),
+            #[cfg(not(feature = "no_object"))]
+            Union::Map(ref map, _, _) => {
+                map.values()
+                    .fold((0, 0, 0), |(arrays, maps, strings), value| match value.0 {
+                        #[cfg(not(feature = "no_index"))]
+                        Union::Array(_, _, _) => {
+                            let (a, m, s) = Self::calc_data_sizes(value, false);
+                            (arrays + a, maps + m + 1, strings + s)
+                        }
+                        #[cfg(not(feature = "no_index"))]
+                        Union::Blob(ref a, _, _) => (arrays + a.len(), maps, strings),
+                        Union::Map(_, _, _) => {
+                            let (a, m, s) = Self::calc_data_sizes(value, false);
+                            (arrays + a, maps + m + 1, strings + s)
+                        }
+                        Union::Str(ref s, _, _) => (arrays, maps + 1, strings + s.len()),
+                        _ => (arrays, maps + 1, strings),
+                    })
+            }
+            Union::Str(ref s, _, _) => (0, 0, s.len()),
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(_, _, _) if !top => {
+                unreachable!("shared values discovered within data: {}", value)
+            }
+            _ => (0, 0, 0),
+        }
     }
 
+    /// Is there a data size limit set?
     #[cfg(not(feature = "unchecked"))]
-    fn check_data_size(&self, value: &Dynamic, pos: Position) -> RhaiResultOf<()> {
-        // Recursively calculate the size of a value (especially `Array` and `Map`)
-        fn calc_size(value: &Dynamic, top: bool) -> (usize, usize, usize) {
-            match value.0 {
-                #[cfg(not(feature = "no_index"))]
-                Union::Array(ref arr, _, _) => {
-                    arr.iter()
-                        .fold((0, 0, 0), |(arrays, maps, strings), value| match value.0 {
-                            Union::Array(_, _, _) => {
-                                let (a, m, s) = calc_size(value, false);
-                                (arrays + a + 1, maps + m, strings + s)
-                            }
-                            Union::Blob(ref a, _, _) => (arrays + 1 + a.len(), maps, strings),
-                            #[cfg(not(feature = "no_object"))]
-                            Union::Map(_, _, _) => {
-                                let (a, m, s) = calc_size(value, false);
-                                (arrays + a + 1, maps + m, strings + s)
-                            }
-                            Union::Str(ref s, _, _) => (arrays + 1, maps, strings + s.len()),
-                            _ => (arrays + 1, maps, strings),
-                        })
-                }
-                #[cfg(not(feature = "no_index"))]
-                Union::Blob(ref arr, _, _) => (arr.len(), 0, 0),
-                #[cfg(not(feature = "no_object"))]
-                Union::Map(ref map, _, _) => {
-                    map.values()
-                        .fold((0, 0, 0), |(arrays, maps, strings), value| match value.0 {
-                            #[cfg(not(feature = "no_index"))]
-                            Union::Array(_, _, _) => {
-                                let (a, m, s) = calc_size(value, false);
-                                (arrays + a, maps + m + 1, strings + s)
-                            }
-                            #[cfg(not(feature = "no_index"))]
-                            Union::Blob(ref a, _, _) => (arrays + a.len(), maps, strings),
-                            Union::Map(_, _, _) => {
-                                let (a, m, s) = calc_size(value, false);
-                                (arrays + a, maps + m + 1, strings + s)
-                            }
-                            Union::Str(ref s, _, _) => (arrays, maps + 1, strings + s.len()),
-                            _ => (arrays, maps + 1, strings),
-                        })
-                }
-                Union::Str(ref s, _, _) => (0, 0, s.len()),
-                #[cfg(not(feature = "no_closure"))]
-                Union::Shared(_, _, _) if !top => {
-                    unreachable!("shared values discovered within data: {}", value)
-                }
-                _ => (0, 0, 0),
-            }
-        }
+    fn has_data_size_limit(&self) -> bool {
+        let mut _limited = self.limits.max_string_size.is_some();
 
-        // If no data size limits, just return
-        let mut _has_limit = self.limits.max_string_size.is_some();
         #[cfg(not(feature = "no_index"))]
         {
-            _has_limit = _has_limit || self.limits.max_array_size.is_some();
+            _limited = _limited || self.limits.max_array_size.is_some();
         }
         #[cfg(not(feature = "no_object"))]
         {
-            _has_limit = _has_limit || self.limits.max_map_size.is_some();
+            _limited = _limited || self.limits.max_map_size.is_some();
         }
 
-        if !_has_limit {
-            return Ok(());
-        }
+        _limited
+    }
 
-        let (_arr, _map, s) = calc_size(value, true);
+    /// Raise an error if any data size exceeds limit.
+    #[cfg(not(feature = "unchecked"))]
+    fn raise_err_if_over_data_size_limit(
+        &self,
+        sizes: (usize, usize, usize),
+        pos: Position,
+    ) -> RhaiResultOf<()> {
+        let (_arr, _map, s) = sizes;
 
         if s > self
             .limits
@@ -3448,6 +3484,26 @@ impl Engine {
             return Err(ERR::ErrorDataTooLarge("Size of object map".to_string(), pos).into());
         }
 
+        Ok(())
+    }
+
+    /// Check whether the size of a [`Dynamic`] is within limits.
+    #[cfg(not(feature = "unchecked"))]
+    fn check_data_size(&self, value: &Dynamic, pos: Position) -> RhaiResultOf<()> {
+        // If no data size limits, just return
+        if !self.has_data_size_limit() {
+            return Ok(());
+        }
+
+        let sizes = Self::calc_data_sizes(value, true);
+
+        self.raise_err_if_over_data_size_limit(sizes, pos)
+    }
+
+    /// Check whether the size of a [`Dynamic`] is within limits.
+    #[cfg(feature = "unchecked")]
+    #[inline(always)]
+    fn check_data_size(&self, _value: &Dynamic, _pos: Position) -> RhaiResultOf<()> {
         Ok(())
     }
 
