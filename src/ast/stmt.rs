@@ -660,7 +660,7 @@ impl Stmt {
             _ => (),
         }
 
-        path.pop().expect("contains current node");
+        path.pop().unwrap();
 
         true
     }

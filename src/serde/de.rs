@@ -565,7 +565,7 @@ where
     ) -> RhaiResultOf<V::Value> {
         // Deserialize each value item coming out of the iterator.
         seed.deserialize(&mut DynamicDeserializer::from_dynamic(
-            self.values.next().expect("exists"),
+            self.values.next().unwrap(),
         ))
     }
 }

@@ -1304,11 +1304,7 @@ fn parse_primary(
         Token::Custom(key) | Token::Reserved(key) | Token::Identifier(key)
             if state.engine.custom_syntax.contains_key(&**key) =>
         {
-            let (key, syntax) = state
-                .engine
-                .custom_syntax
-                .get_key_value(&**key)
-                .expect("exists");
+            let (key, syntax) = state.engine.custom_syntax.get_key_value(&**key).unwrap();
             let (_, pos) = input.next().expect(NEVER_ENDS);
             let settings2 = settings.level_up();
             parse_custom_syntax(input, state, lib, settings2, key, syntax, pos)?
@@ -1714,11 +1710,7 @@ fn make_assignment_stmt(
         Expr::Variable(i, var_pos, ref x) => {
             let (index, _, name) = x.as_ref();
             let index = i.map_or_else(
-                || {
-                    index
-                        .expect("the long index is `Some` when the short index is `None`")
-                        .get()
-                },
+                || index.expect("either long or short index is `None`").get(),
                 |n| n.get() as usize,
             );
             match state.stack[state.stack.len() - index].1 {
@@ -2013,8 +2005,8 @@ fn parse_binary_op(
             | Token::GreaterThanEqualsTo => FnCallExpr { args, ..op_base }.into_fn_call_expr(pos),
 
             Token::Or => {
-                let rhs = args.pop().expect("two arguments");
-                let current_lhs = args.pop().expect("two arguments");
+                let rhs = args.pop().unwrap();
+                let current_lhs = args.pop().unwrap();
                 Expr::Or(
                     BinaryExpr {
                         lhs: current_lhs.ensure_bool_expr()?,
@@ -2025,8 +2017,8 @@ fn parse_binary_op(
                 )
             }
             Token::And => {
-                let rhs = args.pop().expect("two arguments");
-                let current_lhs = args.pop().expect("two arguments");
+                let rhs = args.pop().unwrap();
+                let current_lhs = args.pop().unwrap();
                 Expr::And(
                     BinaryExpr {
                         lhs: current_lhs.ensure_bool_expr()?,
@@ -3026,7 +3018,7 @@ fn parse_try_catch(
 
     if err_var.is_some() {
         // Remove the error variable from the stack
-        state.stack.pop().expect("not empty");
+        state.stack.pop().unwrap();
     }
 
     Ok(Stmt::TryCatch(

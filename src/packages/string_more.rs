@@ -178,7 +178,7 @@ mod string_functions {
     #[rhai_fn(name = "to_upper")]
     pub fn to_upper_char(character: char) -> char {
         let mut stream = character.to_uppercase();
-        let ch = stream.next().expect("not empty");
+        let ch = stream.next().unwrap();
         if stream.next().is_some() {
             character
         } else {
@@ -192,7 +192,7 @@ mod string_functions {
     #[rhai_fn(name = "to_lower")]
     pub fn to_lower_char(character: char) -> char {
         let mut stream = character.to_lowercase();
-        let ch = stream.next().expect("not empty");
+        let ch = stream.next().unwrap();
         if stream.next().is_some() {
             character
         } else {

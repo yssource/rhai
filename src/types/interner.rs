@@ -60,7 +60,7 @@ impl StringsInterner {
         };
 
         if dict.contains_key(text.as_ref()) {
-            dict.get(text.as_ref()).expect("exists").clone()
+            dict.get(text.as_ref()).unwrap().clone()
         } else {
             let value: ImmutableString = mapper(text.as_ref()).into();
             dict.insert(text.as_ref().into(), value.clone());

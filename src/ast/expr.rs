@@ -509,18 +509,15 @@ impl Expr {
             #[cfg(not(feature = "no_index"))]
             Self::Array(x, _) if self.is_constant() => {
                 let mut arr = crate::Array::with_capacity(x.len());
-                arr.extend(
-                    x.iter()
-                        .map(|v| v.get_literal_value().expect("constant value")),
-                );
+                arr.extend(x.iter().map(|v| v.get_literal_value().unwrap()));
                 Dynamic::from_array(arr)
             }
 
             #[cfg(not(feature = "no_object"))]
             Self::Map(x, _) if self.is_constant() => {
                 Dynamic::from_map(x.0.iter().fold(x.1.clone(), |mut map, (k, v)| {
-                    let value_ref = map.get_mut(k.name.as_str()).expect("contains all keys");
-                    *value_ref = v.get_literal_value().expect("constant value");
+                    let value_ref = map.get_mut(k.name.as_str()).unwrap();
+                    *value_ref = v.get_literal_value().unwrap();
                     map
                 }))
             }
@@ -827,7 +824,7 @@ impl Expr {
             _ => (),
         }
 
-        path.pop().expect("contains current node");
+        path.pop().unwrap();
 
         true
     }

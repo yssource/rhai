@@ -274,8 +274,7 @@ impl Engine {
                                         }
                                     })
                                 } else {
-                                    let (first_arg, rest_args) =
-                                        args.split_first().expect("two arguments");
+                                    let (first_arg, rest_args) = args.split_first().unwrap();
 
                                     get_builtin_op_assignment_fn(fn_name, *first_arg, rest_args[0])
                                         .map(|f| FnResolutionCacheEntry {
@@ -624,7 +623,7 @@ impl Engine {
 
             let result = if _is_method_call {
                 // Method call of script function - map first argument to `this`
-                let (first_arg, rest_args) = args.split_first_mut().expect("not empty");
+                let (first_arg, rest_args) = args.split_first_mut().unwrap();
 
                 let level = _level + 1;
 
@@ -1114,7 +1113,7 @@ impl Engine {
             // avoid cloning the value
             if curry.is_empty() && !a_expr.is_empty() && a_expr[0].is_variable_access(false) {
                 // func(x, ...) -> x.func(...)
-                let (first_expr, rest_expr) = a_expr.split_first().expect("not empty");
+                let (first_expr, rest_expr) = a_expr.split_first().unwrap();
 
                 rest_expr.iter().try_for_each(|expr| {
                     self.get_arg_value(scope, global, state, lib, this_ptr, level, expr, constants)
@@ -1215,7 +1214,7 @@ impl Engine {
                     args.extend(arg_values.iter_mut());
                 } else {
                     // Turn it into a method call only if the object is not shared and not a simple value
-                    let (first, rest) = arg_values.split_first_mut().expect("not empty");
+                    let (first, rest) = arg_values.split_first_mut().unwrap();
                     first_arg_value = Some(first);
                     let obj_ref = target.take_ref().expect("ref");
                     args.push(obj_ref);

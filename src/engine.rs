@@ -849,7 +849,7 @@ impl EvalState {
             // Push a new function resolution cache if the stack is empty
             self.push_fn_resolution_cache();
         }
-        self.fn_resolution_caches.last_mut().expect("not empty")
+        self.fn_resolution_caches.last_mut().unwrap()
     }
     /// Push an empty function resolution cache onto the stack and make it current.
     #[allow(dead_code)]
@@ -1200,11 +1200,11 @@ impl Engine {
 
         if let Some(index) = index {
             let offset = global.num_imported_modules() - index.get();
-            Some(global.get_shared_module(offset).expect("within range"))
+            Some(global.get_shared_module(offset).unwrap())
         } else {
             global
                 .find_module(root)
-                .map(|n| global.get_shared_module(n).expect("valid index"))
+                .map(|n| global.get_shared_module(n).unwrap())
                 .or_else(|| self.global_sub_modules.get(root).cloned())
         }
     }
@@ -1335,7 +1335,7 @@ impl Engine {
                 level: 0,
             };
             match resolve_var(
-                expr.get_variable_name(true).expect("`Variable`"),
+                expr.get_variable_name(true).expect("`Expr::Variable`"),
                 index,
                 &context,
             ) {
@@ -1352,7 +1352,7 @@ impl Engine {
             scope.len() - index
         } else {
             // Find the variable in the scope
-            let var_name = expr.get_variable_name(true).expect("`Variable`");
+            let var_name = expr.get_variable_name(true).expect("`Expr::Variable`");
             scope
                 .get_index(var_name)
                 .ok_or_else(|| ERR::ErrorVariableNotFound(var_name.to_string(), var_pos))?
@@ -1386,7 +1386,7 @@ impl Engine {
         let _terminate_chaining = terminate_chaining;
 
         // Pop the last index value
-        let idx_val = idx_values.pop().expect("not empty");
+        let idx_val = idx_values.pop().unwrap();
 
         match chain_type {
             #[cfg(not(feature = "no_index"))]
@@ -2389,12 +2389,15 @@ impl Engine {
                 let mut map = Dynamic::from_map(x.1.clone());
 
                 for (Ident { name, .. }, value_expr) in x.0.iter() {
-                    *map.write_lock::<crate::Map>()
-                        .expect("`Map`")
-                        .get_mut(name.as_str())
-                        .expect("exists") = self
+                    let key = name.as_str();
+                    let value = self
                         .eval_expr(scope, global, state, lib, this_ptr, value_expr, level)?
                         .flatten();
+
+                    *map.write_lock::<crate::Map>()
+                        .expect("`Map`")
+                        .get_mut(key)
+                        .unwrap() = value;
 
                     self.check_data_size(&map, value_expr.position())?;
                 }
@@ -2446,8 +2449,8 @@ impl Engine {
 
             Expr::Custom(custom, _) => {
                 let expressions: StaticVec<_> = custom.inputs.iter().map(Into::into).collect();
-                let key_token = custom.tokens.first().expect("not empty");
-                let custom_def = self.custom_syntax.get(key_token).expect("must match");
+                let key_token = custom.tokens.first().unwrap();
+                let custom_def = self.custom_syntax.get(key_token).unwrap();
                 let mut context = EvalContext {
                     engine: self,
                     scope,
@@ -2808,7 +2811,7 @@ impl Engine {
                 let (mut lhs_ptr, pos) =
                     self.search_namespace(scope, global, state, lib, this_ptr, lhs_expr)?;
 
-                let var_name = lhs_expr.get_variable_name(false).expect("`Variable`");
+                let var_name = lhs_expr.get_variable_name(false).expect("`Expr::Variable`");
 
                 if !lhs_ptr.is_ref() {
                     return Err(ERR::ErrorAssignmentToConstant(var_name.to_string(), pos).into());
@@ -3212,11 +3215,11 @@ impl Engine {
                                 if err_pos.is_none() {
                                     // No position info
                                 } else {
-                                    let line = err_pos.line().expect("line number") as INT;
+                                    let line = err_pos.line().unwrap() as INT;
                                     let position = if err_pos.is_beginning_of_line() {
                                         0
                                     } else {
-                                        err_pos.position().expect("character position")
+                                        err_pos.position().unwrap()
                                     } as INT;
                                     err_map.insert("line".into(), line.into());
                                     err_map.insert("position".into(), position.into());

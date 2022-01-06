@@ -326,14 +326,14 @@ fn optimize_stmt_block(
                             && !last_stmt.returns_value() =>
                     {
                         state.set_dirty();
-                        statements.pop().expect(">= 2 elements");
+                        statements.pop().unwrap();
                     }
                     // { ...; return val; } -> { ...; val }
                     [.., Stmt::Return(options, ref mut expr, pos)]
                         if reduce_return && !options.contains(AST_OPTION_BREAK_OUT) =>
                     {
                         state.set_dirty();
-                        *statements.last_mut().expect(">= 2 elements") = expr
+                        *statements.last_mut().unwrap() = expr
                             .as_mut()
                             .map_or_else(|| Stmt::Noop(pos), |e| Stmt::Expr(mem::take(e)));
                     }
@@ -350,10 +350,9 @@ fn optimize_stmt_block(
                     {
                         state.set_dirty();
                         if second_last_stmt.returns_value() {
-                            *statements.last_mut().expect(">= 2 elements") =
-                                Stmt::Noop(last_stmt.position());
+                            *statements.last_mut().unwrap() = Stmt::Noop(last_stmt.position());
                         } else {
-                            statements.pop().expect(">= 2 elements");
+                            statements.pop().unwrap();
                         }
                     }
                     _ => break,
@@ -371,7 +370,7 @@ fn optimize_stmt_block(
                         if reduce_return && !options.contains(AST_OPTION_BREAK_OUT) =>
                     {
                         state.set_dirty();
-                        statements.pop().expect(">= 2 elements");
+                        statements.pop().unwrap();
                     }
                     // { ...; return pure_val; } -> { ... }
                     [.., Stmt::Return(options, Some(ref expr), _)]
@@ -380,11 +379,11 @@ fn optimize_stmt_block(
                             && expr.is_pure() =>
                     {
                         state.set_dirty();
-                        statements.pop().expect(">= 2 elements");
+                        statements.pop().unwrap();
                     }
                     [.., ref last_stmt] if is_pure(last_stmt) => {
                         state.set_dirty();
-                        statements.pop().expect("not empty");
+                        statements.pop().unwrap();
                     }
                     _ => break,
                 }
@@ -431,10 +430,8 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                     let value = mem::take(&mut x2.args[1]);
 
                     if let Expr::Stack(slot, pos) = value {
-                        x.2 = Expr::from_dynamic(
-                            mem::take(x2.constants.get_mut(slot).expect("valid slot")),
-                            pos,
-                        );
+                        x.2 =
+                            Expr::from_dynamic(mem::take(x2.constants.get_mut(slot).unwrap()), pos);
                     } else {
                         x.2 = value;
                     }
@@ -502,7 +499,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
 
         // switch const { ... }
         Stmt::Switch(match_expr, x, pos) if match_expr.is_constant() => {
-            let value = match_expr.get_literal_value().expect("constant");
+            let value = match_expr.get_literal_value().unwrap();
             let hasher = &mut get_hasher();
             value.hash(hasher);
             let hash = hasher.finish();
@@ -870,13 +867,13 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
             (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, _)) if *i >= 0 && (*i as usize) < s.chars().count() => {
                 // String literal indexing - get the character
                 state.set_dirty();
-                *expr = Expr::CharConstant(s.chars().nth(*i as usize).expect("valid index"), *pos);
+                *expr = Expr::CharConstant(s.chars().nth(*i as usize).unwrap(), *pos);
             }
             // string[-int]
             (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, _)) if *i < 0 && i.checked_abs().map(|n| n as usize <= s.chars().count()).unwrap_or(false) => {
                 // String literal indexing - get the character
                 state.set_dirty();
-                *expr = Expr::CharConstant(s.chars().rev().nth(i.abs() as usize - 1).expect("valid index"), *pos);
+                *expr = Expr::CharConstant(s.chars().rev().nth(i.abs() as usize - 1).unwrap(), *pos);
             }
             // var[rhs]
             (Expr::Variable(_, _, _), rhs) => optimize_expr(rhs, state, true),
@@ -920,7 +917,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
         #[cfg(not(feature = "no_index"))]
         Expr::Array(_, _) if expr.is_constant() => {
             state.set_dirty();
-            *expr = Expr::DynamicConstant(expr.get_literal_value().expect("constant").into(), expr.position());
+            *expr = Expr::DynamicConstant(expr.get_literal_value().unwrap().into(), expr.position());
         }
         // [ items .. ]
         #[cfg(not(feature = "no_index"))]
@@ -929,7 +926,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
         #[cfg(not(feature = "no_object"))]
         Expr::Map(_, _) if expr.is_constant() => {
             state.set_dirty();
-            *expr = Expr::DynamicConstant(expr.get_literal_value().expect("constant").into(), expr.position());
+            *expr = Expr::DynamicConstant(expr.get_literal_value().unwrap().into(), expr.position());
         }
         // #{ key:value, .. }
         #[cfg(not(feature = "no_object"))]
@@ -997,7 +994,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
         => {
             let arg_values = &mut x.args.iter().map(|e| match e {
                                                             Expr::Stack(slot, _) => x.constants[*slot].clone(),
-                                                            _ => e.get_literal_value().expect("constant")
+                                                            _ => e.get_literal_value().unwrap()
                                                         }).collect::<StaticVec<_>>();
 
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
@@ -1024,7 +1021,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                             let lib = &[];
 
                             let context = (state.engine, x.name.as_str(), lib).into();
-                            let (first, second) = arg_values.split_first_mut().expect("not empty");
+                            let (first, second) = arg_values.split_first_mut().unwrap();
                             (f)(context, &mut [ first, &mut second[0] ]).ok()
                         }) {
                             state.set_dirty();
@@ -1063,7 +1060,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
             if !has_script_fn {
                 let arg_values = &mut x.args.iter().map(|e| match e {
                                                                 Expr::Stack(slot, _) => x.constants[*slot].clone(),
-                                                                _ => e.get_literal_value().expect("constant")
+                                                                _ => e.get_literal_value().unwrap()
                                                             }).collect::<StaticVec<_>>();
 
                 let result = match x.name.as_str() {
@@ -1098,7 +1095,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
         // constant-name
         Expr::Variable(_, pos, x) if x.1.is_none() && state.find_constant(&x.2).is_some() => {
             // Replace constant with value
-            *expr = Expr::from_dynamic(state.find_constant(&x.2).expect("exists").clone(), *pos);
+            *expr = Expr::from_dynamic(state.find_constant(&x.2).unwrap().clone(), *pos);
             state.set_dirty();
         }
 

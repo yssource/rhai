@@ -4,7 +4,6 @@ use crate::func::{FnCallArgs, RegisterNativeFunction, SendSync};
 use crate::types::dynamic::Variant;
 use crate::{
     Engine, FnAccess, FnNamespace, Identifier, Module, NativeCallContext, RhaiResultOf, Shared,
-    SmartString,
 };
 use std::any::{type_name, TypeId};
 #[cfg(feature = "no_std")]
@@ -15,13 +14,14 @@ impl Engine {
     #[inline(always)]
     #[allow(dead_code)]
     pub(crate) fn global_namespace(&self) -> &Module {
-        self.global_modules.first().expect("not empty")
+        self.global_modules.first().unwrap()
     }
     /// Get a mutable reference to the global namespace module
     /// (which is the first module in `global_modules`).
     #[inline(always)]
     pub(crate) fn global_namespace_mut(&mut self) -> &mut Module {
-        Shared::get_mut(self.global_modules.first_mut().expect("not empty")).expect("not shared")
+        let module = self.global_modules.first_mut().unwrap();
+        Shared::get_mut(module).expect("not shared")
     }
     /// Register a custom function with the [`Engine`].
     ///
@@ -69,18 +69,20 @@ impl Engine {
         }
 
         #[cfg(feature = "metadata")]
-        let param_type_names: Option<crate::StaticVec<_>> =
-            Some(param_type_names.iter().map(|ty| ty.as_str()).collect());
+        let param_type_names: crate::StaticVec<_> =
+            param_type_names.iter().map(|ty| ty.as_str()).collect();
+        #[cfg(feature = "metadata")]
+        let param_type_names = Some(param_type_names.as_ref());
 
         #[cfg(not(feature = "metadata"))]
-        let param_type_names: Option<[&str; 0]> = None;
+        let param_type_names: Option<&[&str]> = None;
 
         self.global_namespace_mut().set_fn(
             name,
             FnNamespace::Global,
             FnAccess::Public,
-            param_type_names.as_ref().map(<_>::as_ref),
-            &param_types,
+            param_type_names,
+            param_types,
             func.into_callable_function(),
         );
         self
@@ -127,18 +129,20 @@ impl Engine {
             .collect();
 
         #[cfg(feature = "metadata")]
-        let param_type_names: Option<crate::StaticVec<_>> =
-            Some(param_type_names.iter().map(|ty| ty.as_str()).collect());
+        let param_type_names: crate::StaticVec<_> =
+            param_type_names.iter().map(|ty| ty.as_str()).collect();
+        #[cfg(feature = "metadata")]
+        let param_type_names = Some(param_type_names.as_ref());
 
         #[cfg(not(feature = "metadata"))]
-        let param_type_names: Option<[&str; 0]> = None;
+        let param_type_names: Option<&[&str]> = None;
 
         self.global_namespace_mut().set_fn(
             name,
             FnNamespace::Global,
             FnAccess::Public,
-            param_type_names.as_ref().map(<_>::as_ref),
-            &param_types,
+            param_type_names,
+            param_types,
             func.into_callable_function(),
         );
         self
@@ -280,8 +284,8 @@ impl Engine {
     #[inline(always)]
     pub fn register_type_with_name_raw(
         &mut self,
-        fully_qualified_type_path: impl Into<SmartString>,
-        name: impl Into<SmartString>,
+        fully_qualified_type_path: impl Into<Identifier>,
+        name: impl Into<Identifier>,
     ) -> &mut Self {
         // Add the pretty-print type name into the map
         self.type_names

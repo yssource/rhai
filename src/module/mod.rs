@@ -649,7 +649,7 @@ impl Module {
 
         if let Some(f) = self.functions.get_mut(&hash_fn) {
             let (param_names, return_type_name) = if param_names.len() > f.params {
-                let return_type = param_names.pop().expect("exists");
+                let return_type = param_names.pop().unwrap();
                 (param_names, return_type)
             } else {
                 (param_names, Default::default())
@@ -697,7 +697,7 @@ impl Module {
         let comments = comments.as_ref();
 
         if !comments.is_empty() {
-            let f = self.functions.get_mut(&hash_fn).expect("exists");
+            let f = self.functions.get_mut(&hash_fn).unwrap();
             f.comments = Some(comments.iter().map(|s| s.as_ref().into()).collect());
         }
 
@@ -782,7 +782,7 @@ impl Module {
                 .map(|&s| s.into())
                 .collect::<StaticVec<_>>();
             let return_type = if names.len() > arg_types.as_ref().len() {
-                names.pop().expect("exists")
+                names.pop().unwrap()
             } else {
                 Default::default()
             };
@@ -860,7 +860,7 @@ impl Module {
         let comments = comments.as_ref();
 
         if !comments.is_empty() {
-            let f = self.functions.get_mut(&hash).expect("exists");
+            let f = self.functions.get_mut(&hash).unwrap();
             f.comments = Some(comments.iter().map(|s| s.as_ref().into()).collect());
         }
 
@@ -1569,11 +1569,11 @@ impl Module {
                     match aliases.len() {
                         0 => (),
                         1 => {
-                            let alias = aliases.pop().expect("not empty");
+                            let alias = aliases.pop().unwrap();
                             module.set_var(alias, value);
                         }
                         _ => {
-                            let last_alias = aliases.pop().expect("not empty");
+                            let last_alias = aliases.pop().unwrap();
                             aliases.into_iter().for_each(|alias| {
                                 module.set_var(alias, value.clone());
                             });

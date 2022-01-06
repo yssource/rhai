@@ -1216,7 +1216,7 @@ pub fn parse_string_literal(
 
                 #[cfg(not(feature = "no_position"))]
                 {
-                    let start_position = start.position().expect("start position");
+                    let start_position = start.position().unwrap();
                     skip_whitespace_until = start_position + 1;
                 }
             }
@@ -1237,8 +1237,7 @@ pub fn parse_string_literal(
 
             // Whitespace to skip
             #[cfg(not(feature = "no_position"))]
-            _ if next_char.is_whitespace()
-                && pos.position().expect("position") < skip_whitespace_until => {}
+            _ if next_char.is_whitespace() && pos.position().unwrap() < skip_whitespace_until => {}
 
             // All other characters
             _ => {
@@ -1632,7 +1631,7 @@ fn get_next_token_inner(
                         |(err, err_pos)| (Token::LexError(err), err_pos),
                         |(result, _)| {
                             let mut chars = result.chars();
-                            let first = chars.next().expect("not empty");
+                            let first = chars.next().unwrap();
 
                             if chars.next().is_some() {
                                 (

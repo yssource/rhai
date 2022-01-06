@@ -97,18 +97,16 @@ impl Engine {
             resolver: &StaticModuleResolver,
             imports: &mut BTreeSet<crate::Identifier>,
         ) {
-            ast.walk(
-                &mut |path| match path.last().expect("contains current node") {
-                    // Collect all `import` statements with a string constant path
-                    ASTNode::Stmt(Stmt::Import(Expr::StringConstant(s, _), _, _))
-                        if !resolver.contains_path(s) && !imports.contains(s.as_str()) =>
-                    {
-                        imports.insert(s.clone().into());
-                        true
-                    }
-                    _ => true,
-                },
-            );
+            ast.walk(&mut |path| match path.last().unwrap() {
+                // Collect all `import` statements with a string constant path
+                ASTNode::Stmt(Stmt::Import(Expr::StringConstant(s, _), _, _))
+                    if !resolver.contains_path(s) && !imports.contains(s.as_str()) =>
+                {
+                    imports.insert(s.clone().into());
+                    true
+                }
+                _ => true,
+            });
         }
 
         let mut ast = self.compile_scripts_with_scope(scope, &[script])?;
