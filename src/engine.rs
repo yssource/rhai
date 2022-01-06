@@ -361,6 +361,7 @@ impl<'a> Target<'a> {
         }
     }
     /// Get the source [`Dynamic`] of the [`Target`].
+    #[allow(dead_code)]
     #[inline]
     #[must_use]
     pub fn source(&self) -> &Dynamic {
@@ -1459,9 +1460,6 @@ impl Engine {
                             }
                         }
 
-                        #[cfg(not(feature = "unchecked"))]
-                        self.check_data_size(target.as_ref(), root.1)?;
-
                         Ok(result)
                     }
                     // xxx[rhs] op= new_val
@@ -1478,6 +1476,8 @@ impl Engine {
                                     global, state, lib, op_info, op_pos, obj_ptr, root, new_val,
                                 )
                                 .map_err(|err| err.fill_position(new_pos))?;
+                                #[cfg(not(feature = "unchecked"))]
+                                self.check_data_size(obj_ptr, new_pos)?;
                                 None
                             }
                             // Can't index - try to call an index setter
@@ -1500,9 +1500,6 @@ impl Engine {
                                 root_pos, None, level,
                             )?;
                         }
-
-                        #[cfg(not(feature = "unchecked"))]
-                        self.check_data_size(target.as_ref(), root.1)?;
 
                         Ok((Dynamic::UNIT, true))
                     }
@@ -1549,7 +1546,7 @@ impl Engine {
                             .map_err(|err| err.fill_position(new_pos))?;
                         }
                         #[cfg(not(feature = "unchecked"))]
-                        self.check_data_size(target.as_ref(), root.1)?;
+                        self.check_data_size(target.source(), new_pos)?;
                         Ok((Dynamic::UNIT, true))
                     }
                     // {xxx:map}.id
@@ -1604,9 +1601,6 @@ impl Engine {
                                 new_val,
                             )
                             .map_err(|err| err.fill_position(new_pos))?;
-
-                            #[cfg(not(feature = "unchecked"))]
-                            self.check_data_size(target.as_ref(), root.1)?;
 
                             new_val = orig_val;
                         }
@@ -1799,9 +1793,6 @@ impl Engine {
                                             _ => Err(err),
                                         },
                                     )?;
-
-                                    #[cfg(not(feature = "unchecked"))]
-                                    self.check_data_size(target.as_ref(), root.1)?;
                                 }
 
                                 Ok((result, may_be_changed))
@@ -1867,7 +1858,7 @@ impl Engine {
 
         let is_assignment = new_val.is_some();
 
-        let result = match lhs {
+        match lhs {
             // id.??? or id[???]
             Expr::Variable(_, var_pos, x) => {
                 #[cfg(not(feature = "unchecked"))]
@@ -1900,12 +1891,6 @@ impl Engine {
                 .map(|(v, _)| if is_assignment { Dynamic::UNIT } else { v })
                 .map_err(|err| err.fill_position(op_pos))
             }
-        };
-
-        if is_assignment {
-            result.map(|_| Dynamic::UNIT)
-        } else {
-            self.check_return_value(result, expr.position())
         }
     }
 
@@ -2355,7 +2340,7 @@ impl Engine {
             ..
         } = expr;
 
-        let result = if let Some(namespace) = namespace.as_ref() {
+        if let Some(namespace) = namespace.as_ref() {
             // Qualified function call
             let hash = hashes.native;
 
@@ -2369,9 +2354,7 @@ impl Engine {
                 scope, global, state, lib, this_ptr, name, args, constants, *hashes, pos, *capture,
                 level,
             )
-        };
-
-        self.check_return_value(result, pos)
+        }
     }
 
     /// Evaluate an expression.
@@ -2695,49 +2678,45 @@ impl Engine {
             op,
         }) = op_info
         {
-            {
-                let mut lock_guard;
-                let lhs_ptr_inner;
+            let mut lock_guard;
+            let lhs_ptr_inner;
 
-                #[cfg(not(feature = "no_closure"))]
-                let target_is_shared = target.is_shared();
-                #[cfg(feature = "no_closure")]
-                let target_is_shared = false;
+            #[cfg(not(feature = "no_closure"))]
+            let target_is_shared = target.is_shared();
+            #[cfg(feature = "no_closure")]
+            let target_is_shared = false;
 
-                if target_is_shared {
-                    lock_guard = target.write_lock::<Dynamic>().expect("`Dynamic`");
-                    lhs_ptr_inner = &mut *lock_guard;
-                } else {
-                    lhs_ptr_inner = &mut *target;
+            if target_is_shared {
+                lock_guard = target.write_lock::<Dynamic>().expect("`Dynamic`");
+                lhs_ptr_inner = &mut *lock_guard;
+            } else {
+                lhs_ptr_inner = &mut *target;
+            }
+
+            let hash = hash_op_assign;
+            let args = &mut [lhs_ptr_inner, &mut new_val];
+
+            match self.call_native_fn(global, state, lib, op, hash, args, true, true, op_pos) {
+                Err(err) if matches!(*err, ERR::ErrorFunctionNotFound(ref f, _) if f.starts_with(op)) =>
+                {
+                    // Expand to `var = var op rhs`
+                    let op = &op[..op.len() - 1]; // extract operator without =
+
+                    // Run function
+                    let (value, _) = self.call_native_fn(
+                        global, state, lib, op, hash_op, args, true, false, op_pos,
+                    )?;
+
+                    *args[0] = value.flatten();
                 }
-
-                let hash = hash_op_assign;
-                let args = &mut [lhs_ptr_inner, &mut new_val];
-
-                match self.call_native_fn(global, state, lib, op, hash, args, true, true, op_pos) {
-                    Err(err) if matches!(*err, ERR::ErrorFunctionNotFound(ref f, _) if f.starts_with(op)) =>
-                    {
-                        // Expand to `var = var op rhs`
-                        let op = &op[..op.len() - 1]; // extract operator without =
-
-                        // Run function
-                        let (value, _) = self.call_native_fn(
-                            global, state, lib, op, hash_op, args, true, false, op_pos,
-                        )?;
-
-                        *args[0] = value.flatten();
-                    }
-                    err => return err.map(|_| ()),
-                }
+                err => return err.map(|_| ()),
             }
         } else {
             // Normal assignment
             *target.as_mut() = new_val;
         }
 
-        target.propagate_changed_value()?;
-
-        self.check_data_size(target.source(), Position::NONE)
+        target.propagate_changed_value()
     }
 
     /// Evaluate a statement.
@@ -2768,20 +2747,14 @@ impl Engine {
             return self.eval_fn_call_expr(scope, global, state, lib, this_ptr, x, *pos, level);
         }
 
-        #[cfg(not(feature = "unchecked"))]
-        self.inc_operations(&mut global.num_operations, stmt.position())?;
+        // Then assignments.
+        // We shouldn't do this for too many variants because, soon or later, the added comparisons
+        // will cost more than the mis-predicted `match` branch.
+        if let Stmt::Assignment(x, op_pos) = stmt {
+            #[cfg(not(feature = "unchecked"))]
+            self.inc_operations(&mut global.num_operations, stmt.position())?;
 
-        match stmt {
-            // No-op
-            Stmt::Noop(_) => Ok(Dynamic::UNIT),
-
-            // Expression as statement
-            Stmt::Expr(expr) => Ok(self
-                .eval_expr(scope, global, state, lib, this_ptr, expr, level)?
-                .flatten()),
-
-            // var op= rhs
-            Stmt::Assignment(x, op_pos) if x.0.is_variable_access(false) => {
+            return if x.0.is_variable_access(false) {
                 let (lhs_expr, op_info, rhs_expr) = x.as_ref();
                 let rhs_val = self
                     .eval_expr(scope, global, state, lib, this_ptr, rhs_expr, level)?
@@ -2810,16 +2783,8 @@ impl Engine {
                 )
                 .map_err(|err| err.fill_position(rhs_expr.position()))?;
 
-                #[cfg(not(feature = "unchecked"))]
-                if op_info.is_some() {
-                    self.check_data_size(lhs_ptr.as_ref(), lhs_expr.position())?;
-                }
-
                 Ok(Dynamic::UNIT)
-            }
-
-            // lhs op= rhs
-            Stmt::Assignment(x, op_pos) => {
+            } else {
                 let (lhs_expr, op_info, rhs_expr) = x.as_ref();
                 let rhs_val = self
                     .eval_expr(scope, global, state, lib, this_ptr, rhs_expr, level)?
@@ -2850,7 +2815,20 @@ impl Engine {
                     }
                     _ => unreachable!("cannot assign to expression: {:?}", lhs_expr),
                 }
-            }
+            };
+        }
+
+        #[cfg(not(feature = "unchecked"))]
+        self.inc_operations(&mut global.num_operations, stmt.position())?;
+
+        match stmt {
+            // No-op
+            Stmt::Noop(_) => Ok(Dynamic::UNIT),
+
+            // Expression as statement
+            Stmt::Expr(expr) => Ok(self
+                .eval_expr(scope, global, state, lib, this_ptr, expr, level)?
+                .flatten()),
 
             // Block scope
             Stmt::Block(statements, _) if statements.is_empty() => Ok(Dynamic::UNIT),
@@ -3395,7 +3373,7 @@ impl Engine {
     }
 
     /// Check a result to ensure that the data size is within allowable limit.
-    fn check_return_value(&self, mut result: RhaiResult, pos: Position) -> RhaiResult {
+    pub(crate) fn check_return_value(&self, mut result: RhaiResult, pos: Position) -> RhaiResult {
         let _pos = pos;
 
         match result {
@@ -3470,7 +3448,11 @@ impl Engine {
             }
             Union::Str(ref s, _, _) => (0, 0, s.len()),
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(_, _, _) if !top => {
+            Union::Shared(_, _, _) if top => {
+                Self::calc_data_sizes(&*value.read_lock::<Dynamic>().unwrap(), true)
+            }
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(_, _, _) => {
                 unreachable!("shared values discovered within data: {}", value)
             }
             _ => (0, 0, 0),
@@ -3536,7 +3518,7 @@ impl Engine {
 
     /// Check whether the size of a [`Dynamic`] is within limits.
     #[cfg(not(feature = "unchecked"))]
-    fn check_data_size(&self, value: &Dynamic, pos: Position) -> RhaiResultOf<()> {
+    pub(crate) fn check_data_size(&self, value: &Dynamic, pos: Position) -> RhaiResultOf<()> {
         // If no data size limits, just return
         if !self.has_data_size_limit() {
             return Ok(());

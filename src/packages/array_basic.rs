@@ -3,7 +3,6 @@
 
 use crate::engine::OP_EQUALS;
 use crate::plugin::*;
-use crate::types::dynamic::Union;
 use crate::{
     def_package, Array, Dynamic, ExclusiveRange, FnPtr, InclusiveRange, NativeCallContext,
     Position, RhaiResultOf, ERR, INT,
@@ -97,8 +96,9 @@ pub mod array_functions {
 
         #[cfg(not(feature = "unchecked"))]
         let check_sizes = match item.0 {
-            Union::Array(_, _, _) | Union::Str(_, _, _) => true,
-            Union::Map(_, _, _) => true,
+            crate::types::dynamic::Union::Array(_, _, _)
+            | crate::types::dynamic::Union::Str(_, _, _) => true,
+            crate::types::dynamic::Union::Map(_, _, _) => true,
             _ => false,
         };
         #[cfg(feature = "unchecked")]

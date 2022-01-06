@@ -388,7 +388,14 @@ impl Engine {
                 bk.restore_first_arg(args)
             }
 
-            let result = result.map_err(|err| err.fill_position(pos))?;
+            // Check the return value (including data sizes)
+            let result = self.check_return_value(result, pos)?;
+
+            // Check the data size of any `&mut` object, which may be changed.
+            #[cfg(not(feature = "unchecked"))]
+            if is_ref_mut && args.len() > 0 {
+                self.check_data_size(&args[0], pos)?;
+            }
 
             // See if the function match print/debug (which requires special processing)
             return Ok(match name {
@@ -1285,17 +1292,19 @@ impl Engine {
 
             Some(f) if f.is_plugin_fn() => {
                 let context = (self, fn_name, module.id(), &*global, lib, pos).into();
-                f.get_plugin_fn()
+                let result = f
+                    .get_plugin_fn()
                     .expect("plugin function")
                     .clone()
-                    .call(context, &mut args)
-                    .map_err(|err| err.fill_position(pos))
+                    .call(context, &mut args);
+                self.check_return_value(result, pos)
             }
 
             Some(f) if f.is_native() => {
                 let func = f.get_native_fn().expect("native function");
                 let context = (self, fn_name, module.id(), &*global, lib, pos).into();
-                func(context, &mut args).map_err(|err| err.fill_position(pos))
+                let result = func(context, &mut args);
+                self.check_return_value(result, pos)
             }
 
             Some(f) => unreachable!("unknown function type: {:?}", f),

@@ -30,7 +30,7 @@ fn test_max_string_size() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine
-            .eval::<String>(
+            .run(
                 r#"
                     let x = "hello, ";
                     let y = "world!";
@@ -44,7 +44,7 @@ fn test_max_string_size() -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_object"))]
     assert!(matches!(
         *engine
-            .eval::<String>(
+            .run(
                 r#"
                     let x = "hello";
                     x.pad(100, '!');
@@ -90,7 +90,7 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine
-            .eval::<Array>(
+            .run(
                 "
                     let x = [1,2,3,4,5,6];
                     let y = [7,8,9,10,11,12];
@@ -101,10 +101,22 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
         EvalAltResult::ErrorDataTooLarge(_, _)
     ));
 
+    assert!(matches!(
+        *engine
+            .run(
+                "
+                    let x = [ 42 ];
+                    loop { x[0] = x; }
+                "
+            )
+            .expect_err("should error"),
+        EvalAltResult::ErrorDataTooLarge(_, _)
+    ));
+
     #[cfg(not(feature = "no_object"))]
     assert!(matches!(
         *engine
-            .eval::<Array>(
+            .run(
                 "
                     let x = [1,2,3,4,5,6];
                     x.pad(100, 42);
@@ -117,7 +129,7 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine
-            .eval::<Array>(
+            .run(
                 "
                     let x = [1,2,3];
                     [x, x, x, x]
@@ -130,7 +142,7 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_object"))]
     assert!(matches!(
         *engine
-            .eval::<Array>(
+            .run(
                 "
                     let x = #{a:1, b:2, c:3};
                     [x, x, x, x]
@@ -142,7 +154,7 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine
-            .eval::<Array>(
+            .run(
                 "
                     let x = [1];
                     let y = [x, x];
@@ -220,7 +232,7 @@ fn test_max_map_size() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine
-            .eval::<Map>(
+            .run(
                 "
                     let x = #{a:1,b:2,c:3,d:4,e:5,f:6};
                     let y = #{g:7,h:8,i:9,j:10,k:11,l:12};
@@ -233,7 +245,7 @@ fn test_max_map_size() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine
-            .eval::<Map>(
+            .run(
                 "
                     let x = #{a:1,b:2,c:3};
                     #{u:x, v:x, w:x, z:x}
@@ -246,7 +258,7 @@ fn test_max_map_size() -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_index"))]
     assert!(matches!(
         *engine
-            .eval::<Map>(
+            .run(
                 "
                     let x = [1, 2, 3];
                     #{u:x, v:x, w:x, z:x}
