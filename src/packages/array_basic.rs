@@ -98,6 +98,7 @@ pub mod array_functions {
         let check_sizes = match item.0 {
             crate::types::dynamic::Union::Array(_, _, _)
             | crate::types::dynamic::Union::Str(_, _, _) => true,
+            #[cfg(not(feature = "no_object"))]
             crate::types::dynamic::Union::Map(_, _, _) => true,
             _ => false,
         };
