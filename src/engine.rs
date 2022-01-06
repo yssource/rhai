@@ -2308,23 +2308,49 @@ impl Engine {
         }
     }
 
-    /// Evaluate a constant expression.
-    fn eval_constant_expr(expr: &Expr) -> RhaiResult {
-        Ok(match expr {
-            Expr::DynamicConstant(x, _) => x.as_ref().clone(),
-            Expr::IntegerConstant(x, _) => (*x).into(),
-            #[cfg(not(feature = "no_float"))]
-            Expr::FloatConstant(x, _) => (*x).into(),
-            Expr::StringConstant(x, _) => x.clone().into(),
-            Expr::CharConstant(x, _) => (*x).into(),
-            Expr::BoolConstant(x, _) => (*x).into(),
-            Expr::Unit(_) => Dynamic::UNIT,
-            _ => unreachable!("constant expression expected but gets {:?}", expr),
-        })
+    /// Evaluate a function call expression.
+    fn eval_fn_call_expr(
+        &self,
+        scope: &mut Scope,
+        global: &mut GlobalRuntimeState,
+        state: &mut EvalState,
+        lib: &[&Module],
+        this_ptr: &mut Option<&mut Dynamic>,
+        expr: &FnCallExpr,
+        pos: Position,
+        level: usize,
+    ) -> RhaiResult {
+        let FnCallExpr {
+            name,
+            namespace,
+            capture_parent_scope: capture,
+            hashes,
+            args,
+            constants,
+            ..
+        } = expr;
+
+        let result = if let Some(namespace) = namespace.as_ref() {
+            // Qualified function call
+            let hash = hashes.native;
+
+            self.make_qualified_function_call(
+                scope, global, state, lib, this_ptr, namespace, name, args, constants, hash, pos,
+                level,
+            )
+        } else {
+            // Normal function call
+            self.make_function_call(
+                scope, global, state, lib, this_ptr, name, args, constants, *hashes, pos, *capture,
+                level,
+            )
+        };
+
+        self.check_return_value(result, pos)
     }
 
-    /// Evaluate a literal expression.
-    fn eval_literal_expr(
+    /// Evaluate an expression.
+    pub(crate) fn eval_expr(
         &self,
         scope: &mut Scope,
         global: &mut GlobalRuntimeState,
@@ -2334,7 +2360,31 @@ impl Engine {
         expr: &Expr,
         level: usize,
     ) -> RhaiResult {
+        #[cfg(not(feature = "unchecked"))]
+        self.inc_operations(&mut global.num_operations, expr.position())?;
+
         match expr {
+            // Constants
+            Expr::DynamicConstant(x, _) => Ok(x.as_ref().clone()),
+            Expr::IntegerConstant(x, _) => Ok((*x).into()),
+            #[cfg(not(feature = "no_float"))]
+            Expr::FloatConstant(x, _) => Ok((*x).into()),
+            Expr::StringConstant(x, _) => Ok(x.clone().into()),
+            Expr::CharConstant(x, _) => Ok((*x).into()),
+            Expr::BoolConstant(x, _) => Ok((*x).into()),
+            Expr::Unit(_) => Ok(Dynamic::UNIT),
+
+            // `this`
+            Expr::Variable(None, var_pos, x) if x.0.is_none() && x.2 == KEYWORD_THIS => this_ptr
+                .as_deref()
+                .cloned()
+                .ok_or_else(|| ERR::ErrorUnboundThis(*var_pos).into()),
+
+            // Normal variable
+            Expr::Variable(_, _, _) => self
+                .search_namespace(scope, global, state, lib, this_ptr, expr)
+                .map(|(val, _)| val.take_or_clone()),
+
             // `... ${...} ...`
             Expr::InterpolatedString(x, pos) => {
                 let mut pos = *pos;
@@ -2405,22 +2455,6 @@ impl Engine {
                 Ok(map)
             }
 
-            _ => unreachable!("literal expression expected but gets {:?}", expr),
-        }
-    }
-
-    /// Evaluate a simple expression.
-    fn eval_simple_expr(
-        &self,
-        scope: &mut Scope,
-        global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
-        lib: &[&Module],
-        this_ptr: &mut Option<&mut Dynamic>,
-        expr: &Expr,
-        level: usize,
-    ) -> RhaiResult {
-        match expr {
             Expr::And(x, _) => {
                 Ok((self
                     .eval_expr(scope, global, state, lib, this_ptr, &x.lhs, level)?
@@ -2466,156 +2500,23 @@ impl Engine {
                 self.check_return_value(result, expr.position())
             }
 
-            _ => unreachable!("simple expression expected but gets {:?}", expr),
-        }
-    }
-
-    /// Evaluate a variable expression.
-    fn eval_variable_expr(
-        &self,
-        scope: &mut Scope,
-        global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
-        lib: &[&Module],
-        this_ptr: &mut Option<&mut Dynamic>,
-        expr: &Expr,
-        _level: usize,
-    ) -> RhaiResult {
-        let result = match expr {
-            Expr::Variable(None, var_pos, x) if x.0.is_none() && x.2 == KEYWORD_THIS => this_ptr
-                .as_deref()
-                .cloned()
-                .ok_or_else(|| ERR::ErrorUnboundThis(*var_pos).into()),
-
-            Expr::Variable(_, _, _) => self
-                .search_namespace(scope, global, state, lib, this_ptr, expr)
-                .map(|(val, _)| val.take_or_clone()),
-
-            _ => unreachable!("Expr::Variable expected but gets {:?}", expr),
-        };
-
-        self.check_return_value(result, expr.position())
-    }
-
-    /// Evaluate a function call expression.
-    fn eval_fn_call_expr(
-        &self,
-        scope: &mut Scope,
-        global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
-        lib: &[&Module],
-        this_ptr: &mut Option<&mut Dynamic>,
-        expr: &FnCallExpr,
-        pos: Position,
-        level: usize,
-    ) -> RhaiResult {
-        let result = if expr.is_qualified() {
-            // Qualified function call
-            let FnCallExpr {
-                name,
-                namespace,
-                hashes,
-                args,
-                constants,
-                ..
-            } = expr;
-            let namespace = namespace.as_ref().expect("qualified function call");
-            let hash = hashes.native;
-
-            self.make_qualified_function_call(
-                scope, global, state, lib, this_ptr, namespace, name, args, constants, hash, pos,
-                level,
-            )
-        } else {
-            // Normal function call
-            let FnCallExpr {
-                name,
-                capture_parent_scope: capture,
-                hashes,
-                args,
-                constants,
-                ..
-            } = expr;
-
-            self.make_function_call(
-                scope, global, state, lib, this_ptr, name, args, constants, *hashes, pos, *capture,
-                level,
-            )
-        };
-
-        self.check_return_value(result, pos)
-    }
-
-    /// Evaluate an expression.
-    pub(crate) fn eval_expr(
-        &self,
-        scope: &mut Scope,
-        global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
-        lib: &[&Module],
-        this_ptr: &mut Option<&mut Dynamic>,
-        expr: &Expr,
-        level: usize,
-    ) -> RhaiResult {
-        #[cfg(not(feature = "unchecked"))]
-        self.inc_operations(&mut global.num_operations, expr.position())?;
-
-        match expr {
-            Expr::DynamicConstant(_, _)
-            | Expr::IntegerConstant(_, _)
-            | Expr::StringConstant(_, _)
-            | Expr::CharConstant(_, _)
-            | Expr::BoolConstant(_, _)
-            | Expr::Unit(_) => Self::eval_constant_expr(expr),
-            #[cfg(not(feature = "no_float"))]
-            Expr::FloatConstant(_, _) => Self::eval_constant_expr(expr),
-
-            // Variable
-            Expr::Variable(_, _, _) => {
-                self.eval_variable_expr(scope, global, state, lib, this_ptr, expr, level)
-            }
-
-            // Statement block
             Expr::Stmt(x) if x.is_empty() => Ok(Dynamic::UNIT),
             Expr::Stmt(x) => {
                 self.eval_stmt_block(scope, global, state, lib, this_ptr, x, true, level)
             }
 
-            // lhs[idx_expr]
             #[cfg(not(feature = "no_index"))]
             Expr::Index(_, _, _) => {
                 self.eval_dot_index_chain(scope, global, state, lib, this_ptr, expr, level, None)
             }
 
-            // lhs.dot_rhs
             #[cfg(not(feature = "no_object"))]
             Expr::Dot(_, _, _) => {
                 self.eval_dot_index_chain(scope, global, state, lib, this_ptr, expr, level, None)
             }
 
-            // `... ${...} ...`
-            Expr::InterpolatedString(_, _) => {
-                self.eval_literal_expr(scope, global, state, lib, this_ptr, expr, level)
-            }
-
-            #[cfg(not(feature = "no_index"))]
-            Expr::Array(_, _) => {
-                self.eval_literal_expr(scope, global, state, lib, this_ptr, expr, level)
-            }
-
-            #[cfg(not(feature = "no_object"))]
-            Expr::Map(_, _) => {
-                self.eval_literal_expr(scope, global, state, lib, this_ptr, expr, level)
-            }
-
-            // Function call
             Expr::FnCall(x, pos) => {
                 self.eval_fn_call_expr(scope, global, state, lib, this_ptr, x, *pos, level)
-            }
-
-            // Simple expressions
-            Expr::And(_, _) | Expr::Or(_, _) | Expr::Custom(_, _) => {
-                self.eval_simple_expr(scope, global, state, lib, this_ptr, expr, level)
             }
 
             _ => unreachable!("expression cannot be evaluated: {:?}", expr),
@@ -3422,19 +3323,22 @@ impl Engine {
 
     /// Check a result to ensure that the data size is within allowable limit.
     fn check_return_value(&self, mut result: RhaiResult, pos: Position) -> RhaiResult {
-        if let Ok(ref mut r) = result {
-            // Concentrate all empty strings into one instance to save memory
-            if let Dynamic(crate::types::dynamic::Union::Str(s, _, _)) = r {
-                if s.is_empty() {
-                    if !s.ptr_eq(&self.empty_string) {
-                        *s = self.const_empty_string();
+        match result {
+            Ok(ref mut r) => {
+                // Concentrate all empty strings into one instance to save memory
+                if let Dynamic(Union::Str(s, _, _)) = r {
+                    if s.is_empty() {
+                        if !s.ptr_eq(&self.empty_string) {
+                            *s = self.const_empty_string();
+                        }
+                        return result;
                     }
-                    return result;
                 }
-            }
 
-            #[cfg(not(feature = "unchecked"))]
-            self.check_data_size(&r, pos)?;
+                #[cfg(not(feature = "unchecked"))]
+                self.check_data_size(&r, pos)?;
+            }
+            _ => (),
         }
 
         result
