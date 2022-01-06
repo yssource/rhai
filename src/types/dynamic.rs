@@ -1474,11 +1474,9 @@ impl Dynamic {
     /// Casting to a [`Dynamic`] just returns as is, but if it contains a shared value,
     /// it is cloned into a [`Dynamic`] with a normal value.
     ///
-    ///
     /// # Panics or Deadlocks
     ///
-    /// Panics if the cast fails (e.g. the type of the actual value is not the
-    /// same as the specified type).
+    /// Panics if the cast fails (e.g. the type of the actual value is not the same as the specified type).
     ///
     /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
