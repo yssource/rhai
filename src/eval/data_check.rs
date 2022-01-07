@@ -1,37 +1,13 @@
-//! Data checks during evaluation.
+//! Data size checks during evaluation.
+#![cfg(not(feature = "unchecked"))]
 
 use crate::types::dynamic::Union;
-use crate::{Dynamic, Engine, Position, RhaiResult, RhaiResultOf, ERR};
+use crate::{Dynamic, Engine, Position, RhaiResultOf, ERR};
 use std::num::NonZeroUsize;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
 impl Engine {
-    /// Check a result to ensure that the data size is within allowable limit.
-    pub(crate) fn check_return_value(&self, mut result: RhaiResult, pos: Position) -> RhaiResult {
-        let _pos = pos;
-
-        match result {
-            Ok(ref mut r) => {
-                // Concentrate all empty strings into one instance to save memory
-                if let Dynamic(Union::Str(s, _, _)) = r {
-                    if s.is_empty() {
-                        if !s.ptr_eq(&self.empty_string) {
-                            *s = self.const_empty_string();
-                        }
-                        return result;
-                    }
-                }
-
-                #[cfg(not(feature = "unchecked"))]
-                self.check_data_size(&r, _pos)?;
-            }
-            _ => (),
-        }
-
-        result
-    }
-
     /// Recursively calculate the sizes of a value.
     ///
     /// Sizes returned are `(`[`Array`][crate::Array], [`Map`][crate::Map] and `String)`.
@@ -41,6 +17,8 @@ impl Engine {
     /// Panics if any interior data is shared (should never happen).
     #[cfg(not(feature = "unchecked"))]
     pub(crate) fn calc_data_sizes(value: &Dynamic, top: bool) -> (usize, usize, usize) {
+        let _top = top;
+
         match value.0 {
             #[cfg(not(feature = "no_index"))]
             Union::Array(ref arr, _, _) => {
@@ -83,7 +61,7 @@ impl Engine {
             }
             Union::Str(ref s, _, _) => (0, 0, s.len()),
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(_, _, _) if top => {
+            Union::Shared(_, _, _) if _top => {
                 Self::calc_data_sizes(&*value.read_lock::<Dynamic>().unwrap(), true)
             }
             #[cfg(not(feature = "no_closure"))]

@@ -5,9 +5,7 @@ use crate::ast::{Expr, Ident, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
 use crate::func::get_hasher;
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::types::dynamic::{AccessMode, Union};
-use crate::{
-    Dynamic, Engine, ImmutableString, Module, Position, RhaiResult, RhaiResultOf, Scope, ERR, INT,
-};
+use crate::{Dynamic, Engine, Module, Position, RhaiResult, RhaiResultOf, Scope, ERR, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -735,7 +733,7 @@ impl Engine {
 
                 if let Some(path) = self
                     .eval_expr(scope, global, state, lib, this_ptr, &expr, level)?
-                    .try_cast::<ImmutableString>()
+                    .try_cast::<crate::ImmutableString>()
                 {
                     use crate::ModuleResolver;
 
@@ -776,7 +774,7 @@ impl Engine {
 
                     Ok(Dynamic::UNIT)
                 } else {
-                    Err(self.make_type_mismatch_err::<ImmutableString>("", expr.position()))
+                    Err(self.make_type_mismatch_err::<crate::ImmutableString>("", expr.position()))
                 }
             }
 

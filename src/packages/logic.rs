@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
+use crate::def_package;
 use crate::plugin::*;
-use crate::{def_package, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -86,6 +86,8 @@ gen_cmp_functions!(float => f64);
 #[cfg(not(feature = "no_float"))]
 #[export_module]
 mod f32_functions {
+    use crate::INT;
+
     #[rhai_fn(name = "==")]
     pub fn eq_if(x: INT, y: f32) -> bool {
         (x as f32) == (y as f32)
@@ -139,6 +141,8 @@ mod f32_functions {
 #[cfg(not(feature = "no_float"))]
 #[export_module]
 mod f64_functions {
+    use crate::INT;
+
     #[rhai_fn(name = "==")]
     pub fn eq_if(x: INT, y: f64) -> bool {
         (x as f64) == (y as f64)

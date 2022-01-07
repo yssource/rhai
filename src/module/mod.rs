@@ -1585,16 +1585,21 @@ impl Module {
                 });
 
         // Extra modules left in the scope become sub-modules
+        #[cfg(not(feature = "no_function"))]
         let mut func_global = None;
 
         global.into_iter().skip(orig_mods_len).for_each(|kv| {
+            #[cfg(not(feature = "no_function"))]
             if func_global.is_none() {
                 func_global = Some(StaticVec::new());
             }
+            #[cfg(not(feature = "no_function"))]
             func_global.as_mut().expect("`Some`").push(kv.clone());
+
             module.set_sub_module(kv.0, kv.1);
         });
 
+        #[cfg(not(feature = "no_function"))]
         let func_global = func_global.map(|v| v.into_boxed_slice());
 
         // Non-private functions defined become module functions

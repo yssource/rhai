@@ -1,6 +1,8 @@
 Source Structure
 ================
 
+Root Sources
+------------
 
 | Source file    | Description                                                                     |
 | -------------- | ------------------------------------------------------------------------------- |
@@ -12,6 +14,9 @@ Source Structure
 | `unsafe.rs`    | `unsafe` functions                                                              |
 | `tests.rs`     | Unit tests (not integration tests, which are in the `rhai/tests` sub-directory) |
 
+
+Sub-Directories
+---------------
 
 | Sub-directory | Description                                           |
 | ------------- | ----------------------------------------------------- |

@@ -1,16 +1,13 @@
 //! Global runtime state.
 
-use crate::engine::{FN_IDX_GET, FN_IDX_SET};
 use crate::func::{CallableFunction, IteratorFn};
-use crate::{Dynamic, Identifier, Module, Shared, StaticVec};
+use crate::{Identifier, Module, Shared, StaticVec};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
     any::TypeId,
-    collections::BTreeMap,
     fmt,
     iter::{FromIterator, Rev, Zip},
-    ops::DerefMut,
 };
 
 /// _(internals)_ A stack of imported [modules][Module] plus mutable global runtime states.
@@ -46,7 +43,8 @@ pub struct GlobalRuntimeState {
     /// Cache of globally-defined constants.
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
-    constants: Option<Shared<crate::Locked<BTreeMap<Identifier, Dynamic>>>>,
+    constants:
+        Option<Shared<crate::Locked<std::collections::BTreeMap<Identifier, crate::Dynamic>>>>,
 }
 
 impl Default for GlobalRuntimeState {
@@ -183,7 +181,9 @@ impl GlobalRuntimeState {
     #[must_use]
     pub(crate) fn constants_mut<'a>(
         &'a mut self,
-    ) -> Option<impl DerefMut<Target = BTreeMap<Identifier, Dynamic>> + 'a> {
+    ) -> Option<
+        impl std::ops::DerefMut<Target = std::collections::BTreeMap<Identifier, crate::Dynamic>> + 'a,
+    > {
         if let Some(ref global_constants) = self.constants {
             Some(crate::func::native::shared_write_lock(global_constants))
         } else {
@@ -193,9 +193,9 @@ impl GlobalRuntimeState {
     /// Set a constant into the cache of globally-defined constants.
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
-    pub(crate) fn set_constant(&mut self, name: impl Into<Identifier>, value: Dynamic) {
+    pub(crate) fn set_constant(&mut self, name: impl Into<Identifier>, value: crate::Dynamic) {
         if self.constants.is_none() {
-            let dict: crate::Locked<_> = BTreeMap::new().into();
+            let dict: crate::Locked<_> = std::collections::BTreeMap::new().into();
             self.constants = Some(dict.into());
         }
 
@@ -209,8 +209,8 @@ impl GlobalRuntimeState {
         if self.fn_hash_indexing != (0, 0) {
             self.fn_hash_indexing.0
         } else {
-            let n1 = crate::calc_fn_hash(FN_IDX_GET, 2);
-            let n2 = crate::calc_fn_hash(FN_IDX_SET, 3);
+            let n1 = crate::calc_fn_hash(crate::engine::FN_IDX_GET, 2);
+            let n2 = crate::calc_fn_hash(crate::engine::FN_IDX_SET, 3);
             self.fn_hash_indexing = (n1, n2);
             n1
         }
@@ -222,8 +222,8 @@ impl GlobalRuntimeState {
         if self.fn_hash_indexing != (0, 0) {
             self.fn_hash_indexing.1
         } else {
-            let n1 = crate::calc_fn_hash(FN_IDX_GET, 2);
-            let n2 = crate::calc_fn_hash(FN_IDX_SET, 3);
+            let n1 = crate::calc_fn_hash(crate::engine::FN_IDX_GET, 2);
+            let n2 = crate::calc_fn_hash(crate::engine::FN_IDX_SET, 3);
             self.fn_hash_indexing = (n1, n2);
             n2
         }

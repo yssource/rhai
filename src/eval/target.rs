@@ -1,13 +1,10 @@
 //! Type to hold a mutable reference to the target of an evaluation.
 
 use crate::types::dynamic::Variant;
-use crate::{Dynamic, ImmutableString, Position, RhaiResultOf, ERR, INT};
+use crate::{Dynamic, RhaiResultOf};
+use std::ops::{Deref, DerefMut};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-use std::{
-    any::TypeId,
-    ops::{Deref, DerefMut},
-};
 
 /// A type that encapsulates a mutation target for an expression with side effects.
 #[derive(Debug)]
@@ -44,7 +41,7 @@ pub enum Target<'a> {
         /// Copy of the integer value of the bits, as a [`Dynamic`].
         value: Dynamic,
         /// Bitmask to apply to the source value (i.e. shifted)
-        mask: INT,
+        mask: crate::INT,
         /// Number of bits to right-shift the source value.
         shift: u8,
     },
@@ -128,6 +125,9 @@ impl<'a> Target<'a> {
     #[inline]
     #[must_use]
     pub fn is<T: Variant + Clone>(&self) -> bool {
+        #[allow(unused_imports)]
+        use std::any::TypeId;
+
         match self {
             Self::RefMut(r) => r.is::<T>(),
             #[cfg(not(feature = "no_closure"))]
@@ -136,7 +136,7 @@ impl<'a> Target<'a> {
             #[cfg(not(feature = "no_index"))]
             Self::Bit { .. } => TypeId::of::<T>() == TypeId::of::<bool>(),
             #[cfg(not(feature = "no_index"))]
-            Self::BitField { .. } => TypeId::of::<T>() == TypeId::of::<INT>(),
+            Self::BitField { .. } => TypeId::of::<T>() == TypeId::of::<crate::INT>(),
             #[cfg(not(feature = "no_index"))]
             Self::BlobByte { .. } => TypeId::of::<T>() == TypeId::of::<crate::Blob>(),
             #[cfg(not(feature = "no_index"))]
@@ -214,10 +214,10 @@ impl<'a> Target<'a> {
             Self::Bit { source, value, bit } => {
                 // Replace the bit at the specified index position
                 let new_bit = value.as_bool().map_err(|err| {
-                    Box::new(ERR::ErrorMismatchDataType(
+                    Box::new(crate::ERR::ErrorMismatchDataType(
                         "bool".to_string(),
                         err.to_string(),
-                        Position::NONE,
+                        crate::Position::NONE,
                     ))
                 })?;
 
@@ -244,10 +244,10 @@ impl<'a> Target<'a> {
 
                 // Replace the bit at the specified index position
                 let new_value = value.as_int().map_err(|err| {
-                    Box::new(ERR::ErrorMismatchDataType(
+                    Box::new(crate::ERR::ErrorMismatchDataType(
                         "integer".to_string(),
                         err.to_string(),
-                        Position::NONE,
+                        crate::Position::NONE,
                     ))
                 })?;
 
@@ -265,10 +265,10 @@ impl<'a> Target<'a> {
             } => {
                 // Replace the byte at the specified index position
                 let new_byte = value.as_int().map_err(|err| {
-                    Box::new(ERR::ErrorMismatchDataType(
+                    Box::new(crate::ERR::ErrorMismatchDataType(
                         "INT".to_string(),
                         err.to_string(),
-                        Position::NONE,
+                        crate::Position::NONE,
                     ))
                 })?;
 
@@ -290,15 +290,15 @@ impl<'a> Target<'a> {
             } => {
                 // Replace the character at the specified index position
                 let new_ch = value.as_char().map_err(|err| {
-                    Box::new(ERR::ErrorMismatchDataType(
+                    Box::new(crate::ERR::ErrorMismatchDataType(
                         "char".to_string(),
                         err.to_string(),
-                        Position::NONE,
+                        crate::Position::NONE,
                     ))
                 })?;
 
                 let s = &mut *source
-                    .write_lock::<ImmutableString>()
+                    .write_lock::<crate::ImmutableString>()
                     .expect("`ImmutableString`");
 
                 let index = *index;
