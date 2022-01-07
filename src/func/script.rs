@@ -3,7 +3,7 @@
 
 use super::call::FnCallArgs;
 use crate::ast::ScriptFnDef;
-use crate::engine::{EvalState, GlobalRuntimeState};
+use crate::eval::{EvalState, GlobalRuntimeState};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::{Dynamic, Engine, Module, Position, RhaiError, RhaiResult, Scope, StaticVec, ERR};
 use std::mem;

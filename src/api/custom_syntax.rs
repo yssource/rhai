@@ -1,14 +1,14 @@
 //! Module implementing custom syntax for [`Engine`].
 
 use crate::ast::Expr;
-use crate::engine::EvalContext;
 use crate::func::native::SendSync;
 use crate::parser::ParseResult;
 use crate::r#unsafe::unsafe_try_cast;
 use crate::tokenizer::{is_valid_identifier, Token};
 use crate::types::dynamic::Variant;
 use crate::{
-    Engine, Identifier, ImmutableString, LexError, Position, RhaiResult, Shared, StaticVec, INT,
+    Engine, EvalContext, Identifier, ImmutableString, LexError, Position, RhaiResult, Shared,
+    StaticVec, INT,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;

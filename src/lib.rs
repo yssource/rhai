@@ -72,6 +72,7 @@ use std::prelude::v1::*;
 mod api;
 mod ast;
 mod engine;
+mod eval;
 mod func;
 mod module;
 mod optimizer;
@@ -145,7 +146,8 @@ type InclusiveRange = std::ops::RangeInclusive<INT>;
 
 pub use api::custom_syntax::Expression;
 pub use ast::{FnAccess, AST};
-pub use engine::{Engine, EvalContext, OP_CONTAINS, OP_EQUALS};
+pub use engine::{Engine, OP_CONTAINS, OP_EQUALS};
+pub use eval::EvalContext;
 pub use func::{NativeCallContext, RegisterNativeFunction};
 pub use module::{FnNamespace, Module};
 pub use tokenizer::Position;
@@ -246,7 +248,7 @@ pub use ast::{
 pub use ast::FloatWrapper;
 
 #[cfg(feature = "internals")]
-pub use engine::{EvalState, GlobalRuntimeState};
+pub use eval::{EvalState, GlobalRuntimeState};
 
 #[cfg(feature = "internals")]
 pub use func::call::{FnResolutionCache, FnResolutionCacheEntry};

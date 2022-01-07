@@ -1,7 +1,7 @@
 //! Module that defines the `call_fn` API of [`Engine`].
 #![cfg(not(feature = "no_function"))]
 
-use crate::engine::{EvalState, GlobalRuntimeState};
+use crate::eval::{EvalState, GlobalRuntimeState};
 use crate::types::dynamic::Variant;
 use crate::{
     Dynamic, Engine, FuncArgs, Position, RhaiResult, RhaiResultOf, Scope, StaticVec, AST, ERR,

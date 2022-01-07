@@ -1862,6 +1862,10 @@ fn get_next_token_inner(
                 eat_next(stream, pos);
                 return Some((Token::Reserved(":=".into()), start_pos));
             }
+            (':', ';') => {
+                eat_next(stream, pos);
+                return Some((Token::Reserved(":;".into()), start_pos));
+            }
             (':', _) => return Some((Token::Colon, start_pos)),
 
             ('<', '=') => {
@@ -2202,6 +2206,9 @@ impl<'a> Iterator for TokenIterator<'a> {
                 )),
                 (":=", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
                     "':=' is not a valid assignment operator. This is not Go or Pascal! Should it be simply '='?".to_string(),
+                )),
+                (":;", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
+                    "':;' is not a valid symbol. Should it be '::'?".to_string(),
                 )),
                 ("::<", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
                     "'::<>' is not a valid symbol. This is not Rust! Should it be '::'?".to_string(),
