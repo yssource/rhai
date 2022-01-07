@@ -5,7 +5,7 @@ use crate::engine::{
     KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
 use crate::func::native::OnParseTokenCallback;
-use crate::{Engine, LexError, StaticVec, INT};
+use crate::{Engine, LexError, StaticVec, INT, UNSIGNED_INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -213,6 +213,16 @@ impl Position {
         #[cfg(feature = "no_position")]
         return true;
     }
+    /// Returns an fallback [`Position`] if it is [`NONE`][Position::NONE]?
+    #[inline]
+    #[must_use]
+    pub const fn or_else(self, pos: Self) -> Self {
+        if self.is_none() {
+            pos
+        } else {
+            self
+        }
+    }
     /// Print this [`Position`] for debug purposes.
     #[inline]
     pub(crate) fn debug_print(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -240,7 +250,7 @@ impl fmt::Display for Position {
             #[cfg(not(feature = "no_position"))]
             write!(f, "line {}, position {}", self.line, self.pos)?;
             #[cfg(feature = "no_position")]
-            unreachable!();
+            unreachable!("no position");
         }
 
         Ok(())
@@ -275,7 +285,7 @@ impl Add for Position {
                 },
             };
             #[cfg(feature = "no_position")]
-            unreachable!();
+            unreachable!("no position");
         }
     }
 }
@@ -684,10 +694,8 @@ impl Token {
 
     /// Reverse lookup a token from a piece of syntax.
     #[must_use]
-    pub fn lookup_from_syntax(syntax: impl AsRef<str>) -> Option<Self> {
+    pub fn lookup_from_syntax(syntax: &str) -> Option<Self> {
         use Token::*;
-
-        let syntax = syntax.as_ref();
 
         Some(match syntax {
             "{" => LeftBrace,
@@ -776,11 +784,16 @@ impl Token {
             #[cfg(feature = "no_module")]
             "import" | "export" | "as" => Reserved(syntax.into()),
 
-            "===" | "!==" | "->" | "<-" | ":=" | "~" | "::<" | "(*" | "*)" | "#" | "#!"
-            | "public" | "protected" | "super" | "new" | "use" | "module" | "package" | "var"
-            | "static" | "shared" | "with" | "goto" | "exit" | "match" | "case" | "default"
-            | "void" | "null" | "nil" | "spawn" | "thread" | "go" | "sync" | "async" | "await"
-            | "yield" => Reserved(syntax.into()),
+            // List of reserved operators
+            "===" | "!==" | "->" | "<-" | ":=" | "~" | "::<" | "(*" | "*)" | "#" | "#!" => {
+                Reserved(syntax.into())
+            }
+
+            // List of reserved keywords
+            "public" | "protected" | "super" | "new" | "use" | "module" | "package" | "var"
+            | "static" | "shared" | "with" | "is" | "goto" | "exit" | "match" | "case"
+            | "default" | "void" | "null" | "nil" | "spawn" | "thread" | "go" | "sync"
+            | "async" | "await" | "yield" => Reserved(syntax.into()),
 
             KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
             | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_THIS | KEYWORD_IS_DEF_VAR => {
@@ -873,13 +886,6 @@ impl Token {
         use Token::*;
 
         Precedence::new(match self {
-            // Assignments are not considered expressions - set to zero
-            Equals | PlusAssign | MinusAssign | MultiplyAssign | DivideAssign | PowerOfAssign
-            | LeftShiftAssign | RightShiftAssign | AndAssign | OrAssign | XOrAssign
-            | ModuloAssign => 0,
-
-            ExclusiveRange | InclusiveRange => 10,
-
             Or | XOr | Pipe => 30,
 
             And | Ampersand => 60,
@@ -890,6 +896,8 @@ impl Token {
 
             LessThan | LessThanEqualsTo | GreaterThan | GreaterThanEqualsTo => 130,
 
+            ExclusiveRange | InclusiveRange => 140,
+
             Plus | Minus => 150,
 
             Divide | Multiply | Modulo => 180,
@@ -897,8 +905,6 @@ impl Token {
             PowerOf => 190,
 
             LeftShift | RightShift => 210,
-
-            Period => 240,
 
             _ => 0,
         })
@@ -910,14 +916,6 @@ impl Token {
         use Token::*;
 
         match self {
-            // Assignments bind to the right
-            Equals | PlusAssign | MinusAssign | MultiplyAssign | DivideAssign | PowerOfAssign
-            | LeftShiftAssign | RightShiftAssign | AndAssign | OrAssign | XOrAssign
-            | ModuloAssign => true,
-
-            // Property access binds to the right
-            Period => true,
-
             // Exponentiation binds to the right
             PowerOf => true,
 
@@ -1026,7 +1024,7 @@ pub trait InputStream {
     fn peek_next(&mut self) -> Option<char>;
 }
 
-/// _(internals)_ Parse a string literal ended by `termination_char`.
+/// _(internals)_ Parse a string literal ended by a specified termination character.
 /// Exported under the `internals` feature only.
 ///
 /// Returns the parsed string and a boolean indicating whether the string is
@@ -1034,7 +1032,7 @@ pub trait InputStream {
 ///
 /// # Returns
 ///
-/// |Type                             |Return Value                |`state.is_within_text_terminated_by`|
+/// | Type                            | Return Value               |`state.is_within_text_terminated_by`|
 /// |---------------------------------|:--------------------------:|:----------------------------------:|
 /// |`"hello"`                        |`StringConstant("hello")`   |`None`                              |
 /// |`"hello`_{LF}_ or _{EOF}_        |`LexError`                  |`None`                              |
@@ -1061,8 +1059,8 @@ pub fn parse_string_literal(
     state: &mut TokenizeState,
     pos: &mut Position,
     termination_char: char,
-    continuation: bool,
     verbatim: bool,
+    allow_line_continuation: bool,
     allow_interpolation: bool,
 ) -> Result<(Box<str>, bool), (LexError, Position)> {
     let mut result = String::with_capacity(12);
@@ -1091,7 +1089,7 @@ pub fn parse_string_literal(
                 pos.advance();
                 break;
             }
-            None if continuation && !escape.is_empty() => {
+            None if allow_line_continuation && !escape.is_empty() => {
                 assert_eq!(escape, "\\", "unexpected escape {} at end of line", escape);
                 pos.advance();
                 break;
@@ -1159,7 +1157,7 @@ pub fn parse_string_literal(
                     'x' => 2,
                     'u' => 4,
                     'U' => 8,
-                    _ => unreachable!(),
+                    c => unreachable!("x or u or U expected but gets '{}'", c),
                 };
 
                 for _ in 0..len {
@@ -1211,14 +1209,14 @@ pub fn parse_string_literal(
             }
 
             // Line continuation
-            '\n' if continuation && !escape.is_empty() => {
+            '\n' if allow_line_continuation && !escape.is_empty() => {
                 assert_eq!(escape, "\\", "unexpected escape {} at end of line", escape);
                 escape.clear();
                 pos.new_line();
 
                 #[cfg(not(feature = "no_position"))]
                 {
-                    let start_position = start.position().expect("start position");
+                    let start_position = start.position().unwrap();
                     skip_whitespace_until = start_position + 1;
                 }
             }
@@ -1239,8 +1237,7 @@ pub fn parse_string_literal(
 
             // Whitespace to skip
             #[cfg(not(feature = "no_position"))]
-            _ if next_char.is_whitespace()
-                && pos.position().expect("position") < skip_whitespace_until => {}
+            _ if next_char.is_whitespace() && pos.position().unwrap() < skip_whitespace_until => {}
 
             // All other characters
             _ => {
@@ -1319,7 +1316,7 @@ fn scan_block_comment(
     level
 }
 
-/// _(internals)_ Get the next token from the `stream`.
+/// _(internals)_ Get the next token from the input stream.
 /// Exported under the `internals` feature only.
 #[inline]
 #[must_use]
@@ -1355,9 +1352,7 @@ fn is_numeric_digit(c: char) -> bool {
 #[cfg(feature = "metadata")]
 #[inline]
 #[must_use]
-pub fn is_doc_comment(comment: impl AsRef<str>) -> bool {
-    let comment = comment.as_ref();
-
+pub fn is_doc_comment(comment: &str) -> bool {
     (comment.starts_with("///") && !comment.starts_with("////"))
         || (comment.starts_with("/**") && !comment.starts_with("/***"))
 }
@@ -1400,7 +1395,7 @@ fn get_next_token_inner(
     if let Some(ch) = state.is_within_text_terminated_by.take() {
         let start_pos = *pos;
 
-        return parse_string_literal(stream, state, pos, ch, false, true, true).map_or_else(
+        return parse_string_literal(stream, state, pos, ch, true, false, true).map_or_else(
             |(err, err_pos)| Some((Token::LexError(err), err_pos)),
             |(result, interpolated)| {
                 if interpolated {
@@ -1506,14 +1501,14 @@ fn get_next_token_inner(
                                 'x' | 'X' => is_hex_digit,
                                 'o' | 'O' => is_numeric_digit,
                                 'b' | 'B' => is_numeric_digit,
-                                _ => unreachable!(),
+                                c => unreachable!("x/X or o/O or b/B expected but gets '{}'", c),
                             };
 
                             radix_base = Some(match ch {
                                 'x' | 'X' => 16,
                                 'o' | 'O' => 8,
                                 'b' | 'B' => 2,
-                                _ => unreachable!(),
+                                c => unreachable!("x/X or o/O or b/B expected but gets '{}'", c),
                             });
                         }
 
@@ -1535,7 +1530,8 @@ fn get_next_token_inner(
                             .filter(|&&c| c != NUMBER_SEPARATOR)
                             .collect();
 
-                        INT::from_str_radix(&out, radix)
+                        UNSIGNED_INT::from_str_radix(&out, radix)
+                            .map(|v| v as INT)
                             .map(Token::IntegerConstant)
                             .unwrap_or_else(|_| {
                                 Token::LexError(LERR::MalformedNumber(result.into_iter().collect()))
@@ -1583,7 +1579,7 @@ fn get_next_token_inner(
 
             // " - string literal
             ('"', _) => {
-                return parse_string_literal(stream, state, pos, c, true, false, false)
+                return parse_string_literal(stream, state, pos, c, false, true, false)
                     .map_or_else(
                         |(err, err_pos)| Some((Token::LexError(err), err_pos)),
                         |(result, _)| Some((Token::StringConstant(result), start_pos)),
@@ -1610,7 +1606,7 @@ fn get_next_token_inner(
                     _ => (),
                 }
 
-                return parse_string_literal(stream, state, pos, c, false, true, true).map_or_else(
+                return parse_string_literal(stream, state, pos, c, true, false, true).map_or_else(
                     |(err, err_pos)| Some((Token::LexError(err), err_pos)),
                     |(result, interpolated)| {
                         if interpolated {
@@ -1635,7 +1631,7 @@ fn get_next_token_inner(
                         |(err, err_pos)| (Token::LexError(err), err_pos),
                         |(result, _)| {
                             let mut chars = result.chars();
-                            let first = chars.next().expect("not empty");
+                            let first = chars.next().unwrap();
 
                             if chars.next().is_some() {
                                 (
@@ -1674,6 +1670,17 @@ fn get_next_token_inner(
             }
             // Shebang
             ('#', '!') => return Some((Token::Reserved("#!".into()), start_pos)),
+
+            ('#', ' ') => {
+                eat_next(stream, pos);
+                let token = if stream.peek_next() == Some('{') {
+                    eat_next(stream, pos);
+                    "# {"
+                } else {
+                    "#"
+                };
+                return Some((Token::Reserved(token.into()), start_pos));
+            }
 
             ('#', _) => return Some((Token::Reserved("#".into()), start_pos)),
 
@@ -2006,8 +2013,8 @@ fn get_identifier(
 /// Is this keyword allowed as a function?
 #[inline]
 #[must_use]
-pub fn is_keyword_function(name: impl AsRef<str>) -> bool {
-    match name.as_ref() {
+pub fn is_keyword_function(name: &str) -> bool {
+    match name {
         KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
         | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_IS_DEF_VAR => true,
 
@@ -2036,11 +2043,11 @@ pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
     first_alphabetic
 }
 
-/// Is a text string a valid scripted function name?
+/// Is a text string a valid script-defined function name?
 #[inline(always)]
 #[must_use]
-pub fn is_valid_function_name(name: impl AsRef<str>) -> bool {
-    is_valid_identifier(name.as_ref().chars())
+pub fn is_valid_function_name(name: &str) -> bool {
+    is_valid_identifier(name.chars())
 }
 
 /// Is a character valid to start an identifier?
@@ -2202,19 +2209,14 @@ impl<'a> Iterator for TokenIterator<'a> {
                 ("(*", false) | ("*)", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
                     "'(* .. *)' is not a valid comment format. This is not Pascal! Should it be '/* .. */'?".to_string(),
                 )),
-                ("#", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
+                ("# {", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
                     "'#' is not a valid symbol. Should it be '#{'?".to_string(),
                 )),
                 // Reserved keyword/operator that is custom.
                 (_, true) => Token::Custom(s),
-                // Reserved operator that is not custom.
-                (token, false) if !is_valid_identifier(token.chars()) => {
-                    let msg = format!("'{}' is a reserved symbol", token);
-                    Token::LexError(LERR::ImproperSymbol(s.to_string(), msg))
-                },
                 // Reserved keyword that is not custom and disabled.
                 (token, false) if self.engine.disabled_symbols.contains(token) => {
-                    let msg = format!("reserved symbol '{}' is disabled", token);
+                    let msg = format!("reserved {} '{}' is disabled", if is_valid_identifier(token.chars()) { "keyword"} else {"symbol"}, token);
                     Token::LexError(LERR::ImproperSymbol(s.to_string(), msg))
                 },
                 // Reserved keyword/operator that is not custom.
@@ -2224,7 +2226,7 @@ impl<'a> Iterator for TokenIterator<'a> {
             Some((Token::Identifier(s), pos)) if self.engine.custom_keywords.contains_key(&*s) => {
                 (Token::Custom(s), pos)
             }
-            // Custom standard keyword/symbol - must be disabled
+            // Custom keyword/symbol - must be disabled
             Some((token, pos)) if self.engine.custom_keywords.contains_key(&*token.syntax()) => {
                 if self.engine.disabled_symbols.contains(&*token.syntax()) {
                     // Disabled standard keyword/symbol

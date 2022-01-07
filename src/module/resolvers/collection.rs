@@ -1,4 +1,4 @@
-use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
+use crate::{Engine, Module, ModuleResolver, Position, RhaiResultOf, Shared, ERR};
 use std::ops::AddAssign;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -77,7 +77,7 @@ impl ModuleResolversCollection {
     /// Get an iterator of all the [module resolvers][ModuleResolver].
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = &dyn ModuleResolver> {
-        self.0.iter().map(|v| v.as_ref())
+        self.0.iter().map(<_>::as_ref)
     }
     /// Remove all [module resolvers][ModuleResolver].
     #[inline(always)]
@@ -123,19 +123,19 @@ impl ModuleResolver for ModuleResolversCollection {
         source_path: Option<&str>,
         path: &str,
         pos: Position,
-    ) -> Result<Shared<Module>, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Shared<Module>> {
         for resolver in self.0.iter() {
             match resolver.resolve(engine, source_path, path, pos) {
                 Ok(module) => return Ok(module),
                 Err(err) => match *err {
-                    EvalAltResult::ErrorModuleNotFound(_, _) => continue,
-                    EvalAltResult::ErrorInModule(_, err, _) => return Err(err),
+                    ERR::ErrorModuleNotFound(_, _) => continue,
+                    ERR::ErrorInModule(_, err, _) => return Err(err),
                     _ => panic!("ModuleResolver::resolve returns error that is not ErrorModuleNotFound or ErrorInModule"),
                 },
             }
         }
 
-        Err(EvalAltResult::ErrorModuleNotFound(path.into(), pos).into())
+        Err(ERR::ErrorModuleNotFound(path.into(), pos).into())
     }
 }
 

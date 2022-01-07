@@ -1,18 +1,21 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::{def_package, Dynamic, ExclusiveRange, InclusiveRange, StaticVec, INT};
+use crate::{def_package, Dynamic, ExclusiveRange, InclusiveRange, RhaiResultOf, StaticVec, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{any::TypeId, mem};
 
 use super::string_basic::{print_with_func, FUNC_TO_STRING};
 
-def_package!(crate:MoreStringPackage:"Additional string utilities, including string building.", lib, {
-    lib.standard = true;
+def_package! {
+    /// Package of additional string utilities over [`BasicStringPackage`][super::BasicStringPackage]
+    crate::MoreStringPackage => |lib| {
+        lib.standard = true;
 
-    combine_with_exported_module!(lib, "string", string_functions);
-});
+        combine_with_exported_module!(lib, "string", string_functions);
+    }
+}
 
 #[export_module]
 mod string_functions {
@@ -175,7 +178,7 @@ mod string_functions {
     #[rhai_fn(name = "to_upper")]
     pub fn to_upper_char(character: char) -> char {
         let mut stream = character.to_uppercase();
-        let ch = stream.next().expect("not empty");
+        let ch = stream.next().unwrap();
         if stream.next().is_some() {
             character
         } else {
@@ -189,7 +192,7 @@ mod string_functions {
     #[rhai_fn(name = "to_lower")]
     pub fn to_lower_char(character: char) -> char {
         let mut stream = character.to_lowercase();
-        let ch = stream.next().expect("not empty");
+        let ch = stream.next().unwrap();
         if stream.next().is_some() {
             character
         } else {
@@ -497,7 +500,7 @@ mod string_functions {
         string: &mut ImmutableString,
         len: INT,
         character: char,
-    ) -> Result<(), Box<crate::EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         if len <= 0 {
             return Ok(());
         }
@@ -506,7 +509,7 @@ mod string_functions {
         // Check if string will be over max size limit
         #[cfg(not(feature = "unchecked"))]
         if _ctx.engine().max_string_size() > 0 && len as usize > _ctx.engine().max_string_size() {
-            return Err(crate::EvalAltResult::ErrorDataTooLarge(
+            return Err(crate::ERR::ErrorDataTooLarge(
                 "Length of string".to_string(),
                 crate::Position::NONE,
             )
@@ -525,7 +528,7 @@ mod string_functions {
             #[cfg(not(feature = "unchecked"))]
             if _ctx.engine().max_string_size() > 0 && string.len() > _ctx.engine().max_string_size()
             {
-                return Err(crate::EvalAltResult::ErrorDataTooLarge(
+                return Err(crate::ERR::ErrorDataTooLarge(
                     "Length of string".to_string(),
                     crate::Position::NONE,
                 )
@@ -541,7 +544,7 @@ mod string_functions {
         string: &mut ImmutableString,
         len: INT,
         padding: &str,
-    ) -> Result<(), Box<crate::EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         if len <= 0 {
             return Ok(());
         }
@@ -550,7 +553,7 @@ mod string_functions {
         // Check if string will be over max size limit
         #[cfg(not(feature = "unchecked"))]
         if _ctx.engine().max_string_size() > 0 && len as usize > _ctx.engine().max_string_size() {
-            return Err(crate::EvalAltResult::ErrorDataTooLarge(
+            return Err(crate::ERR::ErrorDataTooLarge(
                 "Length of string".to_string(),
                 crate::Position::NONE,
             )
@@ -576,7 +579,7 @@ mod string_functions {
             #[cfg(not(feature = "unchecked"))]
             if _ctx.engine().max_string_size() > 0 && string.len() > _ctx.engine().max_string_size()
             {
-                return Err(crate::EvalAltResult::ErrorDataTooLarge(
+                return Err(crate::ERR::ErrorDataTooLarge(
                     "Length of string".to_string(),
                     crate::Position::NONE,
                 )
@@ -596,7 +599,7 @@ mod string_functions {
             if string.is_empty() {
                 Array::new()
             } else {
-                string.chars().map(Into::<Dynamic>::into).collect()
+                string.chars().map(Into::into).collect()
             }
         }
         #[rhai_fn(name = "split")]
@@ -621,57 +624,39 @@ mod string_functions {
             }
         }
         pub fn split(string: &str, delimiter: &str) -> Array {
-            string.split(delimiter).map(Into::<Dynamic>::into).collect()
+            string.split(delimiter).map(Into::into).collect()
         }
         #[rhai_fn(name = "split")]
         pub fn splitn(string: &str, delimiter: &str, segments: INT) -> Array {
             let pieces: usize = if segments < 1 { 1 } else { segments as usize };
-            string
-                .splitn(pieces, delimiter)
-                .map(Into::<Dynamic>::into)
-                .collect()
+            string.splitn(pieces, delimiter).map(Into::into).collect()
         }
         #[rhai_fn(name = "split")]
         pub fn split_char(string: &str, delimiter: char) -> Array {
-            string.split(delimiter).map(Into::<Dynamic>::into).collect()
+            string.split(delimiter).map(Into::into).collect()
         }
         #[rhai_fn(name = "split")]
         pub fn splitn_char(string: &str, delimiter: char, segments: INT) -> Array {
             let pieces: usize = if segments < 1 { 1 } else { segments as usize };
-            string
-                .splitn(pieces, delimiter)
-                .map(Into::<Dynamic>::into)
-                .collect()
+            string.splitn(pieces, delimiter).map(Into::into).collect()
         }
         #[rhai_fn(name = "split_rev")]
         pub fn rsplit(string: &str, delimiter: &str) -> Array {
-            string
-                .rsplit(delimiter)
-                .map(Into::<Dynamic>::into)
-                .collect()
+            string.rsplit(delimiter).map(Into::into).collect()
         }
         #[rhai_fn(name = "split_rev")]
         pub fn rsplitn(string: &str, delimiter: &str, segments: INT) -> Array {
             let pieces: usize = if segments < 1 { 1 } else { segments as usize };
-            string
-                .rsplitn(pieces, delimiter)
-                .map(Into::<Dynamic>::into)
-                .collect()
+            string.rsplitn(pieces, delimiter).map(Into::into).collect()
         }
         #[rhai_fn(name = "split_rev")]
         pub fn rsplit_char(string: &str, delimiter: char) -> Array {
-            string
-                .rsplit(delimiter)
-                .map(Into::<Dynamic>::into)
-                .collect()
+            string.rsplit(delimiter).map(Into::into).collect()
         }
         #[rhai_fn(name = "split_rev")]
         pub fn rsplitn_char(string: &str, delimiter: char, segments: INT) -> Array {
             let pieces: usize = if segments < 1 { 1 } else { segments as usize };
-            string
-                .rsplitn(pieces, delimiter)
-                .map(Into::<Dynamic>::into)
-                .collect()
+            string.rsplitn(pieces, delimiter).map(Into::into).collect()
         }
     }
 }

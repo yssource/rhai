@@ -10,8 +10,10 @@ fn test_ops() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
+#[cfg(not(feature = "only_i32"))]
+#[cfg(not(feature = "only_i64"))]
 #[test]
-fn test_ops_numbers() -> Result<(), Box<EvalAltResult>> {
+fn test_ops_other_number_types() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     let mut scope = Scope::new();

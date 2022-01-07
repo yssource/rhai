@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::{def_package, Position, INT};
+use crate::{def_package, Position, RhaiResultOf, ERR, INT, UNSIGNED_INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -17,13 +17,6 @@ use rust_decimal::Decimal;
 
 #[cfg(feature = "decimal")]
 use super::arithmetic::make_err;
-
-#[allow(dead_code)]
-#[cfg(feature = "only_i32")]
-pub const MAX_INT: INT = i32::MAX;
-#[allow(dead_code)]
-#[cfg(not(feature = "only_i32"))]
-pub const MAX_INT: INT = i64::MAX;
 
 macro_rules! gen_conversion_as_functions {
     ($root:ident => $func_name:ident ( $($arg_type:ident),+ ) -> $result_type:ty) => {
@@ -58,78 +51,85 @@ macro_rules! reg_functions {
     )* }
 }
 
-def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
-    lib.standard = true;
+def_package! {
+    /// Basic mathematical package.
+    crate::BasicMathPackage => |lib| {
+        lib.standard = true;
 
-    // Integer functions
-    combine_with_exported_module!(lib, "int", int_functions);
+        // Integer functions
+        combine_with_exported_module!(lib, "int", int_functions);
 
-    reg_functions!(lib += basic_to_int::to_int(char));
-
-    #[cfg(not(feature = "only_i32"))]
-    #[cfg(not(feature = "only_i64"))]
-    {
-        reg_functions!(lib += numbers_to_int::to_int(i8, u8, i16, u16, i32, u32, i64, u64));
-
-        #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-        reg_functions!(lib += num_128_to_int::to_int(i128, u128));
-    }
-
-    #[cfg(not(feature = "no_float"))]
-    {
-        // Floating point functions
-        combine_with_exported_module!(lib, "float", float_functions);
-
-        // Trig functions
-        combine_with_exported_module!(lib, "trig", trig_functions);
-
-        reg_functions!(lib += basic_to_float::to_float(INT));
+        reg_functions!(lib += basic_to_int::to_int(char));
 
         #[cfg(not(feature = "only_i32"))]
         #[cfg(not(feature = "only_i64"))]
         {
-            reg_functions!(lib += numbers_to_float::to_float(i8, u8, i16, u16, i32, u32, i64, u32));
+            reg_functions!(lib += numbers_to_int::to_int(i8, u8, i16, u16, i32, u32, i64, u64));
 
-            #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-            reg_functions!(lib += num_128_to_float::to_float(i128, u128));
+            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(target_arch = "wasm64"))]
+            reg_functions!(lib += num_128_to_int::to_int(i128, u128));
+        }
+
+        #[cfg(not(feature = "no_float"))]
+        {
+            // Floating point functions
+            combine_with_exported_module!(lib, "float", float_functions);
+
+            // Trig functions
+            combine_with_exported_module!(lib, "trig", trig_functions);
+
+            reg_functions!(lib += basic_to_float::to_float(INT));
+
+            #[cfg(not(feature = "only_i32"))]
+            #[cfg(not(feature = "only_i64"))]
+            {
+                reg_functions!(lib += numbers_to_float::to_float(i8, u8, i16, u16, i32, u32, i64, u32));
+
+                #[cfg(not(target_arch = "wasm32"))]
+                #[cfg(not(target_arch = "wasm64"))]
+                reg_functions!(lib += num_128_to_float::to_float(i128, u128));
+            }
+        }
+
+        // Decimal functions
+        #[cfg(feature = "decimal")]
+        {
+            combine_with_exported_module!(lib, "decimal", decimal_functions);
+
+            reg_functions!(lib += basic_to_decimal::to_decimal(INT));
+
+            #[cfg(not(feature = "only_i32"))]
+            #[cfg(not(feature = "only_i64"))]
+            reg_functions!(lib += numbers_to_decimal::to_decimal(i8, u8, i16, u16, i32, u32, i64, u64));
         }
     }
-
-    // Decimal functions
-    #[cfg(feature = "decimal")]
-    {
-        combine_with_exported_module!(lib, "decimal", decimal_functions);
-
-        reg_functions!(lib += basic_to_decimal::to_decimal(INT));
-
-        #[cfg(not(feature = "only_i32"))]
-        #[cfg(not(feature = "only_i64"))]
-        reg_functions!(lib += numbers_to_decimal::to_decimal(i8, u8, i16, u16, i32, u32, i64, u64));
-    }
-});
+}
 
 #[export_module]
 mod int_functions {
     #[rhai_fn(name = "parse_int", return_raw)]
-    pub fn parse_int_radix(string: &str, radix: INT) -> Result<INT, Box<EvalAltResult>> {
+    pub fn parse_int_radix(string: &str, radix: INT) -> RhaiResultOf<INT> {
         if !(2..=36).contains(&radix) {
-            return Err(EvalAltResult::ErrorArithmetic(
+            return Err(ERR::ErrorArithmetic(
                 format!("Invalid radix: '{}'", radix),
                 Position::NONE,
             )
             .into());
         }
 
-        INT::from_str_radix(string.trim(), radix as u32).map_err(|err| {
-            EvalAltResult::ErrorArithmetic(
-                format!("Error parsing integer number '{}': {}", string, err),
-                Position::NONE,
-            )
-            .into()
-        })
+        UNSIGNED_INT::from_str_radix(string.trim(), radix as u32)
+            .map(|v| v as INT)
+            .map_err(|err| {
+                ERR::ErrorArithmetic(
+                    format!("Error parsing integer number '{}': {}", string, err),
+                    Position::NONE,
+                )
+                .into()
+            })
     }
     #[rhai_fn(name = "parse_int", return_raw)]
-    pub fn parse_int(string: &str) -> Result<INT, Box<EvalAltResult>> {
+    pub fn parse_int(string: &str) -> RhaiResultOf<INT> {
         parse_int_radix(string, 10)
     }
 }
@@ -258,33 +258,31 @@ mod float_functions {
         x.is_infinite()
     }
     #[rhai_fn(name = "to_int", return_raw)]
-    pub fn f32_to_int(x: f32) -> Result<INT, Box<EvalAltResult>> {
-        if cfg!(not(feature = "unchecked")) && x > (MAX_INT as f32) {
-            Err(EvalAltResult::ErrorArithmetic(
-                format!("Integer overflow: to_int({})", x),
-                Position::NONE,
+    pub fn f32_to_int(x: f32) -> RhaiResultOf<INT> {
+        if cfg!(not(feature = "unchecked")) && x > (INT::MAX as f32) {
+            Err(
+                ERR::ErrorArithmetic(format!("Integer overflow: to_int({})", x), Position::NONE)
+                    .into(),
             )
-            .into())
         } else {
             Ok(x.trunc() as INT)
         }
     }
     #[rhai_fn(name = "to_int", return_raw)]
-    pub fn f64_to_int(x: f64) -> Result<INT, Box<EvalAltResult>> {
-        if cfg!(not(feature = "unchecked")) && x > (MAX_INT as f64) {
-            Err(EvalAltResult::ErrorArithmetic(
-                format!("Integer overflow: to_int({})", x),
-                Position::NONE,
+    pub fn f64_to_int(x: f64) -> RhaiResultOf<INT> {
+        if cfg!(not(feature = "unchecked")) && x > (INT::MAX as f64) {
+            Err(
+                ERR::ErrorArithmetic(format!("Integer overflow: to_int({})", x), Position::NONE)
+                    .into(),
             )
-            .into())
         } else {
             Ok(x.trunc() as INT)
         }
     }
     #[rhai_fn(return_raw)]
-    pub fn parse_float(string: &str) -> Result<FLOAT, Box<EvalAltResult>> {
+    pub fn parse_float(string: &str) -> RhaiResultOf<FLOAT> {
         string.trim().parse::<FLOAT>().map_err(|err| {
-            EvalAltResult::ErrorArithmetic(
+            ERR::ErrorArithmetic(
                 format!("Error parsing floating-point number '{}': {}", string, err),
                 Position::NONE,
             )
@@ -320,7 +318,7 @@ mod decimal_functions {
     }
     #[cfg(feature = "no_float")]
     #[rhai_fn(return_raw)]
-    pub fn parse_float(s: &str) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn parse_float(s: &str) -> RhaiResultOf<Decimal> {
         parse_decimal(s)
     }
 
@@ -334,12 +332,12 @@ mod decimal_functions {
         x.tan()
     }
     #[rhai_fn(return_raw)]
-    pub fn sqrt(x: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn sqrt(x: Decimal) -> RhaiResultOf<Decimal> {
         x.sqrt()
             .ok_or_else(|| make_err(format!("Error taking the square root of {}", x,)))
     }
     #[rhai_fn(return_raw)]
-    pub fn exp(x: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn exp(x: Decimal) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             x.checked_exp()
                 .ok_or_else(|| make_err(format!("Exponential overflow: e ** {}", x,)))
@@ -348,7 +346,7 @@ mod decimal_functions {
         }
     }
     #[rhai_fn(return_raw)]
-    pub fn ln(x: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn ln(x: Decimal) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             x.checked_ln()
                 .ok_or_else(|| make_err(format!("Error taking the natural log of {}", x)))
@@ -357,7 +355,7 @@ mod decimal_functions {
         }
     }
     #[rhai_fn(name = "log", return_raw)]
-    pub fn log10(x: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn log10(x: Decimal) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             x.checked_log10()
                 .ok_or_else(|| make_err(format!("Error taking the log of {}", x)))
@@ -378,7 +376,7 @@ mod decimal_functions {
         x.round()
     }
     #[rhai_fn(name = "round", return_raw)]
-    pub fn round_dp(x: Decimal, dp: INT) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn round_dp(x: Decimal, dp: INT) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             if dp < 0 {
                 return Err(make_err(format!(
@@ -394,7 +392,7 @@ mod decimal_functions {
         Ok(x.round_dp(dp as u32))
     }
     #[rhai_fn(return_raw)]
-    pub fn round_up(x: Decimal, dp: INT) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn round_up(x: Decimal, dp: INT) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             if dp < 0 {
                 return Err(make_err(format!(
@@ -410,7 +408,7 @@ mod decimal_functions {
         Ok(x.round_dp_with_strategy(dp as u32, RoundingStrategy::AwayFromZero))
     }
     #[rhai_fn(return_raw)]
-    pub fn round_down(x: Decimal, dp: INT) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn round_down(x: Decimal, dp: INT) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             if dp < 0 {
                 return Err(make_err(format!(
@@ -426,7 +424,7 @@ mod decimal_functions {
         Ok(x.round_dp_with_strategy(dp as u32, RoundingStrategy::ToZero))
     }
     #[rhai_fn(return_raw)]
-    pub fn round_half_up(x: Decimal, dp: INT) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn round_half_up(x: Decimal, dp: INT) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             if dp < 0 {
                 return Err(make_err(format!(
@@ -442,7 +440,7 @@ mod decimal_functions {
         Ok(x.round_dp_with_strategy(dp as u32, RoundingStrategy::MidpointAwayFromZero))
     }
     #[rhai_fn(return_raw)]
-    pub fn round_half_down(x: Decimal, dp: INT) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn round_half_down(x: Decimal, dp: INT) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             if dp < 0 {
                 return Err(make_err(format!(
@@ -466,11 +464,11 @@ mod decimal_functions {
         x.fract()
     }
     #[rhai_fn(return_raw)]
-    pub fn parse_decimal(string: &str) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn parse_decimal(string: &str) -> RhaiResultOf<Decimal> {
         Decimal::from_str(string)
             .or_else(|_| Decimal::from_scientific(string))
             .map_err(|err| {
-                EvalAltResult::ErrorArithmetic(
+                ERR::ErrorArithmetic(
                     format!("Error parsing decimal number '{}': {}", string, err),
                     Position::NONE,
                 )
@@ -480,9 +478,9 @@ mod decimal_functions {
 
     #[cfg(not(feature = "no_float"))]
     #[rhai_fn(name = "to_decimal", return_raw)]
-    pub fn f32_to_decimal(x: f32) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn f32_to_decimal(x: f32) -> RhaiResultOf<Decimal> {
         Decimal::try_from(x).map_err(|_| {
-            EvalAltResult::ErrorArithmetic(
+            ERR::ErrorArithmetic(
                 format!("Cannot convert to Decimal: to_decimal({})", x),
                 Position::NONE,
             )
@@ -491,9 +489,9 @@ mod decimal_functions {
     }
     #[cfg(not(feature = "no_float"))]
     #[rhai_fn(name = "to_decimal", return_raw)]
-    pub fn f64_to_decimal(x: f64) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn f64_to_decimal(x: f64) -> RhaiResultOf<Decimal> {
         Decimal::try_from(x).map_err(|_| {
-            EvalAltResult::ErrorArithmetic(
+            ERR::ErrorArithmetic(
                 format!("Cannot convert to Decimal: to_decimal({})", x),
                 Position::NONE,
             )
@@ -502,9 +500,9 @@ mod decimal_functions {
     }
     #[cfg(not(feature = "no_float"))]
     #[rhai_fn(return_raw)]
-    pub fn to_float(x: Decimal) -> Result<FLOAT, Box<EvalAltResult>> {
+    pub fn to_float(x: Decimal) -> RhaiResultOf<FLOAT> {
         FLOAT::try_from(x).map_err(|_| {
-            EvalAltResult::ErrorArithmetic(
+            ERR::ErrorArithmetic(
                 format!("Cannot convert to floating-point: to_float({})", x),
                 Position::NONE,
             )
@@ -524,7 +522,8 @@ gen_conversion_as_functions!(numbers_to_float => to_float (i8, u8, i16, u16, i32
 #[cfg(not(feature = "no_float"))]
 #[cfg(not(feature = "only_i32"))]
 #[cfg(not(feature = "only_i64"))]
-#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm64"))]
 gen_conversion_as_functions!(num_128_to_float => to_float (i128, u128) -> FLOAT);
 
 gen_conversion_as_functions!(basic_to_int => to_int (char) -> INT);
@@ -535,7 +534,8 @@ gen_conversion_as_functions!(numbers_to_int => to_int (i8, u8, i16, u16, i32, u3
 
 #[cfg(not(feature = "only_i32"))]
 #[cfg(not(feature = "only_i64"))]
-#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm64"))]
 gen_conversion_as_functions!(num_128_to_int => to_int (i128, u128) -> INT);
 
 #[cfg(feature = "decimal")]

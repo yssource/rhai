@@ -38,6 +38,49 @@ mod module_tests {
     }
 
     #[test]
+    fn one_factory_fn_with_comments_module() {
+        let input_tokens: TokenStream = quote! {
+            pub mod one_fn {
+                /// This is a doc-comment.
+                /// Another line.
+                /** block doc-comment */
+                // Regular comment
+                /// Final line.
+                /** doc-comment
+                    in multiple lines
+                 */
+                pub fn get_mystic_number() -> INT {
+                    42
+                }
+            }
+        };
+
+        let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
+        assert!(item_mod.consts().is_empty());
+        assert_eq!(item_mod.fns().len(), 1);
+        assert_eq!(item_mod.fns()[0].name().to_string(), "get_mystic_number");
+        assert_eq!(
+            item_mod.fns()[0]
+                .comments()
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec![
+                "/// This is a doc-comment.",
+                "/// Another line.",
+                "/// block doc-comment ",
+                "/// Final line.",
+                "/** doc-comment\n                    in multiple lines\n                 */"
+            ]
+        );
+        assert_eq!(item_mod.fns()[0].arg_count(), 0);
+        assert_eq!(
+            item_mod.fns()[0].return_type().unwrap(),
+            &syn::parse2::<syn::Type>(quote! { INT }).unwrap()
+        );
+    }
+
+    #[test]
     fn one_single_arg_fn_module() {
         let input_tokens: TokenStream = quote! {
             pub mod one_fn {
@@ -299,6 +342,66 @@ mod generate_tests {
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("get_mystic_number", FnNamespace::Internal, FnAccess::Public,
                              Some(get_mystic_number_token::PARAM_NAMES), &[],
+                             get_mystic_number_token().into());
+                    if flatten {} else {}
+                }
+                #[allow(non_camel_case_types)]
+                pub struct get_mystic_number_token();
+                impl get_mystic_number_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["INT"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 0usize] { [] }
+                }
+                impl PluginFunction for get_mystic_number_token {
+                    #[inline(always)]
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
+                        Ok(Dynamic::from(get_mystic_number()))
+                    }
+
+                    #[inline(always)] fn is_method_call(&self) -> bool { false }
+                }
+            }
+        };
+
+        let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
+        assert_streams_eq(item_mod.generate(), expected_tokens);
+    }
+
+    #[test]
+    fn one_factory_fn_with_comments_module() {
+        let input_tokens: TokenStream = quote! {
+            pub mod one_fn {
+                /// This is a doc-comment.
+                /// Another line.
+                /** block doc-comment */
+                // Regular comment
+                /// Final line.
+                /** doc-comment
+                    in multiple lines
+                 */
+                pub fn get_mystic_number() -> INT {
+                    42
+                }
+            }
+        };
+
+        let expected_tokens = quote! {
+            pub mod one_fn {
+                pub fn get_mystic_number() -> INT {
+                    42
+                }
+                #[allow(unused_imports)]
+                use super::*;
+
+                pub fn rhai_module_generate() -> Module {
+                    let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m.build_index();
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                    m.set_fn_with_comments("get_mystic_number", FnNamespace::Internal, FnAccess::Public,
+                             Some(get_mystic_number_token::PARAM_NAMES), &[], &["/// This is a doc-comment.","/// Another line.","/// block doc-comment ","/// Final line.","/** doc-comment\n                    in multiple lines\n                 */"],
                              get_mystic_number_token().into());
                     if flatten {} else {}
                 }

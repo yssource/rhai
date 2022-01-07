@@ -41,12 +41,12 @@
 //!     engine.register_fn("compute", compute_something);
 //!
 //! #   #[cfg(not(feature = "no_std"))]
-//! #   #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-//!     assert_eq!(
-//!         // Evaluate the script, expects a 'bool' return
-//!         engine.eval_file::<bool>("my_script.rhai".into())?,
-//!         true
-//!     );
+//! #   #[cfg(not(target_arch = "wasm32"))]
+//! #   #[cfg(not(target_arch = "wasm64"))]
+//!     // Evaluate the script, expecting a 'bool' result
+//!     let result = engine.eval_file::<bool>("my_script.rhai".into())?;
+//!
+//!     assert_eq!(result, true);
 //!
 //!     Ok(())
 //! }
@@ -71,7 +71,6 @@ use std::prelude::v1::*;
 
 mod api;
 mod ast;
-mod custom_syntax;
 mod engine;
 mod func;
 mod module;
@@ -83,7 +82,16 @@ mod tokenizer;
 mod types;
 mod r#unsafe;
 
-type RhaiResult = Result<Dynamic, Box<EvalAltResult>>;
+/// Error encountered when parsing a script.
+type PERR = ParseErrorType;
+/// Evaluation result.
+type ERR = EvalAltResult;
+/// General evaluation error for Rhai scripts.
+type RhaiError = Box<ERR>;
+/// Generic [`Result`] type for Rhai functions.
+type RhaiResultOf<T> = Result<T, RhaiError>;
+/// General [`Result`] type for Rhai functions returning [`Dynamic`] values.
+type RhaiResult = RhaiResultOf<Dynamic>;
 
 /// The system integer type. It is defined as [`i64`].
 ///
@@ -97,6 +105,20 @@ pub type INT = i64;
 /// If the `only_i32` feature is not used, this will be `i64` instead.
 #[cfg(feature = "only_i32")]
 pub type INT = i32;
+
+/// The unsigned system base integer type. It is defined as [`u64`].
+///
+/// If the `only_i32` feature is enabled, this will be [`u32`] instead.
+#[cfg(not(feature = "only_i32"))]
+#[allow(non_camel_case_types)]
+type UNSIGNED_INT = u64;
+/// The unsigned system integer base type.
+/// It is defined as [`u32`] since the `only_i32` feature is used.
+///
+/// If the `only_i32` feature is not used, this will be `u64` instead.
+#[cfg(feature = "only_i32")]
+#[allow(non_camel_case_types)]
+type UNSIGNED_INT = u32;
 
 /// The system floating-point type. It is defined as [`f64`].
 /// Not available under `no_float`.
@@ -115,14 +137,15 @@ pub type FLOAT = f64;
 #[cfg(feature = "f32_float")]
 pub type FLOAT = f32;
 
-pub type ExclusiveRange = std::ops::Range<INT>;
-pub type InclusiveRange = std::ops::RangeInclusive<INT>;
+/// An exclusive integer range.
+type ExclusiveRange = std::ops::Range<INT>;
 
+/// An inclusive integer range.
+type InclusiveRange = std::ops::RangeInclusive<INT>;
+
+pub use api::custom_syntax::Expression;
 pub use ast::{FnAccess, AST};
-pub use custom_syntax::Expression;
-pub use engine::{
-    Engine, EvalContext, OP_CONTAINS, OP_EQUALS, OP_EXCLUSIVE_RANGE, OP_INCLUSIVE_RANGE,
-};
+pub use engine::{Engine, EvalContext, OP_CONTAINS, OP_EQUALS};
 pub use func::{NativeCallContext, RegisterNativeFunction};
 pub use module::{FnNamespace, Module};
 pub use tokenizer::Position;
@@ -171,8 +194,11 @@ pub type Array = Vec<Dynamic>;
 #[cfg(not(feature = "no_index"))]
 pub type Blob = Vec<u8>;
 
-/// Hash map of [`Dynamic`] values with [`SmartString`](https://crates.io/crates/smartstring) keys.
+/// A dictionary of [`Dynamic`] values with string keys.
 /// Not available under `no_object`.
+///
+/// [`SmartString`](https://crates.io/crates/smartstring) is used as the key type because most
+/// property names are ASCII and short, fewer than 23 characters, so they can be stored inline.
 #[cfg(not(feature = "no_object"))]
 pub type Map = std::collections::BTreeMap<Identifier, Dynamic>;
 
@@ -204,7 +230,10 @@ pub use tokenizer::{
 };
 
 #[cfg(feature = "internals")]
-pub use parser::{IdentifierBuilder, ParseState};
+pub use types::StringsInterner;
+
+#[cfg(feature = "internals")]
+pub use parser::ParseState;
 
 #[cfg(feature = "internals")]
 pub use ast::{
@@ -217,10 +246,13 @@ pub use ast::{
 pub use ast::FloatWrapper;
 
 #[cfg(feature = "internals")]
-pub use engine::{EvalState, FnResolutionCache, FnResolutionCacheEntry, Imports};
+pub use engine::{EvalState, GlobalRuntimeState};
 
 #[cfg(feature = "internals")]
-pub use module::NamespaceRef;
+pub use func::call::{FnResolutionCache, FnResolutionCacheEntry};
+
+#[cfg(feature = "internals")]
+pub use module::Namespace;
 
 /// Alias to [`smallvec::SmallVec<[T; 3]>`](https://crates.io/crates/smallvec), which is a
 /// specialized [`Vec`] backed by a small, inline, fixed-size array when there are ≤ 3 items stored.
@@ -291,6 +323,26 @@ type StaticVec<T> = smallvec::SmallVec<[T; 3]>;
 #[cfg(feature = "internals")]
 pub type StaticVec<T> = smallvec::SmallVec<[T; 3]>;
 
+/// Inline arguments storage for function calls.
+///
+/// # Notes
+///
+/// Since most usage of this is during a function call to gather up arguments, this is mostly
+/// allocated on the stack, so we can tolerate a larger number of values stored inline.
+///
+/// Most functions have few parameters, but closures with a lot of captured variables can
+/// potentially have many.  Having a larger inline storage for arguments reduces allocations in
+/// scripts with heavy closure usage.
+///
+/// Under `no_closure`, this type aliases to [`StaticVec`][crate::StaticVec] instead.
+#[cfg(not(feature = "no_closure"))]
+type FnArgsVec<T> = smallvec::SmallVec<[T; 8]>;
+
+/// Inline arguments storage for function calls.
+/// This type aliases to [`StaticVec`][crate::StaticVec].
+#[cfg(feature = "no_closure")]
+type FnArgsVec<T> = crate::StaticVec<T>;
+
 pub(crate) type SmartString = smartstring::SmartString<smartstring::LazyCompact>;
 
 // Compiler guards against mutually-exclusive feature flags
@@ -315,11 +367,13 @@ compile_error!("`stdweb` cannot be used with `no-std`");
 #[cfg(feature = "no_std")]
 compile_error!("`no_std` cannot be used for WASM target");
 
-#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm64"))]
 #[cfg(feature = "wasm-bindgen")]
 compile_error!("`wasm-bindgen` cannot be used for non-WASM target");
 
-#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm64"))]
 #[cfg(feature = "stdweb")]
 compile_error!("`stdweb` cannot be used non-WASM target");
 

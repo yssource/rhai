@@ -1,8 +1,8 @@
 //! Implement deserialization support of [`Dynamic`][crate::Dynamic] for [`serde`].
 
 use crate::types::dynamic::Union;
-use crate::{Dynamic, EvalAltResult, ImmutableString, LexError, Position};
-use serde::de::{DeserializeSeed, Error, IntoDeserializer, Visitor};
+use crate::{Dynamic, ImmutableString, LexError, Position, RhaiError, RhaiResultOf, ERR};
+use serde::de::{Error, IntoDeserializer, Visitor};
 use serde::{Deserialize, Deserializer};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -26,12 +26,12 @@ impl<'de> DynamicDeserializer<'de> {
         Self { value }
     }
     /// Shortcut for a type conversion error.
-    fn type_error<T>(&self) -> Result<T, Box<EvalAltResult>> {
+    fn type_error<T>(&self) -> RhaiResultOf<T> {
         self.type_error_str(type_name::<T>())
     }
     /// Shortcut for a type conversion error.
-    fn type_error_str<T>(&self, error: &str) -> Result<T, Box<EvalAltResult>> {
-        Err(EvalAltResult::ErrorMismatchOutputType(
+    fn type_error_str<T>(&self, error: &str) -> RhaiResultOf<T> {
+        Err(ERR::ErrorMismatchOutputType(
             error.into(),
             self.value.type_name().into(),
             Position::NONE,
@@ -42,7 +42,7 @@ impl<'de> DynamicDeserializer<'de> {
         &mut self,
         v: crate::INT,
         visitor: V,
-    ) -> Result<V::Value, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<V::Value> {
         #[cfg(not(feature = "only_i32"))]
         return visitor.visit_i64(v);
         #[cfg(feature = "only_i32")]
@@ -101,13 +101,11 @@ impl<'de> DynamicDeserializer<'de> {
 /// # Ok(())
 /// # }
 /// ```
-pub fn from_dynamic<'de, T: Deserialize<'de>>(
-    value: &'de Dynamic,
-) -> Result<T, Box<EvalAltResult>> {
+pub fn from_dynamic<'de, T: Deserialize<'de>>(value: &'de Dynamic) -> RhaiResultOf<T> {
     T::deserialize(&mut DynamicDeserializer::from_dynamic(value))
 }
 
-impl Error for Box<EvalAltResult> {
+impl Error for RhaiError {
     fn custom<T: fmt::Display>(err: T) -> Self {
         LexError::ImproperSymbol(String::new(), err.to_string())
             .into_err(Position::NONE)
@@ -116,9 +114,9 @@ impl Error for Box<EvalAltResult> {
 }
 
 impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
-    type Error = Box<EvalAltResult>;
+    type Error = RhaiError;
 
-    fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> RhaiResultOf<V::Value> {
         match self.value.0 {
             Union::Unit(_, _, _) => self.deserialize_unit(visitor),
             Union::Bool(_, _, _) => self.deserialize_bool(visitor),
@@ -172,11 +170,11 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         }
     }
 
-    fn deserialize_bool<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_bool<V: Visitor<'de>>(self, visitor: V) -> RhaiResultOf<V::Value> {
         visitor.visit_bool(self.value.as_bool().or_else(|_| self.type_error())?)
     }
 
-    fn deserialize_i8<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_i8<V: Visitor<'de>>(self, visitor: V) -> RhaiResultOf<V::Value> {
         if let Ok(v) = self.value.as_int() {
             self.deserialize_int(v, visitor)
         } else {
@@ -186,7 +184,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         }
     }
 
-    fn deserialize_i16<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_i16<V: Visitor<'de>>(self, visitor: V) -> RhaiResultOf<V::Value> {
         if let Ok(v) = self.value.as_int() {
             self.deserialize_int(v, visitor)
         } else {
@@ -196,7 +194,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         }
     }
 
-    fn deserialize_i32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_i32<V: Visitor<'de>>(self, visitor: V) -> RhaiResultOf<V::Value> {
         if let Ok(v) = self.value.as_int() {
             self.deserialize_int(v, visitor)
         } else if cfg!(feature = "only_i32") {
@@ -208,7 +206,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         }
     }
 
-    fn deserialize_i64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_i64<V: Visitor<'de>>(self, visitor: V) -> RhaiResultOf<V::Value> {
         if let Ok(v) = self.value.as_int() {
             self.deserialize_int(v, visitor)
         } else if cfg!(not(feature = "only_i32")) {
@@ -220,7 +218,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         }
     }
 
-    fn deserialize_i128<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_i128<V: Visitor<'de>>(self, visitor: V) -> RhaiResultOf<V::Value> {
         if let Ok(v) = self.value.as_int() {
             self.deserialize_int(v, visitor)
         } else if cfg!(not(feature = "only_i32")) {
@@ -232,7 +230,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         }
     }
 
-    fn deserialize_u8<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_u8<V: Visitor<'de>>(self, visitor: V) -> RhaiResultOf<V::Value> {
         if let Ok(v) = self.value.as_int() {
             self.deserialize_int(v, visitor)
         } else {
@@ -242,7 +240,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         }
     }
 
-    fn deserialize_u16<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_u16<V: Visitor<'de>>(self, visitor: V) -> RhaiResultOf<V::Value> {
         if let Ok(v) = self.value.as_int() {
             self.deserialize_int(v, visitor)
         } else {
@@ -252,7 +250,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         }
     }
 
-    fn deserialize_u32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_u32<V: Visitor<'de>>(self, visitor: V) -> RhaiResultOf<V::Value> {
         if let Ok(v) = self.value.as_int() {
             self.deserialize_int(v, visitor)
         } else {
@@ -262,7 +260,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         }
     }
 
-    fn deserialize_u64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_u64<V: Visitor<'de>>(self, visitor: V) -> RhaiResultOf<V::Value> {
         if let Ok(v) = self.value.as_int() {
             self.deserialize_int(v, visitor)
         } else {
@@ -272,7 +270,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         }
     }
 
-    fn deserialize_u128<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_u128<V: Visitor<'de>>(self, visitor: V) -> RhaiResultOf<V::Value> {
         if let Ok(v) = self.value.as_int() {
             self.deserialize_int(v, visitor)
         } else {
@@ -282,7 +280,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         }
     }
 
-    fn deserialize_f32<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_f32<V: Visitor<'de>>(self, _visitor: V) -> RhaiResultOf<V::Value> {
         #[cfg(not(feature = "no_float"))]
         return self
             .value
@@ -306,7 +304,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         return self.type_error_str("f32");
     }
 
-    fn deserialize_f64<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_f64<V: Visitor<'de>>(self, _visitor: V) -> RhaiResultOf<V::Value> {
         #[cfg(not(feature = "no_float"))]
         return self
             .value
@@ -330,30 +328,24 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         return self.type_error_str("f64");
     }
 
-    fn deserialize_char<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_char<V: Visitor<'de>>(self, visitor: V) -> RhaiResultOf<V::Value> {
         self.value
             .downcast_ref::<char>()
             .map_or_else(|| self.type_error(), |&x| visitor.visit_char(x))
     }
 
-    fn deserialize_str<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_str<V: Visitor<'de>>(self, visitor: V) -> RhaiResultOf<V::Value> {
         self.value.downcast_ref::<ImmutableString>().map_or_else(
             || self.type_error(),
             |x| visitor.visit_borrowed_str(x.as_str()),
         )
     }
 
-    fn deserialize_string<V: Visitor<'de>>(
-        self,
-        visitor: V,
-    ) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_string<V: Visitor<'de>>(self, visitor: V) -> RhaiResultOf<V::Value> {
         self.deserialize_str(visitor)
     }
 
-    fn deserialize_bytes<V: Visitor<'de>>(
-        self,
-        _visitor: V,
-    ) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_bytes<V: Visitor<'de>>(self, _visitor: V) -> RhaiResultOf<V::Value> {
         #[cfg(not(feature = "no_index"))]
         return self
             .value
@@ -364,17 +356,11 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         return self.type_error();
     }
 
-    fn deserialize_byte_buf<V: Visitor<'de>>(
-        self,
-        visitor: V,
-    ) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_byte_buf<V: Visitor<'de>>(self, visitor: V) -> RhaiResultOf<V::Value> {
         self.deserialize_bytes(visitor)
     }
 
-    fn deserialize_option<V: Visitor<'de>>(
-        self,
-        visitor: V,
-    ) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_option<V: Visitor<'de>>(self, visitor: V) -> RhaiResultOf<V::Value> {
         if self.value.is::<()>() {
             visitor.visit_none()
         } else {
@@ -382,7 +368,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         }
     }
 
-    fn deserialize_unit<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_unit<V: Visitor<'de>>(self, visitor: V) -> RhaiResultOf<V::Value> {
         self.value
             .downcast_ref::<()>()
             .map_or_else(|| self.type_error(), |_| visitor.visit_unit())
@@ -392,7 +378,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         self,
         _name: &'static str,
         visitor: V,
-    ) -> Result<V::Value, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<V::Value> {
         self.deserialize_unit(visitor)
     }
 
@@ -400,11 +386,11 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         self,
         _name: &'static str,
         visitor: V,
-    ) -> Result<V::Value, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<V::Value> {
         visitor.visit_newtype_struct(self)
     }
 
-    fn deserialize_seq<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_seq<V: Visitor<'de>>(self, _visitor: V) -> RhaiResultOf<V::Value> {
         #[cfg(not(feature = "no_index"))]
         return self.value.downcast_ref::<crate::Array>().map_or_else(
             || self.type_error(),
@@ -415,11 +401,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         return self.type_error();
     }
 
-    fn deserialize_tuple<V: Visitor<'de>>(
-        self,
-        _len: usize,
-        visitor: V,
-    ) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_tuple<V: Visitor<'de>>(self, _len: usize, visitor: V) -> RhaiResultOf<V::Value> {
         self.deserialize_seq(visitor)
     }
 
@@ -428,11 +410,11 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         _name: &'static str,
         _len: usize,
         visitor: V,
-    ) -> Result<V::Value, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<V::Value> {
         self.deserialize_seq(visitor)
     }
 
-    fn deserialize_map<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_map<V: Visitor<'de>>(self, _visitor: V) -> RhaiResultOf<V::Value> {
         #[cfg(not(feature = "no_object"))]
         return self.value.downcast_ref::<crate::Map>().map_or_else(
             || self.type_error(),
@@ -453,7 +435,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         _name: &'static str,
         _fields: &'static [&'static str],
         visitor: V,
-    ) -> Result<V::Value, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<V::Value> {
         self.deserialize_map(visitor)
     }
 
@@ -462,7 +444,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         _name: &'static str,
         _variants: &'static [&'static str],
         visitor: V,
-    ) -> Result<V::Value, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<V::Value> {
         if let Some(s) = self.value.read_lock::<ImmutableString>() {
             visitor.visit_enum(s.as_str().into_deserializer())
         } else {
@@ -487,17 +469,11 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         }
     }
 
-    fn deserialize_identifier<V: Visitor<'de>>(
-        self,
-        visitor: V,
-    ) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_identifier<V: Visitor<'de>>(self, visitor: V) -> RhaiResultOf<V::Value> {
         self.deserialize_str(visitor)
     }
 
-    fn deserialize_ignored_any<V: Visitor<'de>>(
-        self,
-        visitor: V,
-    ) -> Result<V::Value, Box<EvalAltResult>> {
+    fn deserialize_ignored_any<V: Visitor<'de>>(self, visitor: V) -> RhaiResultOf<V::Value> {
         self.deserialize_any(visitor)
     }
 }
@@ -521,12 +497,12 @@ impl<'a, ITER: Iterator<Item = &'a Dynamic>> IterateDynamicArray<'a, ITER> {
 impl<'a: 'de, 'de, ITER: Iterator<Item = &'a Dynamic>> serde::de::SeqAccess<'de>
     for IterateDynamicArray<'a, ITER>
 {
-    type Error = Box<EvalAltResult>;
+    type Error = RhaiError;
 
-    fn next_element_seed<T: DeserializeSeed<'de>>(
+    fn next_element_seed<T: serde::de::DeserializeSeed<'de>>(
         &mut self,
         seed: T,
-    ) -> Result<Option<T::Value>, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Option<T::Value>> {
         // Deserialize each item coming out of the iterator.
         match self.iter.next() {
             None => Ok(None),
@@ -568,12 +544,12 @@ where
     KEYS: Iterator<Item = &'a str>,
     VALUES: Iterator<Item = &'a Dynamic>,
 {
-    type Error = Box<EvalAltResult>;
+    type Error = RhaiError;
 
-    fn next_key_seed<K: DeserializeSeed<'de>>(
+    fn next_key_seed<K: serde::de::DeserializeSeed<'de>>(
         &mut self,
         seed: K,
-    ) -> Result<Option<K::Value>, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Option<K::Value>> {
         // Deserialize each `Identifier` key coming out of the keys iterator.
         match self.keys.next() {
             None => Ok(None),
@@ -583,13 +559,13 @@ where
         }
     }
 
-    fn next_value_seed<V: DeserializeSeed<'de>>(
+    fn next_value_seed<V: serde::de::DeserializeSeed<'de>>(
         &mut self,
         seed: V,
-    ) -> Result<V::Value, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<V::Value> {
         // Deserialize each value item coming out of the iterator.
         seed.deserialize(&mut DynamicDeserializer::from_dynamic(
-            self.values.next().expect("exists"),
+            self.values.next().unwrap(),
         ))
     }
 }
@@ -602,13 +578,13 @@ struct EnumDeserializer<'t, 'de: 't> {
 
 #[cfg(not(feature = "no_object"))]
 impl<'t, 'de> serde::de::EnumAccess<'de> for EnumDeserializer<'t, 'de> {
-    type Error = Box<EvalAltResult>;
+    type Error = RhaiError;
     type Variant = Self;
 
-    fn variant_seed<V: DeserializeSeed<'de>>(
+    fn variant_seed<V: serde::de::DeserializeSeed<'de>>(
         self,
         seed: V,
-    ) -> Result<(V::Value, Self::Variant), Self::Error> {
+    ) -> RhaiResultOf<(V::Value, Self::Variant)> {
         seed.deserialize(self.tag.into_deserializer())
             .map(|v| (v, self))
     }
@@ -616,24 +592,20 @@ impl<'t, 'de> serde::de::EnumAccess<'de> for EnumDeserializer<'t, 'de> {
 
 #[cfg(not(feature = "no_object"))]
 impl<'t, 'de> serde::de::VariantAccess<'de> for EnumDeserializer<'t, 'de> {
-    type Error = Box<EvalAltResult>;
+    type Error = RhaiError;
 
-    fn unit_variant(mut self) -> Result<(), Self::Error> {
+    fn unit_variant(mut self) -> RhaiResultOf<()> {
         Deserialize::deserialize(&mut self.content)
     }
 
-    fn newtype_variant_seed<T: DeserializeSeed<'de>>(
+    fn newtype_variant_seed<T: serde::de::DeserializeSeed<'de>>(
         mut self,
         seed: T,
-    ) -> Result<T::Value, Self::Error> {
+    ) -> RhaiResultOf<T::Value> {
         seed.deserialize(&mut self.content)
     }
 
-    fn tuple_variant<V: Visitor<'de>>(
-        mut self,
-        len: usize,
-        visitor: V,
-    ) -> Result<V::Value, Self::Error> {
+    fn tuple_variant<V: Visitor<'de>>(mut self, len: usize, visitor: V) -> RhaiResultOf<V::Value> {
         self.content.deserialize_tuple(len, visitor)
     }
 
@@ -641,7 +613,7 @@ impl<'t, 'de> serde::de::VariantAccess<'de> for EnumDeserializer<'t, 'de> {
         mut self,
         fields: &'static [&'static str],
         visitor: V,
-    ) -> Result<V::Value, Self::Error> {
+    ) -> RhaiResultOf<V::Value> {
         self.content.deserialize_struct("", fields, visitor)
     }
 }

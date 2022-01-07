@@ -1,6 +1,7 @@
 //! Settings for [`Engine`]'s limitations.
 #![cfg(not(feature = "unchecked"))]
 
+use super::default_limits;
 use crate::Engine;
 use std::num::{NonZeroU64, NonZeroUsize};
 #[cfg(feature = "no_std")]
@@ -56,10 +57,10 @@ impl Limits {
     pub const fn new() -> Self {
         Self {
             #[cfg(not(feature = "no_function"))]
-            max_call_stack_depth: crate::engine::MAX_CALL_STACK_DEPTH,
-            max_expr_depth: NonZeroUsize::new(crate::engine::MAX_EXPR_DEPTH),
+            max_call_stack_depth: default_limits::MAX_CALL_STACK_DEPTH,
+            max_expr_depth: NonZeroUsize::new(default_limits::MAX_EXPR_DEPTH),
             #[cfg(not(feature = "no_function"))]
-            max_function_expr_depth: NonZeroUsize::new(crate::engine::MAX_FUNCTION_EXPR_DEPTH),
+            max_function_expr_depth: NonZeroUsize::new(default_limits::MAX_FUNCTION_EXPR_DEPTH),
             max_operations: None,
             #[cfg(not(feature = "no_module"))]
             max_modules: usize::MAX,

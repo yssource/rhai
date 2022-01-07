@@ -1,14 +1,16 @@
 //! Module defining interfaces to native-Rust functions.
 
 use super::call::FnCallArgs;
-use crate::ast::{FnAccess, FnCallHashes};
-use crate::engine::{EvalState, Imports};
+use crate::ast::FnCallHashes;
+use crate::engine::{EvalState, GlobalRuntimeState};
 use crate::plugin::PluginFunction;
 use crate::tokenizer::{Token, TokenizeState};
+use crate::types::dynamic::Variant;
 use crate::{
-    calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, Module, Position, RhaiResult,
+    calc_fn_hash, Dynamic, Engine, EvalContext, FuncArgs, Module, Position, RhaiResult,
+    RhaiResultOf, StaticVec, ERR,
 };
-use std::fmt;
+use std::any::type_name;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -56,11 +58,17 @@ pub type LockGuard<'a, T> = std::sync::RwLockWriteGuard<'a, T>;
 /// Context of a native Rust function call.
 #[derive(Debug)]
 pub struct NativeCallContext<'a> {
+    /// The current [`Engine`].
     engine: &'a Engine,
+    /// Name of function called.
     fn_name: &'a str,
+    /// Function source, if any.
     source: Option<&'a str>,
-    mods: Option<&'a Imports>,
+    /// The current [`GlobalRuntimeState`], if any.
+    global: Option<&'a GlobalRuntimeState>,
+    /// The current stack of loaded [modules][Module].
     lib: &'a [&'a Module],
+    /// [Position] of the function call.
     pos: Position,
 }
 
@@ -69,7 +77,7 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized, S: AsRef<str> + 'a + ?Sized>
         &'a Engine,
         &'a S,
         Option<&'a S>,
-        &'a Imports,
+        &'a GlobalRuntimeState,
         &'a M,
         Position,
     )> for NativeCallContext<'a>
@@ -80,7 +88,7 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized, S: AsRef<str> + 'a + ?Sized>
             &'a Engine,
             &'a S,
             Option<&'a S>,
-            &'a Imports,
+            &'a GlobalRuntimeState,
             &'a M,
             Position,
         ),
@@ -88,8 +96,8 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized, S: AsRef<str> + 'a + ?Sized>
         Self {
             engine: value.0,
             fn_name: value.1.as_ref(),
-            source: value.2.map(|v| v.as_ref()),
-            mods: Some(value.3),
+            source: value.2.map(S::as_ref),
+            global: Some(value.3),
             lib: value.4.as_ref(),
             pos: value.5,
         }
@@ -105,7 +113,7 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized, S: AsRef<str> + 'a + ?Sized>
             engine: value.0,
             fn_name: value.1.as_ref(),
             source: None,
-            mods: None,
+            global: None,
             lib: value.2.as_ref(),
             pos: Position::NONE,
         }
@@ -130,7 +138,7 @@ impl<'a> NativeCallContext<'a> {
             engine,
             fn_name: fn_name.as_ref(),
             source: None,
-            mods: None,
+            global: None,
             lib,
             pos: Position::NONE,
         }
@@ -147,15 +155,15 @@ impl<'a> NativeCallContext<'a> {
         engine: &'a Engine,
         fn_name: &'a (impl AsRef<str> + 'a + ?Sized),
         source: Option<&'a (impl AsRef<str> + 'a + ?Sized)>,
-        imports: &'a Imports,
+        global: &'a GlobalRuntimeState,
         lib: &'a [&Module],
         pos: Position,
     ) -> Self {
         Self {
             engine,
             fn_name: fn_name.as_ref(),
-            source: source.map(|v| v.as_ref()),
-            mods: Some(imports),
+            source: source.map(<_>::as_ref),
+            global: Some(global),
             lib,
             pos,
         }
@@ -172,7 +180,7 @@ impl<'a> NativeCallContext<'a> {
     pub const fn fn_name(&self) -> &str {
         self.fn_name
     }
-    /// [Position][`Position`] of the function call.
+    /// [Position] of the function call.
     #[inline(always)]
     #[must_use]
     pub const fn position(&self) -> Position {
@@ -184,24 +192,25 @@ impl<'a> NativeCallContext<'a> {
     pub const fn source(&self) -> Option<&str> {
         self.source
     }
-    /// Get an iterator over the current set of modules imported via `import` statements.
+    /// Get an iterator over the current set of modules imported via `import` statements
+    /// in reverse order.
     ///
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     #[inline]
     pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
-        self.mods.iter().flat_map(|&m| m.iter())
+        self.global.iter().flat_map(|&m| m.iter_modules())
     }
-    /// Get an iterator over the current set of modules imported via `import` statements.
+    /// Get an iterator over the current set of modules imported via `import` statements in reverse order.
     #[cfg(not(feature = "no_module"))]
     #[allow(dead_code)]
     #[inline]
     pub(crate) fn iter_imports_raw(
         &self,
     ) -> impl Iterator<Item = (&crate::Identifier, &Shared<Module>)> {
-        self.mods.iter().flat_map(|&m| m.iter_raw())
+        self.global.iter().flat_map(|&m| m.iter_modules_raw())
     }
-    /// _(internals)_ The current set of modules imported via `import` statements.
+    /// _(internals)_ The current [`GlobalRuntimeState`], if any.
     /// Exported under the `internals` feature only.
     ///
     /// Not available under `no_module`.
@@ -209,13 +218,14 @@ impl<'a> NativeCallContext<'a> {
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     #[must_use]
-    pub const fn imports(&self) -> Option<&Imports> {
-        self.mods
+    pub const fn global_runtime_state(&self) -> Option<&GlobalRuntimeState> {
+        self.global
     }
-    /// Get an iterator over the namespaces containing definitions of all script-defined functions.
+    /// Get an iterator over the namespaces containing definitions of all script-defined functions
+    /// in reverse order.
     #[inline]
     pub fn iter_namespaces(&self) -> impl Iterator<Item = &Module> {
-        self.lib.iter().cloned()
+        self.lib.iter().rev().cloned()
     }
     /// _(internals)_ The current set of namespaces containing definitions of all script-defined functions.
     /// Exported under the `internals` feature only.
@@ -224,6 +234,31 @@ impl<'a> NativeCallContext<'a> {
     #[must_use]
     pub const fn namespaces(&self) -> &[&Module] {
         self.lib
+    }
+    /// Call a function inside the call context with the provided arguments.
+    #[inline]
+    pub fn call_fn<T: Variant + Clone>(
+        &self,
+        fn_name: impl AsRef<str>,
+        args: impl FuncArgs,
+    ) -> RhaiResultOf<T> {
+        let mut arg_values = StaticVec::new_const();
+        args.parse(&mut arg_values);
+
+        let mut args: StaticVec<_> = arg_values.iter_mut().collect();
+
+        let result = self.call_fn_raw(fn_name, false, false, &mut args)?;
+
+        let typ = self.engine().map_type_name(result.type_name());
+
+        result.try_cast().ok_or_else(|| {
+            ERR::ErrorMismatchOutputType(
+                self.engine().map_type_name(type_name::<T>()).into(),
+                typ.into(),
+                Position::NONE,
+            )
+            .into()
+        })
     }
     /// Call a function inside the call context.
     ///
@@ -250,22 +285,26 @@ impl<'a> NativeCallContext<'a> {
         is_ref_mut: bool,
         is_method_call: bool,
         args: &mut [&mut Dynamic],
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         let fn_name = fn_name.as_ref();
+        let len = args.len();
 
         let hash = if is_method_call {
             FnCallHashes::from_all(
                 #[cfg(not(feature = "no_function"))]
-                calc_fn_hash(fn_name, args.len() - 1),
-                calc_fn_hash(fn_name, args.len()),
+                calc_fn_hash(fn_name, len - 1),
+                calc_fn_hash(fn_name, len),
             )
         } else {
-            calc_fn_hash(fn_name, args.len()).into()
+            calc_fn_hash(fn_name, len).into()
         };
 
         self.engine()
             .exec_fn_call(
-                &mut self.mods.cloned().unwrap_or_else(|| Imports::new()),
+                &mut self
+                    .global
+                    .cloned()
+                    .unwrap_or_else(|| GlobalRuntimeState::new()),
                 &mut EvalState::new(),
                 self.lib,
                 fn_name,
@@ -336,6 +375,9 @@ pub type FnAny = dyn Fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult;
 #[cfg(feature = "sync")]
 pub type FnAny = dyn Fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult + Send + Sync;
 
+/// A trail object for built-in functions.
+pub type FnBuiltin = fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult;
+
 /// A standard function that gets an iterator from a type.
 pub type IteratorFn = fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
 
@@ -378,253 +420,8 @@ pub type OnParseTokenCallback =
 /// A standard callback function for variable access.
 #[cfg(not(feature = "sync"))]
 pub type OnVarCallback =
-    Box<dyn Fn(&str, usize, &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>> + 'static>;
+    Box<dyn Fn(&str, usize, &EvalContext) -> RhaiResultOf<Option<Dynamic>> + 'static>;
 /// A standard callback function for variable access.
 #[cfg(feature = "sync")]
-pub type OnVarCallback = Box<
-    dyn Fn(&str, usize, &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>
-        + Send
-        + Sync
-        + 'static,
->;
-
-/// A type encapsulating a function callable by Rhai.
-#[derive(Clone)]
-pub enum CallableFunction {
-    /// A pure native Rust function with all arguments passed by value.
-    Pure(Shared<FnAny>),
-    /// A native Rust object method with the first argument passed by reference,
-    /// and the rest passed by value.
-    Method(Shared<FnAny>),
-    /// An iterator function.
-    Iterator(IteratorFn),
-    /// A plugin function,
-    Plugin(Shared<FnPlugin>),
-    /// A script-defined function.
-    ///
-    /// Not available under `no_function`.
-    #[cfg(not(feature = "no_function"))]
-    Script(Shared<crate::ast::ScriptFnDef>),
-}
-
-impl fmt::Debug for CallableFunction {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Pure(_) => write!(f, "NativePureFunction"),
-            Self::Method(_) => write!(f, "NativeMethod"),
-            Self::Iterator(_) => write!(f, "NativeIterator"),
-            Self::Plugin(_) => write!(f, "PluginFunction"),
-
-            #[cfg(not(feature = "no_function"))]
-            Self::Script(fn_def) => fmt::Debug::fmt(fn_def, f),
-        }
-    }
-}
-
-impl fmt::Display for CallableFunction {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Pure(_) => write!(f, "NativePureFunction"),
-            Self::Method(_) => write!(f, "NativeMethod"),
-            Self::Iterator(_) => write!(f, "NativeIterator"),
-            Self::Plugin(_) => write!(f, "PluginFunction"),
-
-            #[cfg(not(feature = "no_function"))]
-            CallableFunction::Script(s) => fmt::Display::fmt(s, f),
-        }
-    }
-}
-
-impl CallableFunction {
-    /// Is this a pure native Rust function?
-    #[inline]
-    #[must_use]
-    pub fn is_pure(&self) -> bool {
-        match self {
-            Self::Pure(_) => true,
-            Self::Method(_) | Self::Iterator(_) => false,
-
-            Self::Plugin(p) => !p.is_method_call(),
-
-            #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => false,
-        }
-    }
-    /// Is this a native Rust method function?
-    #[inline]
-    #[must_use]
-    pub fn is_method(&self) -> bool {
-        match self {
-            Self::Method(_) => true,
-            Self::Pure(_) | Self::Iterator(_) => false,
-
-            Self::Plugin(p) => p.is_method_call(),
-
-            #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => false,
-        }
-    }
-    /// Is this an iterator function?
-    #[inline]
-    #[must_use]
-    pub const fn is_iter(&self) -> bool {
-        match self {
-            Self::Iterator(_) => true,
-            Self::Pure(_) | Self::Method(_) | Self::Plugin(_) => false,
-
-            #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => false,
-        }
-    }
-    /// Is this a Rhai-scripted function?
-    #[inline]
-    #[must_use]
-    pub const fn is_script(&self) -> bool {
-        match self {
-            #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => true,
-
-            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) | Self::Plugin(_) => false,
-        }
-    }
-    /// Is this a plugin function?
-    #[inline]
-    #[must_use]
-    pub const fn is_plugin_fn(&self) -> bool {
-        match self {
-            Self::Plugin(_) => true,
-            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => false,
-
-            #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => false,
-        }
-    }
-    /// Is this a native Rust function?
-    #[inline]
-    #[must_use]
-    pub const fn is_native(&self) -> bool {
-        match self {
-            Self::Pure(_) | Self::Method(_) => true,
-            Self::Plugin(_) => true,
-            Self::Iterator(_) => true,
-
-            #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => false,
-        }
-    }
-    /// Get the access mode.
-    #[inline]
-    #[must_use]
-    pub fn access(&self) -> FnAccess {
-        match self {
-            Self::Plugin(_) => FnAccess::Public,
-            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => FnAccess::Public,
-
-            #[cfg(not(feature = "no_function"))]
-            Self::Script(f) => f.access,
-        }
-    }
-    /// Get a shared reference to a native Rust function.
-    #[inline]
-    #[must_use]
-    pub fn get_native_fn(&self) -> Option<&Shared<FnAny>> {
-        match self {
-            Self::Pure(f) | Self::Method(f) => Some(f),
-            Self::Iterator(_) | Self::Plugin(_) => None,
-
-            #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => None,
-        }
-    }
-    /// Get a shared reference to a script-defined function definition.
-    ///
-    /// Not available under `no_function`.
-    #[cfg(not(feature = "no_function"))]
-    #[inline]
-    #[must_use]
-    pub const fn get_script_fn_def(&self) -> Option<&Shared<crate::ast::ScriptFnDef>> {
-        match self {
-            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) | Self::Plugin(_) => None,
-            Self::Script(f) => Some(f),
-        }
-    }
-    /// Get a reference to an iterator function.
-    #[inline]
-    #[must_use]
-    pub fn get_iter_fn(&self) -> Option<IteratorFn> {
-        match self {
-            Self::Iterator(f) => Some(*f),
-            Self::Pure(_) | Self::Method(_) | Self::Plugin(_) => None,
-
-            #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => None,
-        }
-    }
-    /// Get a shared reference to a plugin function.
-    #[inline]
-    #[must_use]
-    pub fn get_plugin_fn(&self) -> Option<&Shared<FnPlugin>> {
-        match self {
-            Self::Plugin(f) => Some(f),
-            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => None,
-
-            #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => None,
-        }
-    }
-    /// Create a new [`CallableFunction::Pure`].
-    #[inline(always)]
-    #[must_use]
-    pub fn from_pure(func: Box<FnAny>) -> Self {
-        Self::Pure(func.into())
-    }
-    /// Create a new [`CallableFunction::Method`].
-    #[inline(always)]
-    #[must_use]
-    pub fn from_method(func: Box<FnAny>) -> Self {
-        Self::Method(func.into())
-    }
-    /// Create a new [`CallableFunction::Plugin`].
-    #[inline(always)]
-    #[must_use]
-    pub fn from_plugin(func: impl PluginFunction + 'static + SendSync) -> Self {
-        Self::Plugin((Box::new(func) as Box<FnPlugin>).into())
-    }
-}
-
-impl From<IteratorFn> for CallableFunction {
-    #[inline(always)]
-    fn from(func: IteratorFn) -> Self {
-        Self::Iterator(func)
-    }
-}
-
-#[cfg(not(feature = "no_function"))]
-impl From<crate::ast::ScriptFnDef> for CallableFunction {
-    #[inline(always)]
-    fn from(_func: crate::ast::ScriptFnDef) -> Self {
-        Self::Script(_func.into())
-    }
-}
-
-#[cfg(not(feature = "no_function"))]
-impl From<Shared<crate::ast::ScriptFnDef>> for CallableFunction {
-    #[inline(always)]
-    fn from(_func: Shared<crate::ast::ScriptFnDef>) -> Self {
-        Self::Script(_func)
-    }
-}
-
-impl<T: PluginFunction + 'static + SendSync> From<T> for CallableFunction {
-    #[inline(always)]
-    fn from(func: T) -> Self {
-        Self::from_plugin(func)
-    }
-}
-
-impl From<Shared<FnPlugin>> for CallableFunction {
-    #[inline(always)]
-    fn from(func: Shared<FnPlugin>) -> Self {
-        Self::Plugin(func)
-    }
-}
+pub type OnVarCallback =
+    Box<dyn Fn(&str, usize, &EvalContext) -> RhaiResultOf<Option<Dynamic>> + Send + Sync + 'static>;

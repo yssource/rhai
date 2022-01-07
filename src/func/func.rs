@@ -3,8 +3,9 @@
 #![cfg(not(feature = "no_function"))]
 #![allow(non_snake_case)]
 
+use crate::parser::ParseResult;
 use crate::types::dynamic::Variant;
-use crate::{Engine, EvalAltResult, ParseError, Scope, SmartString, AST};
+use crate::{Engine, RhaiResultOf, Scope, SmartString, AST};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -77,11 +78,7 @@ pub trait Func<ARGS, RET> {
     /// # Ok(())
     /// # }
     /// ```
-    fn create_from_script(
-        self,
-        script: &str,
-        entry_point: &str,
-    ) -> Result<Self::Output, ParseError>;
+    fn create_from_script(self, script: &str, entry_point: &str) -> ParseResult<Self::Output>;
 }
 
 macro_rules! def_anonymous_fn {
@@ -92,9 +89,9 @@ macro_rules! def_anonymous_fn {
         impl<$($par: Variant + Clone,)* RET: Variant + Clone> Func<($($par,)*), RET> for Engine
         {
             #[cfg(feature = "sync")]
-            type Output = Box<dyn Fn($($par),*) -> Result<RET, Box<EvalAltResult>> + Send + Sync>;
+            type Output = Box<dyn Fn($($par),*) -> RhaiResultOf<RET> + Send + Sync>;
             #[cfg(not(feature = "sync"))]
-            type Output = Box<dyn Fn($($par),*) -> Result<RET, Box<EvalAltResult>>>;
+            type Output = Box<dyn Fn($($par),*) -> RhaiResultOf<RET>>;
 
             #[inline]
             fn create_from_ast(self, ast: AST, entry_point: &str) -> Self::Output {
@@ -103,7 +100,7 @@ macro_rules! def_anonymous_fn {
             }
 
             #[inline]
-            fn create_from_script(self, script: &str, entry_point: &str) -> Result<Self::Output, ParseError> {
+            fn create_from_script(self, script: &str, entry_point: &str) -> ParseResult<Self::Output> {
                 let ast = self.compile(script)?;
                 Ok(Func::<($($par,)*), RET>::create_from_ast(self, ast, entry_point))
             }

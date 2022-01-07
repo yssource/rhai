@@ -1,24 +1,25 @@
 //! Implement function-calling mechanism for [`Engine`].
 
-use super::native::{CallableFunction, FnAny};
+use super::callable_function::CallableFunction;
+use super::native::FnAny;
 use super::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
-use crate::ast::FnCallHashes;
+use crate::api::default_limits::MAX_DYNAMIC_PARAMETERS;
+use crate::ast::{Expr, FnCallHashes, Stmt};
 use crate::engine::{
-    EvalState, FnResolutionCacheEntry, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
+    EvalState, GlobalRuntimeState, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
     KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
-    MAX_DYNAMIC_PARAMETERS,
 };
-use crate::module::NamespaceRef;
+use crate::module::Namespace;
 use crate::tokenizer::Token;
 use crate::{
-    ast::{Expr, Stmt},
-    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, EvalAltResult, FnPtr,
-    Identifier, ImmutableString, Module, Position, RhaiResult, Scope, StaticVec,
+    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnArgsVec, FnPtr,
+    Identifier, ImmutableString, Module, Position, RhaiResult, RhaiResultOf, Scope, ERR,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
     any::{type_name, TypeId},
+    collections::BTreeMap,
     convert::TryFrom,
     mem,
 };
@@ -104,18 +105,18 @@ impl Drop for ArgBackup<'_> {
 #[cfg(not(feature = "no_closure"))]
 #[inline]
 pub fn ensure_no_data_race(
-    fn_name: impl AsRef<str>,
+    fn_name: &str,
     args: &FnCallArgs,
     is_method_call: bool,
-) -> Result<(), Box<EvalAltResult>> {
+) -> RhaiResultOf<()> {
     if let Some((n, _)) = args
         .iter()
         .enumerate()
         .skip(if is_method_call { 1 } else { 0 })
         .find(|(_, a)| a.is_locked())
     {
-        return Err(EvalAltResult::ErrorDataRace(
-            format!("argument #{} of function '{}'", n + 1, fn_name.as_ref()),
+        return Err(ERR::ErrorDataRace(
+            format!("argument #{} of function '{}'", n + 1, fn_name),
             Position::NONE,
         )
         .into());
@@ -124,32 +125,50 @@ pub fn ensure_no_data_race(
     Ok(())
 }
 
+/// _(internals)_ An entry in a function resolution cache.
+/// Exported under the `internals` feature only.
+#[derive(Debug, Clone)]
+pub struct FnResolutionCacheEntry {
+    /// Function.
+    pub func: CallableFunction,
+    /// Optional source.
+    /// No source if the string is empty.
+    pub source: Identifier,
+}
+
+/// _(internals)_ A function resolution cache.
+/// Exported under the `internals` feature only.
+///
+/// [`FnResolutionCacheEntry`] is [`Box`]ed in order to pack as many entries inside a single B-Tree
+/// level as possible.
+pub type FnResolutionCache = BTreeMap<u64, Option<Box<FnResolutionCacheEntry>>>;
+
 impl Engine {
     /// Generate the signature for a function call.
     #[inline]
     #[must_use]
     fn gen_call_signature(
         &self,
-        namespace: Option<&NamespaceRef>,
-        fn_name: impl AsRef<str>,
+        namespace: Option<&Namespace>,
+        fn_name: &str,
         args: &[&mut Dynamic],
     ) -> String {
         format!(
             "{}{}{} ({})",
-            namespace.map_or(String::new(), |ns| ns.to_string()),
+            namespace.map_or_else(|| String::new(), |ns| ns.to_string()),
             if namespace.is_some() {
                 Token::DoubleColon.literal_syntax()
             } else {
                 ""
             },
-            fn_name.as_ref(),
+            fn_name,
             args.iter()
                 .map(|a| if a.is::<ImmutableString>() {
                     "&str | ImmutableString | String"
                 } else {
                     self.map_type_name(a.type_name())
                 })
-                .collect::<StaticVec<_>>()
+                .collect::<FnArgsVec<_>>()
                 .join(", ")
         )
     }
@@ -165,10 +184,10 @@ impl Engine {
     #[must_use]
     fn resolve_fn<'s>(
         &self,
-        mods: &Imports,
+        global: &GlobalRuntimeState,
         state: &'s mut EvalState,
         lib: &[&Module],
-        fn_name: impl AsRef<str>,
+        fn_name: &str,
         hash_script: u64,
         args: Option<&mut FnCallArgs>,
         allow_dynamic: bool,
@@ -177,8 +196,6 @@ impl Engine {
         if hash_script == 0 {
             return None;
         }
-
-        let fn_name = fn_name.as_ref();
 
         let mut hash = args.as_ref().map_or(hash_script, |args| {
             combine_hashes(
@@ -195,7 +212,7 @@ impl Engine {
                 let max_bitmask = if !allow_dynamic {
                     0
                 } else {
-                    1usize << num_args.min(MAX_DYNAMIC_PARAMETERS)
+                    1usize << usize::min(num_args, MAX_DYNAMIC_PARAMETERS)
                 };
                 let mut bitmask = 1usize; // Bitmask of which parameter to replace with `Dynamic`
 
@@ -205,22 +222,24 @@ impl Engine {
                         .find_map(|m| {
                             m.get_fn(hash).cloned().map(|func| FnResolutionCacheEntry {
                                 func,
-                                source: m.id_raw().cloned(),
+                                source: m.id_raw().clone(),
                             })
                         })
                         .or_else(|| {
                             self.global_modules.iter().find_map(|m| {
                                 m.get_fn(hash).cloned().map(|func| FnResolutionCacheEntry {
                                     func,
-                                    source: m.id_raw().cloned(),
+                                    source: m.id_raw().clone(),
                                 })
                             })
                         })
                         .or_else(|| {
-                            mods.get_fn(hash)
+                            global
+                                .get_fn(hash)
                                 .map(|(func, source)| FnResolutionCacheEntry {
                                     func: func.clone(),
-                                    source: source.cloned(),
+                                    source: source
+                                        .map_or_else(|| Identifier::new_const(), Into::into),
                                 })
                         })
                         .or_else(|| {
@@ -228,7 +247,7 @@ impl Engine {
                                 m.get_qualified_fn(hash).cloned().map(|func| {
                                     FnResolutionCacheEntry {
                                         func,
-                                        source: m.id_raw().cloned(),
+                                        source: m.id_raw().clone(),
                                     }
                                 })
                             })
@@ -251,19 +270,18 @@ impl Engine {
                                             func: CallableFunction::from_method(
                                                 Box::new(f) as Box<FnAny>
                                             ),
-                                            source: None,
+                                            source: Identifier::new_const(),
                                         }
                                     })
                                 } else {
-                                    let (first_arg, rest_args) =
-                                        args.split_first().expect("two arguments");
+                                    let (first_arg, rest_args) = args.split_first().unwrap();
 
                                     get_builtin_op_assignment_fn(fn_name, *first_arg, rest_args[0])
                                         .map(|f| FnResolutionCacheEntry {
                                             func: CallableFunction::from_method(
                                                 Box::new(f) as Box<FnAny>
                                             ),
-                                            source: None,
+                                            source: Identifier::new_const(),
                                         })
                                 }
                                 .map(Box::new)
@@ -308,24 +326,32 @@ impl Engine {
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
     pub(crate) fn call_native_fn(
         &self,
-        mods: &mut Imports,
+        global: &mut GlobalRuntimeState,
         state: &mut EvalState,
         lib: &[&Module],
-        name: impl AsRef<str>,
+        name: &str,
         hash: u64,
         args: &mut FnCallArgs,
         is_ref_mut: bool,
         is_op_assign: bool,
         pos: Position,
-    ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<(Dynamic, bool)> {
         #[cfg(not(feature = "unchecked"))]
-        self.inc_operations(&mut mods.num_operations, pos)?;
+        self.inc_operations(&mut global.num_operations, pos)?;
 
-        let name = name.as_ref();
-        let parent_source = mods.source.clone();
+        let parent_source = global.source.clone();
 
         // Check if function access already in the cache
-        let func = self.resolve_fn(mods, state, lib, name, hash, Some(args), true, is_op_assign);
+        let func = self.resolve_fn(
+            global,
+            state,
+            lib,
+            name,
+            hash,
+            Some(args),
+            true,
+            is_op_assign,
+        );
 
         if let Some(FnResolutionCacheEntry { func, source }) = func {
             assert!(func.is_native());
@@ -342,12 +368,12 @@ impl Engine {
             }
 
             // Run external function
-            let source = source
-                .as_ref()
-                .or_else(|| parent_source.as_ref())
-                .map(|s| s.as_str());
+            let source = match (source.as_str(), parent_source.as_str()) {
+                ("", "") => None,
+                ("", s) | (s, _) => Some(s),
+            };
 
-            let context = (self, name, source, &*mods, lib, pos).into();
+            let context = (self, name, source, &*global, lib, pos).into();
 
             let result = if func.is_plugin_fn() {
                 func.get_plugin_fn()
@@ -362,14 +388,21 @@ impl Engine {
                 bk.restore_first_arg(args)
             }
 
-            let result = result.map_err(|err| err.fill_position(pos))?;
+            // Check the return value (including data sizes)
+            let result = self.check_return_value(result, pos)?;
+
+            // Check the data size of any `&mut` object, which may be changed.
+            #[cfg(not(feature = "unchecked"))]
+            if is_ref_mut && args.len() > 0 {
+                self.check_data_size(&args[0], pos)?;
+            }
 
             // See if the function match print/debug (which requires special processing)
             return Ok(match name {
                 KEYWORD_PRINT => {
                     if let Some(ref print) = self.print {
                         let text = result.into_immutable_string().map_err(|typ| {
-                            EvalAltResult::ErrorMismatchOutputType(
+                            ERR::ErrorMismatchOutputType(
                                 self.map_type_name(type_name::<ImmutableString>()).into(),
                                 typ.into(),
                                 pos,
@@ -383,13 +416,16 @@ impl Engine {
                 KEYWORD_DEBUG => {
                     if let Some(ref debug) = self.debug {
                         let text = result.into_immutable_string().map_err(|typ| {
-                            EvalAltResult::ErrorMismatchOutputType(
+                            ERR::ErrorMismatchOutputType(
                                 self.map_type_name(type_name::<ImmutableString>()).into(),
                                 typ.into(),
                                 pos,
                             )
                         })?;
-                        let source = mods.source.as_ref().map(|s| s.as_str());
+                        let source = match global.source.as_str() {
+                            "" => None,
+                            s => Some(s),
+                        };
                         (debug(&text, source, pos).into(), false)
                     } else {
                         (Dynamic::UNIT, false)
@@ -407,7 +443,7 @@ impl Engine {
             crate::engine::FN_IDX_GET => {
                 assert!(args.len() == 2);
 
-                Err(EvalAltResult::ErrorIndexingType(
+                Err(ERR::ErrorIndexingType(
                     format!(
                         "{} [{}]",
                         self.map_type_name(args[0].type_name()),
@@ -423,7 +459,7 @@ impl Engine {
             crate::engine::FN_IDX_SET => {
                 assert!(args.len() == 3);
 
-                Err(EvalAltResult::ErrorIndexingType(
+                Err(ERR::ErrorIndexingType(
                     format!(
                         "{} [{}] = {}",
                         self.map_type_name(args[0].type_name()),
@@ -440,7 +476,7 @@ impl Engine {
             _ if name.starts_with(crate::engine::FN_GET) => {
                 assert!(args.len() == 1);
 
-                Err(EvalAltResult::ErrorDotExpr(
+                Err(ERR::ErrorDotExpr(
                     format!(
                         "Unknown property '{}' - a getter is not registered for type '{}'",
                         &name[crate::engine::FN_GET.len()..],
@@ -456,7 +492,7 @@ impl Engine {
             _ if name.starts_with(crate::engine::FN_SET) => {
                 assert!(args.len() == 2);
 
-                Err(EvalAltResult::ErrorDotExpr(
+                Err(ERR::ErrorDotExpr(
                     format!(
                         "No writable property '{}' - a setter is not registered for type '{}' to handle '{}'",
                         &name[crate::engine::FN_SET.len()..],
@@ -469,11 +505,9 @@ impl Engine {
             }
 
             // Raise error
-            _ => Err(EvalAltResult::ErrorFunctionNotFound(
-                self.gen_call_signature(None, name, args),
-                pos,
-            )
-            .into()),
+            _ => Err(
+                ERR::ErrorFunctionNotFound(self.gen_call_signature(None, name, args), pos).into(),
+            ),
         }
     }
 
@@ -487,10 +521,10 @@ impl Engine {
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
     pub(crate) fn exec_fn_call(
         &self,
-        mods: &mut Imports,
+        global: &mut GlobalRuntimeState,
         state: &mut EvalState,
         lib: &[&Module],
-        fn_name: impl AsRef<str>,
+        fn_name: &str,
         hashes: FnCallHashes,
         args: &mut FnCallArgs,
         is_ref_mut: bool,
@@ -498,13 +532,11 @@ impl Engine {
         pos: Position,
         scope: Option<&mut Scope>,
         level: usize,
-    ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
-        fn no_method_err(name: &str, pos: Position) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<(Dynamic, bool)> {
+        fn no_method_err(name: &str, pos: Position) -> RhaiResultOf<(Dynamic, bool)> {
             let msg = format!("'{0}' should not be called this way. Try {0}(...);", name);
-            Err(EvalAltResult::ErrorRuntime(msg.into(), pos).into())
+            Err(ERR::ErrorRuntime(msg.into(), pos).into())
         }
-
-        let fn_name = fn_name.as_ref();
 
         // Check for data race.
         #[cfg(not(feature = "no_closure"))]
@@ -537,7 +569,7 @@ impl Engine {
                         false
                     } else {
                         let hash_script = calc_fn_hash(fn_name.as_str(), num_params as usize);
-                        self.has_script_fn(Some(mods), state, lib, hash_script)
+                        self.has_script_fn(Some(global), state, lib, hash_script)
                     }
                     .into(),
                     false,
@@ -561,16 +593,25 @@ impl Engine {
             _ => (),
         }
 
-        // Scripted function call?
+        // Script-defined function call?
         #[cfg(not(feature = "no_function"))]
-        if let Some(FnResolutionCacheEntry { func, source }) = self
-            .resolve_fn(mods, state, lib, fn_name, hashes.script, None, false, false)
+        if let Some(FnResolutionCacheEntry { func, mut source }) = self
+            .resolve_fn(
+                global,
+                state,
+                lib,
+                fn_name,
+                hashes.script,
+                None,
+                false,
+                false,
+            )
             .cloned()
         {
             // Script function call
             assert!(func.is_script());
 
-            let func = func.get_script_fn_def().expect("scripted function");
+            let func = func.get_script_fn_def().expect("script-defined function");
 
             if func.body.is_empty() {
                 return Ok((Dynamic::UNIT, false));
@@ -585,18 +626,17 @@ impl Engine {
                 }
             };
 
+            mem::swap(&mut global.source, &mut source);
+
             let result = if _is_method_call {
                 // Method call of script function - map first argument to `this`
-                let (first_arg, rest_args) = args.split_first_mut().expect("not empty");
-
-                let orig_source = mods.source.take();
-                mods.source = source;
+                let (first_arg, rest_args) = args.split_first_mut().unwrap();
 
                 let level = _level + 1;
 
                 let result = self.call_script_fn(
                     scope,
-                    mods,
+                    global,
                     state,
                     lib,
                     &mut Some(*first_arg),
@@ -606,9 +646,6 @@ impl Engine {
                     true,
                     level,
                 );
-
-                // Restore the original source
-                mods.source = orig_source;
 
                 result?
             } else {
@@ -623,17 +660,11 @@ impl Engine {
                         .change_first_arg_to_copy(args);
                 }
 
-                let orig_source = mods.source.take();
-                mods.source = source;
-
                 let level = _level + 1;
 
                 let result = self.call_script_fn(
-                    scope, mods, state, lib, &mut None, func, args, pos, true, level,
+                    scope, global, state, lib, &mut None, func, args, pos, true, level,
                 );
-
-                // Restore the original source
-                mods.source = orig_source;
 
                 // Restore the original reference
                 if let Some(bk) = backup {
@@ -643,13 +674,16 @@ impl Engine {
                 result?
             };
 
+            // Restore the original source
+            mem::swap(&mut global.source, &mut source);
+
             return Ok((result, false));
         }
 
         // Native function call
         let hash = hashes.native;
         self.call_native_fn(
-            mods, state, lib, fn_name, hash, args, is_ref_mut, false, pos,
+            global, state, lib, fn_name, hash, args, is_ref_mut, false, pos,
         )
     }
 
@@ -659,81 +693,38 @@ impl Engine {
     pub(crate) fn eval_global_statements(
         &self,
         scope: &mut Scope,
-        mods: &mut Imports,
+        global: &mut GlobalRuntimeState,
         state: &mut EvalState,
         statements: &[Stmt],
         lib: &[&Module],
         level: usize,
     ) -> RhaiResult {
         self.eval_stmt_block(
-            scope, mods, state, lib, &mut None, statements, false, false, level,
+            scope, global, state, lib, &mut None, statements, false, level,
         )
         .or_else(|err| match *err {
-            EvalAltResult::Return(out, _) => Ok(out),
-            EvalAltResult::LoopBreak(_, _) => {
+            ERR::Return(out, _) => Ok(out),
+            ERR::LoopBreak(_, _) => {
                 unreachable!("no outer loop scope to break out of")
             }
             _ => Err(err),
         })
     }
 
-    /// Evaluate a text script in place - used primarily for 'eval'.
-    fn eval_script_expr_in_place(
-        &self,
-        scope: &mut Scope,
-        mods: &mut Imports,
-        lib: &[&Module],
-        script: impl AsRef<str>,
-        _pos: Position,
-        level: usize,
-    ) -> RhaiResult {
-        #[cfg(not(feature = "unchecked"))]
-        self.inc_operations(&mut mods.num_operations, _pos)?;
-
-        let script = script.as_ref().trim();
-        if script.is_empty() {
-            return Ok(Dynamic::UNIT);
-        }
-
-        // Compile the script text
-        // No optimizations because we only run it once
-        let ast = self.compile_with_scope_and_optimization_level(
-            &Scope::new(),
-            &[script],
-            #[cfg(not(feature = "no_optimize"))]
-            crate::OptimizationLevel::None,
-        )?;
-
-        // If new functions are defined within the eval string, it is an error
-        #[cfg(not(feature = "no_function"))]
-        if !ast.shared_lib().is_empty() {
-            return Err(crate::ParseErrorType::WrongFnDefinition.into());
-        }
-
-        let statements = ast.statements();
-        if statements.is_empty() {
-            return Ok(Dynamic::UNIT);
-        }
-
-        // Evaluate the AST
-        self.eval_global_statements(scope, mods, &mut EvalState::new(), statements, lib, level)
-    }
-
     /// Call a dot method.
     #[cfg(not(feature = "no_object"))]
     pub(crate) fn make_method_call(
         &self,
-        mods: &mut Imports,
+        global: &mut GlobalRuntimeState,
         state: &mut EvalState,
         lib: &[&Module],
-        fn_name: impl AsRef<str>,
+        fn_name: &str,
         mut hash: FnCallHashes,
         target: &mut crate::engine::Target,
-        (call_args, call_arg_pos): &mut (StaticVec<Dynamic>, Position),
+        (call_args, call_arg_pos): &mut (FnArgsVec<Dynamic>, Position),
         pos: Position,
         level: usize,
-    ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
-        let fn_name = fn_name.as_ref();
+    ) -> RhaiResultOf<(Dynamic, bool)> {
         let is_ref_mut = target.is_ref();
 
         let (result, updated) = match fn_name {
@@ -746,15 +737,16 @@ impl Engine {
                 // Recalculate hashes
                 let new_hash = calc_fn_hash(fn_name, args_len).into();
                 // Arguments are passed as-is, adding the curried arguments
-                let mut curry = StaticVec::with_capacity(fn_ptr.num_curried());
+                let mut curry = FnArgsVec::with_capacity(fn_ptr.num_curried());
                 curry.extend(fn_ptr.curry().iter().cloned());
-                let mut args = StaticVec::with_capacity(curry.len() + call_args.len());
+                let mut args = FnArgsVec::with_capacity(curry.len() + call_args.len());
                 args.extend(curry.iter_mut());
                 args.extend(call_args.iter_mut());
 
                 // Map it to name(args) in function-call style
                 self.exec_fn_call(
-                    mods, state, lib, fn_name, new_hash, &mut args, false, false, pos, None, level,
+                    global, state, lib, fn_name, new_hash, &mut args, false, false, pos, None,
+                    level,
                 )
             }
             KEYWORD_FN_PTR_CALL => {
@@ -784,16 +776,16 @@ impl Engine {
                     calc_fn_hash(fn_name, args_len + 1),
                 );
                 // Replace the first argument with the object pointer, adding the curried arguments
-                let mut curry = StaticVec::with_capacity(fn_ptr.num_curried());
+                let mut curry = FnArgsVec::with_capacity(fn_ptr.num_curried());
                 curry.extend(fn_ptr.curry().iter().cloned());
-                let mut args = StaticVec::with_capacity(curry.len() + call_args.len() + 1);
+                let mut args = FnArgsVec::with_capacity(curry.len() + call_args.len() + 1);
                 args.push(target.as_mut());
                 args.extend(curry.iter_mut());
                 args.extend(call_args.iter_mut());
 
                 // Map it to name(args) in function-call style
                 self.exec_fn_call(
-                    mods, state, lib, fn_name, new_hash, &mut args, is_ref_mut, true, pos, None,
+                    global, state, lib, fn_name, new_hash, &mut args, is_ref_mut, true, pos, None,
                     level,
                 )
             }
@@ -860,12 +852,13 @@ impl Engine {
                 };
 
                 // Attached object pointer in front of the arguments
-                let mut args = StaticVec::with_capacity(call_args.len() + 1);
+                let mut args = FnArgsVec::with_capacity(call_args.len() + 1);
                 args.push(target.as_mut());
                 args.extend(call_args.iter_mut());
 
                 self.exec_fn_call(
-                    mods, state, lib, fn_name, hash, &mut args, is_ref_mut, true, pos, None, level,
+                    global, state, lib, fn_name, hash, &mut args, is_ref_mut, true, pos, None,
+                    level,
                 )
             }
         }?;
@@ -885,18 +878,18 @@ impl Engine {
     pub(crate) fn get_arg_value(
         &self,
         scope: &mut Scope,
-        mods: &mut Imports,
+        global: &mut GlobalRuntimeState,
         state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         level: usize,
         arg_expr: &Expr,
         constants: &[Dynamic],
-    ) -> Result<(Dynamic, Position), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<(Dynamic, Position)> {
         match arg_expr {
             Expr::Stack(slot, pos) => Ok((constants[*slot].clone(), *pos)),
             ref arg => self
-                .eval_expr(scope, mods, state, lib, this_ptr, arg, level)
+                .eval_expr(scope, global, state, lib, this_ptr, arg, level)
                 .map(|v| (v, arg.position())),
         }
     }
@@ -905,11 +898,11 @@ impl Engine {
     pub(crate) fn make_function_call(
         &self,
         scope: &mut Scope,
-        mods: &mut Imports,
+        global: &mut GlobalRuntimeState,
         state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
-        fn_name: impl AsRef<str>,
+        fn_name: &str,
         args_expr: &[Expr],
         constants: &[Dynamic],
         hashes: FnCallHashes,
@@ -917,10 +910,9 @@ impl Engine {
         capture_scope: bool,
         level: usize,
     ) -> RhaiResult {
-        let fn_name = fn_name.as_ref();
         let mut a_expr = args_expr;
         let mut total_args = a_expr.len();
-        let mut curry = StaticVec::new_const();
+        let mut curry = FnArgsVec::new_const();
         let mut name = fn_name;
         let mut hashes = hashes;
         let redirected; // Handle call() - Redirect function call
@@ -929,7 +921,7 @@ impl Engine {
             // Handle call()
             KEYWORD_FN_PTR_CALL if total_args >= 1 => {
                 let (arg, arg_pos) = self.get_arg_value(
-                    scope, mods, state, lib, this_ptr, level, &a_expr[0], constants,
+                    scope, global, state, lib, this_ptr, level, &a_expr[0], constants,
                 )?;
 
                 if !arg.is::<FnPtr>() {
@@ -961,7 +953,7 @@ impl Engine {
             // Handle Fn()
             KEYWORD_FN_PTR if total_args == 1 => {
                 let (arg, arg_pos) = self.get_arg_value(
-                    scope, mods, state, lib, this_ptr, level, &a_expr[0], constants,
+                    scope, global, state, lib, this_ptr, level, &a_expr[0], constants,
                 )?;
 
                 // Fn - only in function call style
@@ -969,14 +961,14 @@ impl Engine {
                     .into_immutable_string()
                     .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, arg_pos))
                     .and_then(FnPtr::try_from)
-                    .map(Into::<Dynamic>::into)
+                    .map(Into::into)
                     .map_err(|err| err.fill_position(arg_pos));
             }
 
             // Handle curry()
             KEYWORD_FN_PTR_CURRY if total_args > 1 => {
                 let (arg, arg_pos) = self.get_arg_value(
-                    scope, mods, state, lib, this_ptr, level, &a_expr[0], constants,
+                    scope, global, state, lib, this_ptr, level, &a_expr[0], constants,
                 )?;
 
                 if !arg.is::<FnPtr>() {
@@ -991,9 +983,9 @@ impl Engine {
                 // Append the new curried arguments to the existing list.
                 let fn_curry = a_expr.iter().skip(1).try_fold(
                     fn_curry,
-                    |mut curried, expr| -> Result<_, Box<EvalAltResult>> {
+                    |mut curried, expr| -> RhaiResultOf<_> {
                         let (value, _) = self.get_arg_value(
-                            scope, mods, state, lib, this_ptr, level, expr, constants,
+                            scope, global, state, lib, this_ptr, level, expr, constants,
                         )?;
                         curried.push(value);
                         Ok(curried)
@@ -1007,7 +999,7 @@ impl Engine {
             #[cfg(not(feature = "no_closure"))]
             crate::engine::KEYWORD_IS_SHARED if total_args == 1 => {
                 let (arg, _) = self.get_arg_value(
-                    scope, mods, state, lib, this_ptr, level, &a_expr[0], constants,
+                    scope, global, state, lib, this_ptr, level, &a_expr[0], constants,
                 )?;
                 return Ok(arg.is_shared().into());
             }
@@ -1016,7 +1008,7 @@ impl Engine {
             #[cfg(not(feature = "no_function"))]
             crate::engine::KEYWORD_IS_DEF_FN if total_args == 2 => {
                 let (arg, arg_pos) = self.get_arg_value(
-                    scope, mods, state, lib, this_ptr, level, &a_expr[0], constants,
+                    scope, global, state, lib, this_ptr, level, &a_expr[0], constants,
                 )?;
 
                 let fn_name = arg
@@ -1024,7 +1016,7 @@ impl Engine {
                     .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, arg_pos))?;
 
                 let (arg, arg_pos) = self.get_arg_value(
-                    scope, mods, state, lib, this_ptr, level, &a_expr[1], constants,
+                    scope, global, state, lib, this_ptr, level, &a_expr[1], constants,
                 )?;
 
                 let num_params = arg
@@ -1035,7 +1027,7 @@ impl Engine {
                     false
                 } else {
                     let hash_script = calc_fn_hash(&fn_name, num_params as usize);
-                    self.has_script_fn(Some(mods), state, lib, hash_script)
+                    self.has_script_fn(Some(global), state, lib, hash_script)
                 }
                 .into());
             }
@@ -1043,7 +1035,7 @@ impl Engine {
             // Handle is_def_var()
             KEYWORD_IS_DEF_VAR if total_args == 1 => {
                 let (arg, arg_pos) = self.get_arg_value(
-                    scope, mods, state, lib, this_ptr, level, &a_expr[0], constants,
+                    scope, global, state, lib, this_ptr, level, &a_expr[0], constants,
                 )?;
                 let var_name = arg
                     .into_immutable_string()
@@ -1056,13 +1048,20 @@ impl Engine {
                 // eval - only in function call style
                 let orig_scope_len = scope.len();
                 let (value, pos) = self.get_arg_value(
-                    scope, mods, state, lib, this_ptr, level, &a_expr[0], constants,
+                    scope, global, state, lib, this_ptr, level, &a_expr[0], constants,
                 )?;
                 let script = &value
                     .into_immutable_string()
                     .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, pos))?;
-                let result =
-                    self.eval_script_expr_in_place(scope, mods, lib, script, pos, level + 1);
+                let result = self.eval_script_expr_in_place(
+                    scope,
+                    global,
+                    state,
+                    lib,
+                    script,
+                    pos,
+                    level + 1,
+                );
 
                 // IMPORTANT! If the eval defines new variables in the current scope,
                 //            all variable offsets from this point on will be mis-aligned.
@@ -1071,12 +1070,9 @@ impl Engine {
                 }
 
                 return result.map_err(|err| {
-                    EvalAltResult::ErrorInFunctionCall(
+                    ERR::ErrorInFunctionCall(
                         KEYWORD_EVAL.to_string(),
-                        mods.source
-                            .as_ref()
-                            .map(Identifier::to_string)
-                            .unwrap_or_default(),
+                        global.source.to_string(),
                         err,
                         pos,
                     )
@@ -1088,8 +1084,8 @@ impl Engine {
         }
 
         // Normal function call - except for Fn, curry, call and eval (handled above)
-        let mut arg_values = StaticVec::with_capacity(a_expr.len());
-        let mut args = StaticVec::with_capacity(a_expr.len() + curry.len());
+        let mut arg_values = FnArgsVec::with_capacity(a_expr.len());
+        let mut args = FnArgsVec::with_capacity(a_expr.len() + curry.len());
         let mut is_ref_mut = false;
 
         // Capture parent scope?
@@ -1098,7 +1094,7 @@ impl Engine {
         // variable access) to &mut because `scope` is needed.
         if capture_scope && !scope.is_empty() {
             a_expr.iter().try_for_each(|expr| {
-                self.get_arg_value(scope, mods, state, lib, this_ptr, level, expr, constants)
+                self.get_arg_value(scope, global, state, lib, this_ptr, level, expr, constants)
                     .map(|(value, _)| arg_values.push(value.flatten()))
             })?;
             args.extend(curry.iter_mut());
@@ -1109,7 +1105,8 @@ impl Engine {
 
             return self
                 .exec_fn_call(
-                    mods, state, lib, name, hashes, &mut args, is_ref_mut, false, pos, scope, level,
+                    global, state, lib, name, hashes, &mut args, is_ref_mut, false, pos, scope,
+                    level,
                 )
                 .map(|(v, _)| v);
         }
@@ -1123,22 +1120,22 @@ impl Engine {
             // avoid cloning the value
             if curry.is_empty() && !a_expr.is_empty() && a_expr[0].is_variable_access(false) {
                 // func(x, ...) -> x.func(...)
-                let (first_expr, rest_expr) = a_expr.split_first().expect("not empty");
+                let (first_expr, rest_expr) = a_expr.split_first().unwrap();
 
                 rest_expr.iter().try_for_each(|expr| {
-                    self.get_arg_value(scope, mods, state, lib, this_ptr, level, expr, constants)
+                    self.get_arg_value(scope, global, state, lib, this_ptr, level, expr, constants)
                         .map(|(value, _)| arg_values.push(value.flatten()))
                 })?;
 
                 let (mut target, _pos) =
-                    self.search_namespace(scope, mods, state, lib, this_ptr, first_expr)?;
+                    self.search_namespace(scope, global, state, lib, this_ptr, first_expr)?;
 
                 if target.as_ref().is_read_only() {
                     target = target.into_owned();
                 }
 
                 #[cfg(not(feature = "unchecked"))]
-                self.inc_operations(&mut mods.num_operations, _pos)?;
+                self.inc_operations(&mut global.num_operations, _pos)?;
 
                 #[cfg(not(feature = "no_closure"))]
                 let target_is_shared = target.is_shared();
@@ -1151,14 +1148,14 @@ impl Engine {
                 } else {
                     // Turn it into a method call only if the object is not shared and not a simple value
                     is_ref_mut = true;
-                    let obj_ref = target.take_ref().expect("reference");
+                    let obj_ref = target.take_ref().expect("ref");
                     args.push(obj_ref);
                     args.extend(arg_values.iter_mut());
                 }
             } else {
                 // func(..., ...)
                 a_expr.iter().try_for_each(|expr| {
-                    self.get_arg_value(scope, mods, state, lib, this_ptr, level, expr, constants)
+                    self.get_arg_value(scope, global, state, lib, this_ptr, level, expr, constants)
                         .map(|(value, _)| arg_values.push(value.flatten()))
                 })?;
                 args.extend(curry.iter_mut());
@@ -1167,7 +1164,7 @@ impl Engine {
         }
 
         self.exec_fn_call(
-            mods, state, lib, name, hashes, &mut args, is_ref_mut, false, pos, None, level,
+            global, state, lib, name, hashes, &mut args, is_ref_mut, false, pos, None, level,
         )
         .map(|(v, _)| v)
     }
@@ -1176,21 +1173,20 @@ impl Engine {
     pub(crate) fn make_qualified_function_call(
         &self,
         scope: &mut Scope,
-        mods: &mut Imports,
+        global: &mut GlobalRuntimeState,
         state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
-        namespace: &NamespaceRef,
-        fn_name: impl AsRef<str>,
+        namespace: &Namespace,
+        fn_name: &str,
         args_expr: &[Expr],
         constants: &[Dynamic],
         hash: u64,
         pos: Position,
         level: usize,
     ) -> RhaiResult {
-        let fn_name = fn_name.as_ref();
-        let mut arg_values = StaticVec::with_capacity(args_expr.len());
-        let mut args = StaticVec::with_capacity(args_expr.len());
+        let mut arg_values = FnArgsVec::with_capacity(args_expr.len());
+        let mut args = FnArgsVec::with_capacity(args_expr.len());
         let mut first_arg_value = None;
 
         if args_expr.is_empty() {
@@ -1204,16 +1200,16 @@ impl Engine {
                 arg_values.push(Dynamic::UNIT);
 
                 args_expr.iter().skip(1).try_for_each(|expr| {
-                    self.get_arg_value(scope, mods, state, lib, this_ptr, level, expr, constants)
+                    self.get_arg_value(scope, global, state, lib, this_ptr, level, expr, constants)
                         .map(|(value, _)| arg_values.push(value.flatten()))
                 })?;
 
                 // Get target reference to first argument
                 let (target, _pos) =
-                    self.search_scope_only(scope, mods, state, lib, this_ptr, &args_expr[0])?;
+                    self.search_scope_only(scope, global, state, lib, this_ptr, &args_expr[0])?;
 
                 #[cfg(not(feature = "unchecked"))]
-                self.inc_operations(&mut mods.num_operations, _pos)?;
+                self.inc_operations(&mut global.num_operations, _pos)?;
 
                 #[cfg(not(feature = "no_closure"))]
                 let target_is_shared = target.is_shared();
@@ -1225,32 +1221,32 @@ impl Engine {
                     args.extend(arg_values.iter_mut());
                 } else {
                     // Turn it into a method call only if the object is not shared and not a simple value
-                    let (first, rest) = arg_values.split_first_mut().expect("not empty");
+                    let (first, rest) = arg_values.split_first_mut().unwrap();
                     first_arg_value = Some(first);
-                    let obj_ref = target.take_ref().expect("reference");
+                    let obj_ref = target.take_ref().expect("ref");
                     args.push(obj_ref);
                     args.extend(rest.iter_mut());
                 }
             } else {
                 // func(..., ...) or func(mod::x, ...)
                 args_expr.iter().try_for_each(|expr| {
-                    self.get_arg_value(scope, mods, state, lib, this_ptr, level, expr, constants)
+                    self.get_arg_value(scope, global, state, lib, this_ptr, level, expr, constants)
                         .map(|(value, _)| arg_values.push(value.flatten()))
                 })?;
                 args.extend(arg_values.iter_mut());
             }
         }
 
-        let module = self.search_imports(mods, state, namespace).ok_or_else(|| {
-            EvalAltResult::ErrorModuleNotFound(namespace.to_string(), namespace[0].pos)
-        })?;
+        let module = self
+            .search_imports(global, state, namespace)
+            .ok_or_else(|| ERR::ErrorModuleNotFound(namespace.to_string(), namespace[0].pos))?;
 
         // First search in script-defined functions (can override built-in)
         let func = match module.get_qualified_fn(hash) {
             // Then search in Rust functions
             None => {
                 #[cfg(not(feature = "unchecked"))]
-                self.inc_operations(&mut mods.num_operations, pos)?;
+                self.inc_operations(&mut global.num_operations, pos)?;
 
                 let hash_params = calc_fn_params_hash(args.iter().map(|a| a.type_id()));
                 let hash_qualified_fn = combine_hashes(hash, hash_params);
@@ -1271,50 +1267,99 @@ impl Engine {
         match func {
             #[cfg(not(feature = "no_function"))]
             Some(f) if f.is_script() => {
-                let fn_def = f.get_script_fn_def().expect("scripted function");
+                let fn_def = f.get_script_fn_def().expect("script-defined function");
 
                 if fn_def.body.is_empty() {
                     Ok(Dynamic::UNIT)
                 } else {
                     let new_scope = &mut Scope::new();
 
-                    let mut source = module.id_raw().cloned();
-                    mem::swap(&mut mods.source, &mut source);
+                    let mut source = module.id_raw().clone();
+                    mem::swap(&mut global.source, &mut source);
 
                     let level = level + 1;
 
                     let result = self.call_script_fn(
-                        new_scope, mods, state, lib, &mut None, fn_def, &mut args, pos, true, level,
+                        new_scope, global, state, lib, &mut None, fn_def, &mut args, pos, true,
+                        level,
                     );
 
-                    mods.source = source;
+                    global.source = source;
 
                     result
                 }
             }
 
             Some(f) if f.is_plugin_fn() => {
-                let context = (self, fn_name, module.id(), &*mods, lib, pos).into();
-                f.get_plugin_fn()
+                let context = (self, fn_name, module.id(), &*global, lib, pos).into();
+                let result = f
+                    .get_plugin_fn()
                     .expect("plugin function")
                     .clone()
-                    .call(context, &mut args)
-                    .map_err(|err| err.fill_position(pos))
+                    .call(context, &mut args);
+                self.check_return_value(result, pos)
             }
 
             Some(f) if f.is_native() => {
                 let func = f.get_native_fn().expect("native function");
-                let context = (self, fn_name, module.id(), &*mods, lib, pos).into();
-                func(context, &mut args).map_err(|err| err.fill_position(pos))
+                let context = (self, fn_name, module.id(), &*global, lib, pos).into();
+                let result = func(context, &mut args);
+                self.check_return_value(result, pos)
             }
 
             Some(f) => unreachable!("unknown function type: {:?}", f),
 
-            None => Err(EvalAltResult::ErrorFunctionNotFound(
+            None => Err(ERR::ErrorFunctionNotFound(
                 self.gen_call_signature(Some(namespace), fn_name, &args),
                 pos,
             )
             .into()),
         }
+    }
+
+    /// Evaluate a text script in place - used primarily for 'eval'.
+    pub(crate) fn eval_script_expr_in_place(
+        &self,
+        scope: &mut Scope,
+        global: &mut GlobalRuntimeState,
+        state: &mut EvalState,
+        lib: &[&Module],
+        script: &str,
+        pos: Position,
+        level: usize,
+    ) -> RhaiResult {
+        let _pos = pos;
+
+        #[cfg(not(feature = "unchecked"))]
+        self.inc_operations(&mut global.num_operations, _pos)?;
+
+        let script = script.trim();
+
+        if script.is_empty() {
+            return Ok(Dynamic::UNIT);
+        }
+
+        // Compile the script text
+        // No optimizations because we only run it once
+        let ast = self.compile_with_scope_and_optimization_level(
+            &Scope::new(),
+            &[script],
+            #[cfg(not(feature = "no_optimize"))]
+            crate::OptimizationLevel::None,
+        )?;
+
+        // If new functions are defined within the eval string, it is an error
+        #[cfg(not(feature = "no_function"))]
+        if !ast.shared_lib().is_empty() {
+            return Err(crate::PERR::WrongFnDefinition.into());
+        }
+
+        let statements = ast.statements();
+        if statements.is_empty() {
+            return Ok(Dynamic::UNIT);
+        }
+
+        // Evaluate the AST
+        self.eval_global_statements(scope, global, state, statements, lib, level)
     }
 }

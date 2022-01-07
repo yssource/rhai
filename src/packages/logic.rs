@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::{def_package, EvalAltResult, ExclusiveRange, InclusiveRange, INT};
+use crate::{def_package, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -37,38 +37,32 @@ macro_rules! reg_functions {
     )* }
 }
 
-def_package!(crate:LogicPackage:"Logical operators.", lib, {
-    lib.standard = true;
+def_package! {
+    /// Package of basic logic operators.
+    crate::LogicPackage => |lib| {
+        lib.standard = true;
 
-    #[cfg(not(feature = "only_i32"))]
-    #[cfg(not(feature = "only_i64"))]
-    {
-        reg_functions!(lib += numbers; i8, u8, i16, u16, i32, u32, u64);
+        #[cfg(not(feature = "only_i32"))]
+        #[cfg(not(feature = "only_i64"))]
+        {
+            reg_functions!(lib += numbers; i8, u8, i16, u16, i32, u32, u64);
 
-        #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-        reg_functions!(lib += num_128; i128, u128);
+            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(target_arch = "wasm64"))]
+            reg_functions!(lib += num_128; i128, u128);
+        }
+
+        #[cfg(not(feature = "no_float"))]
+        {
+            #[cfg(not(feature = "f32_float"))]
+            reg_functions!(lib += float; f32);
+            combine_with_exported_module!(lib, "f32", f32_functions);
+
+            #[cfg(feature = "f32_float")]
+            reg_functions!(lib += float; f64);
+            combine_with_exported_module!(lib, "f64", f64_functions);
+        }
     }
-
-    #[cfg(not(feature = "no_float"))]
-    {
-        #[cfg(not(feature = "f32_float"))]
-        reg_functions!(lib += float; f32);
-        combine_with_exported_module!(lib, "f32", f32_functions);
-
-        #[cfg(feature = "f32_float")]
-        reg_functions!(lib += float; f64);
-        combine_with_exported_module!(lib, "f64", f64_functions);
-    }
-
-    set_exported_fn!(lib, "!", not);
-
-    combine_with_exported_module!(lib, "bit_field", bit_field_functions);
-});
-
-// Logic operators
-#[export_fn]
-fn not(x: bool) -> bool {
-    !x
 }
 
 #[cfg(not(feature = "only_i32"))]
@@ -77,7 +71,8 @@ gen_cmp_functions!(numbers => i8, u8, i16, u16, i32, u32, u64);
 
 #[cfg(not(feature = "only_i32"))]
 #[cfg(not(feature = "only_i64"))]
-#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm64"))]
 gen_cmp_functions!(num_128 => i128, u128);
 
 #[cfg(not(feature = "no_float"))]
@@ -191,196 +186,5 @@ mod f64_functions {
     #[rhai_fn(name = "<=")]
     pub fn lte_fi(x: f64, y: INT) -> bool {
         (x as f64) <= (y as f64)
-    }
-}
-
-#[export_module]
-mod bit_field_functions {
-    const BITS: usize = std::mem::size_of::<INT>() * 8;
-
-    #[rhai_fn(return_raw)]
-    pub fn get_bit(value: INT, index: INT) -> Result<bool, Box<EvalAltResult>> {
-        if index >= 0 {
-            let offset = index as usize;
-
-            if offset >= BITS {
-                Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
-            } else {
-                Ok((value & (1 << offset)) != 0)
-            }
-        } else if let Some(abs_index) = index.checked_abs() {
-            let offset = abs_index as usize;
-
-            // Count from end if negative
-            if offset > BITS {
-                Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
-            } else {
-                Ok((value & (1 << (BITS - offset))) != 0)
-            }
-        } else {
-            Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
-        }
-    }
-    #[rhai_fn(return_raw)]
-    pub fn set_bit(value: &mut INT, index: INT, new_value: bool) -> Result<(), Box<EvalAltResult>> {
-        if index >= 0 {
-            let offset = index as usize;
-
-            if offset >= BITS {
-                Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
-            } else {
-                let mask = 1 << offset;
-                if new_value {
-                    *value |= mask;
-                } else {
-                    *value &= !mask;
-                }
-                Ok(())
-            }
-        } else if let Some(abs_index) = index.checked_abs() {
-            let offset = abs_index as usize;
-
-            // Count from end if negative
-            if offset > BITS {
-                Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
-            } else {
-                let mask = 1 << offset;
-                if new_value {
-                    *value |= mask;
-                } else {
-                    *value &= !mask;
-                }
-                Ok(())
-            }
-        } else {
-            Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
-        }
-    }
-    #[rhai_fn(name = "get_bits", return_raw)]
-    pub fn get_bits_range(value: INT, range: ExclusiveRange) -> Result<INT, Box<EvalAltResult>> {
-        let from = INT::max(range.start, 0);
-        let to = INT::max(range.end, from);
-        get_bits(value, from, to - from)
-    }
-    #[rhai_fn(name = "get_bits", return_raw)]
-    pub fn get_bits_range_inclusive(
-        value: INT,
-        range: InclusiveRange,
-    ) -> Result<INT, Box<EvalAltResult>> {
-        let from = INT::max(*range.start(), 0);
-        let to = INT::max(*range.end(), from - 1);
-        get_bits(value, from, to - from + 1)
-    }
-    #[rhai_fn(return_raw)]
-    pub fn get_bits(value: INT, index: INT, bits: INT) -> Result<INT, Box<EvalAltResult>> {
-        if bits < 1 {
-            return Ok(0);
-        }
-
-        let offset = if index >= 0 {
-            let offset = index as usize;
-
-            if offset >= BITS {
-                return Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
-            }
-
-            offset
-        } else if let Some(abs_index) = index.checked_abs() {
-            let offset = abs_index as usize;
-
-            // Count from end if negative
-            if offset > BITS {
-                return Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
-            }
-            BITS - offset
-        } else {
-            return Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
-        };
-
-        let bits = if offset + bits as usize > BITS {
-            BITS - offset
-        } else {
-            bits as usize
-        };
-
-        let mut base = 1;
-        let mut mask = 0;
-
-        for _ in 0..bits {
-            mask |= base;
-            base <<= 1;
-        }
-
-        Ok(((value & (mask << index)) >> index) & mask)
-    }
-    #[rhai_fn(name = "set_bits", return_raw)]
-    pub fn set_bits_range(
-        value: &mut INT,
-        range: ExclusiveRange,
-        new_value: INT,
-    ) -> Result<(), Box<EvalAltResult>> {
-        let from = INT::max(range.start, 0);
-        let to = INT::max(range.end, from);
-        set_bits(value, from, to - from, new_value)
-    }
-    #[rhai_fn(name = "set_bits", return_raw)]
-    pub fn set_bits_range_inclusive(
-        value: &mut INT,
-        range: InclusiveRange,
-        new_value: INT,
-    ) -> Result<(), Box<EvalAltResult>> {
-        let from = INT::max(*range.start(), 0);
-        let to = INT::max(*range.end(), from - 1);
-        set_bits(value, from, to - from + 1, new_value)
-    }
-    #[rhai_fn(return_raw)]
-    pub fn set_bits(
-        value: &mut INT,
-        index: INT,
-        bits: INT,
-        new_value: INT,
-    ) -> Result<(), Box<EvalAltResult>> {
-        if bits < 1 {
-            return Ok(());
-        }
-
-        let offset = if index >= 0 {
-            let offset = index as usize;
-
-            if offset >= BITS {
-                return Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
-            }
-
-            offset
-        } else if let Some(abs_index) = index.checked_abs() {
-            let offset = abs_index as usize;
-
-            // Count from end if negative
-            if offset > BITS {
-                return Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
-            }
-            BITS - offset
-        } else {
-            return Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
-        };
-
-        let bits = if offset + bits as usize > BITS {
-            BITS - offset
-        } else {
-            bits as usize
-        };
-
-        let mut base = 1;
-        let mut mask = 0;
-
-        for _ in 0..bits {
-            mask |= base;
-            base <<= 1;
-        }
-
-        *value &= !(mask << index);
-        *value |= (new_value & mask) << index;
-
-        Ok(())
     }
 }

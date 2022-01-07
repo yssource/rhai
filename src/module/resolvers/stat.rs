@@ -1,5 +1,5 @@
 use crate::{
-    Engine, EvalAltResult, Identifier, Module, ModuleResolver, Position, Shared, SmartString,
+    Engine, Identifier, Module, ModuleResolver, Position, RhaiResultOf, Shared, SmartString, ERR,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -131,11 +131,11 @@ impl ModuleResolver for StaticModuleResolver {
         _: Option<&str>,
         path: &str,
         pos: Position,
-    ) -> Result<Shared<Module>, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Shared<Module>> {
         self.0
             .get(path)
             .cloned()
-            .ok_or_else(|| EvalAltResult::ErrorModuleNotFound(path.into(), pos).into())
+            .ok_or_else(|| ERR::ErrorModuleNotFound(path.into(), pos).into())
     }
 }
 

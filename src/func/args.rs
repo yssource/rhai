@@ -9,7 +9,7 @@ use std::prelude::v1::*;
 
 /// Trait that parses arguments to a function call.
 ///
-/// Any data type can implement this trait in order to pass arguments to a function call.
+/// Any data type can implement this trait in order to pass arguments to [`Engine::call_fn`][crate::Engine::call_fn].
 pub trait FuncArgs {
     /// Parse function call arguments into a container.
     ///
@@ -26,10 +26,10 @@ pub trait FuncArgs {
     /// }
     ///
     /// impl FuncArgs for Options {
-    ///     fn parse<CONTAINER: Extend<Dynamic>>(self, container: &mut CONTAINER) {
-    ///         container.extend(std::iter::once(self.foo.into()));
-    ///         container.extend(std::iter::once(self.bar.into()));
-    ///         container.extend(std::iter::once(self.baz.into()));
+    ///     fn parse<ARGS: Extend<Dynamic>>(self, args: &mut ARGS) {
+    ///         args.extend(std::iter::once(self.foo.into()));
+    ///         args.extend(std::iter::once(self.bar.into()));
+    ///         args.extend(std::iter::once(self.baz.into()));
     ///     }
     /// }
     ///
@@ -55,13 +55,13 @@ pub trait FuncArgs {
     /// # Ok(())
     /// # }
     /// ```
-    fn parse<CONTAINER: Extend<Dynamic>>(self, container: &mut CONTAINER);
+    fn parse<ARGS: Extend<Dynamic>>(self, args: &mut ARGS);
 }
 
 impl<T: Variant + Clone> FuncArgs for Vec<T> {
     #[inline]
-    fn parse<CONTAINER: Extend<Dynamic>>(self, container: &mut CONTAINER) {
-        container.extend(self.into_iter().map(Variant::into_dynamic));
+    fn parse<ARGS: Extend<Dynamic>>(self, args: &mut ARGS) {
+        args.extend(self.into_iter().map(Dynamic::from));
     }
 }
 
@@ -73,9 +73,9 @@ macro_rules! impl_args {
         {
             #[inline]
             #[allow(unused_variables)]
-            fn parse<CONTAINER: Extend<Dynamic>>(self, container: &mut CONTAINER) {
+            fn parse<ARGS: Extend<Dynamic>>(self, args: &mut ARGS) {
                 let ($($p,)*) = self;
-                $(container.extend(Some($p.into_dynamic()));)*
+                $(args.extend(Some(Dynamic::from($p)));)*
             }
         }
 

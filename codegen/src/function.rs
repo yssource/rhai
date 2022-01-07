@@ -282,6 +282,8 @@ pub struct ExportedFn {
     mut_receiver: bool,
     params: ExportedFnParams,
     cfg_attrs: Vec<syn::Attribute>,
+    #[cfg(feature = "metadata")]
+    comments: Vec<String>,
 }
 
 impl Parse for ExportedFn {
@@ -404,6 +406,8 @@ impl Parse for ExportedFn {
             mut_receiver,
             params: Default::default(),
             cfg_attrs,
+            #[cfg(feature = "metadata")]
+            comments: Default::default(),
         })
     }
 }
@@ -501,6 +505,16 @@ impl ExportedFn {
             syn::ReturnType::Type(_, ref ret_type) => Some(flatten_type_groups(ret_type)),
             _ => None,
         }
+    }
+
+    #[cfg(feature = "metadata")]
+    pub fn comments(&self) -> &[String] {
+        &self.comments
+    }
+
+    #[cfg(feature = "metadata")]
+    pub fn set_comments(&mut self, comments: Vec<String>) {
+        self.comments = comments
     }
 
     pub fn set_cfg_attrs(&mut self, cfg_attrs: Vec<syn::Attribute>) {

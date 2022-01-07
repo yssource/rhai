@@ -4,52 +4,56 @@
 use crate::engine::OP_EQUALS;
 use crate::plugin::*;
 use crate::{
-    def_package, Array, Dynamic, EvalAltResult, ExclusiveRange, FnPtr, InclusiveRange,
-    NativeCallContext, Position, INT,
+    def_package, Array, Dynamic, ExclusiveRange, FnPtr, InclusiveRange, NativeCallContext,
+    Position, RhaiResultOf, ERR, INT,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{any::TypeId, cmp::Ordering, mem};
 
-def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
-    lib.standard = true;
+def_package! {
+    /// Package of basic array utilities.
+    crate::BasicArrayPackage => |lib| {
+        lib.standard = true;
 
-    combine_with_exported_module!(lib, "array", array_functions);
+        combine_with_exported_module!(lib, "array", array_functions);
 
-    // Register array iterator
-    lib.set_iterable::<Array>();
-});
+        // Register array iterator
+        lib.set_iterable::<Array>();
+    }
+}
 
 #[export_module]
-mod array_functions {
+pub mod array_functions {
     #[rhai_fn(name = "len", get = "len", pure)]
     pub fn len(array: &mut Array) -> INT {
         array.len() as INT
     }
-    #[rhai_fn(name = "push", name = "+=")]
     pub fn push(array: &mut Array, item: Dynamic) {
         array.push(item);
     }
-    #[rhai_fn(name = "append", name = "+=")]
-    pub fn append(array: &mut Array, y: Array) {
-        if !y.is_empty() {
-            if array.is_empty() {
-                *array = y;
+    pub fn append(array1: &mut Array, array2: Array) {
+        if !array2.is_empty() {
+            if array1.is_empty() {
+                *array1 = array2;
             } else {
-                array.extend(y);
+                array1.extend(array2);
             }
         }
     }
     #[rhai_fn(name = "+")]
-    pub fn concat(mut array: Array, y: Array) -> Array {
-        if !y.is_empty() {
-            if array.is_empty() {
-                array = y;
+    pub fn concat(array1: Array, array2: Array) -> Array {
+        if !array2.is_empty() {
+            if array1.is_empty() {
+                array2
             } else {
-                array.extend(y);
+                let mut array = array1;
+                array.extend(array2);
+                array
             }
+        } else {
+            array1
         }
-        array
     }
     pub fn insert(array: &mut Array, position: INT, item: Dynamic) {
         if array.is_empty() {
@@ -76,25 +80,45 @@ mod array_functions {
         array: &mut Array,
         len: INT,
         item: Dynamic,
-    ) -> Result<(), Box<EvalAltResult>> {
-        if len <= 0 {
+    ) -> RhaiResultOf<()> {
+        if len <= 0 || (len as usize) <= array.len() {
             return Ok(());
         }
 
         let _ctx = ctx;
+        let len = len as usize;
 
         // Check if array will be over max size limit
         #[cfg(not(feature = "unchecked"))]
-        if _ctx.engine().max_array_size() > 0 && (len as usize) > _ctx.engine().max_array_size() {
-            return Err(EvalAltResult::ErrorDataTooLarge(
-                "Size of array".to_string(),
-                Position::NONE,
-            )
-            .into());
+        if _ctx.engine().max_array_size() > 0 && len > _ctx.engine().max_array_size() {
+            return Err(ERR::ErrorDataTooLarge("Size of array".to_string(), Position::NONE).into());
         }
 
-        if len as usize > array.len() {
-            array.resize(len as usize, item);
+        #[cfg(not(feature = "unchecked"))]
+        let check_sizes = match item.0 {
+            crate::types::dynamic::Union::Array(_, _, _)
+            | crate::types::dynamic::Union::Str(_, _, _) => true,
+            #[cfg(not(feature = "no_object"))]
+            crate::types::dynamic::Union::Map(_, _, _) => true,
+            _ => false,
+        };
+        #[cfg(feature = "unchecked")]
+        let check_sizes = false;
+
+        if check_sizes {
+            let arr = mem::take(array);
+            let mut arr = Dynamic::from_array(arr);
+
+            while array.len() < len {
+                arr.write_lock::<Array>().unwrap().push(item.clone());
+
+                #[cfg(not(feature = "unchecked"))]
+                _ctx.engine().ensure_data_size_within_limits(&arr)?;
+            }
+
+            *array = arr.into_array().unwrap();
+        } else {
+            array.resize(len, item);
         }
 
         Ok(())
@@ -170,9 +194,9 @@ mod array_functions {
             let arr_len = array.len();
             start
                 .checked_abs()
-                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
+                .map_or(0, |n| arr_len - usize::min(n as usize, arr_len))
         } else if start as usize >= array.len() {
-            array.extend(replace.into_iter());
+            array.extend(replace);
             return;
         } else {
             start as usize
@@ -209,7 +233,7 @@ mod array_functions {
             let arr_len = array.len();
             start
                 .checked_abs()
-                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
+                .map_or(0, |n| arr_len - usize::min(n as usize, arr_len))
         } else if start as usize >= array.len() {
             return Array::new();
         } else {
@@ -259,11 +283,7 @@ mod array_functions {
         }
     }
     #[rhai_fn(return_raw, pure)]
-    pub fn map(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        mapper: FnPtr,
-    ) -> Result<Array, Box<EvalAltResult>> {
+    pub fn map(ctx: NativeCallContext, array: &mut Array, mapper: FnPtr) -> RhaiResultOf<Array> {
         if array.is_empty() {
             return Ok(array.clone());
         }
@@ -275,7 +295,7 @@ mod array_functions {
                 mapper
                     .call_raw(&ctx, None, [item.clone()])
                     .or_else(|err| match *err {
-                        EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                        ERR::ErrorFunctionNotFound(fn_sig, _)
                             if fn_sig.starts_with(mapper.fn_name()) =>
                         {
                             mapper.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
@@ -283,7 +303,7 @@ mod array_functions {
                         _ => Err(err),
                     })
                     .map_err(|err| {
-                        Box::new(EvalAltResult::ErrorInFunctionCall(
+                        Box::new(ERR::ErrorInFunctionCall(
                             "map".to_string(),
                             ctx.source().unwrap_or("").to_string(),
                             err,
@@ -300,16 +320,12 @@ mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         mapper: &str,
-    ) -> Result<Array, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Array> {
         map(ctx, array, FnPtr::new(mapper)?)
     }
 
     #[rhai_fn(return_raw, pure)]
-    pub fn filter(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        filter: FnPtr,
-    ) -> Result<Array, Box<EvalAltResult>> {
+    pub fn filter(ctx: NativeCallContext, array: &mut Array, filter: FnPtr) -> RhaiResultOf<Array> {
         if array.is_empty() {
             return Ok(array.clone());
         }
@@ -320,7 +336,7 @@ mod array_functions {
             if filter
                 .call_raw(&ctx, None, [item.clone()])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
                         filter.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
@@ -328,7 +344,7 @@ mod array_functions {
                     _ => Err(err),
                 })
                 .map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                    Box::new(ERR::ErrorInFunctionCall(
                         "filter".to_string(),
                         ctx.source().unwrap_or("").to_string(),
                         err,
@@ -349,7 +365,7 @@ mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         filter_func: &str,
-    ) -> Result<Array, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Array> {
         filter(ctx, array, FnPtr::new(filter_func)?)
     }
     #[rhai_fn(return_raw, pure)]
@@ -357,7 +373,7 @@ mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         value: Dynamic,
-    ) -> Result<bool, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<bool> {
         if array.is_empty() {
             return Ok(false);
         }
@@ -366,9 +382,7 @@ mod array_functions {
             if ctx
                 .call_fn_raw(OP_EQUALS, true, false, &mut [item, &mut value.clone()])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(ref fn_sig, _)
-                        if fn_sig.starts_with(OP_EQUALS) =>
-                    {
+                    ERR::ErrorFunctionNotFound(ref fn_sig, _) if fn_sig.starts_with(OP_EQUALS) => {
                         if item.type_id() == value.type_id() {
                             // No default when comparing same type
                             Err(err)
@@ -392,7 +406,7 @@ mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         value: Dynamic,
-    ) -> Result<INT, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<INT> {
         if array.is_empty() {
             Ok(-1)
         } else {
@@ -405,7 +419,7 @@ mod array_functions {
         array: &mut Array,
         value: Dynamic,
         start: INT,
-    ) -> Result<INT, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<INT> {
         if array.is_empty() {
             return Ok(-1);
         }
@@ -414,7 +428,7 @@ mod array_functions {
             let arr_len = array.len();
             start
                 .checked_abs()
-                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
+                .map_or(0, |n| arr_len - usize::min(n as usize, arr_len))
         } else if start as usize >= array.len() {
             return Ok(-1);
         } else {
@@ -425,9 +439,7 @@ mod array_functions {
             if ctx
                 .call_fn_raw(OP_EQUALS, true, false, &mut [item, &mut value.clone()])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(ref fn_sig, _)
-                        if fn_sig.starts_with(OP_EQUALS) =>
-                    {
+                    ERR::ErrorFunctionNotFound(ref fn_sig, _) if fn_sig.starts_with(OP_EQUALS) => {
                         if item.type_id() == value.type_id() {
                             // No default when comparing same type
                             Err(err)
@@ -451,7 +463,7 @@ mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         filter: &str,
-    ) -> Result<INT, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<INT> {
         index_of_filter(ctx, array, FnPtr::new(filter)?)
     }
     #[rhai_fn(name = "index_of", return_raw, pure)]
@@ -459,7 +471,7 @@ mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         filter: FnPtr,
-    ) -> Result<INT, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<INT> {
         if array.is_empty() {
             Ok(-1)
         } else {
@@ -472,7 +484,7 @@ mod array_functions {
         array: &mut Array,
         filter: FnPtr,
         start: INT,
-    ) -> Result<INT, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<INT> {
         if array.is_empty() {
             return Ok(-1);
         }
@@ -481,7 +493,7 @@ mod array_functions {
             let arr_len = array.len();
             start
                 .checked_abs()
-                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
+                .map_or(0, |n| arr_len - usize::min(n as usize, arr_len))
         } else if start as usize >= array.len() {
             return Ok(-1);
         } else {
@@ -492,7 +504,7 @@ mod array_functions {
             if filter
                 .call_raw(&ctx, None, [item.clone()])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
                         filter.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
@@ -500,7 +512,7 @@ mod array_functions {
                     _ => Err(err),
                 })
                 .map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                    Box::new(ERR::ErrorInFunctionCall(
                         "index_of".to_string(),
                         ctx.source().unwrap_or("").to_string(),
                         err,
@@ -522,15 +534,11 @@ mod array_functions {
         array: &mut Array,
         filter: &str,
         start: INT,
-    ) -> Result<INT, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<INT> {
         index_of_filter_starting_from(ctx, array, FnPtr::new(filter)?, start)
     }
     #[rhai_fn(return_raw, pure)]
-    pub fn some(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        filter: FnPtr,
-    ) -> Result<bool, Box<EvalAltResult>> {
+    pub fn some(ctx: NativeCallContext, array: &mut Array, filter: FnPtr) -> RhaiResultOf<bool> {
         if array.is_empty() {
             return Ok(false);
         }
@@ -539,7 +547,7 @@ mod array_functions {
             if filter
                 .call_raw(&ctx, None, [item.clone()])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
                         filter.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
@@ -547,7 +555,7 @@ mod array_functions {
                     _ => Err(err),
                 })
                 .map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                    Box::new(ERR::ErrorInFunctionCall(
                         "some".to_string(),
                         ctx.source().unwrap_or("").to_string(),
                         err,
@@ -568,15 +576,11 @@ mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         filter: &str,
-    ) -> Result<bool, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<bool> {
         some(ctx, array, FnPtr::new(filter)?)
     }
     #[rhai_fn(return_raw, pure)]
-    pub fn all(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        filter: FnPtr,
-    ) -> Result<bool, Box<EvalAltResult>> {
+    pub fn all(ctx: NativeCallContext, array: &mut Array, filter: FnPtr) -> RhaiResultOf<bool> {
         if array.is_empty() {
             return Ok(true);
         }
@@ -585,7 +589,7 @@ mod array_functions {
             if !filter
                 .call_raw(&ctx, None, [item.clone()])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
                         filter.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
@@ -593,7 +597,7 @@ mod array_functions {
                     _ => Err(err),
                 })
                 .map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                    Box::new(ERR::ErrorInFunctionCall(
                         "all".to_string(),
                         ctx.source().unwrap_or("").to_string(),
                         err,
@@ -614,11 +618,11 @@ mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         filter: &str,
-    ) -> Result<bool, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<bool> {
         all(ctx, array, FnPtr::new(filter)?)
     }
     #[rhai_fn(return_raw)]
-    pub fn dedup(ctx: NativeCallContext, array: &mut Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn dedup(ctx: NativeCallContext, array: &mut Array) -> RhaiResultOf<()> {
         dedup_with_fn_name(ctx, array, OP_EQUALS)
     }
     #[rhai_fn(name = "dedup", return_raw)]
@@ -626,7 +630,7 @@ mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         comparer: FnPtr,
-    ) -> Result<(), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         if array.is_empty() {
             return Ok(());
         }
@@ -646,15 +650,11 @@ mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         comparer: &str,
-    ) -> Result<(), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         dedup_by_comparer(ctx, array, FnPtr::new(comparer)?)
     }
     #[rhai_fn(return_raw, pure)]
-    pub fn reduce(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        reducer: FnPtr,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    pub fn reduce(ctx: NativeCallContext, array: &mut Array, reducer: FnPtr) -> RhaiResult {
         reduce_with_initial(ctx, array, reducer, Dynamic::UNIT)
     }
     #[rhai_fn(name = "reduce", return_raw, pure)]
@@ -662,7 +662,7 @@ mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         reducer: &str,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         reduce(ctx, array, FnPtr::new(reducer)?)
     }
     #[rhai_fn(name = "reduce", return_raw, pure)]
@@ -671,7 +671,7 @@ mod array_functions {
         array: &mut Array,
         reducer: FnPtr,
         initial: Dynamic,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         if array.is_empty() {
             return Ok(initial);
         }
@@ -684,7 +684,7 @@ mod array_functions {
             result = reducer
                 .call_raw(&ctx, None, [result.clone(), item.clone()])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(reducer.fn_name()) =>
                     {
                         reducer.call_raw(&ctx, None, [result, item, (i as INT).into()])
@@ -692,7 +692,7 @@ mod array_functions {
                     _ => Err(err),
                 })
                 .map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                    Box::new(ERR::ErrorInFunctionCall(
                         "reduce".to_string(),
                         ctx.source().unwrap_or("").to_string(),
                         err,
@@ -709,15 +709,11 @@ mod array_functions {
         array: &mut Array,
         reducer: &str,
         initial: Dynamic,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         reduce_with_initial(ctx, array, FnPtr::new(reducer)?, initial)
     }
     #[rhai_fn(return_raw, pure)]
-    pub fn reduce_rev(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        reducer: FnPtr,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    pub fn reduce_rev(ctx: NativeCallContext, array: &mut Array, reducer: FnPtr) -> RhaiResult {
         reduce_rev_with_initial(ctx, array, reducer, Dynamic::UNIT)
     }
     #[rhai_fn(name = "reduce_rev", return_raw, pure)]
@@ -725,7 +721,7 @@ mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         reducer: &str,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         reduce_rev(ctx, array, FnPtr::new(reducer)?)
     }
     #[rhai_fn(name = "reduce_rev", return_raw, pure)]
@@ -734,7 +730,7 @@ mod array_functions {
         array: &mut Array,
         reducer: FnPtr,
         initial: Dynamic,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         if array.is_empty() {
             return Ok(initial);
         }
@@ -748,7 +744,7 @@ mod array_functions {
             result = reducer
                 .call_raw(&ctx, None, [result.clone(), item.clone()])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(reducer.fn_name()) =>
                     {
                         reducer.call_raw(&ctx, None, [result, item, ((len - 1 - i) as INT).into()])
@@ -756,7 +752,7 @@ mod array_functions {
                     _ => Err(err),
                 })
                 .map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                    Box::new(ERR::ErrorInFunctionCall(
                         "reduce_rev".to_string(),
                         ctx.source().unwrap_or("").to_string(),
                         err,
@@ -773,7 +769,7 @@ mod array_functions {
         array: &mut Array,
         reducer: &str,
         initial: Dynamic,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         reduce_rev_with_initial(ctx, array, FnPtr::new(reducer)?, initial)
     }
     #[rhai_fn(name = "sort", return_raw)]
@@ -781,15 +777,11 @@ mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         comparer: &str,
-    ) -> Result<(), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         sort(ctx, array, FnPtr::new(comparer)?)
     }
     #[rhai_fn(return_raw)]
-    pub fn sort(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        comparer: FnPtr,
-    ) -> Result<(), Box<EvalAltResult>> {
+    pub fn sort(ctx: NativeCallContext, array: &mut Array, comparer: FnPtr) -> RhaiResultOf<()> {
         if array.len() <= 1 {
             return Ok(());
         }
@@ -803,7 +795,7 @@ mod array_functions {
                     v if v > 0 => Ordering::Greater,
                     v if v < 0 => Ordering::Less,
                     0 => Ordering::Equal,
-                    _ => unreachable!(),
+                    _ => unreachable!("v is {}", v),
                 })
                 .unwrap_or_else(|| x.type_id().cmp(&y.type_id()))
         });
@@ -811,7 +803,7 @@ mod array_functions {
         Ok(())
     }
     #[rhai_fn(name = "sort", return_raw)]
-    pub fn sort_with_builtin(array: &mut Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn sort_with_builtin(array: &mut Array) -> RhaiResultOf<()> {
         if array.len() <= 1 {
             return Ok(());
         }
@@ -819,7 +811,7 @@ mod array_functions {
         let type_id = array[0].type_id();
 
         if array.iter().any(|a| a.type_id() != type_id) {
-            return Err(EvalAltResult::ErrorFunctionNotFound(
+            return Err(ERR::ErrorFunctionNotFound(
                 "sort() cannot be called with elements of different types".into(),
                 Position::NONE,
             )
@@ -883,11 +875,7 @@ mod array_functions {
         Ok(())
     }
     #[rhai_fn(return_raw)]
-    pub fn drain(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        filter: FnPtr,
-    ) -> Result<Array, Box<EvalAltResult>> {
+    pub fn drain(ctx: NativeCallContext, array: &mut Array, filter: FnPtr) -> RhaiResultOf<Array> {
         if array.is_empty() {
             return Ok(Array::new());
         }
@@ -901,7 +889,7 @@ mod array_functions {
             if filter
                 .call_raw(&ctx, None, [array[x].clone()])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
                         filter.call_raw(&ctx, None, [array[x].clone(), (i as INT).into()])
@@ -909,7 +897,7 @@ mod array_functions {
                     _ => Err(err),
                 })
                 .map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                    Box::new(ERR::ErrorInFunctionCall(
                         "drain".to_string(),
                         ctx.source().unwrap_or("").to_string(),
                         err,
@@ -934,7 +922,7 @@ mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         filter: &str,
-    ) -> Result<Array, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Array> {
         drain(ctx, array, FnPtr::new(filter)?)
     }
     #[rhai_fn(name = "drain")]
@@ -959,7 +947,7 @@ mod array_functions {
             let arr_len = array.len();
             start
                 .checked_abs()
-                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
+                .map_or(0, |n| arr_len - usize::min(n as usize, arr_len))
         } else if start as usize >= array.len() {
             return Array::new();
         } else {
@@ -977,11 +965,7 @@ mod array_functions {
         array.drain(start..start + len).collect()
     }
     #[rhai_fn(return_raw)]
-    pub fn retain(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        filter: FnPtr,
-    ) -> Result<Array, Box<EvalAltResult>> {
+    pub fn retain(ctx: NativeCallContext, array: &mut Array, filter: FnPtr) -> RhaiResultOf<Array> {
         if array.is_empty() {
             return Ok(Array::new());
         }
@@ -995,7 +979,7 @@ mod array_functions {
             if !filter
                 .call_raw(&ctx, None, [array[x].clone()])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
                         filter.call_raw(&ctx, None, [array[x].clone(), (i as INT).into()])
@@ -1003,7 +987,7 @@ mod array_functions {
                     _ => Err(err),
                 })
                 .map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                    Box::new(ERR::ErrorInFunctionCall(
                         "retain".to_string(),
                         ctx.source().unwrap_or("").to_string(),
                         err,
@@ -1028,7 +1012,7 @@ mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         filter: &str,
-    ) -> Result<Array, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Array> {
         retain(ctx, array, FnPtr::new(filter)?)
     }
     #[rhai_fn(name = "retain")]
@@ -1053,7 +1037,7 @@ mod array_functions {
             let arr_len = array.len();
             start
                 .checked_abs()
-                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
+                .map_or(0, |n| arr_len - usize::min(n as usize, arr_len))
         } else if start as usize >= array.len() {
             return mem::take(array);
         } else {
@@ -1074,11 +1058,7 @@ mod array_functions {
         drained
     }
     #[rhai_fn(name = "==", return_raw, pure)]
-    pub fn equals(
-        ctx: NativeCallContext,
-        array1: &mut Array,
-        array2: Array,
-    ) -> Result<bool, Box<EvalAltResult>> {
+    pub fn equals(ctx: NativeCallContext, array1: &mut Array, array2: Array) -> RhaiResultOf<bool> {
         if array1.len() != array2.len() {
             return Ok(false);
         }
@@ -1092,9 +1072,7 @@ mod array_functions {
             if !ctx
                 .call_fn_raw(OP_EQUALS, true, false, &mut [a1, a2])
                 .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(ref fn_sig, _)
-                        if fn_sig.starts_with(OP_EQUALS) =>
-                    {
+                    ERR::ErrorFunctionNotFound(ref fn_sig, _) if fn_sig.starts_with(OP_EQUALS) => {
                         if a1.type_id() == a2.type_id() {
                             // No default when comparing same type
                             Err(err)
@@ -1118,7 +1096,7 @@ mod array_functions {
         ctx: NativeCallContext,
         array1: &mut Array,
         array2: Array,
-    ) -> Result<bool, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<bool> {
         equals(ctx, array1, array2).map(|r| !r)
     }
 }

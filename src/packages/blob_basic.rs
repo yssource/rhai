@@ -3,8 +3,8 @@
 
 use crate::plugin::*;
 use crate::{
-    def_package, Blob, Dynamic, EvalAltResult, ExclusiveRange, InclusiveRange, NativeCallContext,
-    Position, INT,
+    def_package, Blob, Dynamic, ExclusiveRange, InclusiveRange, NativeCallContext, Position,
+    RhaiResultOf, INT,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -13,25 +13,25 @@ use std::{any::TypeId, mem};
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;
 
-def_package!(crate:BasicBlobPackage:"Basic BLOB utilities.", lib, {
-    lib.standard = true;
+def_package! {
+    /// Package of basic BLOB utilities.
+    crate::BasicBlobPackage => |lib| {
+        lib.standard = true;
 
-    combine_with_exported_module!(lib, "blob", blob_functions);
+        combine_with_exported_module!(lib, "blob", blob_functions);
 
-    // Register blob iterator
-    lib.set_iterable::<Blob>();
-});
+        // Register blob iterator
+        lib.set_iterable::<Blob>();
+    }
+}
 
 #[export_module]
-mod blob_functions {
-    pub fn blob() -> Blob {
+pub mod blob_functions {
+    pub const fn blob() -> Blob {
         Blob::new()
     }
     #[rhai_fn(name = "blob", return_raw)]
-    pub fn blob_with_capacity(
-        ctx: NativeCallContext,
-        len: INT,
-    ) -> Result<Blob, Box<EvalAltResult>> {
+    pub fn blob_with_capacity(ctx: NativeCallContext, len: INT) -> RhaiResultOf<Blob> {
         blob_with_capacity_and_value(ctx, len, 0)
     }
     #[rhai_fn(name = "blob", return_raw)]
@@ -39,34 +39,30 @@ mod blob_functions {
         ctx: NativeCallContext,
         len: INT,
         value: INT,
-    ) -> Result<Blob, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<Blob> {
         let len = if len < 0 { 0 } else { len as usize };
         let _ctx = ctx;
 
         // Check if blob will be over max size limit
         #[cfg(not(feature = "unchecked"))]
         if _ctx.engine().max_array_size() > 0 && len > _ctx.engine().max_array_size() {
-            return Err(EvalAltResult::ErrorDataTooLarge(
-                "Size of BLOB".to_string(),
-                Position::NONE,
-            )
-            .into());
+            return Err(
+                crate::ERR::ErrorDataTooLarge("Size of BLOB".to_string(), Position::NONE).into(),
+            );
         }
 
         let mut blob = Blob::new();
-        blob.resize(len, (value & 0x00ff) as u8);
+        blob.resize(len, (value & 0x000000ff) as u8);
         Ok(blob)
     }
     #[rhai_fn(name = "len", get = "len", pure)]
     pub fn len(blob: &mut Blob) -> INT {
         blob.len() as INT
     }
-    #[rhai_fn(name = "push", name = "+=")]
     pub fn push(blob: &mut Blob, item: INT) {
-        let item = (item & 0x00ff) as u8;
+        let item = (item & 0x000000ff) as u8;
         blob.push(item);
     }
-    #[rhai_fn(name = "append", name = "+=")]
     pub fn append(blob: &mut Blob, y: Blob) {
         if !y.is_empty() {
             if blob.is_empty() {
@@ -77,18 +73,21 @@ mod blob_functions {
         }
     }
     #[rhai_fn(name = "+")]
-    pub fn concat(mut blob: Blob, y: Blob) -> Blob {
-        if !y.is_empty() {
-            if blob.is_empty() {
-                blob = y;
+    pub fn concat(blob1: Blob, blob2: Blob) -> Blob {
+        if !blob2.is_empty() {
+            if blob1.is_empty() {
+                blob2
             } else {
-                blob.extend(y);
+                let mut blob = blob1;
+                blob.extend(blob2);
+                blob
             }
+        } else {
+            blob1
         }
-        blob
     }
     pub fn insert(blob: &mut Blob, position: INT, item: INT) {
-        let item = (item & 0x00ff) as u8;
+        let item = (item & 0x000000ff) as u8;
 
         if blob.is_empty() {
             blob.push(item);
@@ -109,27 +108,20 @@ mod blob_functions {
         }
     }
     #[rhai_fn(return_raw)]
-    pub fn pad(
-        ctx: NativeCallContext,
-        blob: &mut Blob,
-        len: INT,
-        item: INT,
-    ) -> Result<(), Box<EvalAltResult>> {
+    pub fn pad(ctx: NativeCallContext, blob: &mut Blob, len: INT, item: INT) -> RhaiResultOf<()> {
         if len <= 0 {
             return Ok(());
         }
 
-        let item = (item & 0x00ff) as u8;
+        let item = (item & 0x000000ff) as u8;
         let _ctx = ctx;
 
         // Check if blob will be over max size limit
         #[cfg(not(feature = "unchecked"))]
         if _ctx.engine().max_array_size() > 0 && (len as usize) > _ctx.engine().max_array_size() {
-            return Err(EvalAltResult::ErrorDataTooLarge(
-                "Size of BLOB".to_string(),
-                Position::NONE,
-            )
-            .into());
+            return Err(
+                crate::ERR::ErrorDataTooLarge("Size of BLOB".to_string(), Position::NONE).into(),
+            );
         }
 
         if len as usize > blob.len() {
@@ -209,9 +201,9 @@ mod blob_functions {
         let start = if start < 0 {
             start
                 .checked_abs()
-                .map_or(0, |n| blob_len - (n as usize).min(blob_len))
+                .map_or(0, |n| blob_len - usize::min(n as usize, blob_len))
         } else if start as usize >= blob_len {
-            blob.extend(replace.into_iter());
+            blob.extend(replace);
             return;
         } else {
             start as usize
@@ -248,7 +240,7 @@ mod blob_functions {
         let start = if start < 0 {
             start
                 .checked_abs()
-                .map_or(0, |n| blob_len - (n as usize).min(blob_len))
+                .map_or(0, |n| blob_len - usize::min(n as usize, blob_len))
         } else if start as usize >= blob_len {
             return Blob::new();
         } else {
@@ -312,7 +304,7 @@ mod blob_functions {
         let start = if start < 0 {
             start
                 .checked_abs()
-                .map_or(0, |n| blob_len - (n as usize).min(blob_len))
+                .map_or(0, |n| blob_len - usize::min(n as usize, blob_len))
         } else if start as usize >= blob_len {
             return Blob::new();
         } else {
@@ -348,7 +340,7 @@ mod blob_functions {
         let start = if start < 0 {
             start
                 .checked_abs()
-                .map_or(0, |n| blob_len - (n as usize).min(blob_len))
+                .map_or(0, |n| blob_len - usize::min(n as usize, blob_len))
         } else if start as usize >= blob_len {
             return mem::take(blob);
         } else {
@@ -366,26 +358,6 @@ mod blob_functions {
 
         drained
     }
-    pub fn contains(blob: &mut Blob, value: Dynamic) -> bool {
-        if blob.is_empty() {
-            return false;
-        }
-
-        let value = match value.as_int() {
-            Ok(value) => value as u8,
-            _ => return false,
-        };
-
-        blob.contains(&value)
-    }
-    #[rhai_fn(name = "==", pure)]
-    pub fn equals(blob1: &mut Blob, blob2: Blob) -> bool {
-        &*blob1 == &blob2
-    }
-    #[rhai_fn(name = "!=", pure)]
-    pub fn not_equals(blob1: &mut Blob, blob2: Blob) -> bool {
-        &*blob1 != &blob2
-    }
 
     #[inline]
     fn parse_int(blob: &mut Blob, start: INT, len: INT, is_le: bool) -> INT {
@@ -397,7 +369,7 @@ mod blob_functions {
         let start = if start < 0 {
             start
                 .checked_abs()
-                .map_or(0, |n| blob_len - (n as usize).min(blob_len))
+                .map_or(0, |n| blob_len - usize::min(n as usize, blob_len))
         } else if start as usize >= blob_len {
             return 0;
         } else {
@@ -466,7 +438,7 @@ mod blob_functions {
         let start = if start < 0 {
             start
                 .checked_abs()
-                .map_or(0, |n| blob_len - (n as usize).min(blob_len))
+                .map_or(0, |n| blob_len - usize::min(n as usize, blob_len))
         } else if start as usize >= blob_len {
             return;
         } else {
@@ -483,13 +455,11 @@ mod blob_functions {
 
         let len = usize::min(len, INT_BYTES);
 
-        let mut buf = [0_u8; INT_BYTES];
-
-        buf.copy_from_slice(&if is_le {
+        let buf = if is_le {
             value.to_le_bytes()
         } else {
             value.to_be_bytes()
-        });
+        };
 
         blob[start..][..len].copy_from_slice(&buf[..len]);
     }
@@ -537,7 +507,7 @@ mod blob_functions {
         let start = if start < 0 {
             start
                 .checked_abs()
-                .map_or(0, |n| blob_len - (n as usize).min(blob_len))
+                .map_or(0, |n| blob_len - usize::min(n as usize, blob_len))
         } else if start as usize >= blob_len {
             return 0.0;
         } else {
@@ -613,7 +583,7 @@ mod blob_functions {
         let start = if start < 0 {
             start
                 .checked_abs()
-                .map_or(0, |n| blob_len - (n as usize).min(blob_len))
+                .map_or(0, |n| blob_len - usize::min(n as usize, blob_len))
         } else if start as usize >= blob_len {
             return;
         } else {
@@ -629,14 +599,11 @@ mod blob_functions {
         const FLOAT_BYTES: usize = mem::size_of::<FLOAT>();
 
         let len = usize::min(len, FLOAT_BYTES);
-
-        let mut buf = [0_u8; FLOAT_BYTES];
-
-        buf.copy_from_slice(&if is_le {
+        let buf = if is_le {
             value.to_le_bytes()
         } else {
             value.to_be_bytes()
-        });
+        };
 
         blob[start..][..len].copy_from_slice(&buf[..len]);
     }
@@ -677,5 +644,78 @@ mod blob_functions {
     #[rhai_fn(name = "write_be")]
     pub fn write_be_float(blob: &mut Blob, start: INT, len: INT, value: FLOAT) {
         write_float(blob, start, len, value, false)
+    }
+    #[inline]
+    fn write_string(blob: &mut Blob, start: INT, len: INT, string: &str, ascii_only: bool) {
+        if len <= 0 || blob.is_empty() || string.is_empty() {
+            return;
+        }
+        let blob_len = blob.len();
+
+        let start = if start < 0 {
+            start
+                .checked_abs()
+                .map_or(0, |n| blob_len - usize::min(n as usize, blob_len))
+        } else if start as usize >= blob_len {
+            return;
+        } else {
+            start as usize
+        };
+
+        let len = if len as usize > blob_len - start {
+            blob_len - start
+        } else {
+            len as usize
+        };
+
+        let len = usize::min(len, string.len());
+
+        if ascii_only {
+            string
+                .chars()
+                .filter(char::is_ascii)
+                .take(len)
+                .map(|ch| ch as u8)
+                .enumerate()
+                .for_each(|(i, x)| blob[start + i] = x);
+        } else {
+            blob[start..][..len].copy_from_slice(&string.as_bytes()[..len]);
+        }
+    }
+    #[rhai_fn(name = "write_utf8")]
+    pub fn write_utf8_string(blob: &mut Blob, start: INT, len: INT, string: &str) {
+        write_string(blob, start, len, string, false)
+    }
+    #[rhai_fn(name = "write_utf8")]
+    pub fn write_utf8_string_range(blob: &mut Blob, range: ExclusiveRange, string: &str) {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        write_string(blob, start, end - start, string, false)
+    }
+    #[rhai_fn(name = "write_utf8")]
+    pub fn write_utf8_string_range_inclusive(blob: &mut Blob, range: InclusiveRange, string: &str) {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        write_string(blob, start, end - start + 1, string, false)
+    }
+    #[rhai_fn(name = "write_ascii")]
+    pub fn write_ascii_string(blob: &mut Blob, start: INT, len: INT, string: &str) {
+        write_string(blob, start, len, string, true)
+    }
+    #[rhai_fn(name = "write_ascii")]
+    pub fn write_ascii_string_range(blob: &mut Blob, range: ExclusiveRange, string: &str) {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        write_string(blob, start, end - start, string, true)
+    }
+    #[rhai_fn(name = "write_ascii")]
+    pub fn write_ascii_string_range_inclusive(
+        blob: &mut Blob,
+        range: InclusiveRange,
+        string: &str,
+    ) {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        write_string(blob, start, end - start + 1, string, true)
     }
 }

@@ -3,8 +3,8 @@
 use crate::tokenizer::is_valid_identifier;
 use crate::types::dynamic::Variant;
 use crate::{
-    Dynamic, Engine, EvalAltResult, FuncArgs, Identifier, Module, NativeCallContext, Position,
-    RhaiResult, StaticVec, AST,
+    Dynamic, Engine, FuncArgs, Identifier, Module, NativeCallContext, Position, RhaiError,
+    RhaiResult, RhaiResultOf, StaticVec, AST, ERR,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -24,7 +24,12 @@ impl fmt::Debug for FnPtr {
         if !self.is_curried() {
             write!(f, "Fn({})", self.fn_name())
         } else {
-            f.debug_tuple("Fn").field(&self.0).field(&self.1).finish()
+            self.1
+                .iter()
+                .fold(f.debug_tuple("Fn").field(&self.0), |f, curry| {
+                    f.field(curry)
+                })
+                .finish()
         }
     }
 }
@@ -32,7 +37,7 @@ impl fmt::Debug for FnPtr {
 impl FnPtr {
     /// Create a new function pointer.
     #[inline(always)]
-    pub fn new(name: impl Into<Identifier>) -> Result<Self, Box<EvalAltResult>> {
+    pub fn new(name: impl Into<Identifier>) -> RhaiResultOf<Self> {
         name.into().try_into()
     }
     /// Create a new function pointer without checking its parameters.
@@ -135,7 +140,7 @@ impl FnPtr {
         engine: &Engine,
         ast: &AST,
         args: impl FuncArgs,
-    ) -> Result<T, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<T> {
         let _ast = ast;
         let mut arg_values = crate::StaticVec::new_const();
         args.parse(&mut arg_values);
@@ -157,7 +162,7 @@ impl FnPtr {
         let typ = engine.map_type_name(result.type_name());
 
         result.try_cast().ok_or_else(|| {
-            EvalAltResult::ErrorMismatchOutputType(
+            ERR::ErrorMismatchOutputType(
                 engine.map_type_name(type_name::<T>()).into(),
                 typ.into(),
                 Position::NONE,
@@ -176,7 +181,7 @@ impl FnPtr {
         &self,
         context: &NativeCallContext,
         args: impl FuncArgs,
-    ) -> Result<T, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<T> {
         let mut arg_values = crate::StaticVec::new_const();
         args.parse(&mut arg_values);
 
@@ -185,7 +190,7 @@ impl FnPtr {
         let typ = context.engine().map_type_name(result.type_name());
 
         result.try_cast().ok_or_else(|| {
-            EvalAltResult::ErrorMismatchOutputType(
+            ERR::ErrorMismatchOutputType(
                 context.engine().map_type_name(type_name::<T>()).into(),
                 typ.into(),
                 Position::NONE,
@@ -204,10 +209,11 @@ impl FnPtr {
     ///
     /// This function is very low level.
     ///
-    /// ## Arguments
+    /// # Arguments
     ///
     /// All the arguments are _consumed_, meaning that they're replaced by `()`.
     /// This is to avoid unnecessarily cloning the arguments.
+    ///
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
     #[inline]
@@ -247,53 +253,53 @@ impl fmt::Display for FnPtr {
 }
 
 impl TryFrom<Identifier> for FnPtr {
-    type Error = Box<EvalAltResult>;
+    type Error = RhaiError;
 
     #[inline]
-    fn try_from(value: Identifier) -> Result<Self, Self::Error> {
+    fn try_from(value: Identifier) -> RhaiResultOf<Self> {
         if is_valid_identifier(value.chars()) {
             Ok(Self(value, StaticVec::new_const()))
         } else {
-            Err(EvalAltResult::ErrorFunctionNotFound(value.to_string(), Position::NONE).into())
+            Err(ERR::ErrorFunctionNotFound(value.to_string(), Position::NONE).into())
         }
     }
 }
 
 impl TryFrom<crate::ImmutableString> for FnPtr {
-    type Error = Box<EvalAltResult>;
+    type Error = RhaiError;
 
     #[inline(always)]
-    fn try_from(value: crate::ImmutableString) -> Result<Self, Self::Error> {
+    fn try_from(value: crate::ImmutableString) -> RhaiResultOf<Self> {
         let s: Identifier = value.into();
         Self::try_from(s)
     }
 }
 
 impl TryFrom<String> for FnPtr {
-    type Error = Box<EvalAltResult>;
+    type Error = RhaiError;
 
     #[inline(always)]
-    fn try_from(value: String) -> Result<Self, Self::Error> {
+    fn try_from(value: String) -> RhaiResultOf<Self> {
         let s: Identifier = value.into();
         Self::try_from(s)
     }
 }
 
 impl TryFrom<Box<str>> for FnPtr {
-    type Error = Box<EvalAltResult>;
+    type Error = RhaiError;
 
     #[inline(always)]
-    fn try_from(value: Box<str>) -> Result<Self, Self::Error> {
+    fn try_from(value: Box<str>) -> RhaiResultOf<Self> {
         let s: Identifier = value.into();
         Self::try_from(s)
     }
 }
 
 impl TryFrom<&str> for FnPtr {
-    type Error = Box<EvalAltResult>;
+    type Error = RhaiError;
 
     #[inline(always)]
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
+    fn try_from(value: &str) -> RhaiResultOf<Self> {
         let s: Identifier = value.into();
         Self::try_from(s)
     }

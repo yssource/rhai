@@ -1,8 +1,8 @@
 //! Module containing all deprecated API that will be removed in the next major version.
 
 use crate::{
-    Dynamic, Engine, EvalAltResult, FnPtr, ImmutableString, NativeCallContext, RhaiResult, Scope,
-    AST,
+    Dynamic, Engine, EvalAltResult, Expression, FnPtr, ImmutableString, NativeCallContext,
+    RhaiResult, RhaiResultOf, Scope, AST,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -20,9 +20,10 @@ impl Engine {
     /// This method will be removed in the next major version.
     #[deprecated(since = "1.1.0", note = "use `run_file` instead")]
     #[cfg(not(feature = "no_std"))]
-    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(target_arch = "wasm64"))]
     #[inline(always)]
-    pub fn consume_file(&self, path: std::path::PathBuf) -> Result<(), Box<EvalAltResult>> {
+    pub fn consume_file(&self, path: std::path::PathBuf) -> RhaiResultOf<()> {
         self.run_file(path)
     }
 
@@ -38,13 +39,14 @@ impl Engine {
     /// This method will be removed in the next major version.
     #[deprecated(since = "1.1.0", note = "use `run_file_with_scope` instead")]
     #[cfg(not(feature = "no_std"))]
-    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(target_arch = "wasm64"))]
     #[inline(always)]
     pub fn consume_file_with_scope(
         &self,
         scope: &mut Scope,
         path: std::path::PathBuf,
-    ) -> Result<(), Box<EvalAltResult>> {
+    ) -> RhaiResultOf<()> {
         self.run_file_with_scope(scope, path)
     }
 
@@ -58,7 +60,7 @@ impl Engine {
     /// This method will be removed in the next major version.
     #[deprecated(since = "1.1.0", note = "use `run` instead")]
     #[inline(always)]
-    pub fn consume(&self, script: &str) -> Result<(), Box<EvalAltResult>> {
+    pub fn consume(&self, script: &str) -> RhaiResultOf<()> {
         self.run(script)
     }
 
@@ -72,11 +74,7 @@ impl Engine {
     /// This method will be removed in the next major version.
     #[deprecated(since = "1.1.0", note = "use `run_with_scope` instead")]
     #[inline(always)]
-    pub fn consume_with_scope(
-        &self,
-        scope: &mut Scope,
-        script: &str,
-    ) -> Result<(), Box<EvalAltResult>> {
+    pub fn consume_with_scope(&self, scope: &mut Scope, script: &str) -> RhaiResultOf<()> {
         self.run_with_scope(scope, script)
     }
 
@@ -90,7 +88,7 @@ impl Engine {
     /// This method will be removed in the next major version.
     #[deprecated(since = "1.1.0", note = "use `run_ast` instead")]
     #[inline(always)]
-    pub fn consume_ast(&self, ast: &AST) -> Result<(), Box<EvalAltResult>> {
+    pub fn consume_ast(&self, ast: &AST) -> RhaiResultOf<()> {
         self.run_ast(ast)
     }
 
@@ -104,11 +102,7 @@ impl Engine {
     /// This method will be removed in the next major version.
     #[deprecated(since = "1.1.0", note = "use `run_ast_with_scope` instead")]
     #[inline(always)]
-    pub fn consume_ast_with_scope(
-        &self,
-        scope: &mut Scope,
-        ast: &AST,
-    ) -> Result<(), Box<EvalAltResult>> {
+    pub fn consume_ast_with_scope(&self, scope: &mut Scope, ast: &AST) -> RhaiResultOf<()> {
         self.run_ast_with_scope(scope, ast)
     }
     /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments
@@ -128,10 +122,11 @@ impl Engine {
     ///
     /// This function is very low level.
     ///
-    /// ## Arguments
+    /// # Arguments
     ///
     /// All the arguments are _consumed_, meaning that they're replaced by `()`.
     /// This is to avoid unnecessarily cloning the arguments.
+    ///
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
     ///
@@ -228,7 +223,7 @@ impl NativeCallContext<'_> {
     ///
     /// This function is very low level.
     ///
-    /// ## Arguments
+    /// # Arguments
     ///
     /// All arguments may be _consumed_, meaning that they may be replaced by `()`. This is to avoid
     /// unnecessarily cloning the arguments.
@@ -258,7 +253,7 @@ impl NativeCallContext<'_> {
 
 #[allow(useless_deprecated)]
 #[deprecated(since = "1.2.0", note = "explicitly wrap `EvalAltResult` in `Err`")]
-impl<T> From<EvalAltResult> for Result<T, Box<EvalAltResult>> {
+impl<T> From<EvalAltResult> for RhaiResultOf<T> {
     #[inline(always)]
     fn from(err: EvalAltResult) -> Self {
         Err(err.into())
@@ -284,10 +279,11 @@ impl FnPtr {
     ///
     /// This function is very low level.
     ///
-    /// ## Arguments
+    /// # Arguments
     ///
     /// All the arguments are _consumed_, meaning that they're replaced by `()`.
     /// This is to avoid unnecessarily cloning the arguments.
+    ///
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
     #[deprecated(
@@ -302,5 +298,21 @@ impl FnPtr {
         arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {
         self.call_raw(context, this_ptr, arg_values)
+    }
+}
+
+impl Expression<'_> {
+    /// If this expression is a variable name, return it.  Otherwise [`None`].
+    ///
+    /// # Deprecated
+    ///
+    /// This method is deprecated. Use [`get_string_value`][Expression::get_string_value] instead.
+    ///
+    /// This method will be removed in the next major version.
+    #[deprecated(since = "1.4.0", note = "use `get_string_value` instead")]
+    #[inline(always)]
+    #[must_use]
+    pub fn get_variable_name(&self) -> Option<&str> {
+        self.get_string_value()
     }
 }

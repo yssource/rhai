@@ -1,7 +1,7 @@
 //! Module that defines the public compilation API of [`Engine`].
 
-use crate::parser::ParseState;
-use crate::{Engine, ParseError, Scope, AST};
+use crate::parser::{ParseResult, ParseState};
+use crate::{Engine, Scope, AST};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -26,7 +26,7 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    pub fn compile(&self, script: impl AsRef<str>) -> Result<AST, ParseError> {
+    pub fn compile(&self, script: impl AsRef<str>) -> ParseResult<AST> {
         self.compile_with_scope(&Scope::new(), script)
     }
     /// Compile a string into an [`AST`] using own scope, which can be used later for evaluation.
@@ -67,11 +67,7 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    pub fn compile_with_scope(
-        &self,
-        scope: &Scope,
-        script: impl AsRef<str>,
-    ) -> Result<AST, ParseError> {
+    pub fn compile_with_scope(&self, scope: &Scope, script: impl AsRef<str>) -> ParseResult<AST> {
         self.compile_scripts_with_scope(scope, &[script])
     }
     /// Compile a string into an [`AST`] using own scope, which can be used later for evaluation,
@@ -88,7 +84,7 @@ impl Engine {
         &self,
         scope: &Scope,
         script: impl AsRef<str>,
-    ) -> Result<AST, Box<crate::EvalAltResult>> {
+    ) -> crate::RhaiResultOf<AST> {
         use crate::{
             ast::{ASTNode, Expr, Stmt},
             func::native::shared_take_or_clone,
@@ -101,18 +97,16 @@ impl Engine {
             resolver: &StaticModuleResolver,
             imports: &mut BTreeSet<crate::Identifier>,
         ) {
-            ast.walk(
-                &mut |path| match path.last().expect("contains current node") {
-                    // Collect all `import` statements with a string constant path
-                    ASTNode::Stmt(Stmt::Import(Expr::StringConstant(s, _), _, _))
-                        if !resolver.contains_path(s) && !imports.contains(s.as_str()) =>
-                    {
-                        imports.insert(s.clone().into());
-                        true
-                    }
-                    _ => true,
-                },
-            );
+            ast.walk(&mut |path| match path.last().unwrap() {
+                // Collect all `import` statements with a string constant path
+                ASTNode::Stmt(Stmt::Import(Expr::StringConstant(s, _), _, _))
+                    if !resolver.contains_path(s) && !imports.contains(s.as_str()) =>
+                {
+                    imports.insert(s.clone().into());
+                    true
+                }
+                _ => true,
+            });
         }
 
         let mut ast = self.compile_scripts_with_scope(scope, &[script])?;
@@ -197,11 +191,11 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    pub fn compile_scripts_with_scope(
+    pub fn compile_scripts_with_scope<S: AsRef<str>>(
         &self,
         scope: &Scope,
-        scripts: &[impl AsRef<str>],
-    ) -> Result<AST, ParseError> {
+        scripts: impl AsRef<[S]>,
+    ) -> ParseResult<AST> {
         self.compile_with_scope_and_optimization_level(
             scope,
             scripts,
@@ -217,14 +211,16 @@ impl Engine {
     /// throughout the script _including_ functions. This allows functions to be optimized based on
     /// dynamic global constants.
     #[inline]
-    pub(crate) fn compile_with_scope_and_optimization_level(
+    pub(crate) fn compile_with_scope_and_optimization_level<S: AsRef<str>>(
         &self,
         scope: &Scope,
-        scripts: &[impl AsRef<str>],
+        scripts: impl AsRef<[S]>,
         #[cfg(not(feature = "no_optimize"))] optimization_level: crate::OptimizationLevel,
-    ) -> Result<AST, ParseError> {
-        let (stream, tokenizer_control) =
-            self.lex_raw(scripts, self.token_mapper.as_ref().map(Box::as_ref));
+    ) -> ParseResult<AST> {
+        let (stream, tokenizer_control) = self.lex_raw(
+            scripts.as_ref(),
+            self.token_mapper.as_ref().map(Box::as_ref),
+        );
         let mut state = ParseState::new(self, tokenizer_control);
         self.parse(
             &mut stream.peekable(),
@@ -255,7 +251,7 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    pub fn compile_expression(&self, script: impl AsRef<str>) -> Result<AST, ParseError> {
+    pub fn compile_expression(&self, script: impl AsRef<str>) -> ParseResult<AST> {
         self.compile_expression_with_scope(&Scope::new(), script)
     }
     /// Compile a string containing an expression into an [`AST`] using own scope,
@@ -295,7 +291,7 @@ impl Engine {
         &self,
         scope: &Scope,
         script: impl AsRef<str>,
-    ) -> Result<AST, ParseError> {
+    ) -> ParseResult<AST> {
         let scripts = [script];
         let (stream, tokenizer_control) =
             self.lex_raw(&scripts, self.token_mapper.as_ref().map(Box::as_ref));
@@ -359,14 +355,14 @@ impl Engine {
         &self,
         json: impl AsRef<str>,
         has_null: bool,
-    ) -> Result<crate::Map, Box<crate::EvalAltResult>> {
+    ) -> crate::RhaiResultOf<crate::Map> {
         use crate::tokenizer::Token;
 
         fn parse_json_inner(
             engine: &Engine,
             json: &str,
             has_null: bool,
-        ) -> Result<crate::Map, Box<crate::EvalAltResult>> {
+        ) -> crate::RhaiResultOf<crate::Map> {
             let mut scope = Scope::new();
             let json_text = json.trim_start();
             let scripts = if json_text.starts_with(Token::MapStart.literal_syntax()) {
@@ -374,7 +370,7 @@ impl Engine {
             } else if json_text.starts_with(Token::LeftBrace.literal_syntax()) {
                 ["#", json_text]
             } else {
-                return Err(crate::ParseErrorType::MissingToken(
+                return Err(crate::PERR::MissingToken(
                     Token::LeftBrace.syntax().into(),
                     "to start a JSON object hash".into(),
                 )

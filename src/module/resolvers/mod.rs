@@ -1,5 +1,5 @@
 use crate::func::native::SendSync;
-use crate::{Engine, EvalAltResult, Module, Position, Shared, AST};
+use crate::{Engine, Module, Position, RhaiResultOf, Shared, AST};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -11,7 +11,8 @@ mod stat;
 pub use collection::ModuleResolversCollection;
 pub use dummy::DummyModuleResolver;
 #[cfg(not(feature = "no_std"))]
-#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm64"))]
 pub use file::FileModuleResolver;
 pub use stat::StaticModuleResolver;
 
@@ -24,7 +25,7 @@ pub trait ModuleResolver: SendSync {
         source_path: Option<&str>,
         path: &str,
         pos: Position,
-    ) -> Result<Shared<Module>, Box<EvalAltResult>>;
+    ) -> RhaiResultOf<Shared<Module>>;
 
     /// Resolve an `AST` based on a path string.
     ///
@@ -43,7 +44,7 @@ pub trait ModuleResolver: SendSync {
         source_path: Option<&str>,
         path: &str,
         pos: Position,
-    ) -> Option<Result<AST, Box<EvalAltResult>>> {
+    ) -> Option<RhaiResultOf<AST>> {
         None
     }
 }

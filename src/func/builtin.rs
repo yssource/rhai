@@ -1,8 +1,9 @@
 //! Built-in implementations for common operators.
 
 use super::call::FnCallArgs;
+use super::native::FnBuiltin;
 use crate::engine::OP_CONTAINS;
-use crate::{Dynamic, ImmutableString, NativeCallContext, RhaiResult, INT};
+use crate::{Dynamic, ExclusiveRange, ImmutableString, InclusiveRange, INT};
 use std::any::TypeId;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -24,7 +25,12 @@ const BUILTIN: &str = "data type was checked";
 #[inline]
 #[must_use]
 fn is_numeric(type_id: TypeId) -> bool {
-    let result = type_id == TypeId::of::<u8>()
+    let result = false;
+
+    #[cfg(not(feature = "only_i64"))]
+    #[cfg(not(feature = "only_i32"))]
+    let result = result
+        || type_id == TypeId::of::<u8>()
         || type_id == TypeId::of::<u16>()
         || type_id == TypeId::of::<u32>()
         || type_id == TypeId::of::<u64>()
@@ -33,7 +39,10 @@ fn is_numeric(type_id: TypeId) -> bool {
         || type_id == TypeId::of::<i32>()
         || type_id == TypeId::of::<i64>();
 
-    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+    #[cfg(not(feature = "only_i64"))]
+    #[cfg(not(feature = "only_i32"))]
+    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(target_arch = "wasm64"))]
     let result = result || type_id == TypeId::of::<u128>() || type_id == TypeId::of::<i128>();
 
     #[cfg(not(feature = "no_float"))]
@@ -46,32 +55,12 @@ fn is_numeric(type_id: TypeId) -> bool {
 }
 
 /// Build in common binary operator implementations to avoid the cost of calling a registered function.
+///
+/// The return function will be registered as a _method_, so the first parameter cannot be consumed.
 #[must_use]
-pub fn get_builtin_binary_op_fn(
-    op: &str,
-    x: &Dynamic,
-    y: &Dynamic,
-) -> Option<fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult> {
+pub fn get_builtin_binary_op_fn(op: &str, x: &Dynamic, y: &Dynamic) -> Option<FnBuiltin> {
     let type1 = x.type_id();
     let type2 = y.type_id();
-
-    // One of the operands is a custom type, so it is never built-in
-    if x.is_variant() || y.is_variant() {
-        return if is_numeric(type1) && is_numeric(type2) {
-            // Disallow comparisons between different numeric types
-            None
-        } else if type1 != type2 {
-            // If the types are not the same, default to not compare
-            match op {
-                "!=" => Some(|_, _| Ok(Dynamic::TRUE)),
-                "==" | ">" | ">=" | "<" | "<=" => Some(|_, _| Ok(Dynamic::FALSE)),
-                _ => None,
-            }
-        } else {
-            // Disallow comparisons between the same type
-            None
-        };
-    }
 
     let types_pair = (type1, type2);
 
@@ -108,7 +97,7 @@ pub fn get_builtin_binary_op_fn(
         ($base:ty => $func:ident ( $xx:ident, $yy:ident )) => { |_, args| {
             let x = args[0].$xx().expect(BUILTIN) as $base;
             let y = args[1].$yy().expect(BUILTIN) as $base;
-            $func(x, y).map(Into::<Dynamic>::into)
+            $func(x, y).map(Into::into)
         } };
         (from $base:ty => $xx:ident $op:tt $yy:ident) => { |_, args| {
             let x = <$base>::from(args[0].$xx().expect(BUILTIN));
@@ -123,7 +112,7 @@ pub fn get_builtin_binary_op_fn(
         (from $base:ty => $func:ident ( $xx:ident, $yy:ident )) => { |_, args| {
             let x = <$base>::from(args[0].$xx().expect(BUILTIN));
             let y = <$base>::from(args[1].$yy().expect(BUILTIN));
-            $func(x, y).map(Into::<Dynamic>::into)
+            $func(x, y).map(Into::into)
         } };
     }
 
@@ -266,7 +255,7 @@ pub fn get_builtin_binary_op_fn(
             OP_CONTAINS => Some(|_, args| {
                 let s = &*args[0].read_lock::<ImmutableString>().expect(BUILTIN);
                 let c = args[1].as_char().expect(BUILTIN);
-                Ok((s.contains(c)).into())
+                Ok(s.contains(c).into())
             }),
             _ => None,
         };
@@ -290,6 +279,30 @@ pub fn get_builtin_binary_op_fn(
         };
     }
 
+    // blob
+    #[cfg(not(feature = "no_index"))]
+    if type1 == TypeId::of::<crate::Blob>() {
+        use crate::Blob;
+
+        if type2 == TypeId::of::<INT>() {
+            return match op {
+                OP_CONTAINS => Some(|_, args| {
+                    let blob = &*args[0].read_lock::<Blob>().expect(BUILTIN);
+                    let x = (args[1].as_int().expect("`INT`") & 0x000000ff) as u8;
+                    Ok(blob.contains(&x).into())
+                }),
+                _ => None,
+            };
+        }
+        if type1 == type2 {
+            return match op {
+                "==" => Some(impl_op!(Blob == Blob)),
+                "!=" => Some(impl_op!(Blob != Blob)),
+                _ => None,
+            };
+        }
+    }
+
     // map op string
     #[cfg(not(feature = "no_object"))]
     if types_pair == (TypeId::of::<crate::Map>(), TypeId::of::<ImmutableString>()) {
@@ -298,6 +311,84 @@ pub fn get_builtin_binary_op_fn(
         return match op {
             OP_CONTAINS => Some(impl_op!(Map.contains_key(ImmutableString.as_str()))),
             _ => None,
+        };
+    }
+
+    // Non-compatible ranges
+    if types_pair
+        == (
+            TypeId::of::<ExclusiveRange>(),
+            TypeId::of::<InclusiveRange>(),
+        )
+        || types_pair
+            == (
+                TypeId::of::<InclusiveRange>(),
+                TypeId::of::<ExclusiveRange>(),
+            )
+    {
+        return match op {
+            "!=" => Some(|_, _| Ok(Dynamic::TRUE)),
+            "==" => Some(|_, _| Ok(Dynamic::FALSE)),
+            _ => None,
+        };
+    }
+
+    // Handle ranges here because ranges are implemented as custom type
+    if type1 == TypeId::of::<ExclusiveRange>() {
+        if type2 == TypeId::of::<INT>() {
+            return match op {
+                OP_CONTAINS => Some(|_, args| {
+                    let range = &*args[0].read_lock::<ExclusiveRange>().expect(BUILTIN);
+                    let x = args[1].as_int().expect("`INT`");
+                    Ok(range.contains(&x).into())
+                }),
+                _ => None,
+            };
+        }
+        if type1 == type2 {
+            return match op {
+                "==" => Some(impl_op!(ExclusiveRange == ExclusiveRange)),
+                "!=" => Some(impl_op!(ExclusiveRange != ExclusiveRange)),
+                _ => None,
+            };
+        }
+    }
+
+    if type1 == TypeId::of::<InclusiveRange>() {
+        if type2 == TypeId::of::<INT>() {
+            return match op {
+                OP_CONTAINS => Some(|_, args| {
+                    let range = &*args[0].read_lock::<InclusiveRange>().expect(BUILTIN);
+                    let x = args[1].as_int().expect("`INT`");
+                    Ok(range.contains(&x).into())
+                }),
+                _ => None,
+            };
+        }
+        if type1 == type2 {
+            return match op {
+                "==" => Some(impl_op!(InclusiveRange == InclusiveRange)),
+                "!=" => Some(impl_op!(InclusiveRange != InclusiveRange)),
+                _ => None,
+            };
+        }
+    }
+
+    // One of the operands is a custom type, so it is never built-in
+    if x.is_variant() || y.is_variant() {
+        return if is_numeric(type1) && is_numeric(type2) {
+            // Disallow comparisons between different numeric types
+            None
+        } else if type1 != type2 {
+            // If the types are not the same, default to not compare
+            match op {
+                "!=" => Some(|_, _| Ok(Dynamic::TRUE)),
+                "==" | ">" | ">=" | "<" | "<=" => Some(|_, _| Ok(Dynamic::FALSE)),
+                _ => None,
+            }
+        } else {
+            // Disallow comparisons between the same type
+            None
         };
     }
 
@@ -391,11 +482,7 @@ pub fn get_builtin_binary_op_fn(
             ">=" => Some(impl_op!(ImmutableString >= ImmutableString)),
             "<" => Some(impl_op!(ImmutableString < ImmutableString)),
             "<=" => Some(impl_op!(ImmutableString <= ImmutableString)),
-            OP_CONTAINS => Some(|_, args| {
-                let s1 = &*args[0].read_lock::<ImmutableString>().expect(BUILTIN);
-                let s2 = &*args[1].read_lock::<ImmutableString>().expect(BUILTIN);
-                Ok((s1.contains(s2.as_str())).into())
-            }),
+            OP_CONTAINS => Some(impl_op!(ImmutableString.contains(ImmutableString.as_str()))),
             _ => None,
         };
     }
@@ -429,12 +516,10 @@ pub fn get_builtin_binary_op_fn(
 }
 
 /// Build in common operator assignment implementations to avoid the cost of calling a registered function.
+///
+/// The return function is registered as a _method_, so the first parameter cannot be consumed.
 #[must_use]
-pub fn get_builtin_op_assignment_fn(
-    op: &str,
-    x: &Dynamic,
-    y: &Dynamic,
-) -> Option<fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult> {
+pub fn get_builtin_op_assignment_fn(op: &str, x: &Dynamic, y: &Dynamic) -> Option<FnBuiltin> {
     let type1 = x.type_id();
     let type2 = y.type_id();
 
@@ -571,6 +656,48 @@ pub fn get_builtin_op_assignment_fn(
         };
     }
 
+    // array op= any
+    #[cfg(not(feature = "no_index"))]
+    if type1 == TypeId::of::<crate::Array>() {
+        use crate::packages::array_basic::array_functions::*;
+        use crate::Array;
+
+        if type2 == TypeId::of::<crate::Array>() {
+            return match op {
+                "+=" => Some(|_, args| {
+                    let array2 = std::mem::take(args[1]).cast::<Array>();
+                    let array1 = &mut *args[0].write_lock::<Array>().expect(BUILTIN);
+                    Ok(append(array1, array2).into())
+                }),
+                _ => None,
+            };
+        } else {
+            return match op {
+                "+=" => Some(|_, args| {
+                    let x = std::mem::take(args[1]);
+                    let array = &mut *args[0].write_lock::<Array>().expect(BUILTIN);
+                    Ok(push(array, x).into())
+                }),
+                _ => None,
+            };
+        }
+    }
+
+    // blob op= int
+    #[cfg(not(feature = "no_index"))]
+    if types_pair == (TypeId::of::<crate::Blob>(), TypeId::of::<INT>()) {
+        use crate::Blob;
+
+        return match op {
+            "+=" => Some(|_, args| {
+                let x = (args[1].as_int().expect("`INT`") & 0x000000ff) as u8;
+                let mut blob = args[0].write_lock::<Blob>().expect(BUILTIN);
+                Ok(blob.push(x).into())
+            }),
+            _ => None,
+        };
+    }
+
     // No built-in op-assignments for different types.
     if type2 != type1 {
         return None;
@@ -647,6 +774,21 @@ pub fn get_builtin_op_assignment_fn(
                 let mut x = first.write_lock::<ImmutableString>().expect(BUILTIN);
                 let y = &*second[0].read_lock::<ImmutableString>().expect(BUILTIN);
                 Ok((*x -= y).into())
+            }),
+            _ => None,
+        };
+    }
+
+    #[cfg(not(feature = "no_index"))]
+    if type1 == TypeId::of::<crate::Blob>() {
+        use crate::packages::blob_basic::blob_functions::*;
+        use crate::Blob;
+
+        return match op {
+            "+=" => Some(|_, args| {
+                let blob2 = std::mem::take(args[1]).cast::<Blob>();
+                let blob1 = &mut *args[0].write_lock::<Blob>().expect(BUILTIN);
+                Ok(append(blob1, blob2).into())
             }),
             _ => None,
         };

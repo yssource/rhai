@@ -64,7 +64,7 @@ fn bench_eval_array_large_set(bench: &mut Bencher) {
 
 #[bench]
 fn bench_eval_array_loop(bench: &mut Bencher) {
-    let script = r#"
+    let script = "
             let list = [];
             
             for i in 0..10_000 {
@@ -76,7 +76,7 @@ fn bench_eval_array_loop(bench: &mut Bencher) {
             for i in list {
                 sum += i;
             }
-        "#;
+        ";
 
     let mut engine = Engine::new();
     engine.set_optimization_level(OptimizationLevel::None);

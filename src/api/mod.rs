@@ -18,6 +18,8 @@ pub mod limits;
 
 pub mod events;
 
+pub mod custom_syntax;
+
 pub mod deprecated;
 
 use crate::engine::Precedence;
@@ -26,6 +28,34 @@ use crate::{Engine, Identifier};
 
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
+
+pub mod default_limits {
+    #[cfg(not(feature = "unchecked"))]
+    #[cfg(debug_assertions)]
+    #[cfg(not(feature = "no_function"))]
+    pub const MAX_CALL_STACK_DEPTH: usize = 8;
+    #[cfg(not(feature = "unchecked"))]
+    #[cfg(debug_assertions)]
+    pub const MAX_EXPR_DEPTH: usize = 32;
+    #[cfg(not(feature = "unchecked"))]
+    #[cfg(not(feature = "no_function"))]
+    #[cfg(debug_assertions)]
+    pub const MAX_FUNCTION_EXPR_DEPTH: usize = 16;
+
+    #[cfg(not(feature = "unchecked"))]
+    #[cfg(not(debug_assertions))]
+    #[cfg(not(feature = "no_function"))]
+    pub const MAX_CALL_STACK_DEPTH: usize = 64;
+    #[cfg(not(feature = "unchecked"))]
+    #[cfg(not(debug_assertions))]
+    pub const MAX_EXPR_DEPTH: usize = 64;
+    #[cfg(not(feature = "unchecked"))]
+    #[cfg(not(feature = "no_function"))]
+    #[cfg(not(debug_assertions))]
+    pub const MAX_FUNCTION_EXPR_DEPTH: usize = 32;
+
+    pub const MAX_DYNAMIC_PARAMETERS: usize = 16;
+}
 
 /// Script optimization API.
 #[cfg(not(feature = "no_optimize"))]
@@ -83,17 +113,15 @@ impl Engine {
             .map(|f| {
                 f.func
                     .get_script_fn_def()
-                    .expect("scripted function")
+                    .expect("script-defined function")
                     .clone()
             })
             .collect();
 
-        let statements = std::mem::take(ast.statements_mut());
-
         crate::optimizer::optimize_into_ast(
             self,
             scope,
-            statements,
+            ast.take_statements(),
             #[cfg(not(feature = "no_function"))]
             lib,
             optimization_level,
@@ -185,7 +213,7 @@ impl Engine {
     /// ```
     pub fn register_custom_operator(
         &mut self,
-        keyword: impl AsRef<str> + Into<Identifier>,
+        keyword: impl AsRef<str>,
         precedence: u8,
     ) -> Result<&mut Self, String> {
         let precedence = Precedence::new(precedence);
@@ -219,7 +247,8 @@ impl Engine {
         }
 
         // Add to custom keywords
-        self.custom_keywords.insert(keyword.into(), precedence);
+        self.custom_keywords
+            .insert(keyword.as_ref().into(), precedence);
 
         Ok(self)
     }

@@ -1,9 +1,9 @@
 //! Module that defines the public evaluation API of [`Engine`].
 
-use crate::engine::{EvalState, Imports};
+use crate::engine::{EvalState, GlobalRuntimeState};
 use crate::parser::ParseState;
 use crate::types::dynamic::Variant;
-use crate::{Dynamic, Engine, EvalAltResult, Module, Position, RhaiResult, Scope, AST};
+use crate::{Dynamic, Engine, Module, Position, RhaiResult, RhaiResultOf, Scope, AST, ERR};
 use std::any::type_name;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -24,7 +24,7 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    pub fn eval<T: Variant + Clone>(&self, script: &str) -> Result<T, Box<EvalAltResult>> {
+    pub fn eval<T: Variant + Clone>(&self, script: &str) -> RhaiResultOf<T> {
         self.eval_with_scope(&mut Scope::new(), script)
     }
     /// Evaluate a string with own scope.
@@ -60,7 +60,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         script: &str,
-    ) -> Result<T, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<T> {
         let ast = self.compile_with_scope_and_optimization_level(
             scope,
             &[script],
@@ -84,10 +84,7 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    pub fn eval_expression<T: Variant + Clone>(
-        &self,
-        script: &str,
-    ) -> Result<T, Box<EvalAltResult>> {
+    pub fn eval_expression<T: Variant + Clone>(&self, script: &str) -> RhaiResultOf<T> {
         self.eval_expression_with_scope(&mut Scope::new(), script)
     }
     /// Evaluate a string containing an expression with own scope.
@@ -113,7 +110,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         script: &str,
-    ) -> Result<T, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<T> {
         let scripts = [script];
         let (stream, tokenizer_control) =
             self.lex_raw(&scripts, self.token_mapper.as_ref().map(Box::as_ref));
@@ -149,7 +146,7 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    pub fn eval_ast<T: Variant + Clone>(&self, ast: &AST) -> Result<T, Box<EvalAltResult>> {
+    pub fn eval_ast<T: Variant + Clone>(&self, ast: &AST) -> RhaiResultOf<T> {
         self.eval_ast_with_scope(&mut Scope::new(), ast)
     }
     /// Evaluate an [`AST`] with own scope.
@@ -186,15 +183,15 @@ impl Engine {
         &self,
         scope: &mut Scope,
         ast: &AST,
-    ) -> Result<T, Box<EvalAltResult>> {
-        let mods = &mut Imports::new();
+    ) -> RhaiResultOf<T> {
+        let global = &mut GlobalRuntimeState::new();
 
-        let result = self.eval_ast_with_scope_raw(scope, mods, ast, 0)?;
+        let result = self.eval_ast_with_scope_raw(scope, global, ast, 0)?;
 
         let typ = self.map_type_name(result.type_name());
 
         result.try_cast::<T>().ok_or_else(|| {
-            EvalAltResult::ErrorMismatchOutputType(
+            ERR::ErrorMismatchOutputType(
                 self.map_type_name(type_name::<T>()).into(),
                 typ.into(),
                 Position::NONE,
@@ -207,17 +204,16 @@ impl Engine {
     pub(crate) fn eval_ast_with_scope_raw<'a>(
         &self,
         scope: &mut Scope,
-        mods: &mut Imports,
+        global: &mut GlobalRuntimeState,
         ast: &'a AST,
         level: usize,
     ) -> RhaiResult {
         let mut state = EvalState::new();
-        if ast.source_raw().is_some() {
-            mods.source = ast.source_raw().cloned();
-        }
+        global.source = ast.source_raw().clone();
+
         #[cfg(not(feature = "no_module"))]
         {
-            mods.embedded_module_resolver = ast.resolver().cloned();
+            global.embedded_module_resolver = ast.resolver().cloned();
         }
 
         let statements = ast.statements();
@@ -235,6 +231,6 @@ impl Engine {
         } else {
             &lib
         };
-        self.eval_global_statements(scope, mods, &mut state, statements, lib, level)
+        self.eval_global_statements(scope, global, &mut state, statements, lib, level)
     }
 }

@@ -3,11 +3,14 @@ use crate::{def_package, FnPtr, ImmutableString, NativeCallContext};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
-def_package!(crate:BasicFnPackage:"Basic Fn functions.", lib, {
-    lib.standard = true;
+def_package! {
+    /// Package of basic function pointer utilities.
+    crate::BasicFnPackage => |lib| {
+        lib.standard = true;
 
-    combine_with_exported_module!(lib, "FnPtr", fn_ptr_functions);
-});
+        combine_with_exported_module!(lib, "FnPtr", fn_ptr_functions);
+    }
+}
 
 #[export_module]
 mod fn_ptr_functions {
@@ -41,7 +44,7 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
     fn make_metadata(
         dict: &BTreeSet<Identifier>,
         namespace: Option<Identifier>,
-        f: &ScriptFnDef,
+        func: &ScriptFnDef,
     ) -> Map {
         const DICT: &str = "key exists";
 
@@ -50,10 +53,13 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
         if let Some(ns) = namespace {
             map.insert(dict.get("namespace").expect(DICT).clone(), ns.into());
         }
-        map.insert(dict.get("name").expect(DICT).clone(), f.name.clone().into());
+        map.insert(
+            dict.get("name").expect(DICT).clone(),
+            func.name.clone().into(),
+        );
         map.insert(
             dict.get("access").expect(DICT).clone(),
-            match f.access {
+            match func.access {
                 FnAccess::Public => dict.get("public").expect(DICT).clone(),
                 FnAccess::Private => dict.get("private").expect(DICT).clone(),
             }
@@ -61,14 +67,14 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
         );
         map.insert(
             dict.get("is_anonymous").expect(DICT).clone(),
-            f.name.starts_with(crate::engine::FN_ANONYMOUS).into(),
+            func.name.starts_with(crate::engine::FN_ANONYMOUS).into(),
         );
         map.insert(
             dict.get("params").expect(DICT).clone(),
-            f.params
+            func.params
                 .iter()
                 .cloned()
-                .map(Into::<Dynamic>::into)
+                .map(Into::into)
                 .collect::<Array>()
                 .into(),
         );

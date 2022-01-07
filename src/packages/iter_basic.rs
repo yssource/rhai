@@ -1,10 +1,12 @@
 use crate::plugin::*;
 use crate::types::dynamic::Variant;
-use crate::{def_package, EvalAltResult, ExclusiveRange, InclusiveRange, INT};
-use std::iter::{ExactSizeIterator, FusedIterator};
-use std::ops::{Range, RangeInclusive};
+use crate::{def_package, ExclusiveRange, InclusiveRange, RhaiResultOf, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
+use std::{
+    iter::{ExactSizeIterator, FusedIterator},
+    ops::{Range, RangeInclusive},
+};
 
 #[cfg(not(feature = "unchecked"))]
 use num_traits::{CheckedAdd as Add, CheckedSub as Sub};
@@ -22,19 +24,19 @@ impl<T> StepRange<T>
 where
     T: Variant + Copy + PartialOrd + Add<Output = T> + Sub<Output = T>,
 {
-    pub fn new(from: T, to: T, step: T) -> Result<Self, Box<EvalAltResult>> {
+    pub fn new(from: T, to: T, step: T) -> RhaiResultOf<Self> {
         #[cfg(not(feature = "unchecked"))]
         if let Some(r) = from.checked_add(&step) {
             if r == from {
-                return Err(EvalAltResult::ErrorInFunctionCall(
+                return Err(crate::ERR::ErrorInFunctionCall(
                     "range".to_string(),
                     String::new(),
-                    EvalAltResult::ErrorArithmetic(
+                    crate::ERR::ErrorArithmetic(
                         "step value cannot be zero".to_string(),
-                        crate::Position::NONE,
+                        Position::NONE,
                     )
                     .into(),
-                    crate::Position::NONE,
+                    Position::NONE,
                 )
                 .into());
             }
@@ -117,33 +119,24 @@ struct BitRange(INT, INT, usize);
 const BITS: usize = std::mem::size_of::<INT>() * 8;
 
 impl BitRange {
-    pub fn new(value: INT, from: INT, len: INT) -> Result<Self, Box<EvalAltResult>> {
+    pub fn new(value: INT, from: INT, len: INT) -> RhaiResultOf<Self> {
         let from = if from >= 0 {
             let offset = from as usize;
 
             #[cfg(not(feature = "unchecked"))]
             if offset >= BITS {
-                return Err(
-                    EvalAltResult::ErrorBitFieldBounds(BITS, from, crate::Position::NONE).into(),
-                );
+                return Err(crate::ERR::ErrorBitFieldBounds(BITS, from, Position::NONE).into());
             }
             offset
         } else {
             #[cfg(not(feature = "unchecked"))]
             if let Some(abs_from) = from.checked_abs() {
                 if (abs_from as usize) > BITS {
-                    return Err(EvalAltResult::ErrorBitFieldBounds(
-                        BITS,
-                        from,
-                        crate::Position::NONE,
-                    )
-                    .into());
+                    return Err(crate::ERR::ErrorBitFieldBounds(BITS, from, Position::NONE).into());
                 }
                 BITS - (abs_from as usize)
             } else {
-                return Err(
-                    EvalAltResult::ErrorBitFieldBounds(BITS, from, crate::Position::NONE).into(),
-                );
+                return Err(crate::ERR::ErrorBitFieldBounds(BITS, from, Position::NONE).into());
             }
 
             #[cfg(feature = "unchecked")]
@@ -168,12 +161,10 @@ impl Iterator for BitRange {
     type Item = bool;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let Self(value, mask, len) = *self;
-
-        if len == 0 {
+        if self.2 == 0 {
             None
         } else {
-            let r = (value & mask) != 0;
+            let r = (self.0 & self.1) != 0;
             self.1 <<= 1;
             self.2 -= 1;
             Some(r)
@@ -272,7 +263,6 @@ macro_rules! reg_range {
     ($lib:ident | $x:expr => $( $y:ty ),*) => {
         $(
             $lib.set_iterator::<Range<$y>>();
-            $lib.set_iterator::<RangeInclusive<$y>>();
             let _hash = $lib.set_native_fn($x, |from: $y, to: $y| Ok(from..to));
 
             #[cfg(feature = "metadata")]
@@ -281,6 +271,8 @@ macro_rules! reg_range {
                     concat!("to: ", stringify!($y)),
                     concat!("Iterator<Item=", stringify!($y), ">")
             ]);
+
+            $lib.set_iterator::<RangeInclusive<$y>>();
         )*
     };
     ($lib:ident | step $x:expr => $( $y:ty ),*) => {
@@ -299,268 +291,275 @@ macro_rules! reg_range {
     };
 }
 
-def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
-    lib.standard = true;
+def_package! {
+    /// Package of basic range iterators
+    crate::BasicIteratorPackage => |lib| {
+        lib.standard = true;
 
-    reg_range!(lib | "range" => INT);
+        reg_range!(lib | "range" => INT);
 
-    #[cfg(not(feature = "only_i32"))]
-    #[cfg(not(feature = "only_i64"))]
-    {
-        reg_range!(lib | "range" => i8, u8, i16, u16, i32, u32, i64, u64);
+        #[cfg(not(feature = "only_i32"))]
+        #[cfg(not(feature = "only_i64"))]
+        {
+            reg_range!(lib | "range" => i8, u8, i16, u16, i32, u32, i64, u64);
 
-        #[cfg(not(target_arch = "wasm32"))]
-        reg_range!(lib | "range" => i128, u128);
-    }
-
-    reg_range!(lib | step "range" => INT);
-
-    #[cfg(not(feature = "only_i32"))]
-    #[cfg(not(feature = "only_i64"))]
-    {
-        reg_range!(lib | step "range" => i8, u8, i16, u16, i32, u32, i64, u64);
-
-        #[cfg(not(target_arch = "wasm32"))]
-        reg_range!(lib | step "range" => i128, u128);
-    }
-
-    #[cfg(not(feature = "no_float"))]
-    {
-        use crate::FLOAT;
-
-        #[derive(Debug, Clone, Copy, PartialEq)]
-        struct StepFloatRange(FLOAT, FLOAT, FLOAT);
-
-        impl StepFloatRange {
-            pub fn new(from: FLOAT, to: FLOAT, step: FLOAT) -> Result<Self, Box<EvalAltResult>> {
-                #[cfg(not(feature = "unchecked"))]
-                if step == 0.0 {
-                    return Err(EvalAltResult::ErrorInFunctionCall("range".to_string(), "".to_string(),
-                        EvalAltResult::ErrorArithmetic("step value cannot be zero".to_string(), crate::Position::NONE).into(),
-                        crate::Position::NONE,
-                    ).into());
-                }
-
-                Ok(Self(from, to, step))
-            }
+            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(target_arch = "wasm64"))]
+            reg_range!(lib | "range" => i128, u128);
         }
 
-        impl Iterator for StepFloatRange {
-            type Item = FLOAT;
+        reg_range!(lib | step "range" => INT);
 
-            fn next(&mut self) -> Option<FLOAT> {
-                if self.0 == self.1 {
-                    None
-                } else if self.0 < self.1 {
-                    #[cfg(not(feature = "unchecked"))]
-                    if self.2 < 0.0 {
-                        return None;
-                    }
+        #[cfg(not(feature = "only_i32"))]
+        #[cfg(not(feature = "only_i64"))]
+        {
+            reg_range!(lib | step "range" => i8, u8, i16, u16, i32, u32, i64, u64);
 
-                    let v = self.0;
-                    let n = self.0 + self.2;
-
-                    self.0 = if n >= self.1 { self.1 } else { n };
-                    Some(v)
-                } else {
-                    #[cfg(not(feature = "unchecked"))]
-                    if self.2 > 0.0 {
-                        return None;
-                    }
-
-                    let v = self.0;
-                    let n = self.0 + self.2;
-
-                    self.0 = if n <= self.1 { self.1 } else { n };
-                    Some(v)
-                }
-            }
+            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(target_arch = "wasm64"))]
+            reg_range!(lib | step "range" => i128, u128);
         }
 
-        impl FusedIterator for StepFloatRange {}
+        #[cfg(not(feature = "no_float"))]
+        {
+            use crate::FLOAT;
 
-        lib.set_iterator::<StepFloatRange>();
+            #[derive(Debug, Clone, Copy, PartialEq)]
+            struct StepFloatRange(FLOAT, FLOAT, FLOAT);
 
-        let _hash = lib.set_native_fn("range", StepFloatRange::new);
-        #[cfg(feature = "metadata")]
-        lib.update_fn_metadata(_hash, &["from: FLOAT", "to: FLOAT", "step: FLOAT", "Iterator<Item=FLOAT>"]);
-    }
-
-    #[cfg(feature = "decimal")]
-    {
-        use rust_decimal::Decimal;
-
-        #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-        struct StepDecimalRange(Decimal, Decimal, Decimal);
-
-        impl StepDecimalRange {
-            pub fn new(from: Decimal, to: Decimal, step: Decimal) -> Result<Self, Box<EvalAltResult>> {
-                #[cfg(not(feature = "unchecked"))]
-                if step.is_zero() {
-                    return Err(EvalAltResult::ErrorInFunctionCall("range".to_string(), "".to_string(),
-                        EvalAltResult::ErrorArithmetic("step value cannot be zero".to_string(), crate::Position::NONE).into(),
-                        crate::Position::NONE,
-                    ).into());
-                }
-
-                Ok(Self(from, to, step))
-            }
-        }
-
-        impl Iterator for StepDecimalRange {
-            type Item = Decimal;
-
-            fn next(&mut self) -> Option<Decimal> {
-                if self.0 == self.1 {
-                    None
-                } else if self.0 < self.1 {
+            impl StepFloatRange {
+                pub fn new(from: FLOAT, to: FLOAT, step: FLOAT) -> RhaiResultOf<Self> {
                     #[cfg(not(feature = "unchecked"))]
-                    if self.2.is_sign_negative() {
-                        return None;
+                    if step == 0.0 {
+                        return Err(crate::ERR::ErrorInFunctionCall("range".to_string(), "".to_string(),
+                            crate::ERR::ErrorArithmetic("step value cannot be zero".to_string(), Position::NONE).into(),
+                            Position::NONE,
+                        ).into());
                     }
 
-                    let v = self.0;
-                    let n = self.0 + self.2;
-
-                    self.0 = if n >= self.1 { self.1 } else { n };
-                    Some(v)
-                } else {
-                    #[cfg(not(feature = "unchecked"))]
-                    if self.2.is_sign_positive() {
-                        return None;
-                    }
-
-                    let v = self.0;
-                    let n = self.0 + self.2;
-
-                    self.0 = if n <= self.1 { self.1 } else { n };
-                    Some(v)
+                    Ok(Self(from, to, step))
                 }
             }
+
+            impl Iterator for StepFloatRange {
+                type Item = FLOAT;
+
+                fn next(&mut self) -> Option<FLOAT> {
+                    if self.0 == self.1 {
+                        None
+                    } else if self.0 < self.1 {
+                        #[cfg(not(feature = "unchecked"))]
+                        if self.2 < 0.0 {
+                            return None;
+                        }
+
+                        let v = self.0;
+                        let n = self.0 + self.2;
+
+                        self.0 = if n >= self.1 { self.1 } else { n };
+                        Some(v)
+                    } else {
+                        #[cfg(not(feature = "unchecked"))]
+                        if self.2 > 0.0 {
+                            return None;
+                        }
+
+                        let v = self.0;
+                        let n = self.0 + self.2;
+
+                        self.0 = if n <= self.1 { self.1 } else { n };
+                        Some(v)
+                    }
+                }
+            }
+
+            impl FusedIterator for StepFloatRange {}
+
+            lib.set_iterator::<StepFloatRange>();
+
+            let _hash = lib.set_native_fn("range", StepFloatRange::new);
+            #[cfg(feature = "metadata")]
+            lib.update_fn_metadata(_hash, &["from: FLOAT", "to: FLOAT", "step: FLOAT", "Iterator<Item=FLOAT>"]);
         }
 
-        impl FusedIterator for StepDecimalRange {}
+        #[cfg(feature = "decimal")]
+        {
+            use rust_decimal::Decimal;
 
-        lib.set_iterator::<StepDecimalRange>();
+            #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+            struct StepDecimalRange(Decimal, Decimal, Decimal);
 
-        let _hash = lib.set_native_fn("range", StepDecimalRange::new);
+            impl StepDecimalRange {
+                pub fn new(from: Decimal, to: Decimal, step: Decimal) -> RhaiResultOf<Self> {
+                    #[cfg(not(feature = "unchecked"))]
+                    if step.is_zero() {
+                        return Err(crate::ERR::ErrorInFunctionCall("range".to_string(), "".to_string(),
+                            crate::ERR::ErrorArithmetic("step value cannot be zero".to_string(), Position::NONE).into(),
+                            Position::NONE,
+                        ).into());
+                    }
+
+                    Ok(Self(from, to, step))
+                }
+            }
+
+            impl Iterator for StepDecimalRange {
+                type Item = Decimal;
+
+                fn next(&mut self) -> Option<Decimal> {
+                    if self.0 == self.1 {
+                        None
+                    } else if self.0 < self.1 {
+                        #[cfg(not(feature = "unchecked"))]
+                        if self.2.is_sign_negative() {
+                            return None;
+                        }
+
+                        let v = self.0;
+                        let n = self.0 + self.2;
+
+                        self.0 = if n >= self.1 { self.1 } else { n };
+                        Some(v)
+                    } else {
+                        #[cfg(not(feature = "unchecked"))]
+                        if self.2.is_sign_positive() {
+                            return None;
+                        }
+
+                        let v = self.0;
+                        let n = self.0 + self.2;
+
+                        self.0 = if n <= self.1 { self.1 } else { n };
+                        Some(v)
+                    }
+                }
+            }
+
+            impl FusedIterator for StepDecimalRange {}
+
+            lib.set_iterator::<StepDecimalRange>();
+
+            let _hash = lib.set_native_fn("range", StepDecimalRange::new);
+            #[cfg(feature = "metadata")]
+            lib.update_fn_metadata(_hash, &["from: Decimal", "to: Decimal", "step: Decimal", "Iterator<Item=Decimal>"]);
+        }
+
+        // Register string iterator
+        lib.set_iterator::<CharsStream>();
+
+        let _hash = lib.set_native_fn("chars", |string, range: ExclusiveRange| {
+            let from = INT::max(range.start, 0);
+            let to = INT::max(range.end, from);
+            Ok(CharsStream::new(string, from, to - from))
+        });
         #[cfg(feature = "metadata")]
-        lib.update_fn_metadata(_hash, &["from: Decimal", "to: Decimal", "step: Decimal", "Iterator<Item=Decimal>"]);
-    }
+        lib.update_fn_metadata(_hash, &["string: &str", "range: Range<INT>", "Iterator<Item=char>"]);
 
-    // Register string iterator
-    lib.set_iterator::<CharsStream>();
-
-    let _hash = lib.set_native_fn("chars", |string, range: ExclusiveRange| {
-        let from = INT::max(range.start, 0);
-        let to = INT::max(range.end, from);
-        Ok(CharsStream::new(string, from, to - from))
-    });
-    #[cfg(feature = "metadata")]
-    lib.update_fn_metadata(_hash, &["string: &str", "range: Range", "Iterator<Item=char>"]);
-
-    let _hash = lib.set_native_fn("chars", |string, range: InclusiveRange| {
-        let from = INT::max(*range.start(), 0);
-        let to = INT::max(*range.end(), from - 1);
-        Ok(CharsStream::new(string, from, to-from + 1))
-    });
-    #[cfg(feature = "metadata")]
-    lib.update_fn_metadata(_hash, &["string: &str", "range: RangeInclusive", "Iterator<Item=char>"]);
-
-    let _hash = lib.set_native_fn("chars", |string, from, len| Ok(CharsStream::new(string, from, len)));
-    #[cfg(feature = "metadata")]
-    lib.update_fn_metadata(_hash, &["string: &str", "from: INT", "len: INT", "Iterator<Item=char>"]);
-
-    let _hash = lib.set_native_fn("chars", |string, from| Ok(CharsStream::new(string, from, INT::MAX)));
-    #[cfg(feature = "metadata")]
-    lib.update_fn_metadata(_hash, &["string: &str", "from: INT", "Iterator<Item=char>"]);
-
-    let _hash = lib.set_native_fn("chars", |string| Ok(CharsStream::new(string, 0, INT::MAX)));
-    #[cfg(feature = "metadata")]
-    lib.update_fn_metadata(_hash, &["string: &str", "Iterator<Item=char>"]);
-
-    #[cfg(not(feature = "no_object"))]
-    {
-        let _hash = lib.set_getter_fn("chars", |string: &mut ImmutableString| Ok(CharsStream::new(string, 0, INT::MAX)));
+        let _hash = lib.set_native_fn("chars", |string, range: InclusiveRange| {
+            let from = INT::max(*range.start(), 0);
+            let to = INT::max(*range.end(), from - 1);
+            Ok(CharsStream::new(string, from, to-from + 1))
+        });
         #[cfg(feature = "metadata")]
-        lib.update_fn_metadata(_hash, &["string: &mut ImmutableString", "Iterator<Item=char>"]);
-    }
+        lib.update_fn_metadata(_hash, &["string: &str", "range: RangeInclusive<INT>", "Iterator<Item=char>"]);
 
-    // Register bit-field iterator
-    lib.set_iterator::<BitRange>();
-
-    let _hash = lib.set_native_fn("bits", |value, range: ExclusiveRange| {
-        let from = INT::max(range.start, 0);
-        let to = INT::max(range.end, from);
-        BitRange::new(value, from, to - from)
-    });
-    #[cfg(feature = "metadata")]
-    lib.update_fn_metadata(_hash, &["value: INT", "range: Range", "Iterator<Item=bool>"]);
-
-    let _hash = lib.set_native_fn("bits", |value, range: InclusiveRange| {
-        let from = INT::max(*range.start(), 0);
-        let to = INT::max(*range.end(), from - 1);
-        BitRange::new(value, from, to - from + 1)
-    });
-    #[cfg(feature = "metadata")]
-    lib.update_fn_metadata(_hash, &["value: INT", "range: RangeInclusive", "Iterator<Item=bool>"]);
-
-    let _hash = lib.set_native_fn("bits", BitRange::new);
-    #[cfg(feature = "metadata")]
-    lib.update_fn_metadata(_hash, &["value: INT", "from: INT", "len: INT", "Iterator<Item=bool>"]);
-
-    let _hash = lib.set_native_fn("bits", |value, from| BitRange::new(value, from, INT::MAX));
-    #[cfg(feature = "metadata")]
-    lib.update_fn_metadata(_hash, &["value: INT", "from: INT", "Iterator<Item=bool>"]);
-
-    let _hash = lib.set_native_fn("bits", |value| BitRange::new(value, 0, INT::MAX) );
-    #[cfg(feature = "metadata")]
-    lib.update_fn_metadata(_hash, &["value: INT", "Iterator<Item=bool>"]);
-
-    #[cfg(not(feature = "no_object"))]
-    {
-        let _hash = lib.set_getter_fn("bits", |value: &mut INT| BitRange::new(*value, 0, INT::MAX) );
+        let _hash = lib.set_native_fn("chars", |string, from, len| Ok(CharsStream::new(string, from, len)));
         #[cfg(feature = "metadata")]
-        lib.update_fn_metadata(_hash, &["value: &mut INT", "range: Range", "Iterator<Item=bool>"]);
-    }
+        lib.update_fn_metadata(_hash, &["string: &str", "from: INT", "len: INT", "Iterator<Item=char>"]);
 
-    combine_with_exported_module!(lib, "range", range_functions);
-});
+        let _hash = lib.set_native_fn("chars", |string, from| Ok(CharsStream::new(string, from, INT::MAX)));
+        #[cfg(feature = "metadata")]
+        lib.update_fn_metadata(_hash, &["string: &str", "from: INT", "Iterator<Item=char>"]);
+
+        let _hash = lib.set_native_fn("chars", |string| Ok(CharsStream::new(string, 0, INT::MAX)));
+        #[cfg(feature = "metadata")]
+        lib.update_fn_metadata(_hash, &["string: &str", "Iterator<Item=char>"]);
+
+        #[cfg(not(feature = "no_object"))]
+        {
+            let _hash = lib.set_getter_fn("chars", |string: &mut ImmutableString| Ok(CharsStream::new(string, 0, INT::MAX)));
+            #[cfg(feature = "metadata")]
+            lib.update_fn_metadata(_hash, &["string: &mut ImmutableString", "Iterator<Item=char>"]);
+        }
+
+        // Register bit-field iterator
+        lib.set_iterator::<BitRange>();
+
+        let _hash = lib.set_native_fn("bits", |value, range: ExclusiveRange| {
+            let from = INT::max(range.start, 0);
+            let to = INT::max(range.end, from);
+            BitRange::new(value, from, to - from)
+        });
+        #[cfg(feature = "metadata")]
+        lib.update_fn_metadata(_hash, &["value: INT", "range: Range<INT>", "Iterator<Item=bool>"]);
+
+        let _hash = lib.set_native_fn("bits", |value, range: InclusiveRange| {
+            let from = INT::max(*range.start(), 0);
+            let to = INT::max(*range.end(), from - 1);
+            BitRange::new(value, from, to - from + 1)
+        });
+        #[cfg(feature = "metadata")]
+        lib.update_fn_metadata(_hash, &["value: INT", "range: RangeInclusive<INT>", "Iterator<Item=bool>"]);
+
+        let _hash = lib.set_native_fn("bits", BitRange::new);
+        #[cfg(feature = "metadata")]
+        lib.update_fn_metadata(_hash, &["value: INT", "from: INT", "len: INT", "Iterator<Item=bool>"]);
+
+        let _hash = lib.set_native_fn("bits", |value, from| BitRange::new(value, from, INT::MAX));
+        #[cfg(feature = "metadata")]
+        lib.update_fn_metadata(_hash, &["value: INT", "from: INT", "Iterator<Item=bool>"]);
+
+        let _hash = lib.set_native_fn("bits", |value| BitRange::new(value, 0, INT::MAX) );
+        #[cfg(feature = "metadata")]
+        lib.update_fn_metadata(_hash, &["value: INT", "Iterator<Item=bool>"]);
+
+        #[cfg(not(feature = "no_object"))]
+        {
+            let _hash = lib.set_getter_fn("bits", |value: &mut INT| BitRange::new(*value, 0, INT::MAX) );
+            #[cfg(feature = "metadata")]
+            lib.update_fn_metadata(_hash, &["value: &mut INT", "range: Range<INT>", "Iterator<Item=bool>"]);
+        }
+
+        combine_with_exported_module!(lib, "range", range_functions);
+    }
+}
 
 #[export_module]
 mod range_functions {
     #[rhai_fn(get = "start", name = "start", pure)]
-    pub fn range_start(range: &mut ExclusiveRange) -> INT {
+    pub fn start(range: &mut ExclusiveRange) -> INT {
         range.start
     }
     #[rhai_fn(get = "end", name = "end", pure)]
-    pub fn range_end(range: &mut ExclusiveRange) -> INT {
+    pub fn end(range: &mut ExclusiveRange) -> INT {
         range.end
     }
-    #[rhai_fn(name = "contains", pure)]
-    pub fn range_contains(range: &mut ExclusiveRange, value: INT) -> bool {
-        range.contains(&value)
-    }
     #[rhai_fn(get = "is_inclusive", name = "is_inclusive", pure)]
-    pub fn range_is_inclusive(range: &mut ExclusiveRange) -> bool {
+    pub fn is_inclusive(range: &mut ExclusiveRange) -> bool {
         let _range = range;
         false
     }
+    #[rhai_fn(get = "is_exclusive", name = "is_exclusive", pure)]
+    pub fn is_exclusive(range: &mut ExclusiveRange) -> bool {
+        let _range = range;
+        true
+    }
     #[rhai_fn(get = "start", name = "start", pure)]
-    pub fn range_inclusive_start(range: &mut InclusiveRange) -> INT {
+    pub fn start_inclusive(range: &mut InclusiveRange) -> INT {
         *range.start()
     }
     #[rhai_fn(get = "end", name = "end", pure)]
-    pub fn range_inclusive_end(range: &mut InclusiveRange) -> INT {
+    pub fn end_inclusive(range: &mut InclusiveRange) -> INT {
         *range.end()
     }
-    #[rhai_fn(name = "contains", pure)]
-    pub fn range_inclusive_contains(range: &mut InclusiveRange, value: INT) -> bool {
-        range.contains(&value)
-    }
     #[rhai_fn(get = "is_inclusive", name = "is_inclusive", pure)]
-    pub fn range_inclusive_is_inclusive(range: &mut InclusiveRange) -> bool {
+    pub fn is_inclusive_inclusive(range: &mut InclusiveRange) -> bool {
         let _range = range;
         true
+    }
+    #[rhai_fn(get = "is_exclusive", name = "is_exclusive", pure)]
+    pub fn is_exclusive_inclusive(range: &mut InclusiveRange) -> bool {
+        let _range = range;
+        false
     }
 }

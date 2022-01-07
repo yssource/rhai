@@ -25,13 +25,13 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
         ],
         true,
         |context, inputs| {
-            let var_name = inputs[0].get_variable_name().unwrap().to_string();
+            let var_name = inputs[0].get_string_value().unwrap();
             let op = inputs[1].get_literal_value::<ImmutableString>().unwrap();
             let max = inputs[2].get_literal_value::<INT>().unwrap();
             let stmt = &inputs[3];
             let condition = &inputs[4];
 
-            context.scope_mut().push(var_name.clone(), 0 as INT);
+            context.scope_mut().push(var_name.to_string(), 0 as INT);
 
             let mut count: INT = 0;
 
@@ -151,14 +151,14 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
         &["var", "$ident$", "=", "$expr$"],
         true,
         |context, inputs| {
-            let var_name = inputs[0].get_variable_name().unwrap().to_string();
+            let var_name = inputs[0].get_string_value().unwrap();
             let expr = &inputs[1];
 
             // Evaluate the expression
             let value = context.eval_expression_tree(expr)?;
 
-            if !context.scope().is_constant(&var_name).unwrap_or(false) {
-                context.scope_mut().set_value(var_name, value);
+            if !context.scope().is_constant(var_name).unwrap_or(false) {
+                context.scope_mut().set_value(var_name.to_string(), value);
                 Ok(Dynamic::UNIT)
             } else {
                 Err(format!("variable {} is constant", var_name).into())
@@ -206,7 +206,7 @@ fn test_custom_syntax_raw() -> Result<(), Box<EvalAltResult>> {
         |context, inputs| {
             context.scope_mut().push("foo", 999 as INT);
 
-            Ok(match inputs[0].get_variable_name().unwrap() {
+            Ok(match inputs[0].get_string_value().unwrap() {
                 "world"
                     if inputs
                         .last()
@@ -236,6 +236,41 @@ fn test_custom_syntax_raw() -> Result<(), Box<EvalAltResult>> {
         *engine.compile("hello hey").expect_err("should error").0,
         ParseErrorType::BadInput(LexError::ImproperSymbol("hey".to_string(), "".to_string()))
     );
+
+    Ok(())
+}
+
+#[test]
+fn test_custom_syntax_raw2() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    engine.register_custom_syntax_raw(
+        "#",
+        |symbols, lookahead| match symbols.len() {
+            1 if lookahead == "-" => Ok(Some("$symbol$".into())),
+            1 => Ok(Some("$int$".into())),
+            2 if symbols[1] == "-" => Ok(Some("$int$".into())),
+            2 => Ok(None),
+            3 => Ok(None),
+            _ => unreachable!(),
+        },
+        false,
+        move |_, inputs| {
+            let id = if inputs.len() == 2 {
+                -inputs[1].get_literal_value::<INT>().unwrap()
+            } else {
+                inputs[0].get_literal_value::<INT>().unwrap()
+            };
+            Ok(id.into())
+        },
+    );
+
+    assert_eq!(engine.eval::<INT>("#-1")?, -1);
+    assert_eq!(engine.eval::<INT>("let x = 41; x + #1")?, 42);
+    #[cfg(not(feature = "no_object"))]
+    assert_eq!(engine.eval::<INT>("#-42.abs()")?, 42);
+    assert_eq!(engine.eval::<INT>("#42/2")?, 21);
+    assert_eq!(engine.eval::<INT>("sign(#1)")?, 1);
 
     Ok(())
 }

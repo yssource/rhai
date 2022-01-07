@@ -371,3 +371,32 @@ fn test_for_module_iterator() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+#[cfg(not(feature = "no_index"))]
+#[cfg(not(feature = "no_closure"))]
+fn test_for_capture() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                let a = [];
+
+                for (x, i) in 100..110 {
+                    a += || i + x;
+                }
+
+                let sum = 0;
+
+                for fp in a {
+                    sum += call(fp);
+                }
+
+                sum
+            "
+        )?,
+        1180
+    );
+    Ok(())
+}

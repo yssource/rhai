@@ -1,6 +1,7 @@
 //! Module containing error definitions for the parsing process.
 
-use crate::{EvalAltResult, Position};
+use crate::tokenizer::is_valid_identifier;
+use crate::{Position, RhaiError, ERR};
 #[cfg(feature = "no_std")]
 use core_error::Error;
 #[cfg(not(feature = "no_std"))]
@@ -65,7 +66,7 @@ impl LexError {
     }
 }
 
-/// Type of error encountered when parsing a script.
+/// Error encountered when parsing a script.
 ///
 /// Some errors never appear when certain features are turned on.
 /// They still exist so that the application can turn features on and off without going through
@@ -108,9 +109,9 @@ pub enum ParseErrorType {
     DuplicatedSwitchCase,
     /// A variable name is duplicated. Wrapped value is the variable name.
     DuplicatedVariable(String),
-    /// An integer case of a `switch` statement is after a range case.
+    /// An integer case of a `switch` statement is in an appropriate place.
     WrongSwitchIntegerCase,
-    /// The default case of a `switch` statement is not the last.
+    /// The default case of a `switch` statement is in an appropriate place.
     WrongSwitchDefaultCase,
     /// The case condition of a `switch` statement is not appropriate.
     WrongSwitchCaseCondition,
@@ -120,7 +121,7 @@ pub enum ParseErrorType {
     PropertyExpected,
     /// Missing a variable name after the `let`, `const`, `for` or `catch` keywords.
     VariableExpected,
-    /// An identifier is a reserved keyword.
+    /// An identifier is a reserved symbol.
     Reserved(String),
     /// An expression is of the wrong type.
     /// Wrapped values are the type requested and type of the actual result.
@@ -260,7 +261,8 @@ impl fmt::Display for ParseErrorType {
             },
 
             Self::LiteralTooLarge(typ, max) => write!(f, "{} exceeds the maximum limit ({})", typ, max),
-            Self::Reserved(s) => write!(f, "'{}' is a reserved keyword", s),
+            Self::Reserved(s) if is_valid_identifier(s.chars()) => write!(f, "'{}' is a reserved keyword", s),
+            Self::Reserved(s) => write!(f, "'{}' is a reserved symbol", s),
             Self::UnexpectedEOF => f.write_str("Script is incomplete"),
             Self::WrongSwitchIntegerCase => f.write_str("Integer switch case cannot follow a range case"),
             Self::WrongSwitchDefaultCase => f.write_str("Default switch case must be the last"),
@@ -308,30 +310,30 @@ impl fmt::Display for ParseError {
     }
 }
 
-impl From<ParseErrorType> for Box<EvalAltResult> {
+impl From<ParseErrorType> for RhaiError {
     #[inline(always)]
     fn from(err: ParseErrorType) -> Self {
         Box::new(err.into())
     }
 }
 
-impl From<ParseErrorType> for EvalAltResult {
+impl From<ParseErrorType> for ERR {
     #[inline(always)]
     fn from(err: ParseErrorType) -> Self {
-        EvalAltResult::ErrorParsing(err, Position::NONE)
+        ERR::ErrorParsing(err, Position::NONE)
     }
 }
 
-impl From<ParseError> for Box<EvalAltResult> {
+impl From<ParseError> for RhaiError {
     #[inline(always)]
     fn from(err: ParseError) -> Self {
         Box::new(err.into())
     }
 }
 
-impl From<ParseError> for EvalAltResult {
+impl From<ParseError> for ERR {
     #[inline(always)]
     fn from(err: ParseError) -> Self {
-        EvalAltResult::ErrorParsing(*err.0, err.1)
+        ERR::ErrorParsing(*err.0, err.1)
     }
 }

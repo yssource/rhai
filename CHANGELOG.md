@@ -5,11 +5,58 @@ Version 1.4.0
 =============
 
 This version adds support for integer _ranges_ via the `..` and `..=` operators.
+Many standard API's are extended with range parameters where appropriate.
+
+Script-breaking changes
+-----------------------
+
+* `is` is (pun intended) now a reserved keyword to prepare for possible future type checking expressions (e.g. `x is "string"`).
+
+Breaking changes
+----------------
+
+* `LogicPackage` is removed from `CorePackage`.
+* Bit-field functions are moved into a new `BitFieldPackage` (used to be in `LogicPackage`) which makes more sense.
+
+Bug fixes
+---------
+
+* Constructing a literal array or object map now checks for size limits for each item instead of at the very end when it is already too late.
+* Non-`INT` integer types are now treated exactly as custom types under `only_i64` and `only_i32`.
+* Calling `pad` on an array now checks for total size over limit after each item added.
 
 New features
 ------------
 
 * Added support for integer _ranges_ via the `..` and `..=` operators.
+
+Enhancements
+------------
+
+* A new syntax is introduced for `def_package!` that will replace the old syntax in future versions.
+* Added `NativeCallContext::call_fn` to easily call a function.
+* Doc-comments on plugin module functions are extracted into the functions' metadata.
+
+Deprecated API's
+----------------
+
+* `Expression::get_variable_name` is deprecated in favor of the new `Expression::get_string_value`.
+* The old syntax of `def_package!` is deprecated in favor of the new syntax.
+
+
+Version 1.3.1
+=============
+
+Bug fixes
+---------
+
+* Custom syntax now works properly inside binary expressions and with method calls.
+* Hex numbers with the high-bit set now parse correctly into negative integer numbers.
+
+Enhancements
+------------
+
+* `BLOB`'s are refined to display in a more compact hex format.
 
 
 Version 1.3.0
@@ -71,8 +118,8 @@ Bug fixes
 Version 1.2.0
 =============
 
-Bug fixes with breaking script changes
--------------------------------------
+Bug fixes (potentially script-breaking)
+--------------------------------------
 
 * As originally intended, function calls with a bang (`!`) now operates directly on the caller's scope, allowing variables inside the scope to be mutated.
 * As originally intended, `Engine::XXX_with_scope` API's now properly propagate constants within the provided scope also to _functions_ in the script.
@@ -104,7 +151,7 @@ Deprecated API's
 ----------------
 
 * `NativeCallContext::call_fn_dynamic_raw` is deprecated and `NativeCallContext::call_fn_raw` is added.
-* `From<EvalAltResult>` for `Result<T, Box<EvalAltResult>>` is deprecated so it will no longer be possible to do `EvalAltResult::ErrorXXXXX.into()` to convert to a `Result`; instead, `Err(EvalAltResult:ErrorXXXXX.into())` must be used. Code is clearer if errors are explicitly wrapped in `Err`.
+* `From<EvalAltResult>` for `Result<T, Box<EvalAltResult> >` is deprecated so it will no longer be possible to do `EvalAltResult::ErrorXXXXX.into()` to convert to a `Result`; instead, `Err(EvalAltResult:ErrorXXXXX.into())` must be used. Code is clearer if errors are explicitly wrapped in `Err`.
 
 
 Version 1.1.2
@@ -177,7 +224,7 @@ Enhancements
 
 ### `Scope` API
 
-* `Scope::set_value` now takes anything that implements `Into<Cow<str>>`.
+* `Scope::set_value` now takes anything that implements `Into<Cow<str> >`.
 * Added `Scope::is_constant` to check if a variable is constant.
 * Added `Scope::set_or_push` to add a new variable only if one doesn't already exist.
 
@@ -462,7 +509,8 @@ Enhancements
 
 * Replaced all `HashMap` usage with `BTreeMap` for better performance because collections in Rhai are tiny.
 * `Engine::register_result_fn` no longer requires the successful return type to be `Dynamic`.  It can now be any clonable type.
-* `#[rhai_fn(return_raw)]` can now return `Result<T, Box<EvalAltResult>>` where `T` is any clonable type instead of `Result<Dynamic, Box<EvalAltResult>>`.
+* `#[rhai_fn(return_raw)]` can now return `Result<T, Box<EvalAltResult> >` where `T` is any clonable
+  type instead of `Result<Dynamic, Box<EvalAltResult> >`.
 * `Dynamic::clone_cast` is added to simplify casting from a `&Dynamic`.
 
 
@@ -932,7 +980,7 @@ Breaking changes
 ----------------
 
 * `AST::iter_functions` now returns an iterator instead of taking a closure.
-* `Module::get_script_function_by_signature` renamed to `Module::get_script_fn` and returns `&<Shared<ScriptFnDef>>`.
+* `Module::get_script_function_by_signature` renamed to `Module::get_script_fn` and returns `&<Shared<ScriptFnDef> >`.
 * `Module::num_fn`, `Module::num_var` and `Module::num_iter` are removed and merged into `Module::count`.
 * The `merge_namespaces` parameter to `Module::eval_ast_as_new` is removed and now defaults to `true`.
 * `GlobalFileModuleResolver` is removed because its performance gain over the `FileModuleResolver` is no longer very significant.
@@ -980,7 +1028,7 @@ Bug fixes
 Breaking changes
 ----------------
 
-* `Engine::register_set_result` and `Engine::register_indexer_set_result` now take a function that returns `Result<(), Box<EvalAltResult>>`.
+* `Engine::register_set_result` and `Engine::register_indexer_set_result` now take a function that returns `Result<(), Box<EvalAltResult> >`.
 * `Engine::register_indexer_XXX` and `Module::set_indexer_XXX` panic when the type is `Array`, `Map` or `String`.
 * `EvalAltResult` has a new variant `ErrorInModule` which holds errors when loading an external module.
 * `Module::eval_ast_as_new` now takes an extra boolean parameter, indicating whether to encapsulate the entire module into a separate namespace.
@@ -1101,7 +1149,7 @@ Breaking changes
 
 * `EvalAltResult::ErrorMismatchOutputType` has an extra argument containing the name of the requested type.
 * `Engine::call_fn_dynamic` take an extra argument, allowing a `Dynamic` value to be bound to the `this` pointer.
-* Precedence of the `%` (modulo) operator is lowered to below `<<` ad `>>`. This is to handle the case of `x << 3 % 10`.
+* Precedence of the `%` (modulo) operator is lowered to below bit shifts. This is to handle the case of `x < < 3 % 10`.
 
 New features
 ------------

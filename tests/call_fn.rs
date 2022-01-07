@@ -69,6 +69,36 @@ fn test_call_fn() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
+#[test]
+fn test_call_fn_scope() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+    let mut scope = Scope::new();
+
+    let ast = engine.compile(
+        "
+            fn foo(x) {
+                let hello = 42;
+                bar + hello + x
+            }
+
+            let bar = 123;
+        ",
+    )?;
+
+    for _ in 0..50 {
+        assert_eq!(
+            engine
+                .call_fn_raw(&mut scope, &ast, true, false, "foo", None, [Dynamic::THREE])?
+                .as_int()?,
+            168
+        );
+    }
+
+    assert_eq!(scope.len(), 100);
+
+    Ok(())
+}
+
 struct Options {
     pub foo: bool,
     pub bar: String,
@@ -296,7 +326,7 @@ fn test_call_fn_events() -> Result<(), Box<EvalAltResult>> {
                 "end" => engine.call_fn(scope, ast, "end", (event_data,)).unwrap(),
 
                 // The 'update' event maps to function 'update'.
-                // This event provides a default implementation when the scripted function is not found.
+                // This event provides a default implementation when the script-defined function is not found.
                 "update" => engine
                     .call_fn(scope, ast, "update", (event_data,))
                     .or_else(|err| match *err {

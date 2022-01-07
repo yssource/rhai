@@ -2,29 +2,24 @@
 
 use crate::engine::OP_EQUALS;
 use crate::plugin::*;
-use crate::{def_package, Dynamic, ImmutableString, Map, INT};
+use crate::{def_package, Dynamic, ImmutableString, Map, RhaiResultOf, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
 #[cfg(not(feature = "no_index"))]
 use crate::Array;
 
-def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
-    lib.standard = true;
+def_package! {
+    /// Package of basic object map utilities.
+    crate::BasicMapPackage => |lib| {
+        lib.standard = true;
 
-    combine_with_exported_module!(lib, "map", map_functions);
-});
+        combine_with_exported_module!(lib, "map", map_functions);
+    }
+}
 
 #[export_module]
 mod map_functions {
-    #[rhai_fn(name = "has", pure)]
-    pub fn contains(map: &mut Map, prop: ImmutableString) -> bool {
-        if map.is_empty() {
-            false
-        } else {
-            map.contains_key(prop.as_str())
-        }
-    }
     #[rhai_fn(pure)]
     pub fn len(map: &mut Map) -> INT {
         map.len() as INT
@@ -71,11 +66,7 @@ mod map_functions {
         }
     }
     #[rhai_fn(name = "==", return_raw, pure)]
-    pub fn equals(
-        ctx: NativeCallContext,
-        map1: &mut Map,
-        map2: Map,
-    ) -> Result<bool, Box<EvalAltResult>> {
+    pub fn equals(ctx: NativeCallContext, map1: &mut Map, map2: Map) -> RhaiResultOf<bool> {
         if map1.len() != map2.len() {
             return Ok(false);
         }
@@ -101,11 +92,7 @@ mod map_functions {
         Ok(true)
     }
     #[rhai_fn(name = "!=", return_raw, pure)]
-    pub fn not_equals(
-        ctx: NativeCallContext,
-        map1: &mut Map,
-        map2: Map,
-    ) -> Result<bool, Box<EvalAltResult>> {
+    pub fn not_equals(ctx: NativeCallContext, map1: &mut Map, map2: Map) -> RhaiResultOf<bool> {
         equals(ctx, map1, map2).map(|r| !r)
     }
 
@@ -115,7 +102,7 @@ mod map_functions {
         if map.is_empty() {
             Array::new()
         } else {
-            map.keys().cloned().map(Into::<Dynamic>::into).collect()
+            map.keys().cloned().map(Into::into).collect()
         }
     }
     #[cfg(not(feature = "no_index"))]

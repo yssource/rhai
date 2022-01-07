@@ -3,8 +3,7 @@
 use crate::func::{FnCallArgs, RegisterNativeFunction, SendSync};
 use crate::types::dynamic::Variant;
 use crate::{
-    Engine, EvalAltResult, FnAccess, FnNamespace, Identifier, Module, NativeCallContext, Shared,
-    SmartString,
+    Engine, FnAccess, FnNamespace, Identifier, Module, NativeCallContext, RhaiResultOf, Shared,
 };
 use std::any::{type_name, TypeId};
 #[cfg(feature = "no_std")]
@@ -15,13 +14,14 @@ impl Engine {
     #[inline(always)]
     #[allow(dead_code)]
     pub(crate) fn global_namespace(&self) -> &Module {
-        self.global_modules.first().expect("not empty")
+        self.global_modules.first().unwrap()
     }
     /// Get a mutable reference to the global namespace module
     /// (which is the first module in `global_modules`).
     #[inline(always)]
     pub(crate) fn global_namespace_mut(&mut self) -> &mut Module {
-        Shared::get_mut(self.global_modules.first_mut().expect("not empty")).expect("not shared")
+        let module = self.global_modules.first_mut().unwrap();
+        Shared::get_mut(module).expect("not shared")
     }
     /// Register a custom function with the [`Engine`].
     ///
@@ -69,18 +69,20 @@ impl Engine {
         }
 
         #[cfg(feature = "metadata")]
-        let param_type_names: Option<crate::StaticVec<_>> =
-            Some(param_type_names.iter().map(|ty| ty.as_str()).collect());
+        let param_type_names: crate::StaticVec<_> =
+            param_type_names.iter().map(|ty| ty.as_str()).collect();
+        #[cfg(feature = "metadata")]
+        let param_type_names = Some(param_type_names.as_ref());
 
         #[cfg(not(feature = "metadata"))]
-        let param_type_names: Option<[&str; 0]> = None;
+        let param_type_names: Option<&[&str]> = None;
 
         self.global_namespace_mut().set_fn(
             name,
             FnNamespace::Global,
             FnAccess::Public,
-            param_type_names.as_ref().map(|v| v.as_ref()),
-            &param_types,
+            param_type_names,
+            param_types,
             func.into_callable_function(),
         );
         self
@@ -113,7 +115,7 @@ impl Engine {
     pub fn register_result_fn<N, A, F, R>(&mut self, name: N, func: F) -> &mut Self
     where
         N: AsRef<str> + Into<Identifier>,
-        F: RegisterNativeFunction<A, Result<R, Box<EvalAltResult>>>,
+        F: RegisterNativeFunction<A, RhaiResultOf<R>>,
     {
         let param_types = F::param_types();
 
@@ -127,18 +129,20 @@ impl Engine {
             .collect();
 
         #[cfg(feature = "metadata")]
-        let param_type_names: Option<crate::StaticVec<_>> =
-            Some(param_type_names.iter().map(|ty| ty.as_str()).collect());
+        let param_type_names: crate::StaticVec<_> =
+            param_type_names.iter().map(|ty| ty.as_str()).collect();
+        #[cfg(feature = "metadata")]
+        let param_type_names = Some(param_type_names.as_ref());
 
         #[cfg(not(feature = "metadata"))]
-        let param_type_names: Option<[&str; 0]> = None;
+        let param_type_names: Option<&[&str]> = None;
 
         self.global_namespace_mut().set_fn(
             name,
             FnNamespace::Global,
             FnAccess::Public,
-            param_type_names.as_ref().map(|v| v.as_ref()),
-            &param_types,
+            param_type_names,
+            param_types,
             func.into_callable_function(),
         );
         self
@@ -150,7 +154,7 @@ impl Engine {
     /// This function is very low level.  It takes a list of [`TypeId`][std::any::TypeId]'s
     /// indicating the actual types of the parameters.
     ///
-    /// ## Arguments
+    /// # Arguments
     ///
     /// Arguments are simply passed in as a mutable array of [`&mut Dynamic`][crate::Dynamic].
     /// The arguments are guaranteed to be of the correct types matching the [`TypeId`][std::any::TypeId]'s.
@@ -165,10 +169,8 @@ impl Engine {
     pub fn register_raw_fn<N, T>(
         &mut self,
         name: N,
-        arg_types: &[TypeId],
-        func: impl Fn(NativeCallContext, &mut FnCallArgs) -> Result<T, Box<EvalAltResult>>
-            + SendSync
-            + 'static,
+        arg_types: impl AsRef<[TypeId]>,
+        func: impl Fn(NativeCallContext, &mut FnCallArgs) -> RhaiResultOf<T> + SendSync + 'static,
     ) -> &mut Self
     where
         N: AsRef<str> + Into<Identifier>,
@@ -195,8 +197,12 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { field: 1 } }
-    ///     fn update(&mut self, offset: i64) { self.field += offset; }
+    ///     fn new() -> Self {
+    ///         Self { field: 1 }
+    ///     }
+    ///     fn update(&mut self, offset: i64) {
+    ///         self.field += offset;
+    ///     }
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
@@ -235,7 +241,9 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { field: 1 } }
+    ///     fn new() -> Self {
+    ///         Self { field: 1 }
+    ///     }
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
@@ -276,8 +284,8 @@ impl Engine {
     #[inline(always)]
     pub fn register_type_with_name_raw(
         &mut self,
-        fully_qualified_type_path: impl Into<SmartString>,
-        name: impl Into<SmartString>,
+        fully_qualified_type_path: impl Into<Identifier>,
+        name: impl Into<Identifier>,
     ) -> &mut Self {
         // Add the pretty-print type name into the map
         self.type_names
@@ -310,9 +318,13 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { field: 1 } }
+    ///     fn new() -> Self {
+    ///         Self { field: 1 }
+    ///     }
     ///     // Even a getter must start with `&mut self` and not `&self`.
-    ///     fn get_field(&mut self) -> i64  { self.field }
+    ///     fn get_field(&mut self) -> i64  {
+    ///         self.field
+    ///     }
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
@@ -338,7 +350,7 @@ impl Engine {
         name: impl AsRef<str>,
         get_fn: impl Fn(&mut T) -> V + SendSync + 'static,
     ) -> &mut Self {
-        self.register_fn(&crate::engine::make_getter(name), get_fn)
+        self.register_fn(crate::engine::make_getter(name.as_ref()).as_str(), get_fn)
     }
     /// Register a getter function for a member of a registered type with the [`Engine`].
     ///
@@ -357,7 +369,9 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { field: 1 } }
+    ///     fn new() -> Self {
+    ///         Self { field: 1 }
+    ///     }
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self) -> Result<i64, Box<EvalAltResult>> {
     ///         Ok(self.field)
@@ -383,9 +397,9 @@ impl Engine {
     pub fn register_get_result<T: Variant + Clone, V: Variant + Clone>(
         &mut self,
         name: impl AsRef<str>,
-        get_fn: impl Fn(&mut T) -> Result<V, Box<EvalAltResult>> + SendSync + 'static,
+        get_fn: impl Fn(&mut T) -> RhaiResultOf<V> + SendSync + 'static,
     ) -> &mut Self {
-        self.register_result_fn(&crate::engine::make_getter(name), get_fn)
+        self.register_result_fn(crate::engine::make_getter(name.as_ref()).as_str(), get_fn)
     }
     /// Register a setter function for a member of a registered type with the [`Engine`].
     ///
@@ -400,8 +414,12 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { field: 1 } }
-    ///     fn set_field(&mut self, new_val: i64) { self.field = new_val; }
+    ///     fn new() -> Self {
+    ///         Self { field: 1 }
+    ///     }
+    ///     fn set_field(&mut self, new_val: i64) {
+    ///         self.field = new_val;
+    ///     }
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
@@ -431,7 +449,7 @@ impl Engine {
         name: impl AsRef<str>,
         set_fn: impl Fn(&mut T, V) + SendSync + 'static,
     ) -> &mut Self {
-        self.register_fn(&crate::engine::make_setter(name), set_fn)
+        self.register_fn(crate::engine::make_setter(name.as_ref()).as_str(), set_fn)
     }
     /// Register a setter function for a member of a registered type with the [`Engine`].
     ///
@@ -448,8 +466,10 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { field: 1 } }
-    ///     fn set_field(&mut self, new_val: i64) -> Result<(), Box<EvalAltResult>> {
+    ///     fn new() -> Self {
+    ///         Self { field: 1 }
+    ///     }
+    ///     fn set_field(&mut self, new_val: i64) -> Result<(), Box<rhai::EvalAltResult>> {
     ///         self.field = new_val;
     ///         Ok(())
     ///     }
@@ -478,9 +498,9 @@ impl Engine {
     pub fn register_set_result<T: Variant + Clone, V: Variant + Clone>(
         &mut self,
         name: impl AsRef<str>,
-        set_fn: impl Fn(&mut T, V) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
+        set_fn: impl Fn(&mut T, V) -> RhaiResultOf<()> + SendSync + 'static,
     ) -> &mut Self {
-        self.register_result_fn(&crate::engine::make_setter(name), set_fn)
+        self.register_result_fn(crate::engine::make_setter(name.as_ref()).as_str(), set_fn)
     }
     /// Short-hand for registering both getter and setter functions
     /// of a registered type with the [`Engine`].
@@ -498,10 +518,16 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { field: 1 } }
+    ///     fn new() -> Self {
+    ///         Self { field: 1 }
+    ///     }
     ///     // Even a getter must start with `&mut self` and not `&self`.
-    ///     fn get_field(&mut self) -> i64 { self.field }
-    ///     fn set_field(&mut self, new_val: i64) { self.field = new_val; }
+    ///     fn get_field(&mut self) -> i64 {
+    ///         self.field
+    ///     }
+    ///     fn set_field(&mut self, new_val: i64) {
+    ///         self.field = new_val;
+    ///     }
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
@@ -552,9 +578,13 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
+    ///     fn new() -> Self {
+    ///         Self { fields: vec![1, 2, 3, 4, 5] }
+    ///     }
     ///     // Even a getter must start with `&mut self` and not `&self`.
-    ///     fn get_field(&mut self, index: i64) -> i64 { self.fields[index as usize] }
+    ///     fn get_field(&mut self, index: i64) -> i64 {
+    ///         self.fields[index as usize]
+    ///     }
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
@@ -625,7 +655,9 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
+    ///     fn new() -> Self {
+    ///         Self { fields: vec![1, 2, 3, 4, 5] }
+    ///     }
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self, index: i64) -> Result<i64, Box<EvalAltResult>> {
     ///         Ok(self.fields[index as usize])
@@ -657,7 +689,7 @@ impl Engine {
         V: Variant + Clone,
     >(
         &mut self,
-        get_fn: impl Fn(&mut T, X) -> Result<V, Box<EvalAltResult>> + SendSync + 'static,
+        get_fn: impl Fn(&mut T, X) -> RhaiResultOf<V> + SendSync + 'static,
     ) -> &mut Self {
         #[cfg(not(feature = "no_index"))]
         if TypeId::of::<T>() == TypeId::of::<crate::Array>() {
@@ -698,8 +730,12 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
-    ///     fn set_field(&mut self, index: i64, value: i64) { self.fields[index as usize] = value; }
+    ///     fn new() -> Self {
+    ///         Self { fields: vec![1, 2, 3, 4, 5] }
+    ///     }
+    ///     fn set_field(&mut self, index: i64, value: i64) {
+    ///         self.fields[index as usize] = value;
+    ///     }
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
@@ -717,10 +753,10 @@ impl Engine {
     ///     .register_indexer_set(TestStruct::set_field);
     ///
     /// # #[cfg(not(feature = "no_index"))]
-    /// assert_eq!(
-    ///     engine.eval::<TestStruct>("let a = new_ts(); a[2] = 42; a")?.fields[2],
-    ///     42
-    /// );
+    /// let result = engine.eval::<TestStruct>("let a = new_ts(); a[2] = 42; a")?;
+    ///
+    /// # #[cfg(not(feature = "no_index"))]
+    /// assert_eq!(result.fields[2], 42);
     /// # Ok(())
     /// # }
     /// ```
@@ -771,8 +807,10 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
-    ///     fn set_field(&mut self, index: i64, value: i64) -> Result<(), Box<EvalAltResult>> {
+    ///     fn new() -> Self {
+    ///         Self { fields: vec![1, 2, 3, 4, 5] }
+    ///     }
+    ///     fn set_field(&mut self, index: i64, value: i64) -> Result<(), Box<rhai::EvalAltResult>> {
     ///         self.fields[index as usize] = value;
     ///         Ok(())
     ///     }
@@ -791,10 +829,10 @@ impl Engine {
     ///     .register_indexer_set_result(TestStruct::set_field);
     ///
     /// # #[cfg(not(feature = "no_index"))]
-    /// assert_eq!(
-    ///     engine.eval::<TestStruct>("let a = new_ts(); a[2] = 42; a")?.fields[2],
-    ///     42
-    /// );
+    /// let result = engine.eval::<TestStruct>("let a = new_ts(); a[2] = 42; a")?;
+    ///
+    /// # #[cfg(not(feature = "no_index"))]
+    /// assert_eq!(result.fields[2], 42);
     /// # Ok(())
     /// # }
     /// ```
@@ -806,7 +844,7 @@ impl Engine {
         V: Variant + Clone,
     >(
         &mut self,
-        set_fn: impl Fn(&mut T, X, V) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
+        set_fn: impl Fn(&mut T, X, V) -> RhaiResultOf<()> + SendSync + 'static,
     ) -> &mut Self {
         #[cfg(not(feature = "no_index"))]
         if TypeId::of::<T>() == TypeId::of::<crate::Array>() {
@@ -847,10 +885,16 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
+    ///     fn new() -> Self {
+    ///         Self { fields: vec![1, 2, 3, 4, 5] }
+    ///     }
     ///     // Even a getter must start with `&mut self` and not `&self`.
-    ///     fn get_field(&mut self, index: i64) -> i64 { self.fields[index as usize] }
-    ///     fn set_field(&mut self, index: i64, value: i64) { self.fields[index as usize] = value; }
+    ///     fn get_field(&mut self, index: i64) -> i64 {
+    ///         self.fields[index as usize]
+    ///     }
+    ///     fn set_field(&mut self, index: i64, value: i64) {
+    ///         self.fields[index as usize] = value;
+    ///     }
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
@@ -935,17 +979,17 @@ impl Engine {
     #[cfg(not(feature = "no_module"))]
     pub fn register_static_module(
         &mut self,
-        name: impl AsRef<str> + Into<Identifier>,
+        name: impl AsRef<str>,
         module: Shared<Module>,
     ) -> &mut Self {
         fn register_static_module_raw(
             root: &mut std::collections::BTreeMap<Identifier, Shared<Module>>,
-            name: impl AsRef<str> + Into<Identifier>,
+            name: &str,
             module: Shared<Module>,
         ) {
             let separator = crate::tokenizer::Token::DoubleColon.syntax();
 
-            if !name.as_ref().contains(separator.as_ref()) {
+            if !name.contains(separator.as_ref()) {
                 if !module.is_indexed() {
                     // Index the module (making a clone copy if necessary) if it is not indexed
                     let mut module = crate::func::native::shared_take_or_clone(module);
@@ -955,7 +999,7 @@ impl Engine {
                     root.insert(name.into(), module);
                 }
             } else {
-                let mut iter = name.as_ref().splitn(2, separator.as_ref());
+                let mut iter = name.splitn(2, separator.as_ref());
                 let sub_module = iter.next().expect("contains separator").trim();
                 let remainder = iter.next().expect("contains separator").trim();
 
@@ -974,7 +1018,7 @@ impl Engine {
             }
         }
 
-        register_static_module_raw(&mut self.global_sub_modules, name, module);
+        register_static_module_raw(&mut self.global_sub_modules, name.as_ref(), module);
         self
     }
     /// _(metadata)_ Generate a list of all registered functions.

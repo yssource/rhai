@@ -10,7 +10,7 @@ pub use crate::{
 use std::prelude::v1::*;
 pub use std::{any::TypeId, mem};
 
-pub type RhaiResult = Result<Dynamic, Box<EvalAltResult>>;
+pub type RhaiResult = crate::RhaiResult;
 
 #[cfg(not(features = "no_module"))]
 pub use rhai_codegen::*;

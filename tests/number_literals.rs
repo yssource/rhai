@@ -27,6 +27,11 @@ fn test_hex_literal() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(engine.eval::<INT>("let x = 0Xf; x")?, 15);
     assert_eq!(engine.eval::<INT>("let x = 0xff; x")?, 255);
 
+    #[cfg(not(feature = "only_i32"))]
+    assert_eq!(engine.eval::<INT>("let x = 0xffffffffffffffff; x")?, -1);
+    #[cfg(feature = "only_i32")]
+    assert_eq!(engine.eval::<INT>("let x = 0xffffffff; x")?, -1);
+
     Ok(())
 }
 
@@ -50,6 +55,18 @@ fn test_binary_literal() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine.eval::<INT>("let x = 0b0011_1100_1010_0101; x")?,
         15525
+    );
+    #[cfg(not(feature = "only_i32"))]
+    assert_eq!(
+        engine.eval::<INT>(
+            "let x = 0b11111111_11111111_11111111_11111111_11111111_11111111_11111111_11111111; x"
+        )?,
+        -1
+    );
+    #[cfg(feature = "only_i32")]
+    assert_eq!(
+        engine.eval::<INT>("let x = 0b11111111_11111111_11111111_11111111; x")?,
+        -1
     );
 
     Ok(())

@@ -1,10 +1,10 @@
 //! Module that defines the `call_fn` API of [`Engine`].
 #![cfg(not(feature = "no_function"))]
 
-use crate::engine::{EvalState, Imports};
+use crate::engine::{EvalState, GlobalRuntimeState};
 use crate::types::dynamic::Variant;
 use crate::{
-    Dynamic, Engine, EvalAltResult, FuncArgs, Position, RhaiResult, Scope, StaticVec, AST,
+    Dynamic, Engine, FuncArgs, Position, RhaiResult, RhaiResultOf, Scope, StaticVec, AST, ERR,
 };
 use std::any::type_name;
 #[cfg(feature = "no_std")]
@@ -60,7 +60,7 @@ impl Engine {
         ast: &AST,
         name: impl AsRef<str>,
         args: impl FuncArgs,
-    ) -> Result<T, Box<EvalAltResult>> {
+    ) -> RhaiResultOf<T> {
         let mut arg_values = StaticVec::new_const();
         args.parse(&mut arg_values);
 
@@ -69,7 +69,7 @@ impl Engine {
         let typ = self.map_type_name(result.type_name());
 
         result.try_cast().ok_or_else(|| {
-            EvalAltResult::ErrorMismatchOutputType(
+            ERR::ErrorMismatchOutputType(
                 self.map_type_name(type_name::<T>()).into(),
                 typ.into(),
                 Position::NONE,
@@ -90,10 +90,11 @@ impl Engine {
     ///
     /// This function is very low level.
     ///
-    /// ## Arguments
+    /// # Arguments
     ///
     /// All the arguments are _consumed_, meaning that they're replaced by `()`.
     /// This is to avoid unnecessarily cloning the arguments.
+    ///
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
     ///
@@ -129,10 +130,10 @@ impl Engine {
     /// let result = engine.call_fn_raw(&mut scope, &ast, true, true, "bar", None, [])?;
     /// assert_eq!(result.cast::<i64>(), 21);
     ///
-    /// let mut value: Dynamic = 1_i64.into();
+    /// let mut value = 1_i64.into();
     /// let result = engine.call_fn_raw(&mut scope, &ast, true, true, "action", Some(&mut value), [ 41_i64.into() ])?;
     /// //                                                                      ^^^^^^^^^^^^^^^^ binding the 'this' pointer
-    /// assert_eq!(value.as_int().expect("value should be INT"), 42);
+    /// assert_eq!(value.as_int().unwrap(), 42);
     ///
     /// engine.call_fn_raw(&mut scope, &ast, true, false, "decl", None, [ 42_i64.into() ])?;
     /// //                                         ^^^^^ do not rewind scope
@@ -153,14 +154,13 @@ impl Engine {
         arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {
         let state = &mut EvalState::new();
-        let mods = &mut Imports::new();
+        let global = &mut GlobalRuntimeState::new();
         let statements = ast.statements();
 
         let orig_scope_len = scope.len();
 
         if eval_ast && !statements.is_empty() {
-            // Make sure new variables introduced at global level do not _spill_ into the function call
-            self.eval_global_statements(scope, mods, state, statements, &[ast.as_ref()], 0)?;
+            self.eval_global_statements(scope, global, state, statements, &[ast.as_ref()], 0)?;
 
             if rewind_scope {
                 scope.rewind(orig_scope_len);
@@ -175,7 +175,7 @@ impl Engine {
         let fn_def = ast
             .shared_lib()
             .get_script_fn(name, args.len())
-            .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::NONE))?;
+            .ok_or_else(|| ERR::ErrorFunctionNotFound(name.into(), Position::NONE))?;
 
         // Check for data race.
         #[cfg(not(feature = "no_closure"))]
@@ -183,7 +183,7 @@ impl Engine {
 
         let result = self.call_script_fn(
             scope,
-            mods,
+            global,
             state,
             &[ast.as_ref()],
             &mut this_ptr,

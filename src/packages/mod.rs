@@ -3,8 +3,9 @@
 use crate::{Module, Shared};
 
 pub(crate) mod arithmetic;
-mod array_basic;
-mod blob_basic;
+pub(crate) mod array_basic;
+mod bit_field;
+pub(crate) mod blob_basic;
 mod fn_basic;
 mod iter_basic;
 mod lang_core;
@@ -20,10 +21,12 @@ mod time_basic;
 pub use arithmetic::ArithmeticPackage;
 #[cfg(not(feature = "no_index"))]
 pub use array_basic::BasicArrayPackage;
+pub use bit_field::BitFieldPackage;
 #[cfg(not(feature = "no_index"))]
 pub use blob_basic::BasicBlobPackage;
 pub use fn_basic::BasicFnPackage;
 pub use iter_basic::BasicIteratorPackage;
+pub use lang_core::LanguageCorePackage;
 pub use logic::LogicPackage;
 #[cfg(not(feature = "no_object"))]
 pub use map_basic::BasicMapPackage;
@@ -69,12 +72,48 @@ pub trait Package {
 /// ```
 #[macro_export]
 macro_rules! def_package {
-    ($root:ident : $package:ident : $comment:expr , $lib:ident , $block:stmt) => {
-        #[doc=$comment]
+    ($($(#[$outer:meta])* $root:ident :: $package:ident => | $lib:ident | $block:block)+) => { $(
+        $(#[$outer])*
         pub struct $package($root::Shared<$root::Module>);
 
         impl $root::packages::Package for $package {
             fn as_shared_module(&self) -> $root::Shared<$root::Module> {
+                self.0.clone()
+            }
+            fn init($lib: &mut $root::Module) {
+                $block
+            }
+        }
+
+        impl Default for $package {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+
+        impl $package {
+            pub fn new() -> Self {
+                let mut module = $root::Module::new();
+                <Self as $root::packages::Package>::init(&mut module);
+                module.build_index();
+                Self(module.into())
+            }
+        }
+    )* };
+    ($root:ident : $package:ident : $comment:expr , $lib:ident , $block:stmt) => {
+        #[deprecated(since = "1.4.0", note = "this is an old syntax of `def_package!` and is deprecated; use the new syntax of `def_package!` instead")]
+        #[doc=$comment]
+        ///
+        /// # Deprecated
+        ///
+        /// This old syntax of `def_package!` is deprecated. Use the new syntax instead.
+        ///
+        /// This syntax will be removed in the next major version.
+        pub struct $package($root::Shared<$root::Module>);
+
+        impl $root::packages::Package for $package {
+            fn as_shared_module(&self) -> $root::Shared<$root::Module> {
+                #[allow(deprecated)]
                 self.0.clone()
             }
             fn init($lib: &mut $root::Module) {

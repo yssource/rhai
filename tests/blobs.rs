@@ -162,6 +162,13 @@ fn test_blobs_parse() -> Result<(), Box<EvalAltResult>> {
         0x1cf588
     );
 
+    assert_eq!(
+        engine.eval::<Blob>(
+            "let x = blob(16, 0); write_be(x, 0, 8, 0x1234567890abcdef); write_be(x, 8, 8, 0xabcdef1234567890); x"
+        )?,
+        vec![0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef, 0xab, 0xcd, 0xef, 0x12, 0x34, 0x56, 0x78, 0x90]
+    );
+
     Ok(())
 }
 
@@ -229,6 +236,40 @@ fn test_blobs_parse() -> Result<(), Box<EvalAltResult>> {
             "let x = blob(16, 0); for n in 0..16 { x[n] = n; } write_le(x, 3, 3, -98765432); parse_le_int(x, 3, 3)"
         )?,
         0x1cf588
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_blobs_write_string() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert_eq!(
+        engine.eval::<Blob>(r#"let x = blob(16, 0); write_ascii(x, 0, 14, "hello, world!"); x"#)?,
+        "hello, world!\0\0\0".as_bytes()
+    );
+
+    assert_eq!(
+        engine.eval::<Blob>(r#"let x = blob(10, 0); write_ascii(x, 3..8, "hello, world!"); x"#)?,
+        "\0\0\0hello\0\0".as_bytes()
+    );
+
+    assert_eq!(
+        engine.eval::<Blob>(
+            r#"let x = blob(10, 0); write_ascii(x, 0..9, "❤ hello, ❤ world! ❤❤❤"); x"#
+        )?,
+        " hello,  \0".as_bytes()
+    );
+
+    assert_eq!(
+        engine.eval::<Blob>(r#"let x = blob(10, 0); write_utf8(x, 3..9, "❤❤❤❤"); x"#)?,
+        "\0\0\0\u{2764}\u{2764}\0".as_bytes()
+    );
+
+    assert_eq!(
+        engine.eval::<Blob>(r#"let x = blob(10, 0); write_utf8(x, 3..7, "❤❤❤❤"); x"#)?,
+        vec![0, 0, 0, 226, 157, 164, 226, 0, 0, 0]
     );
 
     Ok(())

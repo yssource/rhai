@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::{def_package, EvalAltResult, Position, INT};
+use crate::{def_package, Position, RhaiError, RhaiResultOf, ERR, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -9,9 +9,9 @@ use std::prelude::v1::*;
 #[cfg(not(feature = "no_float"))]
 use num_traits::Float;
 
-#[inline(never)]
-pub fn make_err(msg: impl Into<String>) -> Box<EvalAltResult> {
-    EvalAltResult::ErrorArithmetic(msg.into(), Position::NONE).into()
+#[inline]
+pub fn make_err(msg: impl Into<String>) -> RhaiError {
+    ERR::ErrorArithmetic(msg.into(), Position::NONE).into()
 }
 
 macro_rules! gen_arithmetic_functions {
@@ -22,7 +22,7 @@ macro_rules! gen_arithmetic_functions {
             #[export_module]
             pub mod functions {
                 #[rhai_fn(name = "+", return_raw)]
-                pub fn add(x: $arg_type, y: $arg_type) -> Result<$arg_type, Box<EvalAltResult>> {
+                pub fn add(x: $arg_type, y: $arg_type) -> RhaiResultOf<$arg_type> {
                     if cfg!(not(feature = "unchecked")) {
                         x.checked_add(y).ok_or_else(|| make_err(format!("Addition overflow: {} + {}", x, y)))
                     } else {
@@ -30,7 +30,7 @@ macro_rules! gen_arithmetic_functions {
                     }
                 }
                 #[rhai_fn(name = "-", return_raw)]
-                pub fn subtract(x: $arg_type, y: $arg_type) -> Result<$arg_type, Box<EvalAltResult>> {
+                pub fn subtract(x: $arg_type, y: $arg_type) -> RhaiResultOf<$arg_type> {
                     if cfg!(not(feature = "unchecked")) {
                         x.checked_sub(y).ok_or_else(|| make_err(format!("Subtraction overflow: {} - {}", x, y)))
                     } else {
@@ -38,7 +38,7 @@ macro_rules! gen_arithmetic_functions {
                     }
                 }
                 #[rhai_fn(name = "*", return_raw)]
-                pub fn multiply(x: $arg_type, y: $arg_type) -> Result<$arg_type, Box<EvalAltResult>> {
+                pub fn multiply(x: $arg_type, y: $arg_type) -> RhaiResultOf<$arg_type> {
                     if cfg!(not(feature = "unchecked")) {
                         x.checked_mul(y).ok_or_else(|| make_err(format!("Multiplication overflow: {} * {}", x, y)))
                     } else {
@@ -46,7 +46,7 @@ macro_rules! gen_arithmetic_functions {
                     }
                 }
                 #[rhai_fn(name = "/", return_raw)]
-                pub fn divide(x: $arg_type, y: $arg_type) -> Result<$arg_type, Box<EvalAltResult>> {
+                pub fn divide(x: $arg_type, y: $arg_type) -> RhaiResultOf<$arg_type> {
                     if cfg!(not(feature = "unchecked")) {
                         // Detect division by zero
                         if y == 0 {
@@ -59,7 +59,7 @@ macro_rules! gen_arithmetic_functions {
                     }
                 }
                 #[rhai_fn(name = "%", return_raw)]
-                pub fn modulo(x: $arg_type, y: $arg_type) -> Result<$arg_type, Box<EvalAltResult>> {
+                pub fn modulo(x: $arg_type, y: $arg_type) -> RhaiResultOf<$arg_type> {
                     if cfg!(not(feature = "unchecked")) {
                         x.checked_rem(y).ok_or_else(|| make_err(format!("Modulo division by zero or overflow: {} % {}", x, y)))
                     } else {
@@ -67,7 +67,7 @@ macro_rules! gen_arithmetic_functions {
                     }
                 }
                 #[rhai_fn(name = "**", return_raw)]
-                pub fn power(x: $arg_type, y: INT) -> Result<$arg_type, Box<EvalAltResult>> {
+                pub fn power(x: $arg_type, y: INT) -> RhaiResultOf<$arg_type> {
                     if cfg!(not(feature = "unchecked")) {
                         if cfg!(not(feature = "only_i32")) && y > (u32::MAX as INT) {
                             Err(make_err(format!("Integer raised to too large an index: {} ~ {}", x, y)))
@@ -82,7 +82,7 @@ macro_rules! gen_arithmetic_functions {
                 }
 
                 #[rhai_fn(name = "<<", return_raw)]
-                pub fn shift_left(x: $arg_type, y: INT) -> Result<$arg_type, Box<EvalAltResult>> {
+                pub fn shift_left(x: $arg_type, y: INT) -> RhaiResultOf<$arg_type> {
                     if cfg!(not(feature = "unchecked")) {
                         if cfg!(not(feature = "only_i32")) && y > (u32::MAX as INT) {
                             Err(make_err(format!("Left-shift by too many bits: {} << {}", x, y)))
@@ -96,7 +96,7 @@ macro_rules! gen_arithmetic_functions {
                     }
                 }
                 #[rhai_fn(name = ">>", return_raw)]
-                pub fn shift_right(x: $arg_type, y: INT) -> Result<$arg_type, Box<EvalAltResult>> {
+                pub fn shift_right(x: $arg_type, y: INT) -> RhaiResultOf<$arg_type> {
                     if cfg!(not(feature = "unchecked")) {
                         if cfg!(not(feature = "only_i32")) && y > (u32::MAX as INT) {
                             Err(make_err(format!("Right-shift by too many bits: {} >> {}", x, y)))
@@ -146,7 +146,7 @@ macro_rules! gen_signed_functions {
             #[export_module]
             pub mod functions {
                 #[rhai_fn(name = "-", return_raw)]
-                pub fn neg(x: $arg_type) -> Result<$arg_type, Box<EvalAltResult>> {
+                pub fn neg(x: $arg_type) -> RhaiResultOf<$arg_type> {
                     if cfg!(not(feature = "unchecked")) {
                         x.checked_neg().ok_or_else(|| make_err(format!("Negation overflow: -{}", x)))
                     } else {
@@ -158,7 +158,7 @@ macro_rules! gen_signed_functions {
                     x
                 }
                 #[rhai_fn(return_raw)]
-                pub fn abs(x: $arg_type) -> Result<$arg_type, Box<EvalAltResult>> {
+                pub fn abs(x: $arg_type) -> RhaiResultOf<$arg_type> {
                     if cfg!(not(feature = "unchecked")) {
                         x.checked_abs().ok_or_else(|| make_err(format!("Negation overflow: -{}", x)))
                     } else {
@@ -179,36 +179,40 @@ macro_rules! reg_functions {
     )* }
 }
 
-def_package!(crate:ArithmeticPackage:"Basic arithmetic", lib, {
-    lib.standard = true;
+def_package! {
+    /// Basic arithmetic package.
+    crate::ArithmeticPackage => |lib| {
+        lib.standard = true;
 
-    combine_with_exported_module!(lib, "int", int_functions);
-    reg_functions!(lib += signed_basic; INT);
+        combine_with_exported_module!(lib, "int", int_functions);
+        reg_functions!(lib += signed_basic; INT);
 
-    #[cfg(not(feature = "only_i32"))]
-    #[cfg(not(feature = "only_i64"))]
-    {
-        reg_functions!(lib += arith_numbers; i8, u8, i16, u16, i32, u32, u64);
-        reg_functions!(lib += signed_numbers; i8, i16, i32);
-
-        #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+        #[cfg(not(feature = "only_i32"))]
+        #[cfg(not(feature = "only_i64"))]
         {
-            reg_functions!(lib += arith_num_128; i128, u128);
-            reg_functions!(lib += signed_num_128; i128);
+            reg_functions!(lib += arith_numbers; i8, u8, i16, u16, i32, u32, u64);
+            reg_functions!(lib += signed_numbers; i8, i16, i32);
+
+            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(target_arch = "wasm64"))]
+            {
+                reg_functions!(lib += arith_num_128; i128, u128);
+                reg_functions!(lib += signed_num_128; i128);
+            }
         }
-    }
 
-    // Basic arithmetic for floating-point
-    #[cfg(not(feature = "no_float"))]
-    {
-        combine_with_exported_module!(lib, "f32", f32_functions);
-        combine_with_exported_module!(lib, "f64", f64_functions);
-    }
+        // Basic arithmetic for floating-point
+        #[cfg(not(feature = "no_float"))]
+        {
+            combine_with_exported_module!(lib, "f32", f32_functions);
+            combine_with_exported_module!(lib, "f64", f64_functions);
+        }
 
-    // Decimal functions
-    #[cfg(feature = "decimal")]
-    combine_with_exported_module!(lib, "decimal", decimal_functions);
-});
+        // Decimal functions
+        #[cfg(feature = "decimal")]
+        combine_with_exported_module!(lib, "decimal", decimal_functions);
+    }
+}
 
 #[export_module]
 mod int_functions {
@@ -234,7 +238,8 @@ gen_arithmetic_functions!(arith_numbers => i8, u8, i16, u16, i32, u32, u64);
 
 #[cfg(not(feature = "only_i32"))]
 #[cfg(not(feature = "only_i64"))]
-#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm64"))]
 gen_arithmetic_functions!(arith_num_128 => i128, u128);
 
 gen_signed_functions!(signed_basic => INT);
@@ -245,14 +250,13 @@ gen_signed_functions!(signed_numbers => i8, i16, i32);
 
 #[cfg(not(feature = "only_i32"))]
 #[cfg(not(feature = "only_i64"))]
-#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm64"))]
 gen_signed_functions!(signed_num_128 => i128);
 
 #[cfg(not(feature = "no_float"))]
 #[export_module]
 mod f32_functions {
-    use crate::EvalAltResult;
-
     #[cfg(not(feature = "f32_float"))]
     pub mod basic_arithmetic {
         #[rhai_fn(name = "+")]
@@ -334,7 +338,7 @@ mod f32_functions {
         x.abs()
     }
     #[rhai_fn(return_raw)]
-    pub fn sign(x: f32) -> Result<INT, Box<EvalAltResult>> {
+    pub fn sign(x: f32) -> RhaiResultOf<INT> {
         match x.signum() {
             _ if x == 0.0 => Ok(0),
             x if x.is_nan() => Err(make_err("Sign of NaN is undefined")),
@@ -346,7 +350,7 @@ mod f32_functions {
         x == 0.0
     }
     #[rhai_fn(name = "**", return_raw)]
-    pub fn pow_f_i(x: f32, y: INT) -> Result<f32, Box<EvalAltResult>> {
+    pub fn pow_f_i(x: f32, y: INT) -> RhaiResultOf<f32> {
         if cfg!(not(feature = "unchecked")) && y > (i32::MAX as INT) {
             Err(make_err(format!(
                 "Number raised to too large an index: {} ~ {}",
@@ -442,7 +446,7 @@ mod f64_functions {
         x.abs()
     }
     #[rhai_fn(return_raw)]
-    pub fn sign(x: f64) -> Result<INT, Box<EvalAltResult>> {
+    pub fn sign(x: f64) -> RhaiResultOf<INT> {
         match x.signum() {
             _ if x == 0.0 => Ok(0),
             x if x.is_nan() => Err(make_err("Sign of NaN is undefined")),
@@ -462,7 +466,7 @@ pub mod decimal_functions {
     use rust_decimal::{prelude::Zero, Decimal, MathematicalOps};
 
     #[rhai_fn(skip, return_raw)]
-    pub fn add(x: Decimal, y: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn add(x: Decimal, y: Decimal) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             x.checked_add(y)
                 .ok_or_else(|| make_err(format!("Addition overflow: {} + {}", x, y)))
@@ -471,7 +475,7 @@ pub mod decimal_functions {
         }
     }
     #[rhai_fn(skip, return_raw)]
-    pub fn subtract(x: Decimal, y: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn subtract(x: Decimal, y: Decimal) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             x.checked_sub(y)
                 .ok_or_else(|| make_err(format!("Subtraction overflow: {} - {}", x, y)))
@@ -480,7 +484,7 @@ pub mod decimal_functions {
         }
     }
     #[rhai_fn(skip, return_raw)]
-    pub fn multiply(x: Decimal, y: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn multiply(x: Decimal, y: Decimal) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             x.checked_mul(y)
                 .ok_or_else(|| make_err(format!("Multiplication overflow: {} * {}", x, y)))
@@ -489,7 +493,7 @@ pub mod decimal_functions {
         }
     }
     #[rhai_fn(skip, return_raw)]
-    pub fn divide(x: Decimal, y: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn divide(x: Decimal, y: Decimal) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             // Detect division by zero
             if y == Decimal::zero() {
@@ -503,7 +507,7 @@ pub mod decimal_functions {
         }
     }
     #[rhai_fn(skip, return_raw)]
-    pub fn modulo(x: Decimal, y: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn modulo(x: Decimal, y: Decimal) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             x.checked_rem(y).ok_or_else(|| {
                 make_err(format!(
@@ -516,7 +520,7 @@ pub mod decimal_functions {
         }
     }
     #[rhai_fn(skip, return_raw)]
-    pub fn power(x: Decimal, y: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
+    pub fn power(x: Decimal, y: Decimal) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
             x.checked_powd(y)
                 .ok_or_else(|| make_err(format!("Exponential overflow: {} + {}", x, y)))

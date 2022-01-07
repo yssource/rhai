@@ -15,12 +15,15 @@ use crate::Map;
 pub const FUNC_TO_STRING: &str = "to_string";
 pub const FUNC_TO_DEBUG: &str = "to_debug";
 
-def_package!(crate:BasicStringPackage:"Basic string utilities, including printing.", lib, {
-    lib.standard = true;
+def_package! {
+    /// Package of basic string utilities (e.g. printing)
+    crate::BasicStringPackage => |lib| {
+        lib.standard = true;
 
-    combine_with_exported_module!(lib, "print_debug", print_debug_functions);
-    combine_with_exported_module!(lib, "number_formatting", number_formatting);
-});
+        combine_with_exported_module!(lib, "print_debug", print_debug_functions);
+        combine_with_exported_module!(lib, "number_formatting", number_formatting);
+    }
+}
 
 // Register print and debug
 
@@ -271,7 +274,8 @@ mod number_formatting {
             to_binary(value)
         }
 
-        #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(not(target_arch = "wasm64"))]
         pub mod num_128 {
             #[rhai_fn(name = "to_hex")]
             pub fn u128_to_hex(value: u128) -> ImmutableString {

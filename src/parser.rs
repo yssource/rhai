@@ -1,23 +1,24 @@
 //! Main module defining the lexer and parser.
 
+use crate::api::custom_syntax::{markers::*, CustomSyntax};
 use crate::api::options::LanguageOptions;
 use crate::ast::{
     BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment, ScriptFnDef, Stmt,
     StmtBlock, AST_OPTION_FLAGS::*,
 };
-use crate::custom_syntax::{markers::*, CustomSyntax};
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::func::hashing::get_hasher;
-use crate::module::NamespaceRef;
+use crate::module::Namespace;
 use crate::tokenizer::{
     is_keyword_function, is_valid_function_name, is_valid_identifier, Token, TokenStream,
     TokenizerControl,
 };
 use crate::types::dynamic::AccessMode;
+use crate::types::StringsInterner;
 use crate::{
-    calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Engine, ExclusiveRange,
-    Identifier, ImmutableString, InclusiveRange, LexError, ParseError, ParseErrorType, Position,
-    Scope, Shared, StaticVec, AST, INT,
+    calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Dynamic, Engine, ExclusiveRange,
+    Identifier, ImmutableString, InclusiveRange, LexError, ParseError, Position, Scope, Shared,
+    StaticVec, AST, INT, PERR,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -25,53 +26,17 @@ use std::{
     collections::BTreeMap,
     hash::{Hash, Hasher},
     num::{NonZeroU8, NonZeroUsize},
-    ops::AddAssign,
 };
 
-type PERR = ParseErrorType;
+pub type ParseResult<T> = Result<T, ParseError>;
 
-type FunctionsLib = BTreeMap<u64, Shared<ScriptFnDef>>;
+type FnLib = BTreeMap<u64, Shared<ScriptFnDef>>;
 
 /// Invalid variable name that acts as a search barrier in a [`Scope`].
 const SCOPE_SEARCH_BARRIER_MARKER: &str = "$BARRIER$";
 
 /// The message: `TokenStream` never ends
 const NEVER_ENDS: &str = "`TokenStream` never ends";
-
-/// _(internals)_ A factory of identifiers from text strings.
-/// Exported under the `internals` feature only.
-///
-/// When [`SmartString`](https://crates.io/crates/smartstring) is used as [`Identifier`],
-/// this just returns a copy because most identifiers in Rhai are short and ASCII-based.
-///
-/// When [`ImmutableString`] is used as [`Identifier`], this type acts as an interner which keeps a
-/// collection of strings and returns shared instances, only creating a new string when it is not
-/// yet interned.
-#[derive(Debug, Clone, Hash)]
-pub struct IdentifierBuilder();
-
-impl IdentifierBuilder {
-    /// Create a new [`IdentifierBuilder`].
-    #[inline]
-    #[must_use]
-    pub const fn new() -> Self {
-        Self()
-    }
-    /// Get an identifier from a text string.
-    #[inline]
-    #[must_use]
-    pub fn get(&mut self, text: impl AsRef<str> + Into<Identifier>) -> Identifier {
-        text.into()
-    }
-    /// Merge another [`IdentifierBuilder`] into this.
-    #[inline(always)]
-    pub fn merge(&mut self, _other: &Self) {}
-}
-
-impl AddAssign for IdentifierBuilder {
-    #[inline(always)]
-    fn add_assign(&mut self, _rhs: Self) {}
-}
 
 /// _(internals)_ A type that encapsulates the current state of the parser.
 /// Exported under the `internals` feature only.
@@ -82,7 +47,7 @@ pub struct ParseState<'e> {
     /// Input stream buffer containing the next character to read.
     pub tokenizer_control: TokenizerControl,
     /// Interned strings.
-    pub interned_strings: IdentifierBuilder,
+    pub interned_strings: StringsInterner,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     pub stack: StaticVec<(Identifier, AccessMode)>,
     /// Size of the local variables stack upon entry of the current block scope.
@@ -125,7 +90,7 @@ impl<'e> ParseState<'e> {
             external_vars: BTreeMap::new(),
             #[cfg(not(feature = "no_closure"))]
             allow_capture: true,
-            interned_strings: IdentifierBuilder::new(),
+            interned_strings: StringsInterner::new(),
             stack: StaticVec::new_const(),
             entry_stack_len: 0,
             #[cfg(not(feature = "no_module"))]
@@ -143,8 +108,7 @@ impl<'e> ParseState<'e> {
     /// Return `None` when the variable name is not found in the `stack`.
     #[inline]
     #[must_use]
-    pub fn access_var(&mut self, name: impl AsRef<str>, pos: Position) -> Option<NonZeroUsize> {
-        let name = name.as_ref();
+    pub fn access_var(&mut self, name: &str, pos: Position) -> Option<NonZeroUsize> {
         let mut barrier = false;
         let _pos = pos;
 
@@ -193,9 +157,7 @@ impl<'e> ParseState<'e> {
     #[cfg(not(feature = "no_module"))]
     #[inline]
     #[must_use]
-    pub fn find_module(&self, name: impl AsRef<str>) -> Option<NonZeroUsize> {
-        let name = name.as_ref();
-
+    pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
         self.modules
             .iter()
             .rev()
@@ -204,11 +166,23 @@ impl<'e> ParseState<'e> {
             .and_then(|(i, _)| NonZeroUsize::new(i + 1))
     }
 
-    /// Get an interned string, creating one if it is not yet interned.
+    /// Get an interned identifier, creating one if it is not yet interned.
     #[inline(always)]
     #[must_use]
-    pub fn get_identifier(&mut self, text: impl AsRef<str> + Into<Identifier>) -> Identifier {
-        self.interned_strings.get(text)
+    pub fn get_identifier(&mut self, prefix: impl AsRef<str>, text: impl AsRef<str>) -> Identifier {
+        self.interned_strings.get(prefix, text).into()
+    }
+
+    /// Get an interned string, creating one if it is not yet interned.
+    #[inline(always)]
+    #[allow(dead_code)]
+    #[must_use]
+    pub fn get_interned_string(
+        &mut self,
+        prefix: impl AsRef<str>,
+        text: impl AsRef<str>,
+    ) -> ImmutableString {
+        self.interned_strings.get(prefix, text)
     }
 }
 
@@ -258,10 +232,7 @@ impl ParseSettings {
     /// Make sure that the current level of expression nesting is within the maximum limit.
     #[cfg(not(feature = "unchecked"))]
     #[inline]
-    pub fn ensure_level_within_max_limit(
-        &self,
-        limit: Option<NonZeroUsize>,
-    ) -> Result<(), ParseError> {
+    pub fn ensure_level_within_max_limit(&self, limit: Option<NonZeroUsize>) -> ParseResult<()> {
         if let Some(limit) = limit {
             if self.level > limit.get() {
                 return Err(PERR::ExprTooDeep.into_err(self.pos));
@@ -281,22 +252,22 @@ impl Expr {
         match self {
             Self::Variable(_, pos, x) if x.1.is_none() => {
                 let ident = x.2;
-                let getter = state.get_identifier(crate::engine::make_getter(&ident));
+                let getter = state.get_identifier(crate::engine::FN_GET, &ident);
                 let hash_get = calc_fn_hash(&getter, 1);
-                let setter = state.get_identifier(crate::engine::make_setter(&ident));
+                let setter = state.get_identifier(crate::engine::FN_SET, &ident);
                 let hash_set = calc_fn_hash(&setter, 2);
 
                 Self::Property(Box::new((
                     (getter, hash_get),
                     (setter, hash_set),
-                    (state.get_identifier(ident).into(), pos),
+                    (state.get_interned_string("", &ident), pos),
                 )))
             }
             _ => self,
         }
     }
     /// Raise an error if the expression can never yield a boolean value.
-    fn ensure_bool_expr(self) -> Result<Expr, ParseError> {
+    fn ensure_bool_expr(self) -> ParseResult<Expr> {
         let type_name = match self {
             Expr::Unit(_) => "()",
             Expr::DynamicConstant(ref v, _) if !v.is::<bool>() => v.type_name(),
@@ -317,7 +288,7 @@ impl Expr {
         )
     }
     /// Raise an error if the expression can never yield an iterable value.
-    fn ensure_iterable(self) -> Result<Expr, ParseError> {
+    fn ensure_iterable(self) -> ParseResult<Expr> {
         let type_name = match self {
             Expr::Unit(_) => "()",
             Expr::BoolConstant(_, _) => "a boolean",
@@ -340,10 +311,7 @@ impl Expr {
 
 /// Make sure that the next expression is not a statement expression (i.e. wrapped in `{}`).
 #[inline]
-fn ensure_not_statement_expr(
-    input: &mut TokenStream,
-    type_name: impl ToString,
-) -> Result<(), ParseError> {
+fn ensure_not_statement_expr(input: &mut TokenStream, type_name: impl ToString) -> ParseResult<()> {
     match input.peek().expect(NEVER_ENDS) {
         (Token::LeftBrace, pos) => Err(PERR::ExprExpected(type_name.to_string()).into_err(*pos)),
         _ => Ok(()),
@@ -352,7 +320,7 @@ fn ensure_not_statement_expr(
 
 /// Make sure that the next expression is not a mis-typed assignment (i.e. `a = b` instead of `a == b`).
 #[inline]
-fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
+fn ensure_not_assignment(input: &mut TokenStream) -> ParseResult<()> {
     match input.peek().expect(NEVER_ENDS) {
         (Token::Equals, pos) => Err(LexError::ImproperSymbol(
             "=".to_string(),
@@ -374,7 +342,7 @@ fn eat_token(input: &mut TokenStream, expected_token: Token) -> Position {
 
     if t != expected_token {
         unreachable!(
-            "expecting {} (found {}) at {}",
+            "{} expected but gets {} at {}",
             expected_token.syntax(),
             t.syntax(),
             pos
@@ -395,7 +363,7 @@ fn match_token(input: &mut TokenStream, token: Token) -> (bool, Position) {
 }
 
 /// Parse a variable name.
-fn parse_var_name(input: &mut TokenStream) -> Result<(Box<str>, Position), ParseError> {
+fn parse_var_name(input: &mut TokenStream) -> ParseResult<(Box<str>, Position)> {
     match input.next().expect(NEVER_ENDS) {
         // Variable name
         (Token::Identifier(s), pos) => Ok((s, pos)),
@@ -411,7 +379,7 @@ fn parse_var_name(input: &mut TokenStream) -> Result<(Box<str>, Position), Parse
 }
 
 /// Parse a symbol.
-fn parse_symbol(input: &mut TokenStream) -> Result<(Box<str>, Position), ParseError> {
+fn parse_symbol(input: &mut TokenStream) -> ParseResult<(Box<str>, Position)> {
     match input.next().expect(NEVER_ENDS) {
         // Symbol
         (token, pos) if token.is_standard_symbol() => Ok((token.literal_syntax().into(), pos)),
@@ -428,9 +396,9 @@ fn parse_symbol(input: &mut TokenStream) -> Result<(Box<str>, Position), ParseEr
 fn parse_paren_expr(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -462,12 +430,12 @@ fn parse_paren_expr(
 fn parse_fn_call(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     id: Identifier,
     capture_parent_scope: bool,
-    namespace: Option<NamespaceRef>,
+    namespace: Option<Namespace>,
     settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -502,7 +470,7 @@ fn parse_fn_call(
                     let relax = false;
 
                     if !relax && settings.strict_var && index.is_none() {
-                        return Err(ParseErrorType::ModuleUndefined(modules[0].name.to_string())
+                        return Err(PERR::ModuleUndefined(modules[0].name.to_string())
                             .into_err(modules[0].pos));
                     }
 
@@ -523,7 +491,7 @@ fn parse_fn_call(
             args.shrink_to_fit();
 
             return Ok(FnCallExpr {
-                name: state.get_identifier(id),
+                name: state.get_identifier("", id),
                 capture_parent_scope,
                 namespace,
                 hashes,
@@ -561,10 +529,8 @@ fn parse_fn_call(
                         let relax = false;
 
                         if !relax && settings.strict_var && index.is_none() {
-                            return Err(ParseErrorType::ModuleUndefined(
-                                modules[0].name.to_string(),
-                            )
-                            .into_err(modules[0].pos));
+                            return Err(PERR::ModuleUndefined(modules[0].name.to_string())
+                                .into_err(modules[0].pos));
                         }
 
                         modules.set_index(index);
@@ -584,7 +550,7 @@ fn parse_fn_call(
                 args.shrink_to_fit();
 
                 return Ok(FnCallExpr {
-                    name: state.get_identifier(id),
+                    name: state.get_identifier("", id),
                     capture_parent_scope,
                     namespace,
                     hashes,
@@ -625,10 +591,10 @@ fn parse_fn_call(
 fn parse_index_chain(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     lhs: Expr,
     settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -789,9 +755,9 @@ fn parse_index_chain(
 fn parse_array_literal(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -862,9 +828,9 @@ fn parse_array_literal(
 fn parse_map_literal(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -944,7 +910,7 @@ fn parse_map_literal(
         }
 
         let expr = parse_expr(input, state, lib, settings.level_up())?;
-        let name = state.get_identifier(name);
+        let name = state.get_identifier("", name);
         template.insert(name.clone(), crate::Dynamic::UNIT);
         map.push((Ident { name, pos }, expr));
 
@@ -979,9 +945,9 @@ fn parse_map_literal(
 fn parse_switch(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -1095,7 +1061,29 @@ fn parse_switch(
 
         def_stmt = match (hash, range) {
             (None, Some(range)) => {
-                ranges.push((range.0, range.1, range.2, condition, stmt.into()));
+                let is_empty = if range.2 {
+                    (range.0..=range.1).is_empty()
+                } else {
+                    (range.0..range.1).is_empty()
+                };
+
+                if !is_empty {
+                    match (range.1.checked_sub(range.0), range.2) {
+                        // Unroll single range
+                        (Some(1), false) | (Some(0), true) => {
+                            let value = Dynamic::from_int(range.0);
+                            let hasher = &mut get_hasher();
+                            value.hash(hasher);
+                            let hash = hasher.finish();
+
+                            table
+                                .entry(hash)
+                                .or_insert_with(|| (condition.clone(), stmt.into()).into());
+                        }
+                        // Other range
+                        _ => ranges.push((range.0, range.1, range.2, condition, stmt.into())),
+                    }
+                }
                 None
             }
             (Some(hash), None) => {
@@ -1103,9 +1091,7 @@ fn parse_switch(
                 None
             }
             (None, None) => Some(stmt.into()),
-            (Some(_), Some(_)) => {
-                unreachable!("cannot have both a hash and a range in a `switch` statement")
-            }
+            _ => unreachable!("both hash and range in switch statement case"),
         };
 
         match input.peek().expect(NEVER_ENDS) {
@@ -1144,9 +1130,9 @@ fn parse_switch(
 fn parse_primary(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -1155,7 +1141,7 @@ fn parse_primary(
     let mut settings = settings;
     settings.pos = *token_pos;
 
-    let mut root_expr = match token {
+    let root_expr = match token {
         Token::EOF => return Err(PERR::UnexpectedEOF.into_err(settings.pos)),
 
         Token::IntegerConstant(_)
@@ -1166,11 +1152,11 @@ fn parse_primary(
             Token::IntegerConstant(x) => Expr::IntegerConstant(x, settings.pos),
             Token::CharConstant(c) => Expr::CharConstant(c, settings.pos),
             Token::StringConstant(s) => {
-                Expr::StringConstant(state.get_identifier(s).into(), settings.pos)
+                Expr::StringConstant(state.get_interned_string("", s), settings.pos)
             }
             Token::True => Expr::BoolConstant(true, settings.pos),
             Token::False => Expr::BoolConstant(false, settings.pos),
-            _ => unreachable!(),
+            token => unreachable!("token is {:?}", token),
         },
         #[cfg(not(feature = "no_float"))]
         Token::FloatConstant(x) => {
@@ -1189,7 +1175,7 @@ fn parse_primary(
         Token::LeftBrace if settings.allow_stmt_expr => {
             match parse_block(input, state, lib, settings.level_up())? {
                 block @ Stmt::Block(_, _) => Expr::Stmt(Box::new(block.into())),
-                stmt => unreachable!("expecting Stmt::Block, but gets {:?}", stmt),
+                stmt => unreachable!("Stmt::Block expected but gets {:?}", stmt),
             }
         }
         // ( - grouped expression
@@ -1238,13 +1224,12 @@ fn parse_primary(
 
             #[cfg(not(feature = "no_closure"))]
             new_state.external_vars.iter().try_for_each(
-                |(captured_var, &pos)| -> Result<_, ParseError> {
+                |(captured_var, &pos)| -> ParseResult<_> {
                     let index = state.access_var(captured_var, pos);
 
                     if !settings.is_closure && settings.strict_var && index.is_none() {
                         // If the parent scope is not inside another capturing closure
-                        Err(ParseErrorType::VariableUndefined(captured_var.to_string())
-                            .into_err(pos))
+                        Err(PERR::VariableUndefined(captured_var.to_string()).into_err(pos))
                     } else {
                         Ok(())
                     }
@@ -1261,16 +1246,17 @@ fn parse_primary(
         Token::InterpolatedString(_) => {
             let mut segments = StaticVec::<Expr>::new();
 
-            if let (Token::InterpolatedString(s), pos) = input.next().expect(NEVER_ENDS) {
-                segments.push(Expr::StringConstant(s.into(), pos));
-            } else {
-                unreachable!();
+            match input.next().expect(NEVER_ENDS) {
+                (Token::InterpolatedString(s), pos) => {
+                    segments.push(Expr::StringConstant(s.into(), pos));
+                }
+                token => unreachable!("Token::InterpolatedString expected but gets {:?}", token),
             }
 
             loop {
                 let expr = match parse_block(input, state, lib, settings.level_up())? {
                     block @ Stmt::Block(_, _) => Expr::Stmt(Box::new(block.into())),
-                    stmt => unreachable!("expecting Stmt::Block, but gets {:?}", stmt),
+                    stmt => unreachable!("Stmt::Block expected but gets {:?}", stmt),
                 };
                 segments.push(expr);
 
@@ -1296,7 +1282,7 @@ fn parse_primary(
                         return Err(err.into_err(pos))
                     }
                     (token, _) => unreachable!(
-                        "expected a string within an interpolated string literal, but gets {:?}",
+                        "string within an interpolated string literal expected but gets {:?}",
                         token
                     ),
                 }
@@ -1314,11 +1300,21 @@ fn parse_primary(
         #[cfg(not(feature = "no_object"))]
         Token::MapStart => parse_map_literal(input, state, lib, settings.level_up())?,
 
+        // Custom syntax.
+        Token::Custom(key) | Token::Reserved(key) | Token::Identifier(key)
+            if state.engine.custom_syntax.contains_key(&**key) =>
+        {
+            let (key, syntax) = state.engine.custom_syntax.get_key_value(&**key).unwrap();
+            let (_, pos) = input.next().expect(NEVER_ENDS);
+            let settings2 = settings.level_up();
+            parse_custom_syntax(input, state, lib, settings2, key, syntax, pos)?
+        }
+
         // Identifier
         Token::Identifier(_) => {
             let s = match input.next().expect(NEVER_ENDS) {
                 (Token::Identifier(s), _) => s,
-                _ => unreachable!(),
+                token => unreachable!("Token::Identifier expected but gets {:?}", token),
             };
 
             match input.peek().expect(NEVER_ENDS).0 {
@@ -1332,7 +1328,7 @@ fn parse_primary(
                     Expr::Variable(
                         None,
                         settings.pos,
-                        (None, None, state.get_identifier(s)).into(),
+                        (None, None, state.get_identifier("", s)).into(),
                     )
                 }
                 // Namespace qualification
@@ -1346,7 +1342,7 @@ fn parse_primary(
                     Expr::Variable(
                         None,
                         settings.pos,
-                        (None, None, state.get_identifier(s)).into(),
+                        (None, None, state.get_identifier("", s)).into(),
                     )
                 }
                 // Normal variable access
@@ -1354,9 +1350,7 @@ fn parse_primary(
                     let index = state.access_var(&s, settings.pos);
 
                     if settings.strict_var && index.is_none() {
-                        return Err(
-                            ParseErrorType::VariableUndefined(s.to_string()).into_err(settings.pos)
-                        );
+                        return Err(PERR::VariableUndefined(s.to_string()).into_err(settings.pos));
                     }
 
                     let short_index = index.and_then(|x| {
@@ -1369,7 +1363,7 @@ fn parse_primary(
                     Expr::Variable(
                         short_index,
                         settings.pos,
-                        (index, None, state.get_identifier(s)).into(),
+                        (index, None, state.get_identifier("", s)).into(),
                     )
                 }
             }
@@ -1379,7 +1373,7 @@ fn parse_primary(
         Token::Reserved(_) => {
             let s = match input.next().expect(NEVER_ENDS) {
                 (Token::Reserved(s), _) => s,
-                _ => unreachable!(),
+                token => unreachable!("Token::Reserved expected but gets {:?}", token),
             };
 
             match input.peek().expect(NEVER_ENDS).0 {
@@ -1387,30 +1381,27 @@ fn parse_primary(
                 Token::LeftParen | Token::Bang if is_keyword_function(&s) => Expr::Variable(
                     None,
                     settings.pos,
-                    (None, None, state.get_identifier(s)).into(),
+                    (None, None, state.get_identifier("", s)).into(),
                 ),
                 // Access to `this` as a variable is OK within a function scope
                 #[cfg(not(feature = "no_function"))]
                 _ if &*s == KEYWORD_THIS && settings.is_function_scope => Expr::Variable(
                     None,
                     settings.pos,
-                    (None, None, state.get_identifier(s)).into(),
+                    (None, None, state.get_identifier("", s)).into(),
                 ),
                 // Cannot access to `this` as a variable not in a function scope
                 _ if &*s == KEYWORD_THIS => {
                     let msg = format!("'{}' can only be used in functions", s);
                     return Err(LexError::ImproperSymbol(s.to_string(), msg).into_err(settings.pos));
                 }
-                _ if is_valid_identifier(s.chars()) => {
-                    return Err(PERR::Reserved(s.to_string()).into_err(settings.pos))
-                }
-                _ => return Err(LexError::UnexpectedInput(s.to_string()).into_err(settings.pos)),
+                _ => return Err(PERR::Reserved(s.to_string()).into_err(settings.pos)),
             }
         }
 
         Token::LexError(_) => match input.next().expect(NEVER_ENDS) {
             (Token::LexError(err), _) => return Err(err.into_err(settings.pos)),
-            _ => unreachable!(),
+            token => unreachable!("Token::LexError expected but gets {:?}", token),
         },
 
         _ => {
@@ -1418,18 +1409,31 @@ fn parse_primary(
         }
     };
 
+    parse_postfix(input, state, lib, root_expr, settings)
+}
+
+/// Tail processing of all possible postfix operators of a primary expression.
+fn parse_postfix(
+    input: &mut TokenStream,
+    state: &mut ParseState,
+    lib: &mut FnLib,
+    mut lhs: Expr,
+    settings: ParseSettings,
+) -> ParseResult<Expr> {
+    let mut settings = settings;
+
     // Tail processing all possible postfix operators
     loop {
         let (tail_token, _) = input.peek().expect(NEVER_ENDS);
 
-        if !root_expr.is_valid_postfix(tail_token) {
+        if !lhs.is_valid_postfix(tail_token) {
             break;
         }
 
         let (tail_token, tail_pos) = input.next().expect(NEVER_ENDS);
         settings.pos = tail_pos;
 
-        root_expr = match (root_expr, tail_token) {
+        lhs = match (lhs, tail_token) {
             // Qualified function call with !
             (Expr::Variable(_, _, x), Token::Bang) if x.1.is_some() => {
                 return if !match_token(input, Token::LeftParen).0 {
@@ -1478,7 +1482,7 @@ fn parse_primary(
                 if let Some((ref mut namespace, _)) = namespace {
                     namespace.push(var_name_def);
                 } else {
-                    let mut ns = NamespaceRef::new();
+                    let mut ns = Namespace::new();
                     ns.push(var_name_def);
                     namespace = Some((ns, 42));
                 }
@@ -1486,7 +1490,7 @@ fn parse_primary(
                 Expr::Variable(
                     None,
                     pos2,
-                    (None, namespace, state.get_identifier(id2)).into(),
+                    (None, namespace, state.get_identifier("", id2)).into(),
                 )
             }
             // Indexing
@@ -1523,7 +1527,7 @@ fn parse_primary(
     }
 
     // Cache the hash key for namespace-qualified variables
-    let namespaced_variable = match root_expr {
+    let namespaced_variable = match lhs {
         Expr::Variable(_, _, ref mut x) if x.1.is_some() => Some(x.as_mut()),
         Expr::Index(ref mut x, _, _) | Expr::Dot(ref mut x, _, _) => match x.lhs {
             Expr::Variable(_, _, ref mut x) if x.1.is_some() => Some(x.as_mut()),
@@ -1546,8 +1550,7 @@ fn parse_primary(
 
             if !relax && settings.strict_var && index.is_none() {
                 return Err(
-                    ParseErrorType::ModuleUndefined(namespace[0].name.to_string())
-                        .into_err(namespace[0].pos),
+                    PERR::ModuleUndefined(namespace[0].name.to_string()).into_err(namespace[0].pos)
                 );
             }
 
@@ -1556,16 +1559,16 @@ fn parse_primary(
     }
 
     // Make sure identifiers are valid
-    Ok(root_expr)
+    Ok(lhs)
 }
 
 /// Parse a potential unary operator.
 fn parse_unary(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -1604,7 +1607,7 @@ fn parse_unary(
                     args.shrink_to_fit();
 
                     Ok(FnCallExpr {
-                        name: state.get_identifier("-"),
+                        name: state.get_identifier("", "-"),
                         hashes: FnCallHashes::from_native(calc_fn_hash("-", 1)),
                         args,
                         ..Default::default()
@@ -1630,7 +1633,7 @@ fn parse_unary(
                     args.shrink_to_fit();
 
                     Ok(FnCallExpr {
-                        name: state.get_identifier("+"),
+                        name: state.get_identifier("", "+"),
                         hashes: FnCallHashes::from_native(calc_fn_hash("+", 1)),
                         args,
                         ..Default::default()
@@ -1647,7 +1650,7 @@ fn parse_unary(
             args.shrink_to_fit();
 
             Ok(FnCallExpr {
-                name: state.get_identifier("!"),
+                name: state.get_identifier("", "!"),
                 hashes: FnCallHashes::from_native(calc_fn_hash("!", 1)),
                 args,
                 ..Default::default()
@@ -1668,7 +1671,7 @@ fn make_assignment_stmt(
     lhs: Expr,
     rhs: Expr,
     op_pos: Position,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[must_use]
     fn check_lvalue(expr: &Expr, parent_is_dot: bool) -> Option<Position> {
         match expr {
@@ -1692,7 +1695,7 @@ fn make_assignment_stmt(
         }
     }
 
-    let op_info = op.map(OpAssignment::new);
+    let op_info = op.map(OpAssignment::new_from_token);
 
     match lhs {
         // const_expr = rhs
@@ -1707,11 +1710,7 @@ fn make_assignment_stmt(
         Expr::Variable(i, var_pos, ref x) => {
             let (index, _, name) = x.as_ref();
             let index = i.map_or_else(
-                || {
-                    index
-                        .expect("the long index is `Some` when the short index is `None`")
-                        .get()
-                },
+                || index.expect("either long or short index is `None`").get(),
                 |n| n.get() as usize,
             );
             match state.stack[state.stack.len() - index].1 {
@@ -1764,10 +1763,10 @@ fn make_assignment_stmt(
 fn parse_op_assignment_stmt(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     lhs: Expr,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -1798,7 +1797,7 @@ fn make_dot_expr(
     terminate_chaining: bool,
     rhs: Expr,
     op_pos: Position,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     match (lhs, rhs) {
         // lhs[idx_expr].rhs
         (Expr::Index(mut x, term, pos), rhs) => {
@@ -1825,7 +1824,7 @@ fn make_dot_expr(
             let (x, term, pos, is_dot) = match rhs {
                 Expr::Dot(x, term, pos) => (x, term, pos, true),
                 Expr::Index(x, term, pos) => (x, term, pos, false),
-                _ => unreachable!(),
+                expr => unreachable!("Expr::Dot or Expr::Index expected but gets {:?}", expr),
             };
 
             match x.lhs {
@@ -1864,7 +1863,7 @@ fn make_dot_expr(
                     };
                     Ok(Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos))
                 }
-                _ => unreachable!("invalid dot expression: {:?}", x.lhs),
+                expr => unreachable!("invalid dot expression: {:?}", expr),
             }
         }
         // lhs.nnn::func(...)
@@ -1912,11 +1911,11 @@ fn make_dot_expr(
 fn parse_binary_op(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     parent_precedence: Option<Precedence>,
     lhs: Expr,
     settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -1984,7 +1983,7 @@ fn parse_binary_op(
         let hash = calc_fn_hash(&op, 2);
 
         let op_base = FnCallExpr {
-            name: state.get_identifier(op.as_ref()),
+            name: state.get_identifier("", op),
             hashes: FnCallHashes::from_native(hash),
             ..Default::default()
         };
@@ -2006,8 +2005,8 @@ fn parse_binary_op(
             | Token::GreaterThanEqualsTo => FnCallExpr { args, ..op_base }.into_fn_call_expr(pos),
 
             Token::Or => {
-                let rhs = args.pop().expect("two arguments");
-                let current_lhs = args.pop().expect("two arguments");
+                let rhs = args.pop().unwrap();
+                let current_lhs = args.pop().unwrap();
                 Expr::Or(
                     BinaryExpr {
                         lhs: current_lhs.ensure_bool_expr()?,
@@ -2018,8 +2017,8 @@ fn parse_binary_op(
                 )
             }
             Token::And => {
-                let rhs = args.pop().expect("two arguments");
-                let current_lhs = args.pop().expect("two arguments");
+                let rhs = args.pop().unwrap();
+                let current_lhs = args.pop().unwrap();
                 Expr::And(
                     BinaryExpr {
                         lhs: current_lhs.ensure_bool_expr()?,
@@ -2039,7 +2038,7 @@ fn parse_binary_op(
                 FnCallExpr {
                     hashes: calc_fn_hash(OP_CONTAINS, 2).into(),
                     args,
-                    name: state.get_identifier(OP_CONTAINS),
+                    name: state.get_identifier("", OP_CONTAINS),
                     ..op_base
                 }
                 .into_fn_call_expr(pos)
@@ -2075,12 +2074,12 @@ fn parse_binary_op(
 fn parse_custom_syntax(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
     key: impl Into<ImmutableString>,
     syntax: &CustomSyntax,
     pos: Position,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     let mut settings = settings;
     let mut inputs = StaticVec::<Expr>::new();
     let mut segments = StaticVec::new_const();
@@ -2090,7 +2089,7 @@ fn parse_custom_syntax(
     if syntax.scope_may_be_changed {
         // Add a barrier variable to the stack so earlier variables will not be matched.
         // Variable searches stop at the first barrier.
-        let marker = state.get_identifier(SCOPE_SEARCH_BARRIER_MARKER);
+        let marker = state.get_identifier("", SCOPE_SEARCH_BARRIER_MARKER);
         state.stack.push((marker, AccessMode::ReadWrite));
     }
 
@@ -2110,7 +2109,10 @@ fn parse_custom_syntax(
                 if seg.starts_with(CUSTOM_SYNTAX_MARKER_SYNTAX_VARIANT)
                     && seg.len() > CUSTOM_SYNTAX_MARKER_SYNTAX_VARIANT.len() =>
             {
-                inputs.push(Expr::StringConstant(state.get_identifier(seg).into(), pos));
+                inputs.push(Expr::StringConstant(
+                    state.get_interned_string("", seg),
+                    pos,
+                ));
                 break;
             }
             Ok(Some(seg)) => seg,
@@ -2121,38 +2123,38 @@ fn parse_custom_syntax(
         match required_token.as_str() {
             CUSTOM_SYNTAX_MARKER_IDENT => {
                 let (name, pos) = parse_var_name(input)?;
-                let name = state.get_identifier(name);
+                let name = state.get_identifier("", name);
                 segments.push(name.clone().into());
-                tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_IDENT));
+                tokens.push(state.get_identifier("", CUSTOM_SYNTAX_MARKER_IDENT));
                 inputs.push(Expr::Variable(None, pos, (None, None, name).into()));
             }
             CUSTOM_SYNTAX_MARKER_SYMBOL => {
                 let (symbol, pos) = parse_symbol(input)?;
-                let symbol: ImmutableString = state.get_identifier(symbol).into();
+                let symbol = state.get_interned_string("", symbol);
                 segments.push(symbol.clone());
-                tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_SYMBOL));
+                tokens.push(state.get_identifier("", CUSTOM_SYNTAX_MARKER_SYMBOL));
                 inputs.push(Expr::StringConstant(symbol, pos));
             }
             CUSTOM_SYNTAX_MARKER_EXPR => {
                 inputs.push(parse_expr(input, state, lib, settings)?);
-                let keyword = state.get_identifier(CUSTOM_SYNTAX_MARKER_EXPR);
+                let keyword = state.get_identifier("", CUSTOM_SYNTAX_MARKER_EXPR);
                 segments.push(keyword.clone().into());
                 tokens.push(keyword);
             }
             CUSTOM_SYNTAX_MARKER_BLOCK => match parse_block(input, state, lib, settings)? {
                 block @ Stmt::Block(_, _) => {
                     inputs.push(Expr::Stmt(Box::new(block.into())));
-                    let keyword = state.get_identifier(CUSTOM_SYNTAX_MARKER_BLOCK);
+                    let keyword = state.get_identifier("", CUSTOM_SYNTAX_MARKER_BLOCK);
                     segments.push(keyword.clone().into());
                     tokens.push(keyword);
                 }
-                stmt => unreachable!("expecting Stmt::Block, but gets {:?}", stmt),
+                stmt => unreachable!("Stmt::Block expected but gets {:?}", stmt),
             },
             CUSTOM_SYNTAX_MARKER_BOOL => match input.next().expect(NEVER_ENDS) {
                 (b @ Token::True, pos) | (b @ Token::False, pos) => {
                     inputs.push(Expr::BoolConstant(b == Token::True, pos));
-                    segments.push(state.get_identifier(b.literal_syntax()).into());
-                    tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_BOOL));
+                    segments.push(state.get_interned_string("", b.literal_syntax()));
+                    tokens.push(state.get_identifier("", CUSTOM_SYNTAX_MARKER_BOOL));
                 }
                 (_, pos) => {
                     return Err(
@@ -2165,7 +2167,7 @@ fn parse_custom_syntax(
                 (Token::IntegerConstant(i), pos) => {
                     inputs.push(Expr::IntegerConstant(i, pos));
                     segments.push(i.to_string().into());
-                    tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_INT));
+                    tokens.push(state.get_identifier("", CUSTOM_SYNTAX_MARKER_INT));
                 }
                 (_, pos) => {
                     return Err(
@@ -2175,29 +2177,25 @@ fn parse_custom_syntax(
                 }
             },
             #[cfg(not(feature = "no_float"))]
-            crate::custom_syntax::markers::CUSTOM_SYNTAX_MARKER_FLOAT => {
-                match input.next().expect(NEVER_ENDS) {
-                    (Token::FloatConstant(f), pos) => {
-                        inputs.push(Expr::FloatConstant(f, pos));
-                        segments.push(f.to_string().into());
-                        tokens.push(state.get_identifier(
-                            crate::custom_syntax::markers::CUSTOM_SYNTAX_MARKER_FLOAT,
-                        ));
-                    }
-                    (_, pos) => {
-                        return Err(PERR::MissingSymbol(
-                            "Expecting a floating-point number".to_string(),
-                        )
-                        .into_err(pos))
-                    }
+            CUSTOM_SYNTAX_MARKER_FLOAT => match input.next().expect(NEVER_ENDS) {
+                (Token::FloatConstant(f), pos) => {
+                    inputs.push(Expr::FloatConstant(f, pos));
+                    segments.push(f.to_string().into());
+                    tokens.push(state.get_identifier("", CUSTOM_SYNTAX_MARKER_FLOAT));
                 }
-            }
+                (_, pos) => {
+                    return Err(PERR::MissingSymbol(
+                        "Expecting a floating-point number".to_string(),
+                    )
+                    .into_err(pos))
+                }
+            },
             CUSTOM_SYNTAX_MARKER_STRING => match input.next().expect(NEVER_ENDS) {
                 (Token::StringConstant(s), pos) => {
-                    let s: ImmutableString = state.get_identifier(s).into();
+                    let s = state.get_interned_string("", s);
                     inputs.push(Expr::StringConstant(s.clone(), pos));
                     segments.push(s);
-                    tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_STRING));
+                    tokens.push(state.get_identifier("", CUSTOM_SYNTAX_MARKER_STRING));
                 }
                 (_, pos) => {
                     return Err(PERR::MissingSymbol("Expecting a string".to_string()).into_err(pos))
@@ -2250,53 +2248,28 @@ fn parse_custom_syntax(
 fn parse_expr(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+) -> ParseResult<Expr> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut settings = settings;
     settings.pos = input.peek().expect(NEVER_ENDS).1;
 
-    // Check if it is a custom syntax.
-    if !state.engine.custom_syntax.is_empty() {
-        let (token, pos) = input.peek().expect(NEVER_ENDS);
-        let token_pos = *pos;
-
-        match token {
-            Token::Custom(key) | Token::Reserved(key) | Token::Identifier(key) => {
-                if let Some((key, syntax)) = state.engine.custom_syntax.get_key_value(key.as_ref())
-                {
-                    input.next().expect(NEVER_ENDS);
-                    return parse_custom_syntax(
-                        input, state, lib, settings, key, syntax, token_pos,
-                    );
-                }
-            }
-            _ => (),
-        }
-    }
-
     // Parse expression normally.
+    let precedence = Precedence::new(1);
     let lhs = parse_unary(input, state, lib, settings.level_up())?;
-    parse_binary_op(
-        input,
-        state,
-        lib,
-        Precedence::new(1),
-        lhs,
-        settings.level_up(),
-    )
+    parse_binary_op(input, state, lib, precedence, lhs, settings.level_up())
 }
 
 /// Parse an if statement.
 fn parse_if(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2334,9 +2307,9 @@ fn parse_if(
 fn parse_while_loop(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2351,7 +2324,7 @@ fn parse_while_loop(
             (expr, pos)
         }
         (Token::Loop, pos) => (Expr::Unit(Position::NONE), pos),
-        _ => unreachable!(),
+        token => unreachable!("Token::While or Token::Loop expected but gets {:?}", token),
     };
     settings.pos = token_pos;
     settings.is_breakable = true;
@@ -2365,9 +2338,9 @@ fn parse_while_loop(
 fn parse_do(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2408,9 +2381,9 @@ fn parse_do(
 fn parse_for(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2470,13 +2443,13 @@ fn parse_for(
     let prev_stack_len = state.stack.len();
 
     let counter_var = counter_name.map(|name| {
-        let name = state.get_identifier(name);
+        let name = state.get_identifier("", name);
         let pos = counter_pos.expect("`Some`");
         state.stack.push((name.clone(), AccessMode::ReadWrite));
         Ident { name, pos }
     });
 
-    let loop_var = state.get_identifier(name);
+    let loop_var = state.get_identifier("", name);
     state.stack.push((loop_var.clone(), AccessMode::ReadWrite));
     let loop_var = Ident {
         name: loop_var,
@@ -2499,11 +2472,11 @@ fn parse_for(
 fn parse_let(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     var_type: AccessMode,
     is_export: bool,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2514,7 +2487,7 @@ fn parse_let(
     // let name ...
     let (name, pos) = parse_var_name(input)?;
 
-    let name = state.get_identifier(name);
+    let name = state.get_identifier("", name);
     let var_def = Ident {
         name: name.clone(),
         pos,
@@ -2554,9 +2527,9 @@ fn parse_let(
 fn parse_import(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2574,7 +2547,7 @@ fn parse_import(
 
     // import expr as name ...
     let (name, pos) = parse_var_name(input)?;
-    let name = state.get_identifier(name);
+    let name = state.get_identifier("", name);
     state.modules.push(name.clone());
 
     Ok(Stmt::Import(
@@ -2589,9 +2562,9 @@ fn parse_import(
 fn parse_export(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2631,11 +2604,11 @@ fn parse_export(
 
         exports.push((
             Ident {
-                name: state.get_identifier(id),
+                name: state.get_identifier("", id),
                 pos: id_pos,
             },
             Ident {
-                name: state.get_identifier(rename.as_ref().map_or("", |s| s.as_ref())),
+                name: state.get_identifier("", rename.as_ref().map_or("", <_>::as_ref)),
                 pos: rename_pos,
             },
         ));
@@ -2662,9 +2635,9 @@ fn parse_export(
 fn parse_block(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2764,9 +2737,9 @@ fn parse_block(
 fn parse_expr_stmt(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2782,9 +2755,9 @@ fn parse_expr_stmt(
 fn parse_stmt(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     use AccessMode::{ReadOnly, ReadWrite};
 
     let mut settings = settings;
@@ -2802,7 +2775,7 @@ fn parse_stmt(
             }
 
             if !crate::tokenizer::is_doc_comment(comment) {
-                unreachable!("expecting doc-comment, but gets {:?}", comment);
+                unreachable!("doc-comment expected but gets {:?}", comment);
             }
 
             if !settings.is_global {
@@ -2819,7 +2792,7 @@ fn parse_stmt(
                         _ => return Err(PERR::WrongDocComment.into_err(comments_pos)),
                     }
                 }
-                _ => unreachable!(),
+                token => unreachable!("Token::Comment expected but gets {:?}", token),
             }
         }
 
@@ -2946,14 +2919,15 @@ fn parse_stmt(
             let (return_type, token_pos) = input
                 .next()
                 .map(|(token, pos)| {
-                    (
-                        match token {
-                            Token::Return => AST_OPTION_NONE,
-                            Token::Throw => AST_OPTION_BREAK_OUT,
-                            _ => unreachable!(),
-                        },
-                        pos,
-                    )
+                    let flags = match token {
+                        Token::Return => AST_OPTION_NONE,
+                        Token::Throw => AST_OPTION_BREAK_OUT,
+                        token => unreachable!(
+                            "Token::Return or Token::Throw expected but gets {:?}",
+                            token
+                        ),
+                    };
+                    (flags, pos)
                 })
                 .expect(NEVER_ENDS);
 
@@ -2996,9 +2970,9 @@ fn parse_stmt(
 fn parse_try_catch(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<Stmt, ParseError> {
+) -> ParseResult<Stmt> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -3032,7 +3006,7 @@ fn parse_try_catch(
             .into_err(err_pos));
         }
 
-        let name = state.get_identifier(name);
+        let name = state.get_identifier("", name);
         state.stack.push((name.clone(), AccessMode::ReadWrite));
         Some(Ident { name, pos })
     } else {
@@ -3044,7 +3018,7 @@ fn parse_try_catch(
 
     if err_var.is_some() {
         // Remove the error variable from the stack
-        state.stack.pop().expect("not empty");
+        state.stack.pop().unwrap();
     }
 
     Ok(Stmt::TryCatch(
@@ -3058,13 +3032,13 @@ fn parse_try_catch(
 fn parse_fn(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     access: crate::FnAccess,
     settings: ParseSettings,
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
     comments: Vec<Box<str>>,
-) -> Result<ScriptFnDef, ParseError> {
+) -> ParseResult<ScriptFnDef> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -3097,7 +3071,7 @@ fn parse_fn(
                             PERR::FnDuplicatedParam(name.to_string(), s.to_string()).into_err(pos)
                         );
                     }
-                    let s = state.get_identifier(s);
+                    let s = state.get_identifier("", s);
                     state.stack.push((s.clone(), AccessMode::ReadWrite));
                     params.push((s, pos))
                 }
@@ -3136,13 +3110,13 @@ fn parse_fn(
     params.shrink_to_fit();
 
     Ok(ScriptFnDef {
-        name: state.get_identifier(name),
+        name: state.get_identifier("", name),
         access,
         params,
         body,
         lib: None,
         #[cfg(not(feature = "no_module"))]
-        mods: crate::engine::Imports::new(),
+        global: None,
         #[cfg(not(feature = "no_function"))]
         #[cfg(feature = "metadata")]
         comments: if comments.is_empty() {
@@ -3180,7 +3154,7 @@ fn make_curry_from_externals(
     );
 
     let expr = FnCallExpr {
-        name: state.get_identifier(crate::engine::KEYWORD_FN_PTR_CURRY),
+        name: state.get_identifier("", crate::engine::KEYWORD_FN_PTR_CURRY),
         hashes: FnCallHashes::from_native(calc_fn_hash(
             crate::engine::KEYWORD_FN_PTR_CURRY,
             num_externals + 1,
@@ -3203,9 +3177,9 @@ fn make_curry_from_externals(
 fn parse_anon_fn(
     input: &mut TokenStream,
     state: &mut ParseState,
-    lib: &mut FunctionsLib,
+    lib: &mut FnLib,
     settings: ParseSettings,
-) -> Result<(Expr, ScriptFnDef), ParseError> {
+) -> ParseResult<(Expr, ScriptFnDef)> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -3222,7 +3196,7 @@ fn parse_anon_fn(
                             PERR::FnDuplicatedParam("".to_string(), s.to_string()).into_err(pos)
                         );
                     }
-                    let s = state.get_identifier(s);
+                    let s = state.get_identifier("", s);
                     state.stack.push((s.clone(), AccessMode::ReadWrite));
                     params_list.push(s)
                 }
@@ -3279,8 +3253,7 @@ fn parse_anon_fn(
     params.iter().for_each(|p| p.hash(hasher));
     body.hash(hasher);
     let hash = hasher.finish();
-
-    let fn_name = state.get_identifier(&(format!("{}{:016x}", crate::engine::FN_ANONYMOUS, hash)));
+    let fn_name = state.get_identifier("", format!("{}{:016x}", crate::engine::FN_ANONYMOUS, hash));
 
     // Define the function
     let script = ScriptFnDef {
@@ -3290,7 +3263,7 @@ fn parse_anon_fn(
         body: body.into(),
         lib: None,
         #[cfg(not(feature = "no_module"))]
-        mods: crate::engine::Imports::new(),
+        global: None,
         #[cfg(not(feature = "no_function"))]
         #[cfg(feature = "metadata")]
         comments: None,
@@ -3313,7 +3286,7 @@ impl Engine {
         state: &mut ParseState,
         scope: &Scope,
         #[cfg(not(feature = "no_optimize"))] optimization_level: crate::OptimizationLevel,
-    ) -> Result<AST, ParseError> {
+    ) -> ParseResult<AST> {
         let _scope = scope;
         let mut functions = BTreeMap::new();
 
@@ -3373,7 +3346,7 @@ impl Engine {
         &self,
         input: &mut TokenStream,
         state: &mut ParseState,
-    ) -> Result<(StaticVec<Stmt>, StaticVec<Shared<ScriptFnDef>>), ParseError> {
+    ) -> ParseResult<(StaticVec<Stmt>, StaticVec<Shared<ScriptFnDef>>)> {
         let mut statements = StaticVec::new_const();
         let mut functions = BTreeMap::new();
 
@@ -3443,7 +3416,7 @@ impl Engine {
         state: &mut ParseState,
         scope: &Scope,
         #[cfg(not(feature = "no_optimize"))] optimization_level: crate::OptimizationLevel,
-    ) -> Result<AST, ParseError> {
+    ) -> ParseResult<AST> {
         let _scope = scope;
         let (statements, _lib) = self.parse_global_level(input, state)?;
 

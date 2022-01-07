@@ -166,20 +166,32 @@ pub fn generate_body(
             );
 
             #[cfg(feature = "metadata")]
-            let param_names = quote! {
-                Some(#fn_token_name::PARAM_NAMES)
-            };
+            let (param_names, comments) = (
+                quote! { Some(#fn_token_name::PARAM_NAMES) },
+                function
+                    .comments()
+                    .iter()
+                    .map(|s| syn::LitStr::new(s, Span::call_site()))
+                    .collect::<Vec<_>>(),
+            );
             #[cfg(not(feature = "metadata"))]
-            let param_names = quote! { None };
+            let (param_names, comments) = (quote! { None }, Vec::<syn::LitStr>::new());
 
-            set_fn_statements.push(
+            set_fn_statements.push(if comments.is_empty() {
                 syn::parse2::<syn::Stmt>(quote! {
                     #(#cfg_attrs)*
                     m.set_fn(#fn_literal, FnNamespace::#ns_str, FnAccess::Public,
                              #param_names, &[#(#fn_input_types),*], #fn_token_name().into());
                 })
-                .unwrap(),
-            );
+                .unwrap()
+            } else {
+                syn::parse2::<syn::Stmt>(quote! {
+                    #(#cfg_attrs)*
+                    m.set_fn_with_comments(#fn_literal, FnNamespace::#ns_str, FnAccess::Public,
+                             #param_names, &[#(#fn_input_types),*], &[#(#comments),*], #fn_token_name().into());
+                })
+                .unwrap()
+            });
         }
 
         gen_fn_tokens.push(quote! {

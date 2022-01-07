@@ -3,12 +3,12 @@
 use crate::ast::Expr;
 use crate::engine::EvalContext;
 use crate::func::native::SendSync;
+use crate::parser::ParseResult;
 use crate::r#unsafe::unsafe_try_cast;
 use crate::tokenizer::{is_valid_identifier, Token};
 use crate::types::dynamic::Variant;
 use crate::{
-    Engine, Identifier, ImmutableString, LexError, ParseError, Position, RhaiResult, Shared,
-    StaticVec, INT,
+    Engine, Identifier, ImmutableString, LexError, Position, RhaiResult, Shared, StaticVec, INT,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -47,11 +47,11 @@ pub type FnCustomSyntaxEval = dyn Fn(&mut EvalContext, &[Expression]) -> RhaiRes
 /// A general expression parsing trait object.
 #[cfg(not(feature = "sync"))]
 pub type FnCustomSyntaxParse =
-    dyn Fn(&[ImmutableString], &str) -> Result<Option<ImmutableString>, ParseError>;
+    dyn Fn(&[ImmutableString], &str) -> ParseResult<Option<ImmutableString>>;
 /// A general expression parsing trait object.
 #[cfg(feature = "sync")]
 pub type FnCustomSyntaxParse =
-    dyn Fn(&[ImmutableString], &str) -> Result<Option<ImmutableString>, ParseError> + Send + Sync;
+    dyn Fn(&[ImmutableString], &str) -> ParseResult<Option<ImmutableString>> + Send + Sync;
 
 /// An expression sub-tree in an [`AST`][crate::AST].
 #[derive(Debug, Clone)]
@@ -65,11 +65,17 @@ impl<'a> From<&'a Expr> for Expression<'a> {
 }
 
 impl Expression<'_> {
-    /// If this expression is a variable name, return it.  Otherwise [`None`].
+    /// Get the value of this expression if it is a variable name or a string constant.
+    ///
+    /// Returns [`None`] also if the constant is not of the specified type.
     #[inline(always)]
     #[must_use]
-    pub fn get_variable_name(&self) -> Option<&str> {
-        self.0.get_variable_name(true)
+    pub fn get_string_value(&self) -> Option<&str> {
+        match self.0 {
+            Expr::Variable(_, _, x) if x.1.is_none() => Some(x.2.as_str()),
+            Expr::StringConstant(x, _) => Some(x.as_str()),
+            _ => None,
+        }
     }
     /// Get the position of this expression.
     #[inline(always)]
@@ -89,38 +95,39 @@ impl Expression<'_> {
 
         if TypeId::of::<T>() == TypeId::of::<INT>() {
             return match self.0 {
-                Expr::IntegerConstant(x, _) => unsafe_try_cast(*x).ok(),
+                Expr::IntegerConstant(x, _) => unsafe_try_cast(*x),
                 _ => None,
             };
         }
         #[cfg(not(feature = "no_float"))]
         if TypeId::of::<T>() == TypeId::of::<crate::FLOAT>() {
             return match self.0 {
-                Expr::FloatConstant(x, _) => unsafe_try_cast(*x).ok(),
+                Expr::FloatConstant(x, _) => unsafe_try_cast(*x),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<char>() {
             return match self.0 {
-                Expr::CharConstant(x, _) => unsafe_try_cast(*x).ok(),
+                Expr::CharConstant(x, _) => unsafe_try_cast(*x),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<ImmutableString>() {
             return match self.0 {
-                Expr::StringConstant(x, _) => unsafe_try_cast(x.clone()).ok(),
+                Expr::StringConstant(x, _) => unsafe_try_cast(x.clone()),
+                Expr::Variable(_, _, x) => unsafe_try_cast(Into::<ImmutableString>::into(&x.2)),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<bool>() {
             return match self.0 {
-                Expr::BoolConstant(x, _) => unsafe_try_cast(*x).ok(),
+                Expr::BoolConstant(x, _) => unsafe_try_cast(*x),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<()>() {
             return match self.0 {
-                Expr::Unit(_) => unsafe_try_cast(()).ok(),
+                Expr::Unit(_) => unsafe_try_cast(()),
                 _ => None,
             };
         }
@@ -154,7 +161,7 @@ impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_> {
     pub fn eval_expression_tree(&mut self, expr: &Expression) -> RhaiResult {
         self.engine.eval_expr(
             self.scope,
-            self.mods,
+            self.global,
             self.state,
             self.lib,
             self.this_ptr,
@@ -204,15 +211,15 @@ impl Engine {
     /// does NOT count, so `false` should be passed.
     pub fn register_custom_syntax<S: AsRef<str> + Into<Identifier>>(
         &mut self,
-        symbols: &[S],
+        symbols: impl AsRef<[S]>,
         scope_may_be_changed: bool,
         func: impl Fn(&mut EvalContext, &[Expression]) -> RhaiResult + SendSync + 'static,
-    ) -> Result<&mut Self, ParseError> {
+    ) -> ParseResult<&mut Self> {
         use markers::*;
 
         let mut segments = StaticVec::<ImmutableString>::new();
 
-        for s in symbols {
+        for s in symbols.as_ref() {
             let s = s.as_ref().trim();
 
             // Skip empty symbols
@@ -344,11 +351,11 @@ impl Engine {
     ///
     /// * `Ok(None)`: parsing complete and there are no more symbols to match.
     /// * `Ok(Some(symbol))`: the next symbol to match, which can also be `$expr$`, `$ident$` or `$block$`.
-    /// * `Err(ParseError)`: error that is reflected back to the [`Engine`], normally `ParseError(ParseErrorType::BadInput(LexError::ImproperSymbol(message)), Position::NONE)` to indicate a syntax error, but it can be any [`ParseError`].
+    /// * `Err(ParseError)`: error that is reflected back to the [`Engine`], normally `ParseError(ParseErrorType::BadInput(LexError::ImproperSymbol(message)), Position::NONE)` to indicate a syntax error, but it can be any [`ParseError`][crate::ParseError].
     pub fn register_custom_syntax_raw(
         &mut self,
         key: impl Into<Identifier>,
-        parse: impl Fn(&[ImmutableString], &str) -> Result<Option<ImmutableString>, ParseError>
+        parse: impl Fn(&[ImmutableString], &str) -> ParseResult<Option<ImmutableString>>
             + SendSync
             + 'static,
         scope_may_be_changed: bool,
