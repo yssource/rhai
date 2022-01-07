@@ -1,6 +1,6 @@
 //! Module that defines the public evaluation API of [`Engine`].
 
-use crate::engine::{EvalState, GlobalRuntimeState};
+use crate::eval::{EvalState, GlobalRuntimeState};
 use crate::parser::ParseState;
 use crate::{Engine, Module, RhaiResultOf, Scope, AST};
 #[cfg(feature = "no_std")]

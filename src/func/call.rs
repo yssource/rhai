@@ -6,9 +6,10 @@ use super::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
 use crate::api::default_limits::MAX_DYNAMIC_PARAMETERS;
 use crate::ast::{Expr, FnCallHashes, Stmt};
 use crate::engine::{
-    EvalState, GlobalRuntimeState, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
-    KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY,
+    KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
+use crate::eval::{EvalState, GlobalRuntimeState};
 use crate::module::Namespace;
 use crate::tokenizer::Token;
 use crate::{
@@ -720,7 +721,7 @@ impl Engine {
         lib: &[&Module],
         fn_name: &str,
         mut hash: FnCallHashes,
-        target: &mut crate::engine::Target,
+        target: &mut crate::eval::Target,
         (call_args, call_arg_pos): &mut (FnArgsVec<Dynamic>, Position),
         pos: Position,
         level: usize,

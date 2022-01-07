@@ -1,8 +1,7 @@
 //! Module that defines public event handlers for [`Engine`].
 
-use crate::engine::EvalContext;
 use crate::func::SendSync;
-use crate::{Dynamic, Engine, Position, RhaiResultOf};
+use crate::{Dynamic, Engine, EvalContext, Position, RhaiResultOf};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 

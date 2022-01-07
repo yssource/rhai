@@ -1,6 +1,6 @@
 //! Module that defines the public evaluation API of [`Engine`].
 
-use crate::engine::{EvalState, GlobalRuntimeState};
+use crate::eval::{EvalState, GlobalRuntimeState};
 use crate::parser::ParseState;
 use crate::types::dynamic::Variant;
 use crate::{Dynamic, Engine, Module, Position, RhaiResult, RhaiResultOf, Scope, AST, ERR};

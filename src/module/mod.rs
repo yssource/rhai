@@ -1554,7 +1554,7 @@ impl Module {
         engine: &crate::Engine,
     ) -> RhaiResultOf<Self> {
         let mut scope = scope;
-        let mut global = crate::engine::GlobalRuntimeState::new();
+        let mut global = crate::eval::GlobalRuntimeState::new();
         let orig_mods_len = global.num_imported_modules();
 
         // Run the script

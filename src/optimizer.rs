@@ -2,10 +2,8 @@
 #![cfg(not(feature = "no_optimize"))]
 
 use crate::ast::{Expr, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
-use crate::engine::{
-    EvalState, GlobalRuntimeState, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT,
-    KEYWORD_TYPE_OF,
-};
+use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF};
+use crate::eval::{EvalState, GlobalRuntimeState};
 use crate::func::builtin::get_builtin_binary_op_fn;
 use crate::func::hashing::get_hasher;
 use crate::tokenizer::Token;
