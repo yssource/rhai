@@ -229,9 +229,14 @@ impl Engine {
             )
         } else {
             // Normal function call
+            let (first_arg, args) = args.split_first().map_or_else(
+                || (None, args.as_ref()),
+                |(first, rest)| (Some(first), rest),
+            );
+
             self.make_function_call(
-                scope, global, state, lib, this_ptr, name, args, constants, *hashes, pos, *capture,
-                level,
+                scope, global, state, lib, this_ptr, name, first_arg, args, constants, *hashes,
+                pos, *capture, level,
             )
         }
     }
