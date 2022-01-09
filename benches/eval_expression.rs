@@ -107,6 +107,21 @@ fn bench_eval_call(bench: &mut Bencher) {
 }
 
 #[bench]
+fn bench_eval_deeply_nested(bench: &mut Bencher) {
+    let script = r#"
+            (1 + 2 * 3 - 9) * 4 < 5 * 6 - 70 / 8 &&
+            (42 + 99 > 1 + 2 - 3 + 4 * 5 || 123 - 88 < 123 + 88 - 99 + 100)
+            && true
+            && !!!!!!!!false
+        "#;
+
+    let mut engine = Engine::new();
+    engine.set_optimization_level(OptimizationLevel::None);
+
+    bench.iter(|| engine.eval::<bool>(script).unwrap());
+}
+
+#[bench]
 fn bench_eval_loop_number(bench: &mut Bencher) {
     let script = "
         let s = 0;
