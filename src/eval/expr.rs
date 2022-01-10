@@ -419,7 +419,13 @@ impl Engine {
             Expr::Custom(custom, _) => {
                 let expressions: StaticVec<_> = custom.inputs.iter().map(Into::into).collect();
                 let key_token = custom.tokens.first().unwrap();
-                let custom_def = self.custom_syntax.get(key_token).unwrap();
+                let custom_def = self.custom_syntax.get(key_token).ok_or_else(|| {
+                    let code: Vec<_> = custom.tokens.iter().map(|s| s.as_str()).collect();
+                    Box::new(ERR::ErrorSystem(
+                        format!("Invalid custom syntax prefix: {}", key_token),
+                        code.join(" ").into(),
+                    ))
+                })?;
                 let mut context = EvalContext {
                     engine: self,
                     scope,
