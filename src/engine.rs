@@ -140,9 +140,37 @@ pub struct Engine {
 }
 
 impl fmt::Debug for Engine {
-    #[inline(always)]
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Engine")
+        let mut f = f.debug_struct("Engine");
+
+        f.field("global_modules", &self.global_modules)
+            .field("global_sub_modules", &self.global_sub_modules);
+
+        #[cfg(not(feature = "no_module"))]
+        f.field("module_resolver", &self.module_resolver.is_some());
+
+        f.field("type_names", &self.type_names)
+            .field("disabled_symbols", &self.disabled_symbols)
+            .field("custom_keywords", &self.custom_keywords)
+            .field("custom_syntax", &(!self.custom_syntax.is_empty()))
+            .field("resolve_var", &self.resolve_var.is_some())
+            .field("token_mapper", &self.token_mapper.is_some())
+            .field("print", &self.print.is_some())
+            .field("debug", &self.debug.is_some());
+
+        #[cfg(not(feature = "unchecked"))]
+        f.field("progress", &self.progress.is_some());
+
+        #[cfg(not(feature = "no_optimize"))]
+        f.field("optimization_level", &self.optimization_level);
+
+        f.field("options", &self.options);
+
+        #[cfg(not(feature = "unchecked"))]
+        f.field("limits", &self.limits);
+
+        f.finish()
     }
 }
 
