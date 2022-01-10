@@ -263,14 +263,23 @@ impl<K: Into<Identifier>, M: Into<Shared<Module>>> Extend<(K, M)> for GlobalRunt
 
 impl fmt::Debug for GlobalRuntimeState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("GlobalRuntimeState")
-            .field("imports", &self.keys.iter().zip(self.modules.iter()))
+        let mut f = f.debug_struct("GlobalRuntimeState");
+
+        f.field("imports", &self.keys.iter().zip(self.modules.iter()))
             .field("source", &self.source)
             .field("num_operations", &self.num_operations)
-            .field("num_modules_loaded", &self.num_modules_loaded)
-            .field("fn_hash_indexing", &self.fn_hash_indexing)
-            .field("embedded_module_resolver", &self.embedded_module_resolver)
-            .field("constants", &self.constants)
-            .finish()
+            .field("num_modules_loaded", &self.num_modules_loaded);
+
+        #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+        f.field("fn_hash_indexing", &self.fn_hash_indexing);
+
+        #[cfg(not(feature = "no_module"))]
+        f.field("embedded_module_resolver", &self.embedded_module_resolver);
+
+        #[cfg(not(feature = "no_module"))]
+        #[cfg(not(feature = "no_function"))]
+        f.field("constants", &self.constants);
+
+        f.finish()
     }
 }
