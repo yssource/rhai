@@ -245,6 +245,7 @@ impl IntoIterator for GlobalRuntimeState {
 }
 
 impl<K: Into<Identifier>, M: Into<Shared<Module>>> FromIterator<(K, M)> for GlobalRuntimeState {
+    #[inline]
     fn from_iter<T: IntoIterator<Item = (K, M)>>(iter: T) -> Self {
         let mut lib = Self::new();
         lib.extend(iter);
@@ -253,6 +254,7 @@ impl<K: Into<Identifier>, M: Into<Shared<Module>>> FromIterator<(K, M)> for Glob
 }
 
 impl<K: Into<Identifier>, M: Into<Shared<Module>>> Extend<(K, M)> for GlobalRuntimeState {
+    #[inline]
     fn extend<T: IntoIterator<Item = (K, M)>>(&mut self, iter: T) {
         iter.into_iter().for_each(|(k, m)| {
             self.keys.push(k.into());
@@ -262,6 +264,7 @@ impl<K: Into<Identifier>, M: Into<Shared<Module>>> Extend<(K, M)> for GlobalRunt
 }
 
 impl fmt::Debug for GlobalRuntimeState {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut f = f.debug_struct("GlobalRuntimeState");
 
