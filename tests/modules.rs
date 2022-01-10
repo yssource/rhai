@@ -243,7 +243,7 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
         engine.set_max_modules(1000);
 
         #[cfg(not(feature = "no_function"))]
-        engine.eval::<()>(
+        engine.run(
             r#"
                 fn foo() {
                     import "hello" as h;

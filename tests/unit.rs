@@ -3,7 +3,7 @@ use rhai::{Engine, EvalAltResult};
 #[test]
 fn test_unit() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
-    engine.eval::<()>("let x = (); x")?;
+    engine.run("let x = (); x")?;
     Ok(())
 }
 
@@ -17,6 +17,6 @@ fn test_unit_eq() -> Result<(), Box<EvalAltResult>> {
 #[test]
 fn test_unit_with_spaces() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
-    engine.eval::<()>("let x = ( ); x")?;
+    engine.run("let x = ( ); x")?;
     Ok(())
 }

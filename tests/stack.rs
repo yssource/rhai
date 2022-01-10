@@ -21,7 +21,7 @@ fn test_stack_overflow_fn_calls() -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "unchecked"))]
     assert!(matches!(
         *engine
-            .eval::<()>(&format!(
+            .run(&format!(
                 "
                     fn foo(n) {{ if n == 0 {{ 0 }} else {{ n + foo(n-1) }} }}
                     foo({})
