@@ -1,4 +1,4 @@
-use rhai::{Engine, INT};
+use rhai::Engine;
 
 #[cfg(feature = "sync")]
 use std::sync::Mutex;
@@ -23,12 +23,12 @@ fn main() {
         #[cfg(not(feature = "sync"))]
         engine
             .register_fn("get", move || rx_script.recv().unwrap_or_default())
-            .register_fn("put", move |v: INT| tx_script.send(v).unwrap());
+            .register_fn("put", move |v: i64| tx_script.send(v).unwrap());
 
         #[cfg(feature = "sync")]
         engine
             .register_fn("get", move || rx_script.lock().unwrap().recv().unwrap())
-            .register_fn("put", move |v: INT| {
+            .register_fn("put", move |v: i64| {
                 tx_script.lock().unwrap().send(v).unwrap()
             });
 
@@ -54,7 +54,7 @@ fn main() {
 
     println!("Starting main loop...");
 
-    let mut value: INT = 0;
+    let mut value: i64 = 0;
 
     while value < 10 {
         println!("Value: {}", value);
