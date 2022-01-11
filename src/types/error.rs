@@ -308,8 +308,6 @@ impl EvalAltResult {
     /// Get the [position][Position] of this error.
     #[cfg(not(feature = "no_object"))]
     pub(crate) fn dump_fields(&self, map: &mut crate::Map) {
-        use std::str::FromStr;
-
         map.insert(
             "error".into(),
             format!("{:?}", self)
@@ -376,12 +374,15 @@ impl EvalAltResult {
             Self::ErrorCustomSyntax(_, tokens, _) => {
                 map.insert(
                     "tokens".into(),
-                    Dynamic::from_array(
-                        tokens
-                            .iter()
-                            .map(|s| Dynamic::from_str(s).unwrap())
-                            .collect(),
-                    ),
+                    #[cfg(not(feature = "no_index"))]
+                    Dynamic::from_array(tokens.iter().map(Into::into).collect()),
+                    #[cfg(feature = "no_index")]
+                    tokens
+                        .iter()
+                        .map(|s| s.as_str())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                        .into(),
                 );
             }
         };
