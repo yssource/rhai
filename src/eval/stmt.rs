@@ -141,6 +141,10 @@ impl Engine {
             let args = &mut [lhs_ptr_inner, &mut new_val];
 
             match self.call_native_fn(global, state, lib, op, hash, args, true, true, op_pos) {
+                Ok(_) => {
+                    #[cfg(not(feature = "unchecked"))]
+                    self.check_data_size(&mut args[0], root.1)?;
+                }
                 Err(err) if matches!(*err, ERR::ErrorFunctionNotFound(ref f, _) if f.starts_with(op)) =>
                 {
                     // Expand to `var = var op rhs`
@@ -153,7 +157,7 @@ impl Engine {
 
                     *args[0] = value.flatten();
                 }
-                err => return err.map(|_| ()),
+                Err(err) => return Err(err),
             }
         } else {
             // Normal assignment

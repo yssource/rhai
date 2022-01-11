@@ -15,18 +15,48 @@ fn test_max_operations() -> Result<(), Box<EvalAltResult>> {
         None
     });
 
-    engine.eval::<()>("let x = 0; while x < 20 { x += 1; }")?;
+    engine.run("let x = 0; while x < 20 { x += 1; }")?;
 
     assert!(matches!(
-        *engine
-            .eval::<()>("for x in 0..500 {}")
-            .expect_err("should error"),
+        *engine.run("for x in 0..500 {}").expect_err("should error"),
         EvalAltResult::ErrorTooManyOperations(_)
     ));
 
     engine.set_max_operations(0);
 
-    engine.eval::<()>("for x in 0..10000 {}")?;
+    engine.run("for x in 0..10000 {}")?;
+
+    Ok(())
+}
+
+#[test]
+fn test_max_operations_literal() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+    #[cfg(not(feature = "no_optimize"))]
+    engine.set_optimization_level(rhai::OptimizationLevel::None);
+    engine.set_max_operations(10);
+
+    #[cfg(not(feature = "no_index"))]
+    engine.run("[1, 2, 3, 4, 5, 6, 7]")?;
+
+    #[cfg(not(feature = "no_index"))]
+    assert!(matches!(
+        *engine
+            .run("[1, 2, 3, 4, 5, 6, 7, 8, 9]")
+            .expect_err("should error"),
+        EvalAltResult::ErrorTooManyOperations(_)
+    ));
+
+    #[cfg(not(feature = "no_object"))]
+    engine.run("#{a:1, b:2, c:3, d:4, e:5, f:6, g:7}")?;
+
+    #[cfg(not(feature = "no_object"))]
+    assert!(matches!(
+        *engine
+            .run("#{a:1, b:2, c:3, d:4, e:5, f:6, g:7, h:8, i:9}")
+            .expect_err("should error"),
+        EvalAltResult::ErrorTooManyOperations(_)
+    ));
 
     Ok(())
 }
@@ -43,7 +73,7 @@ fn test_max_operations_functions() -> Result<(), Box<EvalAltResult>> {
         None
     });
 
-    engine.eval::<()>(
+    engine.run(
         r#"
             print("Test1");
             let x = 0;
@@ -56,7 +86,7 @@ fn test_max_operations_functions() -> Result<(), Box<EvalAltResult>> {
     )?;
 
     #[cfg(not(feature = "no_function"))]
-    engine.eval::<()>(
+    engine.run(
         r#"
             print("Test2");
             fn inc(x) { x + 1 }
@@ -68,7 +98,7 @@ fn test_max_operations_functions() -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_function"))]
     assert!(matches!(
         *engine
-            .eval::<()>(
+            .run(
                 r#"
                     print("Test3");
                     fn inc(x) { x + 1 }
@@ -101,7 +131,7 @@ fn test_max_operations_eval() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine
-            .eval::<()>(
+            .run(
                 r#"
                     let script = "for x in 0..500 {}";
                     eval(script);
@@ -131,7 +161,7 @@ fn test_max_operations_progress() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine
-            .eval::<()>("for x in 0..500 {}")
+            .run("for x in 0..500 {}")
             .expect_err("should error"),
         EvalAltResult::ErrorTerminated(x, _) if x.as_int()? == 42
     ));

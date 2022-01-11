@@ -887,12 +887,16 @@ impl Engine {
         arg_expr: &Expr,
         constants: &[Dynamic],
     ) -> RhaiResultOf<(Dynamic, Position)> {
-        match arg_expr {
-            Expr::Stack(slot, pos) => Ok((constants[*slot].clone(), *pos)),
-            ref arg => self
-                .eval_expr(scope, global, state, lib, this_ptr, arg, level)
-                .map(|v| (v, arg.position())),
-        }
+        Ok((
+            if let Expr::Stack(slot, _) = arg_expr {
+                constants[*slot].clone()
+            } else if let Some(value) = arg_expr.get_literal_value() {
+                value
+            } else {
+                self.eval_expr(scope, global, state, lib, this_ptr, arg_expr, level)?
+            },
+            arg_expr.position(),
+        ))
     }
 
     /// Call a function in normal function-call style.
@@ -904,6 +908,7 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         fn_name: &str,
+        first_arg: Option<&Expr>,
         args_expr: &[Expr],
         constants: &[Dynamic],
         hashes: FnCallHashes,
@@ -911,8 +916,9 @@ impl Engine {
         capture_scope: bool,
         level: usize,
     ) -> RhaiResult {
+        let mut first_arg = first_arg;
         let mut a_expr = args_expr;
-        let mut total_args = a_expr.len();
+        let mut total_args = if first_arg.is_some() { 1 } else { 0 } + a_expr.len();
         let mut curry = FnArgsVec::new_const();
         let mut name = fn_name;
         let mut hashes = hashes;
@@ -921,26 +927,29 @@ impl Engine {
         match name {
             // Handle call()
             KEYWORD_FN_PTR_CALL if total_args >= 1 => {
-                let (arg, arg_pos) = self.get_arg_value(
-                    scope, global, state, lib, this_ptr, level, &a_expr[0], constants,
-                )?;
+                let arg = first_arg.unwrap();
+                let (arg_value, arg_pos) =
+                    self.get_arg_value(scope, global, state, lib, this_ptr, level, arg, constants)?;
 
-                if !arg.is::<FnPtr>() {
+                if !arg_value.is::<FnPtr>() {
                     return Err(self.make_type_mismatch_err::<FnPtr>(
-                        self.map_type_name(arg.type_name()),
+                        self.map_type_name(arg_value.type_name()),
                         arg_pos,
                     ));
                 }
 
-                let fn_ptr = arg.cast::<FnPtr>();
+                let fn_ptr = arg_value.cast::<FnPtr>();
                 curry.extend(fn_ptr.curry().iter().cloned());
 
                 // Redirect function name
                 redirected = fn_ptr.take_data().0;
                 name = &redirected;
 
-                // Skip the first argument
-                a_expr = &a_expr[1..];
+                // Shift the arguments
+                first_arg = a_expr.get(0);
+                if !a_expr.is_empty() {
+                    a_expr = &a_expr[1..];
+                }
                 total_args -= 1;
 
                 // Recalculate hash
@@ -953,12 +962,12 @@ impl Engine {
             }
             // Handle Fn()
             KEYWORD_FN_PTR if total_args == 1 => {
-                let (arg, arg_pos) = self.get_arg_value(
-                    scope, global, state, lib, this_ptr, level, &a_expr[0], constants,
-                )?;
+                let arg = first_arg.unwrap();
+                let (arg_value, arg_pos) =
+                    self.get_arg_value(scope, global, state, lib, this_ptr, level, arg, constants)?;
 
                 // Fn - only in function call style
-                return arg
+                return arg_value
                     .into_immutable_string()
                     .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, arg_pos))
                     .and_then(FnPtr::try_from)
@@ -968,30 +977,30 @@ impl Engine {
 
             // Handle curry()
             KEYWORD_FN_PTR_CURRY if total_args > 1 => {
-                let (arg, arg_pos) = self.get_arg_value(
-                    scope, global, state, lib, this_ptr, level, &a_expr[0], constants,
-                )?;
+                let first = first_arg.unwrap();
+                let (arg_value, arg_pos) = self
+                    .get_arg_value(scope, global, state, lib, this_ptr, level, first, constants)?;
 
-                if !arg.is::<FnPtr>() {
+                if !arg_value.is::<FnPtr>() {
                     return Err(self.make_type_mismatch_err::<FnPtr>(
-                        self.map_type_name(arg.type_name()),
+                        self.map_type_name(arg_value.type_name()),
                         arg_pos,
                     ));
                 }
 
-                let (name, fn_curry) = arg.cast::<FnPtr>().take_data();
+                let (name, fn_curry) = arg_value.cast::<FnPtr>().take_data();
 
                 // Append the new curried arguments to the existing list.
-                let fn_curry = a_expr.iter().skip(1).try_fold(
-                    fn_curry,
-                    |mut curried, expr| -> RhaiResultOf<_> {
-                        let (value, _) = self.get_arg_value(
-                            scope, global, state, lib, this_ptr, level, expr, constants,
-                        )?;
-                        curried.push(value);
-                        Ok(curried)
-                    },
-                )?;
+                let fn_curry =
+                    a_expr
+                        .iter()
+                        .try_fold(fn_curry, |mut curried, expr| -> RhaiResultOf<_> {
+                            let (value, _) = self.get_arg_value(
+                                scope, global, state, lib, this_ptr, level, expr, constants,
+                            )?;
+                            curried.push(value);
+                            Ok(curried)
+                        })?;
 
                 return Ok(FnPtr::new_unchecked(name, fn_curry).into());
             }
@@ -999,28 +1008,28 @@ impl Engine {
             // Handle is_shared()
             #[cfg(not(feature = "no_closure"))]
             crate::engine::KEYWORD_IS_SHARED if total_args == 1 => {
-                let (arg, _) = self.get_arg_value(
-                    scope, global, state, lib, this_ptr, level, &a_expr[0], constants,
-                )?;
-                return Ok(arg.is_shared().into());
+                let arg = first_arg.unwrap();
+                let (arg_value, _) =
+                    self.get_arg_value(scope, global, state, lib, this_ptr, level, arg, constants)?;
+                return Ok(arg_value.is_shared().into());
             }
 
             // Handle is_def_fn()
             #[cfg(not(feature = "no_function"))]
             crate::engine::KEYWORD_IS_DEF_FN if total_args == 2 => {
-                let (arg, arg_pos) = self.get_arg_value(
-                    scope, global, state, lib, this_ptr, level, &a_expr[0], constants,
-                )?;
+                let first = first_arg.unwrap();
+                let (arg_value, arg_pos) = self
+                    .get_arg_value(scope, global, state, lib, this_ptr, level, first, constants)?;
 
-                let fn_name = arg
+                let fn_name = arg_value
                     .into_immutable_string()
                     .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, arg_pos))?;
 
-                let (arg, arg_pos) = self.get_arg_value(
-                    scope, global, state, lib, this_ptr, level, &a_expr[1], constants,
+                let (arg_value, arg_pos) = self.get_arg_value(
+                    scope, global, state, lib, this_ptr, level, &a_expr[0], constants,
                 )?;
 
-                let num_params = arg
+                let num_params = arg_value
                     .as_int()
                     .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, arg_pos))?;
 
@@ -1035,10 +1044,10 @@ impl Engine {
 
             // Handle is_def_var()
             KEYWORD_IS_DEF_VAR if total_args == 1 => {
-                let (arg, arg_pos) = self.get_arg_value(
-                    scope, global, state, lib, this_ptr, level, &a_expr[0], constants,
-                )?;
-                let var_name = arg
+                let arg = first_arg.unwrap();
+                let (arg_value, arg_pos) =
+                    self.get_arg_value(scope, global, state, lib, this_ptr, level, arg, constants)?;
+                let var_name = arg_value
                     .into_immutable_string()
                     .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, arg_pos))?;
                 return Ok(scope.contains(&var_name).into());
@@ -1048,10 +1057,10 @@ impl Engine {
             KEYWORD_EVAL if total_args == 1 => {
                 // eval - only in function call style
                 let orig_scope_len = scope.len();
-                let (value, pos) = self.get_arg_value(
-                    scope, global, state, lib, this_ptr, level, &a_expr[0], constants,
-                )?;
-                let script = &value
+                let arg = first_arg.unwrap();
+                let (arg_value, pos) =
+                    self.get_arg_value(scope, global, state, lib, this_ptr, level, arg, constants)?;
+                let script = &arg_value
                     .into_immutable_string()
                     .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, pos))?;
                 let result = self.eval_script_expr_in_place(
@@ -1085,8 +1094,8 @@ impl Engine {
         }
 
         // Normal function call - except for Fn, curry, call and eval (handled above)
-        let mut arg_values = FnArgsVec::with_capacity(a_expr.len());
-        let mut args = FnArgsVec::with_capacity(a_expr.len() + curry.len());
+        let mut arg_values = FnArgsVec::with_capacity(total_args);
+        let mut args = FnArgsVec::with_capacity(total_args + curry.len());
         let mut is_ref_mut = false;
 
         // Capture parent scope?
@@ -1094,10 +1103,14 @@ impl Engine {
         // If so, do it separately because we cannot convert the first argument (if it is a simple
         // variable access) to &mut because `scope` is needed.
         if capture_scope && !scope.is_empty() {
-            a_expr.iter().try_for_each(|expr| {
-                self.get_arg_value(scope, global, state, lib, this_ptr, level, expr, constants)
-                    .map(|(value, _)| arg_values.push(value.flatten()))
-            })?;
+            first_arg
+                .iter()
+                .map(|&v| v)
+                .chain(a_expr.iter())
+                .try_for_each(|expr| {
+                    self.get_arg_value(scope, global, state, lib, this_ptr, level, expr, constants)
+                        .map(|(value, _)| arg_values.push(value.flatten()))
+                })?;
             args.extend(curry.iter_mut());
             args.extend(arg_values.iter_mut());
 
@@ -1113,17 +1126,17 @@ impl Engine {
         }
 
         // Call with blank scope
-        if a_expr.is_empty() && curry.is_empty() {
+        if total_args == 0 && curry.is_empty() {
             // No arguments
         } else {
             // If the first argument is a variable, and there is no curried arguments,
             // convert to method-call style in order to leverage potential &mut first argument and
             // avoid cloning the value
-            if curry.is_empty() && !a_expr.is_empty() && a_expr[0].is_variable_access(false) {
+            if curry.is_empty() && first_arg.map_or(false, |expr| expr.is_variable_access(false)) {
                 // func(x, ...) -> x.func(...)
-                let (first_expr, rest_expr) = a_expr.split_first().unwrap();
+                let first_expr = first_arg.unwrap();
 
-                rest_expr.iter().try_for_each(|expr| {
+                a_expr.iter().try_for_each(|expr| {
                     self.get_arg_value(scope, global, state, lib, this_ptr, level, expr, constants)
                         .map(|(value, _)| arg_values.push(value.flatten()))
                 })?;
@@ -1155,10 +1168,15 @@ impl Engine {
                 }
             } else {
                 // func(..., ...)
-                a_expr.iter().try_for_each(|expr| {
-                    self.get_arg_value(scope, global, state, lib, this_ptr, level, expr, constants)
+                first_arg
+                    .into_iter()
+                    .chain(a_expr.iter())
+                    .try_for_each(|expr| {
+                        self.get_arg_value(
+                            scope, global, state, lib, this_ptr, level, expr, constants,
+                        )
                         .map(|(value, _)| arg_values.push(value.flatten()))
-                })?;
+                    })?;
                 args.extend(curry.iter_mut());
                 args.extend(arg_values.iter_mut());
             }

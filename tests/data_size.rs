@@ -1,5 +1,5 @@
 #![cfg(not(feature = "unchecked"))]
-use rhai::{Engine, EvalAltResult, ParseErrorType};
+use rhai::{Engine, EvalAltResult, ParseErrorType, INT};
 
 #[cfg(not(feature = "no_index"))]
 use rhai::Array;
@@ -101,6 +101,39 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
         EvalAltResult::ErrorDataTooLarge(_, _)
     ));
 
+    #[cfg(not(feature = "no_closure"))]
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                    let x = 42;
+                    let y = [];
+                    let f = || x;
+                    for n in 0..10 {
+                        y += x;
+                    }
+                    len(y)
+                "
+        )?,
+        10
+    );
+
+    #[cfg(not(feature = "no_closure"))]
+    assert!(matches!(
+        *engine
+            .run(
+                "
+                    let x = 42;
+                    let y = [];
+                    let f = || x;
+                    for n in 0..11 {
+                        y += x;
+                    }
+                "
+            )
+            .expect_err("should error"),
+        EvalAltResult::ErrorDataTooLarge(_, _)
+    ));
+
     assert!(matches!(
         *engine
             .run(
@@ -114,18 +147,40 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
     ));
 
     #[cfg(not(feature = "no_object"))]
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                let x = [1,2,3,4,5,6];
+                x.pad(10, 42);
+                len(x)
+            "
+        )?,
+        10
+    );
+
+    #[cfg(not(feature = "no_object"))]
     assert!(matches!(
         *engine
             .run(
                 "
                     let x = [1,2,3,4,5,6];
-                    x.pad(100, 42);
+                    x.pad(11, 42);
                     x
                 "
             )
             .expect_err("should error"),
         EvalAltResult::ErrorDataTooLarge(_, _)
     ));
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                let x = [1,2,3];
+                len([x, x, x])
+            "
+        )?,
+        3
+    );
 
     assert!(matches!(
         *engine

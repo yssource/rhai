@@ -18,7 +18,7 @@ cargo +nightly build --release
 A specific profile can also be used:
 
 ```bash
-cargo +nightly build --profile unix -Z unstable-options
+cargo +nightly build --profile unix
 ```
 
 Three profiles are defined: `unix`, `windows` and `macos`.

@@ -5,12 +5,12 @@ fn test_throw() {
     let engine = Engine::new();
 
     assert!(matches!(
-        *engine.eval::<()>("if true { throw 42 }").expect_err("expects error"),
+        *engine.run("if true { throw 42 }").expect_err("expects error"),
         EvalAltResult::ErrorRuntime(s, _) if s.as_int().unwrap() == 42
     ));
 
     assert!(matches!(
-        *engine.eval::<()>(r#"throw"#).expect_err("expects error"),
+        *engine.run(r#"throw"#).expect_err("expects error"),
         EvalAltResult::ErrorRuntime(s, _) if s.is::<()>()
     ));
 }
@@ -88,7 +88,7 @@ fn test_try_catch() -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "unchecked"))]
     assert!(matches!(
         *engine
-            .eval::<()>("try { 42/0; } catch { throw; }")
+            .run("try { 42/0; } catch { throw; }")
             .expect_err("expects error"),
         EvalAltResult::ErrorArithmetic(_, _)
     ));

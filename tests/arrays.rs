@@ -120,6 +120,18 @@ fn test_arrays() -> Result<(), Box<EvalAltResult>> {
             .into_typed_array::<INT>()?,
         [1, 2, 3, 4, 5]
     );
+    #[cfg(not(feature = "no_closure"))]
+    assert!(!engine.eval::<bool>(
+        "
+            let x = 42;
+            let y = [];
+            let f = || x;
+            for n in 0..10 {
+                y += x;
+            }
+            some(y, |x| is_shared(x))
+        "
+    )?);
 
     Ok(())
 }

@@ -21,7 +21,7 @@ fn test_comments() -> Result<(), Box<EvalAltResult>> {
         42
     );
 
-    assert_eq!(engine.eval::<()>("/* Hello world */")?, ());
+    assert_eq!(engine.run("/* Hello world */")?, ());
 
     Ok(())
 }

@@ -245,6 +245,7 @@ impl IntoIterator for GlobalRuntimeState {
 }
 
 impl<K: Into<Identifier>, M: Into<Shared<Module>>> FromIterator<(K, M)> for GlobalRuntimeState {
+    #[inline]
     fn from_iter<T: IntoIterator<Item = (K, M)>>(iter: T) -> Self {
         let mut lib = Self::new();
         lib.extend(iter);
@@ -253,6 +254,7 @@ impl<K: Into<Identifier>, M: Into<Shared<Module>>> FromIterator<(K, M)> for Glob
 }
 
 impl<K: Into<Identifier>, M: Into<Shared<Module>>> Extend<(K, M)> for GlobalRuntimeState {
+    #[inline]
     fn extend<T: IntoIterator<Item = (K, M)>>(&mut self, iter: T) {
         iter.into_iter().for_each(|(k, m)| {
             self.keys.push(k.into());
@@ -262,10 +264,25 @@ impl<K: Into<Identifier>, M: Into<Shared<Module>>> Extend<(K, M)> for GlobalRunt
 }
 
 impl fmt::Debug for GlobalRuntimeState {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Imports")?;
-        f.debug_map()
-            .entries(self.keys.iter().zip(self.modules.iter()))
-            .finish()
+        let mut f = f.debug_struct("GlobalRuntimeState");
+
+        f.field("imports", &self.keys.iter().zip(self.modules.iter()))
+            .field("source", &self.source)
+            .field("num_operations", &self.num_operations)
+            .field("num_modules_loaded", &self.num_modules_loaded);
+
+        #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+        f.field("fn_hash_indexing", &self.fn_hash_indexing);
+
+        #[cfg(not(feature = "no_module"))]
+        f.field("embedded_module_resolver", &self.embedded_module_resolver);
+
+        #[cfg(not(feature = "no_module"))]
+        #[cfg(not(feature = "no_function"))]
+        f.field("constants", &self.constants);
+
+        f.finish()
     }
 }

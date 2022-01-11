@@ -21,6 +21,8 @@ Breaking changes
 Bug fixes
 ---------
 
+* Custom syntax now works properly inside binary expressions and with method calls.
+* Hex numbers with the high-bit set now parse correctly into negative integer numbers.
 * Constructing a literal array or object map now checks for size limits for each item instead of at the very end when it is already too late.
 * Non-`INT` integer types are now treated exactly as custom types under `only_i64` and `only_i32`.
 * Calling `pad` on an array now checks for total size over limit after each item added.
@@ -29,10 +31,12 @@ New features
 ------------
 
 * Added support for integer _ranges_ via the `..` and `..=` operators.
+* Added `EvalAltResult::ErrorCustomSyntax` to catch errors in custom syntax, which should not happen unless an `AST` is compiled on one `Engine` but evaluated on another unrelated `Engine`.
 
 Enhancements
 ------------
 
+* `BLOB`'s are refined to display in a more compact hex format.
 * A new syntax is introduced for `def_package!` that will replace the old syntax in future versions.
 * Added `NativeCallContext::call_fn` to easily call a function.
 * Doc-comments on plugin module functions are extracted into the functions' metadata.
@@ -42,21 +46,6 @@ Deprecated API's
 
 * `Expression::get_variable_name` is deprecated in favor of the new `Expression::get_string_value`.
 * The old syntax of `def_package!` is deprecated in favor of the new syntax.
-
-
-Version 1.3.1
-=============
-
-Bug fixes
----------
-
-* Custom syntax now works properly inside binary expressions and with method calls.
-* Hex numbers with the high-bit set now parse correctly into negative integer numbers.
-
-Enhancements
-------------
-
-* `BLOB`'s are refined to display in a more compact hex format.
 
 
 Version 1.3.0

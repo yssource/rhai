@@ -11,7 +11,7 @@ fn test_switch() -> Result<(), Box<EvalAltResult>> {
         'a'
     );
     assert_eq!(
-        engine.eval::<()>("switch 3 { 1 => (), 2 => 'a', 42 => true }")?,
+        engine.run("switch 3 { 1 => (), 2 => 'a', 42 => true }")?,
         ()
     );
     assert_eq!(

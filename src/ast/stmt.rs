@@ -483,7 +483,7 @@ impl Stmt {
             Self::Expr(Expr::Stmt(s)) => s.iter().all(Stmt::is_block_dependent),
 
             Self::FnCall(x, _) | Self::Expr(Expr::FnCall(x, _)) => {
-                x.namespace.is_none() && x.name == KEYWORD_EVAL
+                !x.is_qualified() && x.name == KEYWORD_EVAL
             }
 
             #[cfg(not(feature = "no_module"))]

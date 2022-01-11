@@ -229,9 +229,14 @@ impl Engine {
             )
         } else {
             // Normal function call
+            let (first_arg, args) = args.split_first().map_or_else(
+                || (None, args.as_ref()),
+                |(first, rest)| (Some(first), rest),
+            );
+
             self.make_function_call(
-                scope, global, state, lib, this_ptr, name, args, constants, *hashes, pos, *capture,
-                level,
+                scope, global, state, lib, this_ptr, name, first_arg, args, constants, *hashes,
+                pos, *capture, level,
             )
         }
     }
@@ -411,10 +416,18 @@ impl Engine {
                 .into())
             }
 
-            Expr::Custom(custom, _) => {
+            Expr::Custom(custom, pos) => {
                 let expressions: StaticVec<_> = custom.inputs.iter().map(Into::into).collect();
+                // The first token acts as the custom syntax's key
                 let key_token = custom.tokens.first().unwrap();
-                let custom_def = self.custom_syntax.get(key_token).unwrap();
+                // The key should exist, unless the AST is compiled in a different Engine
+                let custom_def = self.custom_syntax.get(key_token).ok_or_else(|| {
+                    Box::new(ERR::ErrorCustomSyntax(
+                        format!("Invalid custom syntax prefix: {}", key_token),
+                        custom.tokens.iter().map(|s| s.to_string()).collect(),
+                        *pos,
+                    ))
+                })?;
                 let mut context = EvalContext {
                     engine: self,
                     scope,

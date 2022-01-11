@@ -71,6 +71,7 @@ pub enum EvalAltResult {
     ErrorDotExpr(String, Position),
     /// Arithmetic error encountered. Wrapped value is the error message.
     ErrorArithmetic(String, Position),
+
     /// Number of operations over maximum limit.
     ErrorTooManyOperations(Position),
     /// [Modules][crate::Module] over maximum limit.
@@ -81,6 +82,14 @@ pub enum EvalAltResult {
     ErrorDataTooLarge(String, Position),
     /// The script is prematurely terminated. Wrapped value is the termination token.
     ErrorTerminated(Dynamic, Position),
+
+    /// Error encountered for a custom syntax. Wrapped values are the error message and
+    /// custom syntax symbols stream.
+    ///
+    /// Normally this should never happen, unless an [`AST`][crate::AST] is compiled on one
+    /// [`Engine`][crate::Engine] but evaluated on another unrelated [`Engine`][crate::Engine].
+    ErrorCustomSyntax(String, Vec<String>, Position),
+
     /// Run-time error encountered. Wrapped value is the error token.
     ErrorRuntime(Dynamic, Position),
 
@@ -204,6 +213,8 @@ impl fmt::Display for EvalAltResult {
                 index, max
             )?,
             Self::ErrorDataTooLarge(typ, _) => write!(f, "{} exceeds maximum limit", typ)?,
+
+            Self::ErrorCustomSyntax(s, tokens, _) => write!(f, "{}: {}", s, tokens.join(" "))?,
         }
 
         // Do not write any position if None
@@ -266,7 +277,8 @@ impl EvalAltResult {
             | Self::ErrorArithmetic(_, _)
             | Self::ErrorRuntime(_, _) => true,
 
-            Self::ErrorTooManyOperations(_)
+            Self::ErrorCustomSyntax(_, _, _)
+            | Self::ErrorTooManyOperations(_)
             | Self::ErrorTooManyModules(_)
             | Self::ErrorStackOverflow(_)
             | Self::ErrorDataTooLarge(_, _)
@@ -282,7 +294,8 @@ impl EvalAltResult {
             Self::ErrorSystem(_, _) => true,
             Self::ErrorParsing(_, _) => true,
 
-            Self::ErrorTooManyOperations(_)
+            Self::ErrorCustomSyntax(_, _, _)
+            | Self::ErrorTooManyOperations(_)
             | Self::ErrorTooManyModules(_)
             | Self::ErrorStackOverflow(_)
             | Self::ErrorDataTooLarge(_, _) => true,
@@ -358,6 +371,20 @@ impl EvalAltResult {
             Self::ErrorTerminated(t, _) => {
                 map.insert("token".into(), t.clone());
             }
+            Self::ErrorCustomSyntax(_, tokens, _) => {
+                map.insert(
+                    "tokens".into(),
+                    #[cfg(not(feature = "no_index"))]
+                    Dynamic::from_array(tokens.iter().map(Into::into).collect()),
+                    #[cfg(feature = "no_index")]
+                    tokens
+                        .iter()
+                        .map(|s| s.as_str())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                        .into(),
+                );
+            }
         };
     }
     /// Get the [position][Position] of this error.
@@ -389,6 +416,7 @@ impl EvalAltResult {
             | Self::ErrorStackOverflow(pos)
             | Self::ErrorDataTooLarge(_, pos)
             | Self::ErrorTerminated(_, pos)
+            | Self::ErrorCustomSyntax(_, _, pos)
             | Self::ErrorRuntime(_, pos)
             | Self::LoopBreak(_, pos)
             | Self::Return(_, pos) => *pos,
@@ -436,6 +464,7 @@ impl EvalAltResult {
             | Self::ErrorStackOverflow(pos)
             | Self::ErrorDataTooLarge(_, pos)
             | Self::ErrorTerminated(_, pos)
+            | Self::ErrorCustomSyntax(_, _, pos)
             | Self::ErrorRuntime(_, pos)
             | Self::LoopBreak(_, pos)
             | Self::Return(_, pos) => *pos = new_position,

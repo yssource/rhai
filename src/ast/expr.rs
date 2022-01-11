@@ -1,18 +1,19 @@
 //! Module defining script expressions.
 
 use super::{ASTNode, Ident, Stmt, StmtBlock};
-use crate::engine::{OP_EXCLUSIVE_RANGE, OP_INCLUSIVE_RANGE};
+use crate::engine::{KEYWORD_FN_PTR, OP_EXCLUSIVE_RANGE, OP_INCLUSIVE_RANGE};
 use crate::func::hashing::ALT_ZERO_HASH;
 use crate::module::Namespace;
 use crate::tokenizer::Token;
 use crate::types::dynamic::Union;
-use crate::{Dynamic, Identifier, ImmutableString, Position, StaticVec, INT};
+use crate::{calc_fn_hash, Dynamic, FnPtr, Identifier, ImmutableString, Position, StaticVec, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
     collections::BTreeMap,
     fmt,
     hash::Hash,
+    iter::once,
     num::{NonZeroU8, NonZeroUsize},
 };
 
@@ -522,8 +523,23 @@ impl Expr {
                 }))
             }
 
+            // Fn
+            Self::FnCall(ref x, _)
+                if !x.is_qualified() && x.args.len() == 1 && x.name == KEYWORD_FN_PTR =>
+            {
+                if let Expr::StringConstant(ref s, _) = x.args[0] {
+                    if let Ok(fn_ptr) = FnPtr::new(s) {
+                        fn_ptr.into()
+                    } else {
+                        return None;
+                    }
+                } else {
+                    return None;
+                }
+            }
+
             // Binary operators
-            Self::FnCall(x, _) if x.args.len() == 2 => match x.name.as_str() {
+            Self::FnCall(x, _) if !x.is_qualified() && x.args.len() == 2 => match x.name.as_str() {
                 // x..y
                 OP_EXCLUSIVE_RANGE => {
                     if let Expr::IntegerConstant(ref start, _) = x.args[0] {
@@ -576,6 +592,19 @@ impl Expr {
 
             #[cfg(not(feature = "no_object"))]
             Union::Map(m, _, _) => Self::DynamicConstant(Box::new((*m).into()), pos),
+
+            Union::FnPtr(f, _, _) if !f.is_curried() => Self::FnCall(
+                FnCallExpr {
+                    namespace: None,
+                    name: KEYWORD_FN_PTR.into(),
+                    hashes: calc_fn_hash(f.fn_name(), 1).into(),
+                    args: once(Self::Stack(0, pos)).collect(),
+                    constants: once(f.fn_name().into()).collect(),
+                    capture_parent_scope: false,
+                }
+                .into(),
+                pos,
+            ),
 
             _ => Self::DynamicConstant(value.into(), pos),
         }
