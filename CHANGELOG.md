@@ -31,6 +31,7 @@ New features
 ------------
 
 * Added support for integer _ranges_ via the `..` and `..=` operators.
+* Added `EvalAltResult::ErrorCustomSyntax` to catch errors in custom syntax, which should not happen unless an `AST` is compiled on one `Engine` but evaluated on another unrelated `Engine`.
 
 Enhancements
 ------------

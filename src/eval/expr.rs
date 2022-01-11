@@ -416,14 +416,16 @@ impl Engine {
                 .into())
             }
 
-            Expr::Custom(custom, _) => {
+            Expr::Custom(custom, pos) => {
                 let expressions: StaticVec<_> = custom.inputs.iter().map(Into::into).collect();
+                // The first token acts as the custom syntax's key
                 let key_token = custom.tokens.first().unwrap();
+                // The key should exist, unless the AST is compiled in a different Engine
                 let custom_def = self.custom_syntax.get(key_token).ok_or_else(|| {
-                    let code: Vec<_> = custom.tokens.iter().map(|s| s.as_str()).collect();
-                    Box::new(ERR::ErrorSystem(
+                    Box::new(ERR::ErrorCustomSyntax(
                         format!("Invalid custom syntax prefix: {}", key_token),
-                        code.join(" ").into(),
+                        custom.tokens.iter().map(|s| s.to_string()).collect(),
+                        *pos,
                     ))
                 })?;
                 let mut context = EvalContext {
