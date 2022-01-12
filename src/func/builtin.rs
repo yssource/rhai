@@ -41,8 +41,7 @@ fn is_numeric(type_id: TypeId) -> bool {
 
     #[cfg(not(feature = "only_i64"))]
     #[cfg(not(feature = "only_i32"))]
-    #[cfg(not(target_arch = "wasm32"))]
-    #[cfg(not(target_arch = "wasm64"))]
+    #[cfg(not(target_family = "wasm"))]
     let result = result || type_id == TypeId::of::<u128>() || type_id == TypeId::of::<i128>();
 
     #[cfg(not(feature = "no_float"))]

@@ -203,40 +203,6 @@ pub fn make_setter(id: &str) -> Identifier {
     buf
 }
 
-/// Is this function an anonymous function?
-#[cfg(not(feature = "no_function"))]
-#[inline(always)]
-#[must_use]
-pub fn is_anonymous_fn(fn_name: &str) -> bool {
-    fn_name.starts_with(FN_ANONYMOUS)
-}
-
-/// Print to `stdout`
-#[inline]
-#[allow(unused_variables)]
-fn print_to_stdout(s: &str) {
-    #[cfg(not(feature = "no_std"))]
-    #[cfg(not(target_arch = "wasm32"))]
-    #[cfg(not(target_arch = "wasm64"))]
-    println!("{}", s);
-}
-
-/// Debug to `stdout`
-#[inline]
-#[allow(unused_variables)]
-fn debug_to_stdout(s: &str, source: Option<&str>, pos: Position) {
-    #[cfg(not(feature = "no_std"))]
-    #[cfg(not(target_arch = "wasm32"))]
-    #[cfg(not(target_arch = "wasm64"))]
-    if let Some(source) = source {
-        println!("{}{:?} | {}", source, pos, s);
-    } else if pos.is_none() {
-        println!("{}", s);
-    } else {
-        println!("{:?} | {}", pos, s);
-    }
-}
-
 impl Engine {
     /// Create a new [`Engine`].
     #[inline]
@@ -247,16 +213,32 @@ impl Engine {
 
         #[cfg(not(feature = "no_module"))]
         #[cfg(not(feature = "no_std"))]
-        #[cfg(not(target_arch = "wasm32"))]
-        #[cfg(not(target_arch = "wasm64"))]
+        #[cfg(not(target_family = "wasm"))]
         {
             engine.module_resolver =
                 Some(Box::new(crate::module::resolvers::FileModuleResolver::new()));
         }
 
         // default print/debug implementations
-        engine.print = Some(Box::new(print_to_stdout));
-        engine.debug = Some(Box::new(debug_to_stdout));
+        #[cfg(not(feature = "no_std"))]
+        #[cfg(not(target_family = "wasm"))]
+        {
+            engine.print = Some(Box::new(|s| println!("{}", s)));
+            engine.debug = Some(Box::new(|s, source, pos| {
+                if let Some(source) = source {
+                    println!("{}{:?} | {}", source, pos, s);
+                } else if pos.is_none() {
+                    println!("{}", s);
+                } else {
+                    println!("{:?} | {}", pos, s);
+                }
+            }));
+        }
+        #[cfg(any(feature = "no_std", target_family = "wasm"))]
+        {
+            engine.print = None;
+            engine.debug = None;
+        }
 
         engine.register_global_module(StandardPackage::new().as_shared_module());
 

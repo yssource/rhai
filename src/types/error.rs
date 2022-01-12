@@ -115,7 +115,7 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorParsing(p, _) => write!(f, "Syntax error: {}", p)?,
 
             #[cfg(not(feature = "no_function"))]
-            Self::ErrorInFunctionCall(s, src, err, _) if crate::engine::is_anonymous_fn(s) => {
+            Self::ErrorInFunctionCall(s, src, err, _) if crate::parser::is_anonymous_fn(s) => {
                 write!(f, "{} in call to closure", err)?;
                 if !src.is_empty() {
                     write!(f, " @ '{}'", src)?;

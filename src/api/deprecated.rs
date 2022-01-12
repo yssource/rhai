@@ -20,8 +20,7 @@ impl Engine {
     /// This method will be removed in the next major version.
     #[deprecated(since = "1.1.0", note = "use `run_file` instead")]
     #[cfg(not(feature = "no_std"))]
-    #[cfg(not(target_arch = "wasm32"))]
-    #[cfg(not(target_arch = "wasm64"))]
+    #[cfg(not(target_family = "wasm"))]
     #[inline(always)]
     pub fn consume_file(&self, path: std::path::PathBuf) -> RhaiResultOf<()> {
         self.run_file(path)
@@ -39,8 +38,7 @@ impl Engine {
     /// This method will be removed in the next major version.
     #[deprecated(since = "1.1.0", note = "use `run_file_with_scope` instead")]
     #[cfg(not(feature = "no_std"))]
-    #[cfg(not(target_arch = "wasm32"))]
-    #[cfg(not(target_arch = "wasm64"))]
+    #[cfg(not(target_family = "wasm"))]
     #[inline(always)]
     pub fn consume_file_with_scope(
         &self,

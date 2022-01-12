@@ -15,12 +15,11 @@ use std::{
 };
 
 #[cfg(not(feature = "no_std"))]
-#[cfg(not(target_arch = "wasm32"))]
-#[cfg(not(target_arch = "wasm64"))]
+#[cfg(not(target_family = "wasm"))]
 use std::time::Instant;
 
 #[cfg(not(feature = "no_std"))]
-#[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))]
+#[cfg(target_family = "wasm")]
 use instant::Instant;
 
 /// The message: data type was checked
@@ -525,8 +524,7 @@ impl Hash for Dynamic {
                         value_any.downcast_ref::<i64>().expect(CHECKED).hash(state);
                     }
 
-                    #[cfg(not(target_arch = "wasm32"))]
-                    #[cfg(not(target_arch = "wasm64"))]
+                    #[cfg(not(target_family = "wasm"))]
                     if type_id == TypeId::of::<u128>() {
                         TypeId::of::<u128>().hash(state);
                         value_any.downcast_ref::<u128>().expect(CHECKED).hash(state);
@@ -650,8 +648,7 @@ impl fmt::Display for Dynamic {
 
                 #[cfg(not(feature = "only_i32"))]
                 #[cfg(not(feature = "only_i64"))]
-                #[cfg(not(target_arch = "wasm32"))]
-                #[cfg(not(target_arch = "wasm64"))]
+                #[cfg(not(target_family = "wasm"))]
                 if _type_id == TypeId::of::<u128>() {
                     return fmt::Display::fmt(_value_any.downcast_ref::<u128>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<i128>() {
@@ -756,8 +753,7 @@ impl fmt::Debug for Dynamic {
 
                 #[cfg(not(feature = "only_i32"))]
                 #[cfg(not(feature = "only_i64"))]
-                #[cfg(not(target_arch = "wasm32"))]
-                #[cfg(not(target_arch = "wasm64"))]
+                #[cfg(not(target_family = "wasm"))]
                 if _type_id == TypeId::of::<u128>() {
                     return fmt::Debug::fmt(_value_any.downcast_ref::<u128>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<i128>() {

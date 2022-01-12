@@ -7,11 +7,10 @@ use crate::{def_package, Dynamic, EvalAltResult, RhaiResult, RhaiResultOf, INT};
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;
 
-#[cfg(not(target_arch = "wasm32"))]
-#[cfg(not(target_arch = "wasm64"))]
+#[cfg(not(target_family = "wasm"))]
 use std::time::{Duration, Instant};
 
-#[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))]
+#[cfg(target_family = "wasm")]
 use instant::{Duration, Instant};
 
 def_package! {

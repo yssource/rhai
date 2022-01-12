@@ -274,8 +274,8 @@ mod number_formatting {
             to_binary(value)
         }
 
-        #[cfg(not(target_arch = "wasm32"))]
-        #[cfg(not(target_arch = "wasm64"))]
+        #[cfg(not(target_family = "wasm"))]
+
         pub mod num_128 {
             #[rhai_fn(name = "to_hex")]
             pub fn u128_to_hex(value: u128) -> ImmutableString {
