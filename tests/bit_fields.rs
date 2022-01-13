@@ -27,10 +27,24 @@ fn test_bit_fields() -> Result<(), Box<EvalAltResult>> {
     );
     assert_eq!(engine.eval::<INT>("let x = 10; get_bits(x, 1, 3)")?, 5);
     assert_eq!(engine.eval::<INT>("let x = 10; x[1..=3]")?, 5);
+    assert!(engine.eval::<INT>("let x = 10; x[1..99]").is_err());
+    assert!(engine.eval::<INT>("let x = 10; x[-1..3]").is_err());
     assert_eq!(
         engine.eval::<INT>("let x = 10; set_bits(x, 1, 3, 7); x")?,
         14
     );
+    #[cfg(target_pointer_width = "64")]
+    {
+        assert_eq!(engine.eval::<INT>("let x = 255; get_bits(x, -60, 2)")?, 3);
+        assert_eq!(
+            engine.eval::<INT>("let x = 0; set_bits(x, -64, 1, 15); x")?,
+            1
+        );
+        assert_eq!(
+            engine.eval::<INT>("let x = 0; set_bits(x, -60, 2, 15); x")?,
+            0b00110000
+        );
+    }
     assert_eq!(engine.eval::<INT>("let x = 10; x[1..4] = 7; x")?, 14);
     assert_eq!(
         engine.eval::<INT>(

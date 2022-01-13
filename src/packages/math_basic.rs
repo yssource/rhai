@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::{def_package, Position, RhaiResultOf, ERR, INT, UNSIGNED_INT};
+use crate::{def_package, Position, RhaiResultOf, ERR, INT, UINT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -118,7 +118,7 @@ mod int_functions {
             .into());
         }
 
-        UNSIGNED_INT::from_str_radix(string.trim(), radix as u32)
+        UINT::from_str_radix(string.trim(), radix as u32)
             .map(|v| v as INT)
             .map_err(|err| {
                 ERR::ErrorArithmetic(

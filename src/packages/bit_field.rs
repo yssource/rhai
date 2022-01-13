@@ -1,7 +1,8 @@
 #![allow(non_snake_case)]
 
+use crate::eval::calc_index;
 use crate::plugin::*;
-use crate::{def_package, ExclusiveRange, InclusiveRange, Position, RhaiResultOf, ERR, INT};
+use crate::{def_package, ExclusiveRange, InclusiveRange, Position, RhaiResultOf, ERR, INT, UINT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -19,62 +20,27 @@ mod bit_field_functions {
     const BITS: usize = std::mem::size_of::<INT>() * 8;
 
     #[rhai_fn(return_raw)]
-    pub fn get_bit(value: INT, index: INT) -> RhaiResultOf<bool> {
-        if index >= 0 {
-            let offset = index as usize;
+    pub fn get_bit(value: INT, bit: INT) -> RhaiResultOf<bool> {
+        let bit = calc_index(BITS, bit, true, || {
+            ERR::ErrorBitFieldBounds(BITS, bit, Position::NONE)
+        })?;
 
-            if offset >= BITS {
-                Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
-            } else {
-                Ok((value & (1 << offset)) != 0)
-            }
-        } else if let Some(abs_index) = index.checked_abs() {
-            let offset = abs_index as usize;
-
-            // Count from end if negative
-            if offset > BITS {
-                Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
-            } else {
-                Ok((value & (1 << (BITS - offset))) != 0)
-            }
-        } else {
-            Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
-        }
+        Ok((value & (1 << bit)) != 0)
     }
     #[rhai_fn(return_raw)]
-    pub fn set_bit(value: &mut INT, index: INT, new_value: bool) -> RhaiResultOf<()> {
-        if index >= 0 {
-            let offset = index as usize;
+    pub fn set_bit(value: &mut INT, bit: INT, new_value: bool) -> RhaiResultOf<()> {
+        let bit = calc_index(BITS, bit, true, || {
+            ERR::ErrorBitFieldBounds(BITS, bit, Position::NONE)
+        })?;
 
-            if offset >= BITS {
-                Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
-            } else {
-                let mask = 1 << offset;
-                if new_value {
-                    *value |= mask;
-                } else {
-                    *value &= !mask;
-                }
-                Ok(())
-            }
-        } else if let Some(abs_index) = index.checked_abs() {
-            let offset = abs_index as usize;
-
-            // Count from end if negative
-            if offset > BITS {
-                Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
-            } else {
-                let mask = 1 << offset;
-                if new_value {
-                    *value |= mask;
-                } else {
-                    *value &= !mask;
-                }
-                Ok(())
-            }
+        let mask = 1 << bit;
+        if new_value {
+            *value |= mask;
         } else {
-            Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
+            *value &= !mask;
         }
+
+        Ok(())
     }
     #[rhai_fn(name = "get_bits", return_raw)]
     pub fn get_bits_range(value: INT, range: ExclusiveRange) -> RhaiResultOf<INT> {
@@ -89,46 +55,29 @@ mod bit_field_functions {
         get_bits(value, from, to - from + 1)
     }
     #[rhai_fn(return_raw)]
-    pub fn get_bits(value: INT, index: INT, bits: INT) -> RhaiResultOf<INT> {
-        if bits < 1 {
+    pub fn get_bits(value: INT, bit: INT, bits: INT) -> RhaiResultOf<INT> {
+        if bits <= 0 {
             return Ok(0);
         }
 
-        let offset = if index >= 0 {
-            let offset = index as usize;
+        let bit = calc_index(BITS, bit, true, || {
+            ERR::ErrorBitFieldBounds(BITS, bit, Position::NONE)
+        })?;
 
-            if offset >= BITS {
-                return Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
-            }
-
-            offset
-        } else if let Some(abs_index) = index.checked_abs() {
-            let offset = abs_index as usize;
-
-            // Count from end if negative
-            if offset > BITS {
-                return Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
-            }
-            BITS - offset
-        } else {
-            return Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
-        };
-
-        let bits = if offset + bits as usize > BITS {
-            BITS - offset
+        let bits = if bit + bits as usize > BITS {
+            BITS - bit
         } else {
             bits as usize
         };
 
-        let mut base = 1;
-        let mut mask = 0;
-
-        for _ in 0..bits {
-            mask |= base;
-            base <<= 1;
+        if bit == 0 && bits == BITS {
+            return Ok(value);
         }
 
-        Ok(((value & (mask << index)) >> index) & mask)
+        // 2^bits - 1
+        let mask = ((2 as UINT).pow(bits as u32) - 1) as crate::INT;
+
+        Ok(((value & (mask << bit)) >> bit) & mask)
     }
     #[rhai_fn(name = "set_bits", return_raw)]
     pub fn set_bits_range(
@@ -151,47 +100,31 @@ mod bit_field_functions {
         set_bits(value, from, to - from + 1, new_value)
     }
     #[rhai_fn(return_raw)]
-    pub fn set_bits(value: &mut INT, index: INT, bits: INT, new_value: INT) -> RhaiResultOf<()> {
-        if bits < 1 {
+    pub fn set_bits(value: &mut INT, bit: INT, bits: INT, new_value: INT) -> RhaiResultOf<()> {
+        if bits <= 0 {
             return Ok(());
         }
 
-        let offset = if index >= 0 {
-            let offset = index as usize;
+        let bit = calc_index(BITS, bit, true, || {
+            ERR::ErrorBitFieldBounds(BITS, bit, Position::NONE)
+        })?;
 
-            if offset >= BITS {
-                return Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
-            }
-
-            offset
-        } else if let Some(abs_index) = index.checked_abs() {
-            let offset = abs_index as usize;
-
-            // Count from end if negative
-            if offset > BITS {
-                return Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
-            }
-            BITS - offset
-        } else {
-            return Err(ERR::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
-        };
-
-        let bits = if offset + bits as usize > BITS {
-            BITS - offset
+        let bits = if bit + bits as usize > BITS {
+            BITS - bit
         } else {
             bits as usize
         };
 
-        let mut base = 1;
-        let mut mask = 0;
-
-        for _ in 0..bits {
-            mask |= base;
-            base <<= 1;
+        if bit == 0 && bits == BITS {
+            *value = new_value;
+            return Ok(());
         }
 
-        *value &= !(mask << index);
-        *value |= (new_value & mask) << index;
+        // 2^bits - 1
+        let mask = ((2 as UINT).pow(bits as u32) - 1) as crate::INT;
+
+        *value &= !(mask << bit);
+        *value |= (new_value & mask) << bit;
 
         Ok(())
     }

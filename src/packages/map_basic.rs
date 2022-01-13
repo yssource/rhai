@@ -77,8 +77,9 @@ mod map_functions {
             for (m1, v1) in map1.iter_mut() {
                 if let Some(v2) = map2.get_mut(m1) {
                     let equals = ctx
-                        .call_fn_raw(OP_EQUALS, true, false, &mut [v1, v2])
-                        .map(|v| v.as_bool().unwrap_or(false))?;
+                        .call_fn_raw(OP_EQUALS, true, false, &mut [v1, v2])?
+                        .as_bool()
+                        .unwrap_or(false);
 
                     if !equals {
                         return Ok(false);

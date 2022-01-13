@@ -1,3 +1,4 @@
+use crate::eval::calc_index;
 use crate::plugin::*;
 use crate::types::dynamic::Variant;
 use crate::{def_package, ExclusiveRange, InclusiveRange, RhaiResultOf, INT};
@@ -120,30 +121,9 @@ const BITS: usize = std::mem::size_of::<INT>() * 8;
 
 impl BitRange {
     pub fn new(value: INT, from: INT, len: INT) -> RhaiResultOf<Self> {
-        let from = if from >= 0 {
-            let offset = from as usize;
-
-            #[cfg(not(feature = "unchecked"))]
-            if offset >= BITS {
-                return Err(crate::ERR::ErrorBitFieldBounds(BITS, from, Position::NONE).into());
-            }
-            offset
-        } else {
-            #[cfg(not(feature = "unchecked"))]
-            if let Some(abs_from) = from.checked_abs() {
-                if (abs_from as usize) > BITS {
-                    return Err(crate::ERR::ErrorBitFieldBounds(BITS, from, Position::NONE).into());
-                }
-                BITS - (abs_from as usize)
-            } else {
-                return Err(crate::ERR::ErrorBitFieldBounds(BITS, from, Position::NONE).into());
-            }
-
-            #[cfg(feature = "unchecked")]
-            {
-                BITS - (from.abs() as usize)
-            }
-        };
+        let from = calc_index(BITS, from, true, || {
+            crate::ERR::ErrorBitFieldBounds(BITS, from, Position::NONE)
+        })?;
 
         let len = if len < 0 {
             0

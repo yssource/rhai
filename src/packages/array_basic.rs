@@ -2,6 +2,7 @@
 #![allow(non_snake_case)]
 
 use crate::engine::OP_EQUALS;
+use crate::eval::calc_offset_len;
 use crate::plugin::*;
 use crate::{
     def_package, Array, Dynamic, ExclusiveRange, FnPtr, InclusiveRange, NativeCallContext,
@@ -55,23 +56,18 @@ pub mod array_functions {
             array1
         }
     }
-    pub fn insert(array: &mut Array, position: INT, item: Dynamic) {
+    pub fn insert(array: &mut Array, index: INT, item: Dynamic) {
         if array.is_empty() {
             array.push(item);
-        } else if position < 0 {
-            if let Some(n) = position.checked_abs() {
-                if n as usize > array.len() {
-                    array.insert(0, item);
-                } else {
-                    array.insert(array.len() - n as usize, item);
-                }
-            } else {
-                array.insert(0, item);
-            }
-        } else if (position as usize) >= array.len() {
+            return;
+        }
+
+        let (index, _) = calc_offset_len(array.len(), index, 0);
+
+        if index >= array.len() {
             array.push(item);
         } else {
-            array.insert(position as usize, item);
+            array.insert(index, item);
         }
     }
     #[rhai_fn(return_raw)]
@@ -137,11 +133,11 @@ pub mod array_functions {
             array.remove(0)
         }
     }
-    pub fn remove(array: &mut Array, len: INT) -> Dynamic {
-        if len < 0 || (len as usize) >= array.len() {
+    pub fn remove(array: &mut Array, index: INT) -> Dynamic {
+        if index < 0 || (index as usize) >= array.len() {
             Dynamic::UNIT
         } else {
-            array.remove(len as usize)
+            array.remove(index as usize)
         }
     }
     pub fn clear(array: &mut Array) {
@@ -190,27 +186,13 @@ pub mod array_functions {
             return;
         }
 
-        let start = if start < 0 {
-            let arr_len = array.len();
-            start
-                .checked_abs()
-                .map_or(0, |n| arr_len - usize::min(n as usize, arr_len))
-        } else if start as usize >= array.len() {
+        let (start, len) = calc_offset_len(array.len(), start, len);
+
+        if start >= array.len() {
             array.extend(replace);
-            return;
         } else {
-            start as usize
-        };
-
-        let len = if len < 0 {
-            0
-        } else if len as usize > array.len() - start {
-            array.len() - start
-        } else {
-            len as usize
-        };
-
-        array.splice(start..start + len, replace.into_iter());
+            array.splice(start..start + len, replace);
+        }
     }
     #[rhai_fn(name = "extract")]
     pub fn extract_range(array: &mut Array, range: ExclusiveRange) -> Array {
@@ -229,24 +211,7 @@ pub mod array_functions {
             return Array::new();
         }
 
-        let start = if start < 0 {
-            let arr_len = array.len();
-            start
-                .checked_abs()
-                .map_or(0, |n| arr_len - usize::min(n as usize, arr_len))
-        } else if start as usize >= array.len() {
-            return Array::new();
-        } else {
-            start as usize
-        };
-
-        let len = if len <= 0 {
-            0
-        } else if len as usize > array.len() - start {
-            array.len() - start
-        } else {
-            len as usize
-        };
+        let (start, len) = calc_offset_len(array.len(), start, len);
 
         if len == 0 {
             Array::new()
@@ -261,20 +226,20 @@ pub mod array_functions {
     #[rhai_fn(name = "split")]
     pub fn split_at(array: &mut Array, start: INT) -> Array {
         if array.is_empty() {
-            Array::new()
-        } else if start < 0 {
-            if let Some(n) = start.checked_abs() {
-                if n as usize > array.len() {
-                    mem::take(array)
-                } else {
-                    let mut result = Array::new();
-                    result.extend(array.drain(array.len() - n as usize..));
-                    result
-                }
-            } else {
+            return Array::new();
+        }
+
+        let (start, len) = calc_offset_len(array.len(), start, INT::MAX);
+
+        if start == 0 {
+            if len >= array.len() {
                 mem::take(array)
+            } else {
+                let mut result = Array::new();
+                result.extend(array.drain(array.len() - len..));
+                result
             }
-        } else if start as usize >= array.len() {
+        } else if start >= array.len() {
             Array::new()
         } else {
             let mut result = Array::new();
@@ -424,16 +389,7 @@ pub mod array_functions {
             return Ok(-1);
         }
 
-        let start = if start < 0 {
-            let arr_len = array.len();
-            start
-                .checked_abs()
-                .map_or(0, |n| arr_len - usize::min(n as usize, arr_len))
-        } else if start as usize >= array.len() {
-            return Ok(-1);
-        } else {
-            start as usize
-        };
+        let (start, _) = calc_offset_len(array.len(), start, 0);
 
         for (i, item) in array.iter_mut().enumerate().skip(start) {
             if ctx
@@ -489,16 +445,7 @@ pub mod array_functions {
             return Ok(-1);
         }
 
-        let start = if start < 0 {
-            let arr_len = array.len();
-            start
-                .checked_abs()
-                .map_or(0, |n| arr_len - usize::min(n as usize, arr_len))
-        } else if start as usize >= array.len() {
-            return Ok(-1);
-        } else {
-            start as usize
-        };
+        let (start, _) = calc_offset_len(array.len(), start, 0);
 
         for (i, item) in array.iter().enumerate().skip(start) {
             if filter
@@ -943,26 +890,13 @@ pub mod array_functions {
             return Array::new();
         }
 
-        let start = if start < 0 {
-            let arr_len = array.len();
-            start
-                .checked_abs()
-                .map_or(0, |n| arr_len - usize::min(n as usize, arr_len))
-        } else if start as usize >= array.len() {
-            return Array::new();
-        } else {
-            start as usize
-        };
+        let (start, len) = calc_offset_len(array.len(), start, len);
 
-        let len = if len <= 0 {
-            0
-        } else if len as usize > array.len() - start {
-            array.len() - start
+        if len == 0 {
+            Array::new()
         } else {
-            len as usize
-        };
-
-        array.drain(start..start + len).collect()
+            array.drain(start..start + len).collect()
+        }
     }
     #[rhai_fn(return_raw)]
     pub fn retain(ctx: NativeCallContext, array: &mut Array, filter: FnPtr) -> RhaiResultOf<Array> {
@@ -1033,29 +967,16 @@ pub mod array_functions {
             return Array::new();
         }
 
-        let start = if start < 0 {
-            let arr_len = array.len();
-            start
-                .checked_abs()
-                .map_or(0, |n| arr_len - usize::min(n as usize, arr_len))
-        } else if start as usize >= array.len() {
-            return mem::take(array);
+        let (start, len) = calc_offset_len(array.len(), start, len);
+
+        if len == 0 {
+            Array::new()
         } else {
-            start as usize
-        };
+            let mut drained: Array = array.drain(..start).collect();
+            drained.extend(array.drain(len..));
 
-        let len = if len < 0 {
-            0
-        } else if len as usize > array.len() - start {
-            array.len() - start
-        } else {
-            len as usize
-        };
-
-        let mut drained: Array = array.drain(..start).collect();
-        drained.extend(array.drain(len..));
-
-        drained
+            drained
+        }
     }
     #[rhai_fn(name = "==", return_raw, pure)]
     pub fn equals(ctx: NativeCallContext, array1: &mut Array, array2: Array) -> RhaiResultOf<bool> {

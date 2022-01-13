@@ -5,7 +5,7 @@ use crate::engine::{
     KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
 use crate::func::native::OnParseTokenCallback;
-use crate::{Engine, LexError, StaticVec, INT, UNSIGNED_INT};
+use crate::{Engine, LexError, StaticVec, INT, UINT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -1530,7 +1530,7 @@ fn get_next_token_inner(
                             .filter(|&&c| c != NUMBER_SEPARATOR)
                             .collect();
 
-                        UNSIGNED_INT::from_str_radix(&out, radix)
+                        UINT::from_str_radix(&out, radix)
                             .map(|v| v as INT)
                             .map(Token::IntegerConstant)
                             .unwrap_or_else(|_| {

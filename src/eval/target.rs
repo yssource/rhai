@@ -1,10 +1,76 @@
 //! Type to hold a mutable reference to the target of an evaluation.
 
 use crate::types::dynamic::Variant;
-use crate::{Dynamic, RhaiResultOf};
+use crate::{Dynamic, EvalAltResult, RhaiResultOf, INT};
 use std::ops::{Deref, DerefMut};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
+
+// Calculate an offset+len pair given an actual length of the underlying array.
+//
+// Negative starting positions count from the end.
+//
+// Values going over bounds are limited to the actual length.
+#[inline(always)]
+pub fn calc_offset_len(length: usize, start: INT, len: INT) -> (usize, usize) {
+    let start = if start < 0 {
+        start.checked_abs().map_or(0, |positive_start| {
+            length - usize::min(positive_start as usize, length)
+        })
+    } else if start as usize >= length {
+        return (length, 0);
+    } else {
+        start as usize
+    };
+
+    let len = if len <= 0 {
+        0
+    } else if len as usize > length - start {
+        length - start
+    } else {
+        len as usize
+    };
+
+    (start, len)
+}
+
+// Calculate an offset+len pair given an actual length of the underlying array.
+//
+// Negative starting positions count from the end.
+//
+// Values going over bounds call the provided closure to create an error.
+#[inline(always)]
+pub fn calc_index(
+    length: usize,
+    start: INT,
+    negative_count_from_end: bool,
+    err: impl Fn() -> EvalAltResult,
+) -> RhaiResultOf<usize> {
+    if start < 0 {
+        if negative_count_from_end {
+            // Count from end if negative
+            #[cfg(not(feature = "unchecked"))]
+            return start
+                .checked_abs()
+                .ok_or_else(|| err().into())
+                .and_then(|positive_start| {
+                    if (positive_start as usize) > length {
+                        Err(err().into())
+                    } else {
+                        Ok(length - (positive_start as usize))
+                    }
+                });
+            #[cfg(feature = "unchecked")]
+            return Ok(actual - (start.abs() as usize));
+        } else {
+            Err(err().into())
+        }
+    } else if start as usize >= length {
+        Err(err().into())
+    } else {
+        Ok(start as usize)
+    }
+}
 
 /// A type that encapsulates a mutation target for an expression with side effects.
 #[derive(Debug)]

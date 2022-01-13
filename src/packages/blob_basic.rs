@@ -1,6 +1,7 @@
 #![cfg(not(feature = "no_index"))]
 #![allow(non_snake_case)]
 
+use crate::eval::calc_offset_len;
 use crate::plugin::*;
 use crate::{
     def_package, Blob, Dynamic, ExclusiveRange, InclusiveRange, NativeCallContext, Position,
@@ -86,25 +87,20 @@ pub mod blob_functions {
             blob1
         }
     }
-    pub fn insert(blob: &mut Blob, position: INT, item: INT) {
+    pub fn insert(blob: &mut Blob, index: INT, item: INT) {
         let item = (item & 0x000000ff) as u8;
 
         if blob.is_empty() {
             blob.push(item);
-        } else if position < 0 {
-            if let Some(n) = position.checked_abs() {
-                if n as usize > blob.len() {
-                    blob.insert(0, item);
-                } else {
-                    blob.insert(blob.len() - n as usize, item);
-                }
-            } else {
-                blob.insert(0, item);
-            }
-        } else if (position as usize) >= blob.len() {
+            return;
+        }
+
+        let (index, _) = calc_offset_len(blob.len(), index, 0);
+
+        if index >= blob.len() {
             blob.push(item);
         } else {
-            blob.insert(position as usize, item);
+            blob.insert(index, item);
         }
     }
     #[rhai_fn(return_raw)]
@@ -196,28 +192,14 @@ pub mod blob_functions {
             *blob = replace;
             return;
         }
-        let blob_len = blob.len();
 
-        let start = if start < 0 {
-            start
-                .checked_abs()
-                .map_or(0, |n| blob_len - usize::min(n as usize, blob_len))
-        } else if start as usize >= blob_len {
+        let (start, len) = calc_offset_len(blob.len(), start, len);
+
+        if len == 0 {
             blob.extend(replace);
-            return;
         } else {
-            start as usize
-        };
-
-        let len = if len < 0 {
-            0
-        } else if len as usize > blob_len - start {
-            blob_len - start
-        } else {
-            len as usize
-        };
-
-        blob.splice(start..start + len, replace.into_iter());
+            blob.splice(start..start + len, replace);
+        }
     }
     #[rhai_fn(name = "extract")]
     pub fn extract_range(blob: &mut Blob, range: ExclusiveRange) -> Blob {
@@ -235,25 +217,14 @@ pub mod blob_functions {
         if blob.is_empty() || len <= 0 {
             return Blob::new();
         }
-        let blob_len = blob.len();
 
-        let start = if start < 0 {
-            start
-                .checked_abs()
-                .map_or(0, |n| blob_len - usize::min(n as usize, blob_len))
-        } else if start as usize >= blob_len {
-            return Blob::new();
+        let (start, len) = calc_offset_len(blob.len(), start, len);
+
+        if len == 0 {
+            Blob::new()
         } else {
-            start as usize
-        };
-
-        let len = if len as usize > blob_len - start {
-            blob_len - start
-        } else {
-            len as usize
-        };
-
-        blob[start..start + len].to_vec()
+            blob[start..start + len].to_vec()
+        }
     }
     #[rhai_fn(name = "extract")]
     pub fn extract_tail(blob: &mut Blob, start: INT) -> Blob {
@@ -262,20 +233,20 @@ pub mod blob_functions {
     #[rhai_fn(name = "split")]
     pub fn split_at(blob: &mut Blob, start: INT) -> Blob {
         if blob.is_empty() {
-            Blob::new()
-        } else if start < 0 {
-            if let Some(n) = start.checked_abs() {
-                if n as usize > blob.len() {
-                    mem::take(blob)
-                } else {
-                    let mut result = Blob::new();
-                    result.extend(blob.drain(blob.len() - n as usize..));
-                    result
-                }
-            } else {
+            return Blob::new();
+        }
+
+        let (start, len) = calc_offset_len(blob.len(), start, INT::MAX);
+
+        if start == 0 {
+            if len > blob.len() {
                 mem::take(blob)
+            } else {
+                let mut result = Blob::new();
+                result.extend(blob.drain(blob.len() - len..));
+                result
             }
-        } else if start as usize >= blob.len() {
+        } else if start >= blob.len() {
             Blob::new()
         } else {
             let mut result = Blob::new();
@@ -299,25 +270,14 @@ pub mod blob_functions {
         if blob.is_empty() || len <= 0 {
             return Blob::new();
         }
-        let blob_len = blob.len();
 
-        let start = if start < 0 {
-            start
-                .checked_abs()
-                .map_or(0, |n| blob_len - usize::min(n as usize, blob_len))
-        } else if start as usize >= blob_len {
-            return Blob::new();
+        let (start, len) = calc_offset_len(blob.len(), start, len);
+
+        if len == 0 {
+            Blob::new()
         } else {
-            start as usize
-        };
-
-        let len = if len as usize > blob_len - start {
-            blob_len - start
-        } else {
-            len as usize
-        };
-
-        blob.drain(start..start + len).collect()
+            blob.drain(start..start + len).collect()
+        }
     }
     #[rhai_fn(name = "retain")]
     pub fn retain_range(blob: &mut Blob, range: ExclusiveRange) -> Blob {
@@ -335,28 +295,17 @@ pub mod blob_functions {
         if blob.is_empty() || len <= 0 {
             return Blob::new();
         }
-        let blob_len = blob.len();
 
-        let start = if start < 0 {
-            start
-                .checked_abs()
-                .map_or(0, |n| blob_len - usize::min(n as usize, blob_len))
-        } else if start as usize >= blob_len {
-            return mem::take(blob);
+        let (start, len) = calc_offset_len(blob.len(), start, len);
+
+        if len == 0 {
+            mem::take(blob)
         } else {
-            start as usize
-        };
+            let mut drained: Blob = blob.drain(..start).collect();
+            drained.extend(blob.drain(len..));
 
-        let len = if len as usize > blob_len - start {
-            blob_len - start
-        } else {
-            len as usize
-        };
-
-        let mut drained: Blob = blob.drain(..start).collect();
-        drained.extend(blob.drain(len..));
-
-        drained
+            drained
+        }
     }
 
     #[inline]
@@ -364,23 +313,11 @@ pub mod blob_functions {
         if blob.is_empty() || len <= 0 {
             return 0;
         }
-        let blob_len = blob.len();
+        let (start, len) = calc_offset_len(blob.len(), start, len);
 
-        let start = if start < 0 {
-            start
-                .checked_abs()
-                .map_or(0, |n| blob_len - usize::min(n as usize, blob_len))
-        } else if start as usize >= blob_len {
+        if len == 0 {
             return 0;
-        } else {
-            start as usize
-        };
-
-        let len = if len as usize > blob_len - start {
-            blob_len - start
-        } else {
-            len as usize
-        };
+        }
 
         const INT_BYTES: usize = mem::size_of::<INT>();
 
@@ -433,23 +370,12 @@ pub mod blob_functions {
         if blob.is_empty() || len <= 0 {
             return;
         }
-        let blob_len = blob.len();
 
-        let start = if start < 0 {
-            start
-                .checked_abs()
-                .map_or(0, |n| blob_len - usize::min(n as usize, blob_len))
-        } else if start as usize >= blob_len {
+        let (start, len) = calc_offset_len(blob.len(), start, len);
+
+        if len == 0 {
             return;
-        } else {
-            start as usize
-        };
-
-        let len = if len as usize > blob_len - start {
-            blob_len - start
-        } else {
-            len as usize
-        };
+        }
 
         const INT_BYTES: usize = mem::size_of::<INT>();
 
@@ -502,23 +428,12 @@ pub mod blob_functions {
         if blob.is_empty() || len <= 0 {
             return 0.0;
         }
-        let blob_len = blob.len();
 
-        let start = if start < 0 {
-            start
-                .checked_abs()
-                .map_or(0, |n| blob_len - usize::min(n as usize, blob_len))
-        } else if start as usize >= blob_len {
+        let (start, len) = calc_offset_len(blob.len(), start, len);
+
+        if len == 0 {
             return 0.0;
-        } else {
-            start as usize
-        };
-
-        let len = if len as usize > blob_len - start {
-            blob_len - start
-        } else {
-            len as usize
-        };
+        }
 
         const FLOAT_BYTES: usize = mem::size_of::<FLOAT>();
 
@@ -578,23 +493,12 @@ pub mod blob_functions {
         if blob.is_empty() || len <= 0 {
             return;
         }
-        let blob_len = blob.len();
 
-        let start = if start < 0 {
-            start
-                .checked_abs()
-                .map_or(0, |n| blob_len - usize::min(n as usize, blob_len))
-        } else if start as usize >= blob_len {
+        let (start, len) = calc_offset_len(blob.len(), start, len);
+
+        if len == 0 {
             return;
-        } else {
-            start as usize
-        };
-
-        let len = if len as usize > blob_len - start {
-            blob_len - start
-        } else {
-            len as usize
-        };
+        }
 
         const FLOAT_BYTES: usize = mem::size_of::<FLOAT>();
 
@@ -650,23 +554,12 @@ pub mod blob_functions {
         if len <= 0 || blob.is_empty() || string.is_empty() {
             return;
         }
-        let blob_len = blob.len();
 
-        let start = if start < 0 {
-            start
-                .checked_abs()
-                .map_or(0, |n| blob_len - usize::min(n as usize, blob_len))
-        } else if start as usize >= blob_len {
+        let (start, len) = calc_offset_len(blob.len(), start, len);
+
+        if len == 0 {
             return;
-        } else {
-            start as usize
-        };
-
-        let len = if len as usize > blob_len - start {
-            blob_len - start
-        } else {
-            len as usize
-        };
+        }
 
         let len = usize::min(len, string.len());
 

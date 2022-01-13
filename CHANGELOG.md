@@ -1,6 +1,15 @@
 Rhai Release Notes
 ==================
 
+Version 1.5.0
+=============
+
+Bug fixes
+---------
+
+* `set_bit` for bit-flags with negative index now works correctly.
+
+
 Version 1.4.0
 =============
 

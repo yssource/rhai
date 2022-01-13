@@ -28,6 +28,30 @@ fn test_arrays() -> Result<(), Box<EvalAltResult>> {
             .into_typed_array::<INT>()?,
         [1, 6, 3]
     );
+    assert_eq!(
+        engine
+            .eval::<Dynamic>("let y = [1, 2, 3]; extract(y, 1, 10)")?
+            .into_typed_array::<INT>()?,
+        vec![2, 3]
+    );
+    assert_eq!(
+        engine
+            .eval::<Dynamic>("let y = [1, 2, 3]; extract(y, -3, 1)")?
+            .into_typed_array::<INT>()?,
+        vec![1]
+    );
+    assert_eq!(
+        engine
+            .eval::<Dynamic>("let y = [1, 2, 3]; extract(y, -99, 2)")?
+            .into_typed_array::<INT>()?,
+        vec![1, 2]
+    );
+    assert_eq!(
+        engine
+            .eval::<Dynamic>("let y = [1, 2, 3]; extract(y, 99, 1)")?
+            .into_typed_array::<INT>()?,
+        vec![] as Vec<INT>
+    );
 
     #[cfg(not(feature = "no_object"))]
     {
