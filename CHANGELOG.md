@@ -8,6 +8,7 @@ Bug fixes
 ---------
 
 * `set_bit` for bit-flags with negative index now works correctly.
+* Misnamed `params` field `name` in the JSON output of `Engine::gen_fn_metadata_to_json` is fixed (was incorrectly named `type`).
 
 
 Version 1.4.0

@@ -2,7 +2,7 @@
 
 #![cfg(feature = "metadata")]
 
-use crate::module::calc_native_fn_hash;
+use crate::module::{calc_native_fn_hash, FuncInfo};
 use crate::{calc_fn_hash, Engine, AST};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "no_std")]
@@ -48,32 +48,13 @@ impl From<crate::FnAccess> for FnAccess {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct FnParam<'a> {
-    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<&'a str>,
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     pub typ: Option<&'a str>,
-}
-
-impl PartialOrd for FnParam<'_> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(match self.name.partial_cmp(&other.name).expect("succeed") {
-            Ordering::Less => Ordering::Less,
-            Ordering::Greater => Ordering::Greater,
-            Ordering::Equal => self.typ.partial_cmp(&other.typ).expect("succeed"),
-        })
-    }
-}
-
-impl Ord for FnParam<'_> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        match self.name.cmp(&other.name) {
-            Ordering::Equal => self.typ.cmp(&other.typ),
-            cmp => cmp,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -105,17 +86,14 @@ impl PartialOrd for FnMetadata<'_> {
 impl Ord for FnMetadata<'_> {
     fn cmp(&self, other: &Self) -> Ordering {
         match self.name.cmp(&other.name) {
-            Ordering::Equal => match self.num_params.cmp(&other.num_params) {
-                Ordering::Equal => self.params.cmp(&other.params),
-                cmp => cmp,
-            },
+            Ordering::Equal => self.num_params.cmp(&other.num_params),
             cmp => cmp,
         }
     }
 }
 
-impl<'a> From<&'a crate::module::FuncInfo> for FnMetadata<'a> {
-    fn from(info: &'a crate::module::FuncInfo) -> Self {
+impl<'a> From<&'a FuncInfo> for FnMetadata<'a> {
+    fn from(info: &'a FuncInfo) -> Self {
         let base_hash = calc_fn_hash(&info.name, info.params);
         let (typ, full_hash) = if info.func.is_script() {
             (FnType::Script, base_hash)
@@ -139,7 +117,7 @@ impl<'a> From<&'a crate::module::FuncInfo> for FnMetadata<'a> {
                 .iter()
                 .map(|s| {
                     let mut seg = s.splitn(2, ':');
-                    let name = match seg.next().map(&str::trim).unwrap_or("_") {
+                    let name = match seg.next().unwrap().trim() {
                         "_" => None,
                         s => Some(s),
                     };
