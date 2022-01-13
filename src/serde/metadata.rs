@@ -70,8 +70,11 @@ struct FnMetadata<'a> {
     pub num_params: usize,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub params: Vec<FnParam<'a>>,
+    // No idea why the following is needed otherwise serde comes back with a lifetime error
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub return_type: Option<&'a str>,
+    pub _dummy: Option<&'a str>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub return_type: String,
     pub signature: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub doc_comments: Vec<&'a str>,
@@ -126,10 +129,8 @@ impl<'a> From<&'a FuncInfo> for FnMetadata<'a> {
                     FnParam { name, typ }
                 })
                 .collect(),
-            return_type: match info.metadata.return_type.as_str() {
-                "" | "()" => None,
-                ty => Some(ty),
-            },
+            _dummy: None,
+            return_type: FuncInfo::format_return_type(&info.metadata.return_type).into_owned(),
             signature: info.gen_signature(),
             doc_comments: if info.func.is_script() {
                 #[cfg(feature = "no_function")]

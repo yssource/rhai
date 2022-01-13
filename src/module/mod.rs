@@ -87,12 +87,35 @@ pub struct FuncInfo {
 }
 
 impl FuncInfo {
+    /// Format a return type to be display-friendly.
+    ///
+    /// `()` is cleared.  
+    /// [`RhaiResult`][crate::RhaiResult] and [`RhaiResultOf<T>`] are expanded.
+    pub fn format_return_type(typ: &str) -> std::borrow::Cow<str> {
+        const RHAI_RESULT_TYPE: &str = "RhaiResult";
+        const RHAI_RESULT_TYPE_EXPAND: &str = "Result<Dynamic, Box<EvalAltResult>>";
+        const RHAI_RESULT_OF_TYPE: &str = "RhaiResultOf<";
+        const RHAI_RESULT_OF_TYPE_EXPAND: &str = "Result<{}, Box<EvalAltResult>>";
+
+        match typ {
+            "" | "()" => "".into(),
+            RHAI_RESULT_TYPE => RHAI_RESULT_TYPE_EXPAND.into(),
+            ty if ty.starts_with(RHAI_RESULT_OF_TYPE) && ty.ends_with(">") => {
+                RHAI_RESULT_OF_TYPE_EXPAND
+                    .replace("{}", ty[RHAI_RESULT_OF_TYPE.len()..ty.len() - 1].trim())
+                    .into()
+            }
+            ty => ty.into(),
+        }
+    }
     /// Generate a signature of the function.
     /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
     #[must_use]
     pub fn gen_signature(&self) -> String {
         let mut sig = format!("{}(", self.metadata.name);
+
+        let return_type = Self::format_return_type(&self.metadata.return_type);
 
         if !self.metadata.params_info.is_empty() {
             let params: StaticVec<_> = self
@@ -102,14 +125,11 @@ impl FuncInfo {
                 .map(|s| s.as_str())
                 .collect();
             sig.push_str(&params.join(", "));
-            sig.push_str(")");
+            sig.push(')');
 
-            match self.metadata.return_type.as_str() {
-                "" | "()" => (),
-                ty => {
-                    sig.push_str(" -> ");
-                    sig.push_str(ty);
-                }
+            if !return_type.is_empty() {
+                sig.push_str(" -> ");
+                sig.push_str(&return_type);
             }
         } else {
             for x in 0..self.metadata.params {
@@ -119,14 +139,14 @@ impl FuncInfo {
                 }
             }
 
-            if self.func.is_script() {
-                sig.push(')');
-            } else {
-                sig.push_str(")");
+            sig.push(')');
 
-                match self.metadata.return_type.as_str() {
-                    "()" => (),
-                    _ => sig.push_str(" -> ?"),
+            if !self.func.is_script() {
+                sig.push(')');
+
+                if !return_type.is_empty() {
+                    sig.push_str(" -> ");
+                    sig.push_str(&return_type);
                 }
             }
         }
