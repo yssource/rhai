@@ -859,7 +859,8 @@ impl Engine {
                         (
                             start as u8,
                             // 2^bits - 1
-                            (((2 as crate::UINT).pow((end - start) as u32) - 1) as crate::INT)
+                            (((2 as crate::UNSIGNED_INT).pow((end - start) as u32) - 1)
+                                as crate::INT)
                                 << start,
                         )
                     }
@@ -883,7 +884,8 @@ impl Engine {
                         (
                             start as u8,
                             // 2^bits - 1
-                            (((2 as crate::UINT).pow((end - start + 1) as u32) - 1) as crate::INT)
+                            (((2 as crate::UNSIGNED_INT).pow((end - start + 1) as u32) - 1)
+                                as crate::INT)
                                 << start,
                         )
                     }

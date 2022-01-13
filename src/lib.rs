@@ -112,7 +112,8 @@ pub type INT = i32;
 /// If the `only_i32` feature is enabled, this will be [`u32`] instead.
 #[cfg(not(feature = "only_i32"))]
 #[allow(non_camel_case_types)]
-type UINT = u64;
+type UNSIGNED_INT = u64;
+
 /// The unsigned system integer base type.
 /// It is defined as [`u32`] since the `only_i32` feature is used.
 ///

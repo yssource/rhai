@@ -2,7 +2,9 @@
 
 use crate::eval::calc_index;
 use crate::plugin::*;
-use crate::{def_package, ExclusiveRange, InclusiveRange, Position, RhaiResultOf, ERR, INT, UINT};
+use crate::{
+    def_package, ExclusiveRange, InclusiveRange, Position, RhaiResultOf, ERR, INT, UNSIGNED_INT,
+};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -75,7 +77,7 @@ mod bit_field_functions {
         }
 
         // 2^bits - 1
-        let mask = ((2 as UINT).pow(bits as u32) - 1) as crate::INT;
+        let mask = ((2 as UNSIGNED_INT).pow(bits as u32) - 1) as crate::INT;
 
         Ok(((value & (mask << bit)) >> bit) & mask)
     }
@@ -121,7 +123,7 @@ mod bit_field_functions {
         }
 
         // 2^bits - 1
-        let mask = ((2 as UINT).pow(bits as u32) - 1) as crate::INT;
+        let mask = ((2 as UNSIGNED_INT).pow(bits as u32) - 1) as crate::INT;
 
         *value &= !(mask << bit);
         *value |= (new_value & mask) << bit;
