@@ -61,7 +61,7 @@ pub fn calc_index(
                     }
                 });
             #[cfg(feature = "unchecked")]
-            return Ok(actual - (start.abs() as usize));
+            return Ok(length - (start.abs() as usize));
         } else {
             Err(err().into())
         }
