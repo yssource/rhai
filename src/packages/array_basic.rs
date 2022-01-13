@@ -102,14 +102,30 @@ pub mod array_functions {
         let check_sizes = false;
 
         if check_sizes {
-            let arr = mem::take(array);
-            let mut arr = Dynamic::from_array(arr);
+            let mut arr_len = array.len();
+            let mut arr = Dynamic::from_array(mem::take(array));
 
-            while array.len() < len {
-                arr.write_lock::<Array>().unwrap().push(item.clone());
+            #[cfg(not(feature = "unchecked"))]
+            let (mut a1, mut m1, mut s1) = Engine::calc_data_sizes(&arr, true);
+            #[cfg(not(feature = "unchecked"))]
+            let (a2, m2, s2) = Engine::calc_data_sizes(&item, true);
 
-                #[cfg(not(feature = "unchecked"))]
-                _ctx.engine().ensure_data_size_within_limits(&arr)?;
+            {
+                let mut guard = arr.write_lock::<Array>().unwrap();
+
+                while arr_len < len {
+                    #[cfg(not(feature = "unchecked"))]
+                    {
+                        a1 += a2;
+                        m1 += m2;
+                        s1 += s2;
+
+                        _ctx.engine()
+                            .raise_err_if_over_data_size_limit((a1, m1, s1), Position::NONE)?;
+                    }
+                    guard.push(item.clone());
+                    arr_len += 1;
+                }
             }
 
             *array = arr.into_array().unwrap();

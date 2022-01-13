@@ -7,6 +7,7 @@ Version 1.5.0
 Bug fixes
 ---------
 
+* Padding arrays with another array via `pad` no longer loops indefinitely.
 * `set_bit` for bit-flags with negative index now works correctly.
 * Misnamed `params` field `name` in the JSON output of `Engine::gen_fn_metadata_to_json` is fixed (was incorrectly named `type`).
 
