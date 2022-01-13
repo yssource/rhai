@@ -71,14 +71,14 @@ struct FnMetadata<'a> {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub params: Vec<FnParam<'a>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub return_type_name: Option<&'a str>,
+    pub return_type: Option<&'a str>,
     pub signature: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub doc_comments: Vec<&'a str>,
 }
 
 impl PartialOrd for FnMetadata<'_> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
@@ -94,26 +94,27 @@ impl Ord for FnMetadata<'_> {
 
 impl<'a> From<&'a FuncInfo> for FnMetadata<'a> {
     fn from(info: &'a FuncInfo) -> Self {
-        let base_hash = calc_fn_hash(&info.name, info.params);
+        let base_hash = calc_fn_hash(&info.metadata.name, info.metadata.params);
         let (typ, full_hash) = if info.func.is_script() {
             (FnType::Script, base_hash)
         } else {
             (
                 FnType::Native,
-                calc_native_fn_hash(empty::<&str>(), &info.name, &info.param_types),
+                calc_native_fn_hash(empty::<&str>(), &info.metadata.name, &info.param_types),
             )
         };
 
         Self {
             base_hash,
             full_hash,
-            namespace: info.namespace.into(),
-            access: info.access.into(),
-            name: info.name.to_string(),
+            namespace: info.metadata.namespace.into(),
+            access: info.metadata.access.into(),
+            name: info.metadata.name.to_string(),
             typ,
-            num_params: info.params,
+            num_params: info.metadata.params,
             params: info
-                .param_names_and_types
+                .metadata
+                .params_info
                 .iter()
                 .map(|s| {
                     let mut seg = s.splitn(2, ':');
@@ -125,7 +126,7 @@ impl<'a> From<&'a FuncInfo> for FnMetadata<'a> {
                     FnParam { name, typ }
                 })
                 .collect(),
-            return_type_name: match info.return_type_name.as_str() {
+            return_type: match info.metadata.return_type.as_str() {
                 "" | "()" => None,
                 ty => Some(ty),
             },
@@ -142,7 +143,8 @@ impl<'a> From<&'a FuncInfo> for FnMetadata<'a> {
                     .as_ref()
                     .map_or_else(|| Vec::new(), |v| v.iter().map(|s| &**s).collect())
             } else {
-                info.comments
+                info.metadata
+                    .comments
                     .as_ref()
                     .map_or_else(|| Vec::new(), |v| v.iter().map(|s| &**s).collect())
             },
