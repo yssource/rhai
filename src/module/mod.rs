@@ -63,10 +63,13 @@ impl PartialOrd for FnMetadata {
 impl Ord for FnMetadata {
     fn cmp(&self, other: &Self) -> Ordering {
         match self.name.cmp(&other.name) {
+            #[cfg(feature = "metadata")]
             Ordering::Equal => match self.params.cmp(&other.params) {
                 Ordering::Equal => self.params_info.cmp(&other.params_info),
                 cmp => cmp,
             },
+            #[cfg(not(feature = "metadata"))]
+            Ordering::Equal => self.params.cmp(&other.params),
             cmp => cmp,
         }
     }
