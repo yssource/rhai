@@ -1,6 +1,6 @@
 //! Module containing error definitions for the evaluation process.
 
-use crate::{Dynamic, ImmutableString, ParseErrorType, Position, RhaiError, INT};
+use crate::{Dynamic, ImmutableString, ParseErrorType, Position, INT};
 #[cfg(feature = "no_std")]
 use core_error::Error;
 #[cfg(not(feature = "no_std"))]
@@ -34,22 +34,28 @@ pub enum EvalAltResult {
     ErrorVariableNotFound(String, Position),
     /// Call to an unknown function. Wrapped value is the function signature.
     ErrorFunctionNotFound(String, Position),
-    /// An error has occurred inside a called function.
-    /// Wrapped values are the function name, function source, and the interior error.
-    ErrorInFunctionCall(String, String, RhaiError, Position),
     /// Usage of an unknown [module][crate::Module]. Wrapped value is the [module][crate::Module] name.
     ErrorModuleNotFound(String, Position),
+
+    /// An error has occurred inside a called function.
+    /// Wrapped values are the function name, function source, and the interior error.
+    ErrorInFunctionCall(String, String, Box<Self>, Position),
     /// An error has occurred while loading a [module][crate::Module].
     /// Wrapped value are the [module][crate::Module] name and the interior error.
-    ErrorInModule(String, RhaiError, Position),
+    ErrorInModule(String, Box<Self>, Position),
+
     /// Access to `this` that is not bound.
     ErrorUnboundThis(Position),
+
     /// Data is not of the required type.
     /// Wrapped values are the type requested and type of the actual result.
     ErrorMismatchDataType(String, String, Position),
     /// Returned type is not the same as the required output type.
     /// Wrapped values are the type requested and type of the actual result.
     ErrorMismatchOutputType(String, String, Position),
+    /// Trying to index into a type that has no indexer function defined. Wrapped value is the type name.
+    ErrorIndexingType(String, Position),
+
     /// Array access out-of-bounds.
     /// Wrapped values are the current number of elements in the array and the index number.
     ErrorArrayBounds(usize, INT, Position),
@@ -59,10 +65,10 @@ pub enum EvalAltResult {
     /// Bit-field indexing out-of-bounds.
     /// Wrapped values are the current number of bits in the bit-field and the index number.
     ErrorBitFieldBounds(usize, INT, Position),
-    /// Trying to index into a type that has no indexer function defined. Wrapped value is the type name.
-    ErrorIndexingType(String, Position),
-    /// The `for` statement encounters a type that is not an iterator.
+
+    /// The `for` statement encounters a type that is not iterable.
     ErrorFor(Position),
+
     /// Data race detected when accessing a variable. Wrapped value is the variable name.
     ErrorDataRace(String, Position),
     /// Assignment to a constant variable. Wrapped value is the variable name.
@@ -145,7 +151,7 @@ impl fmt::Display for EvalAltResult {
             }?,
             Self::ErrorIndexingType(s, _) => write!(f, "Indexer not registered for {}", s)?,
             Self::ErrorUnboundThis(_) => f.write_str("'this' is not bound")?,
-            Self::ErrorFor(_) => f.write_str("For loop expects a type with an iterator defined")?,
+            Self::ErrorFor(_) => f.write_str("For loop expects a type that is iterable")?,
             Self::ErrorTooManyOperations(_) => f.write_str("Too many operations")?,
             Self::ErrorTooManyModules(_) => f.write_str("Too many modules imported")?,
             Self::ErrorStackOverflow(_) => f.write_str("Stack overflow")?,
@@ -233,7 +239,7 @@ impl<T: AsRef<str>> From<T> for EvalAltResult {
     }
 }
 
-impl<T: AsRef<str>> From<T> for RhaiError {
+impl<T: AsRef<str>> From<T> for Box<EvalAltResult> {
     #[inline(never)]
     fn from(err: T) -> Self {
         EvalAltResult::ErrorRuntime(err.as_ref().to_string().into(), Position::NONE).into()
@@ -277,8 +283,13 @@ impl EvalAltResult {
             | Self::ErrorArithmetic(_, _)
             | Self::ErrorRuntime(_, _) => true,
 
-            Self::ErrorCustomSyntax(_, _, _)
-            | Self::ErrorTooManyOperations(_)
+            // Custom syntax raises errors only when they are compiled by one
+            // [`Engine`][crate::Engine] and run by another, causing a mismatch.
+            //
+            // Therefore, this error should not be catchable.
+            Self::ErrorCustomSyntax(_, _, _) => false,
+
+            Self::ErrorTooManyOperations(_)
             | Self::ErrorTooManyModules(_)
             | Self::ErrorStackOverflow(_)
             | Self::ErrorDataTooLarge(_, _)

@@ -91,6 +91,7 @@ impl FuncInfo {
     ///
     /// `()` is cleared.  
     /// [`RhaiResult`][crate::RhaiResult] and [`RhaiResultOf<T>`] are expanded.
+    #[cfg(feature = "metadata")]
     pub fn format_return_type(typ: &str) -> std::borrow::Cow<str> {
         const RHAI_RESULT_TYPE: &str = "RhaiResult";
         const RHAI_RESULT_TYPE_EXPAND: &str = "Result<Dynamic, Box<EvalAltResult>>";

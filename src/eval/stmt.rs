@@ -322,11 +322,10 @@ impl Engine {
                     if let Some(t) = table.get(&hash) {
                         if let Some(ref c) = t.0 {
                             if self
-                                .eval_expr(scope, global, state, lib, this_ptr, &c, level)
-                                .and_then(|v| {
-                                    v.as_bool().map_err(|typ| {
-                                        self.make_type_mismatch_err::<bool>(typ, c.position())
-                                    })
+                                .eval_expr(scope, global, state, lib, this_ptr, &c, level)?
+                                .as_bool()
+                                .map_err(|typ| {
+                                    self.make_type_mismatch_err::<bool>(typ, c.position())
                                 })?
                             {
                                 Some(&t.1)
@@ -349,11 +348,10 @@ impl Engine {
                         {
                             if let Some(c) = condition {
                                 if !self
-                                    .eval_expr(scope, global, state, lib, this_ptr, &c, level)
-                                    .and_then(|v| {
-                                        v.as_bool().map_err(|typ| {
-                                            self.make_type_mismatch_err::<bool>(typ, c.position())
-                                        })
+                                    .eval_expr(scope, global, state, lib, this_ptr, &c, level)?
+                                    .as_bool()
+                                    .map_err(|typ| {
+                                        self.make_type_mismatch_err::<bool>(typ, c.position())
                                     })?
                                 {
                                     continue;
