@@ -171,11 +171,11 @@ pub mod array_functions {
         }
     }
     pub fn chop(array: &mut Array, len: INT) {
-        if !array.is_empty() && len as usize >= array.len() {
-            if len >= 0 {
-                array.drain(0..array.len() - len as usize);
-            } else {
+        if !array.is_empty() {
+            if len <= 0 {
                 array.clear();
+            } else if (len as usize) < array.len() {
+                array.drain(0..array.len() - len as usize);
             }
         }
     }

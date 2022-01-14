@@ -8,6 +8,7 @@ Bug fixes
 ---------
 
 * Padding arrays with another array via `pad` no longer loops indefinitely.
+* `chop` for arrays and BLOB's now works properly.
 * `set_bit` for bit-flags with negative index now works correctly.
 * Misnamed `params` field `name` in the JSON output of `Engine::gen_fn_metadata_to_json` is fixed (was incorrectly named `type`).
 

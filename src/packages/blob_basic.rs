@@ -162,11 +162,11 @@ pub mod blob_functions {
         }
     }
     pub fn chop(blob: &mut Blob, len: INT) {
-        if !blob.is_empty() && len as usize >= blob.len() {
-            if len >= 0 {
-                blob.drain(0..blob.len() - len as usize);
-            } else {
+        if !blob.is_empty() {
+            if len <= 0 {
                 blob.clear();
+            } else if (len as usize) < blob.len() {
+                blob.drain(0..blob.len() - len as usize);
             }
         }
     }
