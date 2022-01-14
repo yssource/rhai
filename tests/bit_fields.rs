@@ -34,6 +34,7 @@ fn test_bit_fields() -> Result<(), Box<EvalAltResult>> {
         14
     );
     #[cfg(target_pointer_width = "64")]
+    #[cfg(not(feature = "only_i32"))]
     {
         assert_eq!(engine.eval::<INT>("let x = 255; get_bits(x, -60, 2)")?, 3);
         assert_eq!(
