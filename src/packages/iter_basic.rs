@@ -122,7 +122,7 @@ const BITS: usize = std::mem::size_of::<INT>() * 8;
 impl BitRange {
     pub fn new(value: INT, from: INT, len: INT) -> RhaiResultOf<Self> {
         let from = calc_index(BITS, from, true, || {
-            crate::ERR::ErrorBitFieldBounds(BITS, from, Position::NONE)
+            crate::ERR::ErrorBitFieldBounds(BITS, from, Position::NONE).into()
         })?;
 
         let len = if len < 0 {

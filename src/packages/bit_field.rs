@@ -24,7 +24,7 @@ mod bit_field_functions {
     #[rhai_fn(return_raw)]
     pub fn get_bit(value: INT, bit: INT) -> RhaiResultOf<bool> {
         let bit = calc_index(BITS, bit, true, || {
-            ERR::ErrorBitFieldBounds(BITS, bit, Position::NONE)
+            ERR::ErrorBitFieldBounds(BITS, bit, Position::NONE).into()
         })?;
 
         Ok((value & (1 << bit)) != 0)
@@ -32,7 +32,7 @@ mod bit_field_functions {
     #[rhai_fn(return_raw)]
     pub fn set_bit(value: &mut INT, bit: INT, new_value: bool) -> RhaiResultOf<()> {
         let bit = calc_index(BITS, bit, true, || {
-            ERR::ErrorBitFieldBounds(BITS, bit, Position::NONE)
+            ERR::ErrorBitFieldBounds(BITS, bit, Position::NONE).into()
         })?;
 
         let mask = 1 << bit;
@@ -63,7 +63,7 @@ mod bit_field_functions {
         }
 
         let bit = calc_index(BITS, bit, true, || {
-            ERR::ErrorBitFieldBounds(BITS, bit, Position::NONE)
+            ERR::ErrorBitFieldBounds(BITS, bit, Position::NONE).into()
         })?;
 
         let bits = if bit + bits as usize > BITS {
@@ -108,7 +108,7 @@ mod bit_field_functions {
         }
 
         let bit = calc_index(BITS, bit, true, || {
-            ERR::ErrorBitFieldBounds(BITS, bit, Position::NONE)
+            ERR::ErrorBitFieldBounds(BITS, bit, Position::NONE).into()
         })?;
 
         let bits = if bit + bits as usize > BITS {
