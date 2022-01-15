@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::{def_package, Position, RhaiResultOf, ERR, INT, UNSIGNED_INT};
+use crate::{def_package, Position, RhaiResultOf, ERR, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -108,6 +108,34 @@ def_package! {
 
 #[export_module]
 mod int_functions {
+    /// Parse a string into an integer number.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let x = parse_int("123");
+    ///
+    /// print(x);       // prints 123
+    /// ```
+    #[rhai_fn(name = "parse_int", return_raw)]
+    pub fn parse_int(string: &str) -> RhaiResultOf<INT> {
+        parse_int_radix(string, 10)
+    }
+    /// Parse a string into an integer number of the specified `radix`.
+    ///
+    /// `radix` must be between 2 and 36.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let x = parse_int("123");
+    ///
+    /// print(x);       // prints 123
+    ///
+    /// let y = parse_int("123abc", 16);
+    ///
+    /// print(y);       // prints 1194684 (0x123abc)
+    /// ```
     #[rhai_fn(name = "parse_int", return_raw)]
     pub fn parse_int_radix(string: &str, radix: INT) -> RhaiResultOf<INT> {
         if !(2..=36).contains(&radix) {
@@ -118,19 +146,13 @@ mod int_functions {
             .into());
         }
 
-        UNSIGNED_INT::from_str_radix(string.trim(), radix as u32)
-            .map(|v| v as INT)
-            .map_err(|err| {
-                ERR::ErrorArithmetic(
-                    format!("Error parsing integer number '{}': {}", string, err),
-                    Position::NONE,
-                )
-                .into()
-            })
-    }
-    #[rhai_fn(name = "parse_int", return_raw)]
-    pub fn parse_int(string: &str) -> RhaiResultOf<INT> {
-        parse_int_radix(string, 10)
+        INT::from_str_radix(string.trim(), radix as u32).map_err(|err| {
+            ERR::ErrorArithmetic(
+                format!("Error parsing integer number '{}': {}", string, err),
+                Position::NONE,
+            )
+            .into()
+        })
     }
 }
 
@@ -139,46 +161,60 @@ mod int_functions {
 mod trig_functions {
     use crate::FLOAT;
 
+    /// Return the sine of the floating-point number in radians.
     pub fn sin(x: FLOAT) -> FLOAT {
         x.sin()
     }
+    /// Return the cosine of the floating-point number in radians.
     pub fn cos(x: FLOAT) -> FLOAT {
         x.cos()
     }
+    /// Return the tangent of the floating-point number in radians.
     pub fn tan(x: FLOAT) -> FLOAT {
         x.tan()
     }
+    /// Return the hyperbolic sine of the floating-point number in radians.
     pub fn sinh(x: FLOAT) -> FLOAT {
         x.sinh()
     }
+    /// Return the hyperbolic cosine of the floating-point number in radians.
     pub fn cosh(x: FLOAT) -> FLOAT {
         x.cosh()
     }
+    /// Return the hyperbolic tangent of the floating-point number in radians.
     pub fn tanh(x: FLOAT) -> FLOAT {
         x.tanh()
     }
+    /// Return the arc-sine of the floating-point number, in radians.
     pub fn asin(x: FLOAT) -> FLOAT {
         x.asin()
     }
+    /// Return the arc-cosine of the floating-point number, in radians.
     pub fn acos(x: FLOAT) -> FLOAT {
         x.acos()
     }
+    /// Return the arc-tangent of the floating-point number, in radians.
     pub fn atan(x: FLOAT) -> FLOAT {
         x.atan()
     }
+    /// Return the arc-tangent of the floating-point numbers `x` and `y`, in radians.
     #[rhai_fn(name = "atan")]
     pub fn atan2(x: FLOAT, y: FLOAT) -> FLOAT {
         x.atan2(y)
     }
+    /// Return the arc-hyperbolic-sine of the floating-point number, in radians.
     pub fn asinh(x: FLOAT) -> FLOAT {
         x.asinh()
     }
+    /// Return the arc-hyperbolic-cosine of the floating-point number, in radians.
     pub fn acosh(x: FLOAT) -> FLOAT {
         x.acosh()
     }
+    /// Return the arc-hyperbolic-tangent of the floating-point number, in radians.
     pub fn atanh(x: FLOAT) -> FLOAT {
         x.atanh()
     }
+    /// Return the hypotenuse of a triangle with sides `x` and `y`.
     pub fn hypot(x: FLOAT, y: FLOAT) -> FLOAT {
         x.hypot(y)
     }
@@ -189,6 +225,7 @@ mod trig_functions {
 mod float_functions {
     use crate::FLOAT;
 
+    /// Return the natural number _e_.
     #[rhai_fn(name = "E")]
     pub fn e() -> FLOAT {
         #[cfg(not(feature = "f32_float"))]
@@ -196,6 +233,7 @@ mod float_functions {
         #[cfg(feature = "f32_float")]
         return std::f32::consts::E;
     }
+    /// Return the number π.
     #[rhai_fn(name = "PI")]
     pub fn pi() -> FLOAT {
         #[cfg(not(feature = "f32_float"))]
@@ -203,60 +241,77 @@ mod float_functions {
         #[cfg(feature = "f32_float")]
         return std::f32::consts::PI;
     }
+    /// Convert degrees to radians.
     pub fn to_radians(x: FLOAT) -> FLOAT {
         x.to_radians()
     }
+    /// Convert radians to degrees.
     pub fn to_degrees(x: FLOAT) -> FLOAT {
         x.to_degrees()
     }
+    /// Return the square root of the floating-point number.
     pub fn sqrt(x: FLOAT) -> FLOAT {
         x.sqrt()
     }
+    /// Return the exponential of the floating-point number.
     pub fn exp(x: FLOAT) -> FLOAT {
         x.exp()
     }
+    /// Return the natural log of the floating-point number.
     pub fn ln(x: FLOAT) -> FLOAT {
         x.ln()
     }
+    /// Return the log of the floating-point number with `base`.
     pub fn log(x: FLOAT, base: FLOAT) -> FLOAT {
         x.log(base)
     }
+    /// Return the log of the floating-point number with base 10.
     #[rhai_fn(name = "log")]
     pub fn log10(x: FLOAT) -> FLOAT {
         x.log10()
     }
+    /// Return the largest whole number less than or equals to the floating-point number.
     #[rhai_fn(name = "floor", get = "floor")]
     pub fn floor(x: FLOAT) -> FLOAT {
         x.floor()
     }
+    /// Return the smallest whole number larger than or equals to the floating-point number.
     #[rhai_fn(name = "ceiling", get = "ceiling")]
     pub fn ceiling(x: FLOAT) -> FLOAT {
         x.ceil()
     }
+    /// Return the nearest whole number closest to the floating-point number.
+    /// Rounds away from zero.
     #[rhai_fn(name = "round", get = "round")]
     pub fn round(x: FLOAT) -> FLOAT {
         x.round()
     }
+    /// Return the integral part of the floating-point number.
     #[rhai_fn(name = "int", get = "int")]
     pub fn int(x: FLOAT) -> FLOAT {
         x.trunc()
     }
+    /// Return the fractional part of the floating-point number.
     #[rhai_fn(name = "fraction", get = "fraction")]
     pub fn fraction(x: FLOAT) -> FLOAT {
         x.fract()
     }
+    /// Return `true` if the floating-point number is `NaN` (Not A Number).
     #[rhai_fn(name = "is_nan", get = "is_nan")]
     pub fn is_nan(x: FLOAT) -> bool {
         x.is_nan()
     }
+    /// Return `true` if the floating-point number is finite.
     #[rhai_fn(name = "is_finite", get = "is_finite")]
     pub fn is_finite(x: FLOAT) -> bool {
         x.is_finite()
     }
+    /// Return `true` if the floating-point number is infinite.
     #[rhai_fn(name = "is_infinite", get = "is_infinite")]
     pub fn is_infinite(x: FLOAT) -> bool {
         x.is_infinite()
     }
+    /// Return the integral part of the floating-point number.
     #[rhai_fn(name = "to_int", return_raw)]
     pub fn f32_to_int(x: f32) -> RhaiResultOf<INT> {
         if cfg!(not(feature = "unchecked")) && x > (INT::MAX as f32) {
@@ -268,6 +323,7 @@ mod float_functions {
             Ok(x.trunc() as INT)
         }
     }
+    /// Return the integral part of the floating-point number.
     #[rhai_fn(name = "to_int", return_raw)]
     pub fn f64_to_int(x: f64) -> RhaiResultOf<INT> {
         if cfg!(not(feature = "unchecked")) && x > (INT::MAX as f64) {
@@ -279,6 +335,15 @@ mod float_functions {
             Ok(x.trunc() as INT)
         }
     }
+    /// Parse a string into a floating-point number.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let x = parse_int("123.456");
+    ///
+    /// print(x);       // prints 123.456
+    /// ```
     #[rhai_fn(return_raw)]
     pub fn parse_float(string: &str) -> RhaiResultOf<FLOAT> {
         string.trim().parse::<FLOAT>().map_err(|err| {
@@ -289,6 +354,7 @@ mod float_functions {
             .into()
         })
     }
+    /// Convert the 32-bit floating-point number to 64-bit.
     #[cfg(not(feature = "f32_float"))]
     #[rhai_fn(name = "to_float")]
     pub fn f32_to_f64(x: f32) -> f64 {
@@ -306,36 +372,52 @@ mod decimal_functions {
     #[cfg(not(feature = "no_float"))]
     use std::convert::TryFrom;
 
+    /// Return the natural number _e_.
     #[cfg(feature = "no_float")]
     #[rhai_fn(name = "PI")]
     pub fn pi() -> Decimal {
         Decimal::PI
     }
+    /// Return the number π.
     #[cfg(feature = "no_float")]
     #[rhai_fn(name = "E")]
     pub fn e() -> Decimal {
         Decimal::E
     }
+    /// Parse a string into a decimal number.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let x = parse_float("123.456");
+    ///
+    /// print(x);       // prints 123.456
+    /// ```
     #[cfg(feature = "no_float")]
     #[rhai_fn(return_raw)]
     pub fn parse_float(s: &str) -> RhaiResultOf<Decimal> {
         parse_decimal(s)
     }
 
+    /// Return the sine of the decimal number in radians.
     pub fn sin(x: Decimal) -> Decimal {
         x.sin()
     }
+    /// Return the cosine of the decimal number in radians.
     pub fn cos(x: Decimal) -> Decimal {
         x.cos()
     }
+    /// Return the tangent of the decimal number in radians.
     pub fn tan(x: Decimal) -> Decimal {
         x.tan()
     }
+    /// Return the square root of the decimal number.
     #[rhai_fn(return_raw)]
     pub fn sqrt(x: Decimal) -> RhaiResultOf<Decimal> {
         x.sqrt()
             .ok_or_else(|| make_err(format!("Error taking the square root of {}", x,)))
     }
+    /// Return the exponential of the decimal number.
     #[rhai_fn(return_raw)]
     pub fn exp(x: Decimal) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
@@ -345,6 +427,7 @@ mod decimal_functions {
             Ok(x.exp())
         }
     }
+    /// Return the natural log of the decimal number.
     #[rhai_fn(return_raw)]
     pub fn ln(x: Decimal) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
@@ -354,6 +437,7 @@ mod decimal_functions {
             Ok(x.ln())
         }
     }
+    /// Return the log of the decimal number with base 10.
     #[rhai_fn(name = "log", return_raw)]
     pub fn log10(x: Decimal) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
@@ -363,106 +447,131 @@ mod decimal_functions {
             Ok(x.log10())
         }
     }
+    /// Return the largest whole number less than or equals to the decimal number.
     #[rhai_fn(name = "floor", get = "floor")]
     pub fn floor(x: Decimal) -> Decimal {
         x.floor()
     }
+    /// Return the smallest whole number larger than or equals to the decimal number.
     #[rhai_fn(name = "ceiling", get = "ceiling")]
     pub fn ceiling(x: Decimal) -> Decimal {
         x.ceil()
     }
+    /// Return the nearest whole number closest to the decimal number.
+    /// Always round mid-point towards the closest even number.
     #[rhai_fn(name = "round", get = "round")]
     pub fn round(x: Decimal) -> Decimal {
         x.round()
     }
+    /// Round the decimal number to the specified number of `digits` after the decimal point and return it.
+    /// Always round mid-point towards the closest even number.
     #[rhai_fn(name = "round", return_raw)]
-    pub fn round_dp(x: Decimal, dp: INT) -> RhaiResultOf<Decimal> {
+    pub fn round_dp(x: Decimal, digits: INT) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
-            if dp < 0 {
+            if digits < 0 {
                 return Err(make_err(format!(
                     "Invalid number of digits for rounding: {}",
-                    dp
+                    digits
                 )));
             }
-            if cfg!(not(feature = "only_i32")) && dp > (u32::MAX as INT) {
+            if cfg!(not(feature = "only_i32")) && digits > (u32::MAX as INT) {
                 return Ok(x);
             }
         }
 
-        Ok(x.round_dp(dp as u32))
+        Ok(x.round_dp(digits as u32))
     }
+    /// Round the decimal number to the specified number of `digits` after the decimal point and return it.
+    /// Always round away from zero.
     #[rhai_fn(return_raw)]
-    pub fn round_up(x: Decimal, dp: INT) -> RhaiResultOf<Decimal> {
+    pub fn round_up(x: Decimal, digits: INT) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
-            if dp < 0 {
+            if digits < 0 {
                 return Err(make_err(format!(
                     "Invalid number of digits for rounding: {}",
-                    dp
+                    digits
                 )));
             }
-            if cfg!(not(feature = "only_i32")) && dp > (u32::MAX as INT) {
+            if cfg!(not(feature = "only_i32")) && digits > (u32::MAX as INT) {
                 return Ok(x);
             }
         }
 
-        Ok(x.round_dp_with_strategy(dp as u32, RoundingStrategy::AwayFromZero))
+        Ok(x.round_dp_with_strategy(digits as u32, RoundingStrategy::AwayFromZero))
     }
+    /// Round the decimal number to the specified number of `digits` after the decimal point and return it.
+    /// Always round towards zero.
     #[rhai_fn(return_raw)]
-    pub fn round_down(x: Decimal, dp: INT) -> RhaiResultOf<Decimal> {
+    pub fn round_down(x: Decimal, digits: INT) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
-            if dp < 0 {
+            if digits < 0 {
                 return Err(make_err(format!(
                     "Invalid number of digits for rounding: {}",
-                    dp
+                    digits
                 )));
             }
-            if cfg!(not(feature = "only_i32")) && dp > (u32::MAX as INT) {
+            if cfg!(not(feature = "only_i32")) && digits > (u32::MAX as INT) {
                 return Ok(x);
             }
         }
 
-        Ok(x.round_dp_with_strategy(dp as u32, RoundingStrategy::ToZero))
+        Ok(x.round_dp_with_strategy(digits as u32, RoundingStrategy::ToZero))
     }
+    /// Round the decimal number to the specified number of `digits` after the decimal point and return it.
+    /// Always round mid-points away from zero.
     #[rhai_fn(return_raw)]
-    pub fn round_half_up(x: Decimal, dp: INT) -> RhaiResultOf<Decimal> {
+    pub fn round_half_up(x: Decimal, digits: INT) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
-            if dp < 0 {
+            if digits < 0 {
                 return Err(make_err(format!(
                     "Invalid number of digits for rounding: {}",
-                    dp
+                    digits
                 )));
             }
-            if cfg!(not(feature = "only_i32")) && dp > (u32::MAX as INT) {
+            if cfg!(not(feature = "only_i32")) && digits > (u32::MAX as INT) {
                 return Ok(x);
             }
         }
 
-        Ok(x.round_dp_with_strategy(dp as u32, RoundingStrategy::MidpointAwayFromZero))
+        Ok(x.round_dp_with_strategy(digits as u32, RoundingStrategy::MidpointAwayFromZero))
     }
+    /// Round the decimal number to the specified number of `digits` after the decimal point and return it.
+    /// Always round mid-points towards zero.
     #[rhai_fn(return_raw)]
-    pub fn round_half_down(x: Decimal, dp: INT) -> RhaiResultOf<Decimal> {
+    pub fn round_half_down(x: Decimal, digits: INT) -> RhaiResultOf<Decimal> {
         if cfg!(not(feature = "unchecked")) {
-            if dp < 0 {
+            if digits < 0 {
                 return Err(make_err(format!(
                     "Invalid number of digits for rounding: {}",
-                    dp
+                    digits
                 )));
             }
-            if cfg!(not(feature = "only_i32")) && dp > (u32::MAX as INT) {
+            if cfg!(not(feature = "only_i32")) && digits > (u32::MAX as INT) {
                 return Ok(x);
             }
         }
 
-        Ok(x.round_dp_with_strategy(dp as u32, RoundingStrategy::MidpointTowardZero))
+        Ok(x.round_dp_with_strategy(digits as u32, RoundingStrategy::MidpointTowardZero))
     }
+    /// Return the integral part of the decimal number.
     #[rhai_fn(name = "int", get = "int")]
     pub fn int(x: Decimal) -> Decimal {
         x.trunc()
     }
+    /// Return the fractional part of the decimal number.
     #[rhai_fn(name = "fraction", get = "fraction")]
     pub fn fraction(x: Decimal) -> Decimal {
         x.fract()
     }
+    /// Parse a string into a decimal number.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let x = parse_decimal("123.456");
+    ///
+    /// print(x);       // prints 123.456
+    /// ```
     #[rhai_fn(return_raw)]
     pub fn parse_decimal(string: &str) -> RhaiResultOf<Decimal> {
         Decimal::from_str(string)
@@ -476,6 +585,7 @@ mod decimal_functions {
             })
     }
 
+    /// Convert the floating-point number to decimal.
     #[cfg(not(feature = "no_float"))]
     #[rhai_fn(name = "to_decimal", return_raw)]
     pub fn f32_to_decimal(x: f32) -> RhaiResultOf<Decimal> {
@@ -487,6 +597,7 @@ mod decimal_functions {
             .into()
         })
     }
+    /// Convert the floating-point number to decimal.
     #[cfg(not(feature = "no_float"))]
     #[rhai_fn(name = "to_decimal", return_raw)]
     pub fn f64_to_decimal(x: f64) -> RhaiResultOf<Decimal> {
@@ -498,6 +609,7 @@ mod decimal_functions {
             .into()
         })
     }
+    /// Convert the decimal number to floating-point.
     #[cfg(not(feature = "no_float"))]
     #[rhai_fn(return_raw)]
     pub fn to_float(x: Decimal) -> RhaiResultOf<FLOAT> {

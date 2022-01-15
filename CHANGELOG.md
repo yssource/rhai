@@ -12,12 +12,16 @@ Bug fixes
 * `set_bit` for bit-flags with negative index now works correctly.
 * Misnamed `params` field `name` in the JSON output of `Engine::gen_fn_metadata_to_json` is fixed (was incorrectly named `type`).
 * Fixes a potential `unsafe` violation in `for` loop.
+* Missing `to_hex`, `to_octal` and `to_binary` for `i128` and `u128` are added.
+* `remove` for arrays and BLOB's now treat negative index correctly.
+* `parse_int` now works properly for negative numbers.
 
 Enhancements
 ------------
 
 * Formatting of return types in functions metadata info is improved.
 * Use `SmartString` for `Scope` variable names and remove `unsafe` lifetime casting.
+* Functions in the standard library now have doc-comments (which can be obtained via `Engine::gen_fn_metadata_to_json`).
 
 
 Version 1.4.0

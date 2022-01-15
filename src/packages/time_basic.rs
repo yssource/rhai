@@ -25,10 +25,12 @@ def_package! {
 
 #[export_module]
 mod time_functions {
+    /// Create a timestamp containing the current system time.
     pub fn timestamp() -> Instant {
         Instant::now()
     }
 
+    /// Return the number of seconds between the current system time and the timestamp.
     #[rhai_fn(name = "elapsed", get = "elapsed", return_raw)]
     pub fn elapsed(timestamp: Instant) -> RhaiResult {
         #[cfg(not(feature = "no_float"))]
@@ -55,6 +57,7 @@ mod time_functions {
         }
     }
 
+    /// Return the number of seconds between two timestamps.
     #[rhai_fn(return_raw, name = "-")]
     pub fn time_diff(timestamp1: Instant, timestamp2: Instant) -> RhaiResult {
         #[cfg(not(feature = "no_float"))]
@@ -140,19 +143,23 @@ mod time_functions {
             }
         }
 
+        /// Add the specified number of `seconds` to the timestamp and return it as a new timestamp.
         #[rhai_fn(return_raw, name = "+")]
         pub fn add(timestamp: Instant, seconds: FLOAT) -> RhaiResultOf<Instant> {
             add_impl(timestamp, seconds)
         }
+        /// Add the specified number of `seconds` to the timestamp.
         #[rhai_fn(return_raw, name = "+=")]
         pub fn add_assign(timestamp: &mut Instant, seconds: FLOAT) -> RhaiResultOf<()> {
             *timestamp = add_impl(*timestamp, seconds)?;
             Ok(())
         }
+        /// Subtract the specified number of `seconds` from the timestamp and return it as a new timestamp.
         #[rhai_fn(return_raw, name = "-")]
         pub fn subtract(timestamp: Instant, seconds: FLOAT) -> RhaiResultOf<Instant> {
             subtract_impl(timestamp, seconds)
         }
+        /// Subtract the specified number of `seconds` from the timestamp.
         #[rhai_fn(return_raw, name = "-=")]
         pub fn subtract_assign(timestamp: &mut Instant, seconds: FLOAT) -> RhaiResultOf<()> {
             *timestamp = subtract_impl(*timestamp, seconds)?;
@@ -193,45 +200,55 @@ mod time_functions {
         }
     }
 
+    /// Add the specified number of `seconds` to the timestamp and return it as a new timestamp.
     #[rhai_fn(return_raw, name = "+")]
     pub fn add(timestamp: Instant, seconds: INT) -> RhaiResultOf<Instant> {
         add_impl(timestamp, seconds)
     }
+    /// Add the specified number of `seconds` to the timestamp.
     #[rhai_fn(return_raw, name = "+=")]
     pub fn add_assign(timestamp: &mut Instant, seconds: INT) -> RhaiResultOf<()> {
         *timestamp = add_impl(*timestamp, seconds)?;
         Ok(())
     }
+    /// Subtract the specified number of `seconds` from the timestamp and return it as a new timestamp.
     #[rhai_fn(return_raw, name = "-")]
     pub fn subtract(timestamp: Instant, seconds: INT) -> RhaiResultOf<Instant> {
         subtract_impl(timestamp, seconds)
     }
+    /// Subtract the specified number of `seconds` from the timestamp.
     #[rhai_fn(return_raw, name = "-=")]
     pub fn subtract_assign(timestamp: &mut Instant, seconds: INT) -> RhaiResultOf<()> {
         *timestamp = subtract_impl(*timestamp, seconds)?;
         Ok(())
     }
 
+    /// Return `true` if two timestamps are equal.
     #[rhai_fn(name = "==")]
     pub fn eq(timestamp1: Instant, timestamp2: Instant) -> bool {
         timestamp1 == timestamp2
     }
+    /// Return `true` if two timestamps are not equal.
     #[rhai_fn(name = "!=")]
     pub fn ne(timestamp1: Instant, timestamp2: Instant) -> bool {
         timestamp1 != timestamp2
     }
+    /// Return `true` if the first timestamp is earlier than the second.
     #[rhai_fn(name = "<")]
     pub fn lt(timestamp1: Instant, timestamp2: Instant) -> bool {
         timestamp1 < timestamp2
     }
+    /// Return `true` if the first timestamp is earlier than or equals to the second.
     #[rhai_fn(name = "<=")]
     pub fn lte(timestamp1: Instant, timestamp2: Instant) -> bool {
         timestamp1 <= timestamp2
     }
+    /// Return `true` if the first timestamp is later than the second.
     #[rhai_fn(name = ">")]
     pub fn gt(timestamp1: Instant, timestamp2: Instant) -> bool {
         timestamp1 > timestamp2
     }
+    /// Return `true` if the first timestamp is later than or equals to the second.
     #[rhai_fn(name = ">=")]
     pub fn gte(timestamp1: Instant, timestamp2: Instant) -> bool {
         timestamp1 >= timestamp2
