@@ -12,7 +12,7 @@ use rhai::Array;
 use rhai::Map;
 #[cfg(not(feature = "no_float"))]
 use rhai::FLOAT;
-#[cfg(not(feature = "no_float"))]
+#[cfg(feature = "no_float")]
 #[cfg(feature = "decimal")]
 use rust_decimal::Decimal;
 

@@ -3,15 +3,11 @@
 use super::{EvalState, GlobalRuntimeState, Target};
 use crate::ast::{Expr, Ident, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
 use crate::func::get_hasher;
-use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::types::dynamic::{AccessMode, Union};
 use crate::{Dynamic, Engine, Module, Position, RhaiResult, RhaiResultOf, Scope, ERR, INT};
+use std::hash::{Hash, Hasher};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-use std::{
-    borrow::Cow,
-    hash::{Hash, Hasher},
-};
 
 impl Engine {
     /// Evaluate a statements block.
@@ -492,19 +488,13 @@ impl Engine {
                     // Add the loop variables
                     let orig_scope_len = scope.len();
                     let counter_index = if let Some(counter) = counter {
-                        // Loop variables are always removed at the end of the statement
-                        // so this cast is safe.
-                        let counter_name = unsafe_cast_var_name_to_lifetime(&counter.name);
-                        scope.push(counter_name, 0 as INT);
+                        scope.push(counter.name.clone(), 0 as INT);
                         scope.len() - 1
                     } else {
                         usize::MAX
                     };
 
-                    // Loop variables are always removed at the end of the statement
-                    // so this cast is safe.
-                    let var_name = unsafe_cast_var_name_to_lifetime(var_name);
-                    scope.push(var_name, ());
+                    scope.push(var_name.clone(), ());
                     let index = scope.len() - 1;
 
                     let mut loop_result = Ok(Dynamic::UNIT);
@@ -514,11 +504,12 @@ impl Engine {
                         if counter_index < usize::MAX {
                             #[cfg(not(feature = "unchecked"))]
                             if x > INT::MAX as usize {
-                                return Err(ERR::ErrorArithmetic(
+                                loop_result = Err(ERR::ErrorArithmetic(
                                     format!("for-loop counter overflow: {}", x),
                                     counter.as_ref().expect("`Some`").pos,
                                 )
                                 .into());
+                                break;
                             }
 
                             let index_value = (x as INT).into();
@@ -575,7 +566,10 @@ impl Engine {
                             Err(err) => match *err {
                                 ERR::LoopBreak(false, _) => (),
                                 ERR::LoopBreak(true, _) => break,
-                                _ => return Err(err),
+                                _ => {
+                                    loop_result = Err(err);
+                                    break;
+                                }
                             },
                         }
                     }
@@ -645,12 +639,9 @@ impl Engine {
 
                         let orig_scope_len = scope.len();
 
-                        err_var_name.as_ref().map(|Ident { name, .. }| {
-                            // Catch error variables are always removed from after the block
-                            // so this cast is safe.
-                            let var_name = unsafe_cast_var_name_to_lifetime(name);
-                            scope.push(var_name, err_value)
-                        });
+                        err_var_name
+                            .as_ref()
+                            .map(|Ident { name, .. }| scope.push(name.clone(), err_value));
 
                         let result = self.eval_stmt_block(
                             scope, global, state, lib, this_ptr, catch_stmt, true, level,
@@ -701,7 +692,7 @@ impl Engine {
 
             // Let/const statement
             Stmt::Var(expr, x, options, _) => {
-                let name = &x.name;
+                let var_name = &x.name;
                 let entry_type = if options.contains(AST_OPTION_CONSTANT) {
                     AccessMode::ReadOnly
                 } else {
@@ -713,7 +704,7 @@ impl Engine {
                     .eval_expr(scope, global, state, lib, this_ptr, expr, level)?
                     .flatten();
 
-                let (var_name, _alias): (Cow<'_, str>, _) = if !rewind_scope {
+                let _alias = if !rewind_scope {
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(not(feature = "no_module"))]
                     if state.scope_level == 0
@@ -721,23 +712,26 @@ impl Engine {
                         && lib.iter().any(|&m| !m.is_empty())
                     {
                         // Add a global constant if at top level and there are functions
-                        global.set_constant(name.clone(), value.clone());
+                        global.set_constant(var_name.clone(), value.clone());
                     }
 
-                    (
-                        name.to_string().into(),
-                        if export { Some(name.clone()) } else { None },
-                    )
+                    if export {
+                        Some(var_name)
+                    } else {
+                        None
+                    }
                 } else if export {
                     unreachable!("exported variable not on global level");
                 } else {
-                    (unsafe_cast_var_name_to_lifetime(name).into(), None)
+                    None
                 };
 
-                scope.push_dynamic_value(var_name, entry_type, value);
+                scope.push_dynamic_value(var_name.clone(), entry_type, value);
 
                 #[cfg(not(feature = "no_module"))]
-                _alias.map(|alias| scope.add_entry_alias(scope.len() - 1, alias));
+                if let Some(alias) = _alias {
+                    scope.add_entry_alias(scope.len() - 1, alias.clone());
+                }
 
                 Ok(Dynamic::UNIT)
             }

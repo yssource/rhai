@@ -23,11 +23,11 @@ fn check_struct_sizes() {
     assert_eq!(size_of::<Option<ast::Expr>>(), if PACKED { 12 } else { 16 });
     assert_eq!(size_of::<ast::Stmt>(), if PACKED { 24 } else { 32 });
     assert_eq!(size_of::<Option<ast::Stmt>>(), if PACKED { 24 } else { 32 });
-    assert_eq!(size_of::<FnPtr>(), if PACKED { 40 } else { 80 });
-    assert_eq!(size_of::<Scope>(), if PACKED { 232 } else { 464 });
 
     #[cfg(target_pointer_width = "64")]
     {
+        assert_eq!(size_of::<Scope>(), 400);
+        assert_eq!(size_of::<FnPtr>(), 80);
         assert_eq!(size_of::<LexError>(), 56);
         assert_eq!(
             size_of::<ParseError>(),

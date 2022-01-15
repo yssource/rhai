@@ -52,20 +52,3 @@ pub fn unsafe_cast_box<X: Any, T: Any>(item: Box<X>) -> Option<T> {
         None
     }
 }
-
-/// # DANGEROUS!!!
-///
-/// A dangerous function that blindly casts a `&str` from one lifetime to a `&str` of
-/// another lifetime.  This is mainly used to let us push a block-local variable into the
-/// current [`Scope`][crate::Scope] without cloning the variable name.  Doing this is safe because all local
-/// variables in the [`Scope`][crate::Scope] are cleared out before existing the block.
-///
-/// Force-casting a local variable's lifetime to the current [`Scope`][crate::Scope]'s larger lifetime saves
-/// on allocations and string cloning, thus avoids us having to maintain a chain of [`Scope`][crate::Scope]'s.
-#[inline(always)]
-#[must_use]
-pub fn unsafe_cast_var_name_to_lifetime<'s>(name: &str) -> &'s str {
-    // WARNING - force-cast the variable name into the scope's lifetime to avoid cloning it
-    //           this is safe because all local variables are cleared at the end of the block
-    unsafe { mem::transmute(name) }
-}

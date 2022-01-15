@@ -17,6 +17,7 @@ Enhancements
 ------------
 
 * Formatting of return types in functions metadata info is improved.
+* Use `SmartString` for `Scope` variable names and remove `unsafe` lifetime casting.
 
 
 Version 1.4.0
