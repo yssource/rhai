@@ -74,14 +74,18 @@ impl Engine {
         let orig_mods_len = global.num_imported_modules();
 
         // Put arguments into scope as variables
-        // Actually consume the arguments instead of cloning them
         scope.extend(
             fn_def
                 .params
                 .iter()
-                .zip(args.iter_mut().map(|v| mem::take(*v)))
+                .zip(args.into_iter().map(|v| {
+                    // Actually consume the arguments instead of cloning them
+                    mem::take(*v)
+                }))
                 .map(|(name, value)| {
-                    let var_name: std::borrow::Cow<'_, str> =
+                    // Arguments are always removed at the end of the call,
+                    // so this cast is safe.
+                    let var_name: std::borrow::Cow<_> =
                         unsafe_cast_var_name_to_lifetime(name).into();
                     (var_name, value)
                 }),

@@ -464,7 +464,7 @@ impl Engine {
 
             // For loop
             Stmt::For(expr, x, _) => {
-                let (Ident { name, .. }, counter, statements) = x.as_ref();
+                let (Ident { name: var_name, .. }, counter, statements) = x.as_ref();
                 let iter_obj = self
                     .eval_expr(scope, global, state, lib, this_ptr, expr, level)?
                     .flatten();
@@ -492,13 +492,22 @@ impl Engine {
                     // Add the loop variables
                     let orig_scope_len = scope.len();
                     let counter_index = if let Some(counter) = counter {
-                        scope.push(unsafe_cast_var_name_to_lifetime(&counter.name), 0 as INT);
+                        // Loop variables are always removed at the end of the statement
+                        // so this cast is safe.
+                        let counter_name = unsafe_cast_var_name_to_lifetime(&counter.name);
+                        scope.push(counter_name, 0 as INT);
                         scope.len() - 1
                     } else {
                         usize::MAX
                     };
-                    scope.push(unsafe_cast_var_name_to_lifetime(name), ());
+
+                    // Loop variables are always removed at the end of the statement
+                    // so this cast is safe.
+                    let var_name = unsafe_cast_var_name_to_lifetime(var_name);
+                    scope.push(var_name, ());
                     let index = scope.len() - 1;
+
+                    let mut loop_result = Ok(Dynamic::UNIT);
 
                     for (x, iter_value) in func(iter_obj).enumerate() {
                         // Increment counter
@@ -546,7 +555,12 @@ impl Engine {
                         }
 
                         #[cfg(not(feature = "unchecked"))]
-                        self.inc_operations(&mut global.num_operations, statements.position())?;
+                        if let Err(err) =
+                            self.inc_operations(&mut global.num_operations, statements.position())
+                        {
+                            loop_result = Err(err);
+                            break;
+                        }
 
                         if statements.is_empty() {
                             continue;
@@ -567,7 +581,8 @@ impl Engine {
                     }
 
                     scope.rewind(orig_scope_len);
-                    Ok(Dynamic::UNIT)
+
+                    loop_result
                 } else {
                     Err(ERR::ErrorFor(expr.position()).into())
                 }
@@ -580,7 +595,7 @@ impl Engine {
 
             // Try/Catch statement
             Stmt::TryCatch(x, _) => {
-                let (try_stmt, err_var, catch_stmt) = x.as_ref();
+                let (try_stmt, err_var_name, catch_stmt) = x.as_ref();
 
                 let result = self
                     .eval_stmt_block(scope, global, state, lib, this_ptr, try_stmt, true, level)
@@ -630,8 +645,11 @@ impl Engine {
 
                         let orig_scope_len = scope.len();
 
-                        err_var.as_ref().map(|Ident { name, .. }| {
-                            scope.push(unsafe_cast_var_name_to_lifetime(name), err_value)
+                        err_var_name.as_ref().map(|Ident { name, .. }| {
+                            // Catch error variables are always removed from after the block
+                            // so this cast is safe.
+                            let var_name = unsafe_cast_var_name_to_lifetime(name);
+                            scope.push(var_name, err_value)
                         });
 
                         let result = self.eval_stmt_block(
