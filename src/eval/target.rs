@@ -1,7 +1,7 @@
 //! Type to hold a mutable reference to the target of an evaluation.
 
 use crate::types::dynamic::Variant;
-use crate::{Dynamic, EvalAltResult, RhaiResultOf, INT};
+use crate::{Dynamic, RhaiResultOf, INT};
 use std::ops::{Deref, DerefMut};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -38,35 +38,35 @@ pub fn calc_offset_len(length: usize, start: INT, len: INT) -> (usize, usize) {
 //
 // Negative starting positions count from the end.
 //
-// Values going over bounds call the provided closure to create an error.
+// Values going over bounds call the provided closure to return a default value or an error.
 #[inline(always)]
-pub fn calc_index(
+pub fn calc_index<E>(
     length: usize,
     start: INT,
     negative_count_from_end: bool,
-    err: impl Fn() -> EvalAltResult,
-) -> RhaiResultOf<usize> {
+    err: impl Fn() -> Result<usize, E>,
+) -> Result<usize, E> {
     if start < 0 {
         if negative_count_from_end {
             // Count from end if negative
             #[cfg(not(feature = "unchecked"))]
-            return start
-                .checked_abs()
-                .ok_or_else(|| err().into())
-                .and_then(|positive_start| {
+            return match start.checked_abs() {
+                Some(positive_start) => {
                     if (positive_start as usize) > length {
-                        Err(err().into())
+                        err()
                     } else {
                         Ok(length - (positive_start as usize))
                     }
-                });
+                }
+                None => err(),
+            };
             #[cfg(feature = "unchecked")]
             return Ok(length - (start.abs() as usize));
         } else {
-            Err(err().into())
+            err()
         }
     } else if start as usize >= length {
-        Err(err().into())
+        err()
     } else {
         Ok(start as usize)
     }

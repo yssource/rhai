@@ -790,8 +790,9 @@ impl Engine {
                     .as_int()
                     .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, pos))?;
                 let len = arr.len();
-                let arr_idx =
-                    calc_index(len, index, true, || ERR::ErrorArrayBounds(len, index, pos))?;
+                let arr_idx = calc_index(len, index, true, || {
+                    ERR::ErrorArrayBounds(len, index, pos).into()
+                })?;
 
                 Ok(arr.get_mut(arr_idx).map(Target::from).unwrap())
             }
@@ -803,8 +804,9 @@ impl Engine {
                     .as_int()
                     .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, pos))?;
                 let len = arr.len();
-                let arr_idx =
-                    calc_index(len, index, true, || ERR::ErrorArrayBounds(len, index, pos))?;
+                let arr_idx = calc_index(len, index, true, || {
+                    ERR::ErrorArrayBounds(len, index, pos).into()
+                })?;
 
                 let value = arr.get(arr_idx).map(|&v| (v as crate::INT).into()).unwrap();
 
@@ -844,10 +846,10 @@ impl Engine {
                     let end = range.end;
 
                     let start = calc_index(BITS, start, false, || {
-                        ERR::ErrorBitFieldBounds(BITS, start, pos)
+                        ERR::ErrorBitFieldBounds(BITS, start, pos).into()
                     })?;
                     let end = calc_index(BITS, end, false, || {
-                        ERR::ErrorBitFieldBounds(BITS, end, pos)
+                        ERR::ErrorBitFieldBounds(BITS, end, pos).into()
                     })?;
 
                     if end <= start {
@@ -869,10 +871,10 @@ impl Engine {
                     let end = *range.end();
 
                     let start = calc_index(BITS, start, false, || {
-                        ERR::ErrorBitFieldBounds(BITS, start, pos)
+                        ERR::ErrorBitFieldBounds(BITS, start, pos).into()
                     })?;
                     let end = calc_index(BITS, end, false, || {
-                        ERR::ErrorBitFieldBounds(BITS, end, pos)
+                        ERR::ErrorBitFieldBounds(BITS, end, pos).into()
                     })?;
 
                     if end < start {
@@ -913,7 +915,7 @@ impl Engine {
                 const BITS: usize = std::mem::size_of::<crate::INT>() * 8;
 
                 let bit = calc_index(BITS, index, true, || {
-                    ERR::ErrorBitFieldBounds(BITS, index, pos)
+                    ERR::ErrorBitFieldBounds(BITS, index, pos).into()
                 })?;
 
                 let bit_value = (*value & (1 << bit)) != 0;
