@@ -1,7 +1,7 @@
 //! Types to support chaining operations (i.e. indexing and dotting).
 #![cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 
-use super::{calc_index, EvalState, GlobalRuntimeState, Target};
+use super::{EvalState, GlobalRuntimeState, Target};
 use crate::ast::{Expr, OpAssignment};
 use crate::types::dynamic::Union;
 use crate::{Dynamic, Engine, Module, Position, RhaiResult, RhaiResultOf, Scope, StaticVec, ERR};
@@ -790,7 +790,7 @@ impl Engine {
                     .as_int()
                     .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, pos))?;
                 let len = arr.len();
-                let arr_idx = calc_index(len, index, true, || {
+                let arr_idx = super::calc_index(len, index, true, || {
                     ERR::ErrorArrayBounds(len, index, pos).into()
                 })?;
 
@@ -804,7 +804,7 @@ impl Engine {
                     .as_int()
                     .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, pos))?;
                 let len = arr.len();
-                let arr_idx = calc_index(len, index, true, || {
+                let arr_idx = super::calc_index(len, index, true, || {
                     ERR::ErrorArrayBounds(len, index, pos).into()
                 })?;
 
@@ -845,10 +845,10 @@ impl Engine {
                     let start = range.start;
                     let end = range.end;
 
-                    let start = calc_index(BITS, start, false, || {
+                    let start = super::calc_index(BITS, start, false, || {
                         ERR::ErrorBitFieldBounds(BITS, start, pos).into()
                     })?;
-                    let end = calc_index(BITS, end, false, || {
+                    let end = super::calc_index(BITS, end, false, || {
                         ERR::ErrorBitFieldBounds(BITS, end, pos).into()
                     })?;
 
@@ -870,10 +870,10 @@ impl Engine {
                     let start = *range.start();
                     let end = *range.end();
 
-                    let start = calc_index(BITS, start, false, || {
+                    let start = super::calc_index(BITS, start, false, || {
                         ERR::ErrorBitFieldBounds(BITS, start, pos).into()
                     })?;
-                    let end = calc_index(BITS, end, false, || {
+                    let end = super::calc_index(BITS, end, false, || {
                         ERR::ErrorBitFieldBounds(BITS, end, pos).into()
                     })?;
 
@@ -914,7 +914,7 @@ impl Engine {
 
                 const BITS: usize = std::mem::size_of::<crate::INT>() * 8;
 
-                let bit = calc_index(BITS, index, true, || {
+                let bit = super::calc_index(BITS, index, true, || {
                     ERR::ErrorBitFieldBounds(BITS, index, pos).into()
                 })?;
 
