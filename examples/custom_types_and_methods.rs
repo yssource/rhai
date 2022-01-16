@@ -1,5 +1,3 @@
-#![cfg(not(feature = "no_object"))]
-
 use rhai::{Engine, EvalAltResult};
 
 #[derive(Debug, Clone)]
@@ -17,6 +15,7 @@ impl TestStruct {
     }
 }
 
+#[cfg(not(feature = "no_object"))]
 fn main() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
@@ -36,4 +35,9 @@ fn main() -> Result<(), Box<EvalAltResult>> {
     println!("result: {}", result.x); // prints 1001
 
     Ok(())
+}
+
+#[cfg(feature = "no_object")]
+fn main() {
+    panic!("This example does not run under 'no_object'.");
 }
