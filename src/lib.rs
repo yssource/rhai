@@ -41,8 +41,8 @@
 //!     engine.register_fn("compute", compute_something);
 //!
 //! #   #[cfg(not(feature = "no_std"))]
-//! #   #[cfg(not(target_arch = "wasm32"))]
-//! #   #[cfg(not(target_arch = "wasm64"))]
+//! #   #[cfg(not(target_family = "wasm"))]
+//! #   
 //!     // Evaluate the script, expecting a 'bool' result
 //!     let result = engine.eval_file::<bool>("my_script.rhai".into())?;
 //!
@@ -113,6 +113,7 @@ pub type INT = i32;
 #[cfg(not(feature = "only_i32"))]
 #[allow(non_camel_case_types)]
 type UNSIGNED_INT = u64;
+
 /// The unsigned system integer base type.
 /// It is defined as [`u32`] since the `only_i32` feature is used.
 ///
@@ -365,17 +366,15 @@ compile_error!("`wasm-bindgen` cannot be used with `no-std`");
 #[cfg(feature = "stdweb")]
 compile_error!("`stdweb` cannot be used with `no-std`");
 
-#[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))]
+#[cfg(target_family = "wasm")]
 #[cfg(feature = "no_std")]
 compile_error!("`no_std` cannot be used for WASM target");
 
-#[cfg(not(target_arch = "wasm32"))]
-#[cfg(not(target_arch = "wasm64"))]
+#[cfg(not(target_family = "wasm"))]
 #[cfg(feature = "wasm-bindgen")]
 compile_error!("`wasm-bindgen` cannot be used for non-WASM target");
 
-#[cfg(not(target_arch = "wasm32"))]
-#[cfg(not(target_arch = "wasm64"))]
+#[cfg(not(target_family = "wasm"))]
 #[cfg(feature = "stdweb")]
 compile_error!("`stdweb` cannot be used non-WASM target");
 

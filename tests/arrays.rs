@@ -23,10 +23,46 @@ fn test_arrays() -> Result<(), Box<EvalAltResult>> {
     assert!(engine.eval::<bool>("let y = [1, 2, 3]; 2 in y")?);
     assert_eq!(engine.eval::<INT>("let y = [1, 2, 3]; y += 4; y[3]")?, 4);
     assert_eq!(
+        engine.eval::<INT>("let y = [1, 2, 3]; pad(y, 5, 42); len(y)")?,
+        5
+    );
+    assert_eq!(
+        engine.eval::<INT>("let y = [1, 2, 3]; pad(y, 5, [42]); len(y)")?,
+        5
+    );
+    assert_eq!(
+        engine.eval::<INT>("let y = [1, 2, 3]; pad(y, 5, [42, 999, 123]); y[4][0]")?,
+        42
+    );
+    assert_eq!(
         engine
             .eval::<Dynamic>("let y = [1, 2, 3]; y[1] += 4; y")?
             .into_typed_array::<INT>()?,
         [1, 6, 3]
+    );
+    assert_eq!(
+        engine
+            .eval::<Dynamic>("let y = [1, 2, 3]; extract(y, 1, 10)")?
+            .into_typed_array::<INT>()?,
+        vec![2, 3]
+    );
+    assert_eq!(
+        engine
+            .eval::<Dynamic>("let y = [1, 2, 3]; extract(y, -3, 1)")?
+            .into_typed_array::<INT>()?,
+        vec![1]
+    );
+    assert_eq!(
+        engine
+            .eval::<Dynamic>("let y = [1, 2, 3]; extract(y, -99, 2)")?
+            .into_typed_array::<INT>()?,
+        vec![1, 2]
+    );
+    assert_eq!(
+        engine
+            .eval::<Dynamic>("let y = [1, 2, 3]; extract(y, 99, 1)")?
+            .into_typed_array::<INT>()?,
+        vec![] as Vec<INT>
     );
 
     #[cfg(not(feature = "no_object"))]

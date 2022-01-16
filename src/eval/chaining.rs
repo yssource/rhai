@@ -771,7 +771,7 @@ impl Engine {
         lib: &[&Module],
         target: &'t mut Dynamic,
         idx: Dynamic,
-        idx_pos: Position,
+        pos: Position,
         add_if_not_found: bool,
         use_indexers: bool,
         level: usize,
@@ -788,38 +788,13 @@ impl Engine {
                 // val_array[idx]
                 let index = idx
                     .as_int()
-                    .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, idx_pos))?;
+                    .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, pos))?;
+                let len = arr.len();
+                let arr_idx = super::calc_index(len, index, true, || {
+                    ERR::ErrorArrayBounds(len, index, pos).into()
+                })?;
 
-                let arr_len = arr.len();
-
-                #[cfg(not(feature = "unchecked"))]
-                let arr_idx = if index < 0 {
-                    // Count from end if negative
-                    arr_len
-                        - index
-                            .checked_abs()
-                            .ok_or_else(|| ERR::ErrorArrayBounds(arr_len, index, idx_pos))
-                            .and_then(|n| {
-                                if n as usize > arr_len {
-                                    Err(ERR::ErrorArrayBounds(arr_len, index, idx_pos).into())
-                                } else {
-                                    Ok(n as usize)
-                                }
-                            })?
-                } else {
-                    index as usize
-                };
-                #[cfg(feature = "unchecked")]
-                let arr_idx = if index < 0 {
-                    // Count from end if negative
-                    arr_len - index.abs() as usize
-                } else {
-                    index as usize
-                };
-
-                arr.get_mut(arr_idx)
-                    .map(Target::from)
-                    .ok_or_else(|| ERR::ErrorArrayBounds(arr_len, index, idx_pos).into())
+                Ok(arr.get_mut(arr_idx).map(Target::from).unwrap())
             }
 
             #[cfg(not(feature = "no_index"))]
@@ -827,39 +802,14 @@ impl Engine {
                 // val_blob[idx]
                 let index = idx
                     .as_int()
-                    .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, idx_pos))?;
+                    .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, pos))?;
+                let len = arr.len();
+                let arr_idx = super::calc_index(len, index, true, || {
+                    ERR::ErrorArrayBounds(len, index, pos).into()
+                })?;
 
-                let arr_len = arr.len();
+                let value = arr.get(arr_idx).map(|&v| (v as crate::INT).into()).unwrap();
 
-                #[cfg(not(feature = "unchecked"))]
-                let arr_idx = if index < 0 {
-                    // Count from end if negative
-                    arr_len
-                        - index
-                            .checked_abs()
-                            .ok_or_else(|| ERR::ErrorArrayBounds(arr_len, index, idx_pos))
-                            .and_then(|n| {
-                                if n as usize > arr_len {
-                                    Err(ERR::ErrorArrayBounds(arr_len, index, idx_pos).into())
-                                } else {
-                                    Ok(n as usize)
-                                }
-                            })?
-                } else {
-                    index as usize
-                };
-                #[cfg(feature = "unchecked")]
-                let arr_idx = if index < 0 {
-                    // Count from end if negative
-                    arr_len - index.abs() as usize
-                } else {
-                    index as usize
-                };
-
-                let value = arr
-                    .get(arr_idx)
-                    .map(|&v| (v as crate::INT).into())
-                    .ok_or_else(|| Box::new(ERR::ErrorArrayBounds(arr_len, index, idx_pos)))?;
                 Ok(Target::BlobByte {
                     source: target,
                     value,
@@ -871,7 +821,7 @@ impl Engine {
             Dynamic(Union::Map(map, _, _)) => {
                 // val_map[idx]
                 let index = idx.read_lock::<crate::ImmutableString>().ok_or_else(|| {
-                    self.make_type_mismatch_err::<crate::ImmutableString>(idx.type_name(), idx_pos)
+                    self.make_type_mismatch_err::<crate::ImmutableString>(idx.type_name(), pos)
                 })?;
 
                 if _add_if_not_found && !map.contains_key(index.as_str()) {
@@ -888,11 +838,6 @@ impl Engine {
             Dynamic(Union::Int(value, _, _))
                 if idx.is::<crate::ExclusiveRange>() || idx.is::<crate::InclusiveRange>() =>
             {
-                #[cfg(not(feature = "only_i32"))]
-                type BASE = u64;
-                #[cfg(feature = "only_i32")]
-                type BASE = u32;
-
                 // val_int[range]
                 const BITS: usize = std::mem::size_of::<crate::INT>() * 8;
 
@@ -900,40 +845,49 @@ impl Engine {
                     let start = range.start;
                     let end = range.end;
 
-                    if start < 0 || start as usize >= BITS {
-                        return Err(ERR::ErrorBitFieldBounds(BITS, start, idx_pos).into());
-                    } else if end < 0 || end as usize >= BITS {
-                        return Err(ERR::ErrorBitFieldBounds(BITS, end, idx_pos).into());
-                    } else if end <= start {
+                    let start = super::calc_index(BITS, start, false, || {
+                        ERR::ErrorBitFieldBounds(BITS, start, pos).into()
+                    })?;
+                    let end = super::calc_index(BITS, end, false, || {
+                        ERR::ErrorBitFieldBounds(BITS, end, pos).into()
+                    })?;
+
+                    if end <= start {
                         (0, 0)
-                    } else if end as usize == BITS && start == 0 {
+                    } else if end == BITS && start == 0 {
                         // -1 = all bits set
                         (0, -1)
                     } else {
                         (
                             start as u8,
                             // 2^bits - 1
-                            (((2 as BASE).pow((end - start) as u32) - 1) as crate::INT) << start,
+                            (((2 as crate::UNSIGNED_INT).pow((end - start) as u32) - 1)
+                                as crate::INT)
+                                << start,
                         )
                     }
                 } else if let Some(range) = idx.read_lock::<crate::InclusiveRange>() {
                     let start = *range.start();
                     let end = *range.end();
 
-                    if start < 0 || start as usize >= BITS {
-                        return Err(ERR::ErrorBitFieldBounds(BITS, start, idx_pos).into());
-                    } else if end < 0 || end as usize >= BITS {
-                        return Err(ERR::ErrorBitFieldBounds(BITS, end, idx_pos).into());
-                    } else if end < start {
+                    let start = super::calc_index(BITS, start, false, || {
+                        ERR::ErrorBitFieldBounds(BITS, start, pos).into()
+                    })?;
+                    let end = super::calc_index(BITS, end, false, || {
+                        ERR::ErrorBitFieldBounds(BITS, end, pos).into()
+                    })?;
+
+                    if end < start {
                         (0, 0)
-                    } else if end as usize == BITS - 1 && start == 0 {
+                    } else if end == BITS - 1 && start == 0 {
                         // -1 = all bits set
                         (0, -1)
                     } else {
                         (
                             start as u8,
                             // 2^bits - 1
-                            (((2 as BASE).pow((end - start + 1) as u32) - 1) as crate::INT)
+                            (((2 as crate::UNSIGNED_INT).pow((end - start + 1) as u32) - 1)
+                                as crate::INT)
                                 << start,
                         )
                     }
@@ -956,39 +910,20 @@ impl Engine {
                 // val_int[idx]
                 let index = idx
                     .as_int()
-                    .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, idx_pos))?;
+                    .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, pos))?;
 
                 const BITS: usize = std::mem::size_of::<crate::INT>() * 8;
 
-                let (bit_value, offset) = if index >= 0 {
-                    let offset = index as usize;
-                    (
-                        if offset >= BITS {
-                            return Err(ERR::ErrorBitFieldBounds(BITS, index, idx_pos).into());
-                        } else {
-                            (*value & (1 << offset)) != 0
-                        },
-                        offset as u8,
-                    )
-                } else if let Some(abs_index) = index.checked_abs() {
-                    let offset = abs_index as usize;
-                    (
-                        // Count from end if negative
-                        if offset > BITS {
-                            return Err(ERR::ErrorBitFieldBounds(BITS, index, idx_pos).into());
-                        } else {
-                            (*value & (1 << (BITS - offset))) != 0
-                        },
-                        offset as u8,
-                    )
-                } else {
-                    return Err(ERR::ErrorBitFieldBounds(BITS, index, idx_pos).into());
-                };
+                let bit = super::calc_index(BITS, index, true, || {
+                    ERR::ErrorBitFieldBounds(BITS, index, pos).into()
+                })?;
+
+                let bit_value = (*value & (1 << bit)) != 0;
 
                 Ok(Target::Bit {
                     source: target,
                     value: bit_value.into(),
-                    bit: offset,
+                    bit: bit as u8,
                 })
             }
 
@@ -997,14 +932,14 @@ impl Engine {
                 // val_string[idx]
                 let index = idx
                     .as_int()
-                    .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, idx_pos))?;
+                    .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, pos))?;
 
                 let (ch, offset) = if index >= 0 {
                     let offset = index as usize;
                     (
                         s.chars().nth(offset).ok_or_else(|| {
                             let chars_len = s.chars().count();
-                            ERR::ErrorStringBounds(chars_len, index, idx_pos)
+                            ERR::ErrorStringBounds(chars_len, index, pos)
                         })?,
                         offset,
                     )
@@ -1014,13 +949,13 @@ impl Engine {
                         // Count from end if negative
                         s.chars().rev().nth(offset - 1).ok_or_else(|| {
                             let chars_len = s.chars().count();
-                            ERR::ErrorStringBounds(chars_len, index, idx_pos)
+                            ERR::ErrorStringBounds(chars_len, index, pos)
                         })?,
                         offset,
                     )
                 } else {
                     let chars_len = s.chars().count();
-                    return Err(ERR::ErrorStringBounds(chars_len, index, idx_pos).into());
+                    return Err(ERR::ErrorStringBounds(chars_len, index, pos).into());
                 };
 
                 Ok(Target::StringChar {
@@ -1033,8 +968,6 @@ impl Engine {
             _ if use_indexers => {
                 let args = &mut [target, &mut idx];
                 let hash_get = crate::ast::FnCallHashes::from_native(global.hash_idx_get());
-                let idx_pos = Position::NONE;
-
                 self.exec_fn_call(
                     global,
                     state,
@@ -1044,7 +977,7 @@ impl Engine {
                     args,
                     true,
                     true,
-                    idx_pos,
+                    Position::NONE,
                     None,
                     level,
                 )

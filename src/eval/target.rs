@@ -6,6 +6,74 @@ use std::ops::{Deref, DerefMut};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
+// Calculate an offset+len pair given an actual length of the underlying array.
+//
+// Negative starting positions count from the end.
+//
+// Values going over bounds are limited to the actual length.
+#[inline]
+#[allow(dead_code)]
+pub fn calc_offset_len(length: usize, start: crate::INT, len: crate::INT) -> (usize, usize) {
+    let start = if start < 0 {
+        start.checked_abs().map_or(0, |positive_start| {
+            length - usize::min(positive_start as usize, length)
+        })
+    } else if start as usize >= length {
+        return (length, 0);
+    } else {
+        start as usize
+    };
+
+    let len = if len <= 0 {
+        0
+    } else if len as usize > length - start {
+        length - start
+    } else {
+        len as usize
+    };
+
+    (start, len)
+}
+
+// Calculate an offset+len pair given an actual length of the underlying array.
+//
+// Negative starting positions count from the end.
+//
+// Values going over bounds call the provided closure to return a default value or an error.
+#[inline]
+#[allow(dead_code)]
+pub fn calc_index<E>(
+    length: usize,
+    start: crate::INT,
+    negative_count_from_end: bool,
+    err: impl Fn() -> Result<usize, E>,
+) -> Result<usize, E> {
+    if start < 0 {
+        if negative_count_from_end {
+            // Count from end if negative
+            #[cfg(not(feature = "unchecked"))]
+            return match start.checked_abs() {
+                Some(positive_start) => {
+                    if (positive_start as usize) > length {
+                        err()
+                    } else {
+                        Ok(length - (positive_start as usize))
+                    }
+                }
+                None => err(),
+            };
+            #[cfg(feature = "unchecked")]
+            return Ok(length - (start.abs() as usize));
+        } else {
+            err()
+        }
+    } else if start as usize >= length {
+        err()
+    } else {
+        Ok(start as usize)
+    }
+}
+
 /// A type that encapsulates a mutation target for an expression with side effects.
 #[derive(Debug)]
 pub enum Target<'a> {

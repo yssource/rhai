@@ -11,8 +11,7 @@ mod stat;
 pub use collection::ModuleResolversCollection;
 pub use dummy::DummyModuleResolver;
 #[cfg(not(feature = "no_std"))]
-#[cfg(not(target_arch = "wasm32"))]
-#[cfg(not(target_arch = "wasm64"))]
+#[cfg(not(target_family = "wasm"))]
 pub use file::FileModuleResolver;
 pub use stat::StaticModuleResolver;
 

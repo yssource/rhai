@@ -1,7 +1,6 @@
 //! Module that defines the public file-based API of [`Engine`].
 #![cfg(not(feature = "no_std"))]
-#![cfg(not(target_arch = "wasm32"))]
-#![cfg(not(target_arch = "wasm64"))]
+#![cfg(not(target_family = "wasm"))]
 
 use crate::types::dynamic::Variant;
 use crate::{Engine, RhaiResultOf, Scope, AST, ERR};

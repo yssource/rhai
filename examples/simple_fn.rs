@@ -1,6 +1,6 @@
-use rhai::{Engine, EvalAltResult, INT};
+use rhai::{Engine, EvalAltResult};
 
-fn add(x: INT, y: INT) -> INT {
+fn add(x: i64, y: i64) -> i64 {
     x + y
 }
 
@@ -9,7 +9,7 @@ fn main() -> Result<(), Box<EvalAltResult>> {
 
     engine.register_fn("add", add);
 
-    let result = engine.eval::<INT>("add(40, 2)")?;
+    let result = engine.eval::<i64>("add(40, 2)")?;
 
     println!("Answer: {}", result); // prints 42
 

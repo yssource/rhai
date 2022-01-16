@@ -2,7 +2,7 @@
 
 #![cfg(feature = "metadata")]
 
-use crate::module::calc_native_fn_hash;
+use crate::module::{calc_native_fn_hash, FuncInfo};
 use crate::{calc_fn_hash, Engine, AST};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "no_std")]
@@ -48,32 +48,13 @@ impl From<crate::FnAccess> for FnAccess {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct FnParam<'a> {
-    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<&'a str>,
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     pub typ: Option<&'a str>,
-}
-
-impl PartialOrd for FnParam<'_> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(match self.name.partial_cmp(&other.name).expect("succeed") {
-            Ordering::Less => Ordering::Less,
-            Ordering::Greater => Ordering::Greater,
-            Ordering::Equal => self.typ.partial_cmp(&other.typ).expect("succeed"),
-        })
-    }
-}
-
-impl Ord for FnParam<'_> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        match self.name.cmp(&other.name) {
-            Ordering::Equal => self.typ.cmp(&other.typ),
-            cmp => cmp,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -89,15 +70,18 @@ struct FnMetadata<'a> {
     pub num_params: usize,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub params: Vec<FnParam<'a>>,
+    // No idea why the following is needed otherwise serde comes back with a lifetime error
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub return_type_name: Option<&'a str>,
+    pub _dummy: Option<&'a str>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub return_type: String,
     pub signature: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub doc_comments: Vec<&'a str>,
 }
 
 impl PartialOrd for FnMetadata<'_> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
@@ -105,41 +89,39 @@ impl PartialOrd for FnMetadata<'_> {
 impl Ord for FnMetadata<'_> {
     fn cmp(&self, other: &Self) -> Ordering {
         match self.name.cmp(&other.name) {
-            Ordering::Equal => match self.num_params.cmp(&other.num_params) {
-                Ordering::Equal => self.params.cmp(&other.params),
-                cmp => cmp,
-            },
+            Ordering::Equal => self.num_params.cmp(&other.num_params),
             cmp => cmp,
         }
     }
 }
 
-impl<'a> From<&'a crate::module::FuncInfo> for FnMetadata<'a> {
-    fn from(info: &'a crate::module::FuncInfo) -> Self {
-        let base_hash = calc_fn_hash(&info.name, info.params);
+impl<'a> From<&'a FuncInfo> for FnMetadata<'a> {
+    fn from(info: &'a FuncInfo) -> Self {
+        let base_hash = calc_fn_hash(&info.metadata.name, info.metadata.params);
         let (typ, full_hash) = if info.func.is_script() {
             (FnType::Script, base_hash)
         } else {
             (
                 FnType::Native,
-                calc_native_fn_hash(empty::<&str>(), &info.name, &info.param_types),
+                calc_native_fn_hash(empty::<&str>(), &info.metadata.name, &info.param_types),
             )
         };
 
         Self {
             base_hash,
             full_hash,
-            namespace: info.namespace.into(),
-            access: info.access.into(),
-            name: info.name.to_string(),
+            namespace: info.metadata.namespace.into(),
+            access: info.metadata.access.into(),
+            name: info.metadata.name.to_string(),
             typ,
-            num_params: info.params,
+            num_params: info.metadata.params,
             params: info
-                .param_names_and_types
+                .metadata
+                .params_info
                 .iter()
                 .map(|s| {
                     let mut seg = s.splitn(2, ':');
-                    let name = match seg.next().map(&str::trim).unwrap_or("_") {
+                    let name = match seg.next().unwrap().trim() {
                         "_" => None,
                         s => Some(s),
                     };
@@ -147,10 +129,8 @@ impl<'a> From<&'a crate::module::FuncInfo> for FnMetadata<'a> {
                     FnParam { name, typ }
                 })
                 .collect(),
-            return_type_name: match info.return_type_name.as_str() {
-                "" | "()" => None,
-                ty => Some(ty),
-            },
+            _dummy: None,
+            return_type: FuncInfo::format_return_type(&info.metadata.return_type).into_owned(),
             signature: info.gen_signature(),
             doc_comments: if info.func.is_script() {
                 #[cfg(feature = "no_function")]
@@ -164,7 +144,8 @@ impl<'a> From<&'a crate::module::FuncInfo> for FnMetadata<'a> {
                     .as_ref()
                     .map_or_else(|| Vec::new(), |v| v.iter().map(|s| &**s).collect())
             } else {
-                info.comments
+                info.metadata
+                    .comments
                     .as_ref()
                     .map_or_else(|| Vec::new(), |v| v.iter().map(|s| &**s).collect())
             },

@@ -121,14 +121,17 @@ macro_rules! gen_arithmetic_functions {
                 pub fn binary_xor(x: $arg_type, y: $arg_type) -> $arg_type {
                     x ^ y
                 }
+                /// Return true if the number is zero.
                 #[rhai_fn(get = "is_zero", name = "is_zero")]
                 pub fn is_zero(x: $arg_type) -> bool {
                     x == 0
                 }
+                /// Return true if the number is odd.
                 #[rhai_fn(get = "is_odd", name = "is_odd")]
                 pub fn is_odd(x: $arg_type) -> bool {
                     x % 2 != 0
                 }
+                /// Return true if the number is even.
                 #[rhai_fn(get = "is_even", name = "is_even")]
                 pub fn is_even(x: $arg_type) -> bool {
                     x % 2 == 0
@@ -157,6 +160,7 @@ macro_rules! gen_signed_functions {
                 pub fn plus(x: $arg_type) -> $arg_type {
                     x
                 }
+                /// Return the absolute value of the number.
                 #[rhai_fn(return_raw)]
                 pub fn abs(x: $arg_type) -> RhaiResultOf<$arg_type> {
                     if cfg!(not(feature = "unchecked")) {
@@ -165,6 +169,11 @@ macro_rules! gen_signed_functions {
                         Ok(x.abs())
                     }
                 }
+                /// Return the sign (as an integer) of the number according to the following:
+                ///
+                /// * `0` if the number is zero
+                /// * `1` if the number is positive
+                /// * `-1` if the number is negative
                 pub fn sign(x: $arg_type) -> INT {
                     x.signum() as INT
                 }
@@ -193,8 +202,8 @@ def_package! {
             reg_functions!(lib += arith_numbers; i8, u8, i16, u16, i32, u32, u64);
             reg_functions!(lib += signed_numbers; i8, i16, i32);
 
-            #[cfg(not(target_arch = "wasm32"))]
-            #[cfg(not(target_arch = "wasm64"))]
+            #[cfg(not(target_family = "wasm"))]
+
             {
                 reg_functions!(lib += arith_num_128; i128, u128);
                 reg_functions!(lib += signed_num_128; i128);
@@ -216,14 +225,17 @@ def_package! {
 
 #[export_module]
 mod int_functions {
+    /// Return true if the number is zero.
     #[rhai_fn(get = "is_zero", name = "is_zero")]
     pub fn is_zero(x: INT) -> bool {
         x == 0
     }
+    /// Return true if the number is odd.
     #[rhai_fn(get = "is_odd", name = "is_odd")]
     pub fn is_odd(x: INT) -> bool {
         x % 2 != 0
     }
+    /// Return true if the number is even.
     #[rhai_fn(get = "is_even", name = "is_even")]
     pub fn is_even(x: INT) -> bool {
         x % 2 == 0
@@ -238,8 +250,8 @@ gen_arithmetic_functions!(arith_numbers => i8, u8, i16, u16, i32, u32, u64);
 
 #[cfg(not(feature = "only_i32"))]
 #[cfg(not(feature = "only_i64"))]
-#[cfg(not(target_arch = "wasm32"))]
-#[cfg(not(target_arch = "wasm64"))]
+#[cfg(not(target_family = "wasm"))]
+
 gen_arithmetic_functions!(arith_num_128 => i128, u128);
 
 gen_signed_functions!(signed_basic => INT);
@@ -250,8 +262,8 @@ gen_signed_functions!(signed_numbers => i8, i16, i32);
 
 #[cfg(not(feature = "only_i32"))]
 #[cfg(not(feature = "only_i64"))]
-#[cfg(not(target_arch = "wasm32"))]
-#[cfg(not(target_arch = "wasm64"))]
+#[cfg(not(target_family = "wasm"))]
+
 gen_signed_functions!(signed_num_128 => i128);
 
 #[cfg(not(feature = "no_float"))]
@@ -334,9 +346,15 @@ mod f32_functions {
     pub fn plus(x: f32) -> f32 {
         x
     }
+    /// Return the absolute value of the floating-point number.
     pub fn abs(x: f32) -> f32 {
         x.abs()
     }
+    /// Return the sign (as an integer) of the floating-point number according to the following:
+    ///
+    /// * `0` if the number is zero
+    /// * `1` if the number is positive
+    /// * `-1` if the number is negative
     #[rhai_fn(return_raw)]
     pub fn sign(x: f32) -> RhaiResultOf<INT> {
         match x.signum() {
@@ -345,6 +363,7 @@ mod f32_functions {
             x => Ok(x as INT),
         }
     }
+    /// Return true if the floating-point number is zero.
     #[rhai_fn(get = "is_zero", name = "is_zero")]
     pub fn is_zero(x: f32) -> bool {
         x == 0.0
@@ -442,9 +461,15 @@ mod f64_functions {
     pub fn plus(x: f64) -> f64 {
         x
     }
+    /// Return the absolute value of the floating-point number.
     pub fn abs(x: f64) -> f64 {
         x.abs()
     }
+    /// Return the sign (as an integer) of the floating-point number according to the following:
+    ///
+    /// * `0` if the number is zero
+    /// * `1` if the number is positive
+    /// * `-1` if the number is negative
     #[rhai_fn(return_raw)]
     pub fn sign(x: f64) -> RhaiResultOf<INT> {
         match x.signum() {
@@ -453,6 +478,7 @@ mod f64_functions {
             x => Ok(x as INT),
         }
     }
+    /// Return true if the floating-point number is zero.
     #[rhai_fn(get = "is_zero", name = "is_zero")]
     pub fn is_zero(x: f64) -> bool {
         x == 0.0
@@ -536,9 +562,15 @@ pub mod decimal_functions {
     pub fn plus(x: Decimal) -> Decimal {
         x
     }
+    /// Return the absolute value of the decimal number.
     pub fn abs(x: Decimal) -> Decimal {
         x.abs()
     }
+    /// Return the sign (as an integer) of the decimal number according to the following:
+    ///
+    /// * `0` if the number is zero
+    /// * `1` if the number is positive
+    /// * `-1` if the number is negative
     pub fn sign(x: Decimal) -> INT {
         if x == Decimal::zero() {
             0
@@ -548,6 +580,7 @@ pub mod decimal_functions {
             1
         }
     }
+    /// Return true if the decimal number is zero.
     #[rhai_fn(get = "is_zero", name = "is_zero")]
     pub fn is_zero(x: Decimal) -> bool {
         x.is_zero()

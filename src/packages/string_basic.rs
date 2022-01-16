@@ -46,56 +46,68 @@ pub fn print_with_func(
 mod print_debug_functions {
     use crate::ImmutableString;
 
+    /// Convert the value of the `item` into a string.
     #[rhai_fn(name = "print", pure)]
     pub fn print_generic(ctx: NativeCallContext, item: &mut Dynamic) -> ImmutableString {
         print_with_func(FUNC_TO_STRING, &ctx, item)
     }
+    /// Convert the value of the `item` into a string.
     #[rhai_fn(name = "to_string", pure)]
     pub fn to_string_generic(ctx: NativeCallContext, item: &mut Dynamic) -> ImmutableString {
         ctx.engine().map_type_name(&item.to_string()).into()
     }
+    /// Convert the value of the `item` into a string in debug format.
     #[rhai_fn(name = "debug", pure)]
     pub fn debug_generic(ctx: NativeCallContext, item: &mut Dynamic) -> ImmutableString {
         print_with_func(FUNC_TO_DEBUG, &ctx, item)
     }
+    /// Convert the value of the `item` into a string in debug format.
     #[rhai_fn(name = "to_debug", pure)]
     pub fn to_debug_generic(ctx: NativeCallContext, item: &mut Dynamic) -> ImmutableString {
         ctx.engine().map_type_name(&format!("{:?}", item)).into()
     }
+    /// Return the empty string.
     #[rhai_fn(name = "print", name = "debug")]
     pub fn print_empty_string(ctx: NativeCallContext) -> ImmutableString {
         ctx.engine().const_empty_string()
     }
+    /// Return the `string`.
     #[rhai_fn(name = "print", name = "to_string")]
-    pub fn print_string(s: ImmutableString) -> ImmutableString {
-        s
+    pub fn print_string(string: ImmutableString) -> ImmutableString {
+        string
     }
+    /// Convert the function pointer into a string in debug format.
     #[rhai_fn(name = "debug", name = "to_debug", pure)]
     pub fn debug_fn_ptr(f: &mut FnPtr) -> ImmutableString {
         f.to_string().into()
     }
 
+    /// Convert the value of `number` into a string.
     #[cfg(not(feature = "no_float"))]
     #[rhai_fn(name = "print", name = "to_string")]
     pub fn print_f64(number: f64) -> ImmutableString {
         crate::ast::FloatWrapper::new(number).to_string().into()
     }
+    /// Convert the value of `number` into a string.
     #[cfg(not(feature = "no_float"))]
     #[rhai_fn(name = "print", name = "to_string")]
     pub fn print_f32(number: f32) -> ImmutableString {
         crate::ast::FloatWrapper::new(number).to_string().into()
     }
+    /// Convert the value of `number` into a string.
     #[cfg(not(feature = "no_float"))]
     #[rhai_fn(name = "debug", name = "to_debug")]
     pub fn debug_f64(number: f64) -> ImmutableString {
         format!("{:?}", crate::ast::FloatWrapper::new(number)).into()
     }
+    /// Convert the value of `number` into a string.
     #[cfg(not(feature = "no_float"))]
     #[rhai_fn(name = "debug", name = "to_debug")]
     pub fn debug_f32(number: f32) -> ImmutableString {
         format!("{:?}", crate::ast::FloatWrapper::new(number)).into()
     }
 
+    /// Convert the array into a string.
     #[cfg(not(feature = "no_index"))]
     #[rhai_fn(
         name = "print",
@@ -119,6 +131,8 @@ mod print_debug_functions {
         result.push(']');
         result.into()
     }
+
+    /// Convert the object map into a string.
     #[cfg(not(feature = "no_object"))]
     #[rhai_fn(
         name = "print",
@@ -148,27 +162,27 @@ mod print_debug_functions {
 
 #[export_module]
 mod number_formatting {
-    #[rhai_fn(skip)]
-    pub fn to_hex<T: LowerHex>(value: T) -> ImmutableString {
+    fn to_hex<T: LowerHex>(value: T) -> ImmutableString {
         format!("{:x}", value).into()
     }
-    #[rhai_fn(skip)]
-    pub fn to_octal<T: Octal>(value: T) -> ImmutableString {
+    fn to_octal<T: Octal>(value: T) -> ImmutableString {
         format!("{:o}", value).into()
     }
-    #[rhai_fn(skip)]
-    pub fn to_binary<T: Binary>(value: T) -> ImmutableString {
+    fn to_binary<T: Binary>(value: T) -> ImmutableString {
         format!("{:b}", value).into()
     }
 
+    /// Convert the `value` into a string in hex format.
     #[rhai_fn(name = "to_hex")]
     pub fn int_to_hex(value: INT) -> ImmutableString {
         to_hex(value)
     }
+    /// Convert the `value` into a string in octal format.
     #[rhai_fn(name = "to_octal")]
     pub fn int_to_octal(value: INT) -> ImmutableString {
         to_octal(value)
     }
+    /// Convert the `value` into a string in binary format.
     #[rhai_fn(name = "to_binary")]
     pub fn int_to_binary(value: INT) -> ImmutableString {
         to_binary(value)
@@ -177,114 +191,156 @@ mod number_formatting {
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
     pub mod numbers {
+        /// Convert the `value` into a string in hex format.
         #[rhai_fn(name = "to_hex")]
         pub fn u8_to_hex(value: u8) -> ImmutableString {
             to_hex(value)
         }
+        /// Convert the `value` into a string in hex format.
         #[rhai_fn(name = "to_hex")]
         pub fn u16_to_hex(value: u16) -> ImmutableString {
             to_hex(value)
         }
+        /// Convert the `value` into a string in hex format.
         #[rhai_fn(name = "to_hex")]
         pub fn u32_to_hex(value: u32) -> ImmutableString {
             to_hex(value)
         }
+        /// Convert the `value` into a string in hex format.
         #[rhai_fn(name = "to_hex")]
         pub fn u64_to_hex(value: u64) -> ImmutableString {
             to_hex(value)
         }
+        /// Convert the `value` into a string in hex format.
         #[rhai_fn(name = "to_hex")]
         pub fn i8_to_hex(value: i8) -> ImmutableString {
             to_hex(value)
         }
+        /// Convert the `value` into a string in hex format.
         #[rhai_fn(name = "to_hex")]
         pub fn i16_to_hex(value: i16) -> ImmutableString {
             to_hex(value)
         }
+        /// Convert the `value` into a string in hex format.
         #[rhai_fn(name = "to_hex")]
         pub fn i32_to_hex(value: i32) -> ImmutableString {
             to_hex(value)
         }
+        /// Convert the `value` into a string in hex format.
         #[rhai_fn(name = "to_hex")]
         pub fn i64_to_hex(value: i64) -> ImmutableString {
             to_hex(value)
         }
+        /// Convert the `value` into a string in octal format.
         #[rhai_fn(name = "to_octal")]
         pub fn u8_to_octal(value: u8) -> ImmutableString {
             to_octal(value)
         }
+        /// Convert the `value` into a string in octal format.
         #[rhai_fn(name = "to_octal")]
         pub fn u16_to_octal(value: u16) -> ImmutableString {
             to_octal(value)
         }
+        /// Convert the `value` into a string in octal format.
         #[rhai_fn(name = "to_octal")]
         pub fn u32_to_octal(value: u32) -> ImmutableString {
             to_octal(value)
         }
+        /// Convert the `value` into a string in octal format.
         #[rhai_fn(name = "to_octal")]
         pub fn u64_to_octal(value: u64) -> ImmutableString {
             to_octal(value)
         }
+        /// Convert the `value` into a string in octal format.
         #[rhai_fn(name = "to_octal")]
         pub fn i8_to_octal(value: i8) -> ImmutableString {
             to_octal(value)
         }
+        /// Convert the `value` into a string in octal format.
         #[rhai_fn(name = "to_octal")]
         pub fn i16_to_octal(value: i16) -> ImmutableString {
             to_octal(value)
         }
+        /// Convert the `value` into a string in octal format.
         #[rhai_fn(name = "to_octal")]
         pub fn i32_to_octal(value: i32) -> ImmutableString {
             to_octal(value)
         }
+        /// Convert the `value` into a string in octal format.
         #[rhai_fn(name = "to_octal")]
         pub fn i64_to_octal(value: i64) -> ImmutableString {
             to_octal(value)
         }
+        /// Convert the `value` into a string in binary format.
         #[rhai_fn(name = "to_binary")]
         pub fn u8_to_binary(value: u8) -> ImmutableString {
             to_binary(value)
         }
+        /// Convert the `value` into a string in binary format.
         #[rhai_fn(name = "to_binary")]
         pub fn u16_to_binary(value: u16) -> ImmutableString {
             to_binary(value)
         }
+        /// Convert the `value` into a string in binary format.
         #[rhai_fn(name = "to_binary")]
         pub fn u32_to_binary(value: u32) -> ImmutableString {
             to_binary(value)
         }
+        /// Convert the `value` into a string in binary format.
         #[rhai_fn(name = "to_binary")]
         pub fn u64_to_binary(value: u64) -> ImmutableString {
             to_binary(value)
         }
+        /// Convert the `value` into a string in binary format.
         #[rhai_fn(name = "to_binary")]
         pub fn i8_to_binary(value: i8) -> ImmutableString {
             to_binary(value)
         }
+        /// Convert the `value` into a string in binary format.
         #[rhai_fn(name = "to_binary")]
         pub fn i16_to_binary(value: i16) -> ImmutableString {
             to_binary(value)
         }
+        /// Convert the `value` into a string in binary format.
         #[rhai_fn(name = "to_binary")]
         pub fn i32_to_binary(value: i32) -> ImmutableString {
             to_binary(value)
         }
+        /// Convert the `value` into a string in binary format.
         #[rhai_fn(name = "to_binary")]
         pub fn i64_to_binary(value: i64) -> ImmutableString {
             to_binary(value)
         }
 
-        #[cfg(not(target_arch = "wasm32"))]
-        #[cfg(not(target_arch = "wasm64"))]
+        #[cfg(not(target_family = "wasm"))]
+
         pub mod num_128 {
+            /// Convert the `value` into a string in hex format.
             #[rhai_fn(name = "to_hex")]
             pub fn u128_to_hex(value: u128) -> ImmutableString {
                 to_hex(value)
             }
+            /// Convert the `value` into a string in hex format.
+            #[rhai_fn(name = "to_hex")]
+            pub fn i128_to_hex(value: i128) -> ImmutableString {
+                to_hex(value)
+            }
+            /// Convert the `value` into a string in octal format.
+            #[rhai_fn(name = "to_octal")]
+            pub fn u128_to_octal(value: u128) -> ImmutableString {
+                to_octal(value)
+            }
+            /// Convert the `value` into a string in octal format.
             #[rhai_fn(name = "to_octal")]
             pub fn i128_to_octal(value: i128) -> ImmutableString {
                 to_octal(value)
             }
+            /// Convert the `value` into a string in binary format.
+            #[rhai_fn(name = "to_binary")]
+            pub fn u128_to_binary(value: u128) -> ImmutableString {
+                to_binary(value)
+            }
+            /// Convert the `value` into a string in binary format.
             #[rhai_fn(name = "to_binary")]
             pub fn i128_to_binary(value: i128) -> ImmutableString {
                 to_binary(value)

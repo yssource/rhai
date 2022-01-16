@@ -3,16 +3,23 @@
 use super::dynamic::{AccessMode, Variant};
 use crate::{Dynamic, Identifier, StaticVec};
 use smallvec::SmallVec;
-use std::iter::FromIterator;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-use std::{borrow::Cow, iter::Extend};
+use std::{
+    iter::{Extend, FromIterator},
+    marker::PhantomData,
+};
 
 /// Keep a number of entries inline (since [`Dynamic`] is usually small enough).
 const SCOPE_ENTRIES_INLINED: usize = 8;
 
 /// Type containing information about the current scope. Useful for keeping state between
 /// [`Engine`][crate::Engine] evaluation runs.
+///
+/// # Lifetime
+///
+/// Currently the lifetime parameter is not used, but it is not guaranteed to remain unused for
+/// future versions. Until then, `'static` can be used.
 ///
 /// # Thread Safety
 ///
@@ -47,7 +54,7 @@ const SCOPE_ENTRIES_INLINED: usize = 8;
 //
 // [`Scope`] is implemented as two [`Vec`]'s of exactly the same length.  Variables data (name,
 // type, etc.) is manually split into two equal-length arrays.  That's because variable names take
-// up the most space, with [`Cow<str>`][Cow] being four words long, but in the vast majority of
+// up the most space, with [`Identifier`] being four words long, but in the vast majority of
 // cases the name is NOT used to look up a variable.  Variable lookup is usually via direct
 // indexing, by-passing the name altogether.
 //
@@ -58,25 +65,30 @@ pub struct Scope<'a> {
     /// Current value of the entry.
     values: SmallVec<[Dynamic; SCOPE_ENTRIES_INLINED]>,
     /// (Name, aliases) of the entry.
-    names: SmallVec<[(Cow<'a, str>, Option<Box<StaticVec<Identifier>>>); SCOPE_ENTRIES_INLINED]>,
+    names: SmallVec<[(Identifier, Option<Box<StaticVec<Identifier>>>); SCOPE_ENTRIES_INLINED]>,
+    /// Phantom to keep the lifetime parameter in order not to break existing code.
+    phantom: PhantomData<&'a ()>,
 }
 
-impl<'a> IntoIterator for Scope<'a> {
-    type Item = (Cow<'a, str>, Dynamic);
-    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
+impl IntoIterator for Scope<'_> {
+    type Item = (String, Dynamic, Vec<Identifier>);
+    type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
-        Box::new(
-            self.values
-                .into_iter()
-                .zip(self.names.into_iter())
-                .map(|(value, (name, _))| (name, value)),
-        )
+        Box::new(self.values.into_iter().zip(self.names.into_iter()).map(
+            |(value, (name, alias))| {
+                (
+                    name.into(),
+                    value,
+                    alias.map(|a| a.to_vec()).unwrap_or_default(),
+                )
+            },
+        ))
     }
 }
 
-impl<'a> Scope<'a> {
+impl Scope<'_> {
     /// Create a new [`Scope`].
     ///
     /// # Example
@@ -95,6 +107,7 @@ impl<'a> Scope<'a> {
         Self {
             values: SmallVec::new_const(),
             names: SmallVec::new_const(),
+            phantom: PhantomData,
         }
     }
     /// Empty the [`Scope`].
@@ -171,11 +184,7 @@ impl<'a> Scope<'a> {
     /// assert_eq!(my_scope.get_value::<i64>("x").expect("x should exist"), 42);
     /// ```
     #[inline(always)]
-    pub fn push(
-        &mut self,
-        name: impl Into<Cow<'a, str>>,
-        value: impl Variant + Clone,
-    ) -> &mut Self {
+    pub fn push(&mut self, name: impl Into<Identifier>, value: impl Variant + Clone) -> &mut Self {
         self.push_dynamic_value(name, AccessMode::ReadWrite, Dynamic::from(value))
     }
     /// Add (push) a new [`Dynamic`] entry to the [`Scope`].
@@ -191,7 +200,7 @@ impl<'a> Scope<'a> {
     /// assert_eq!(my_scope.get_value::<i64>("x").expect("x should exist"), 42);
     /// ```
     #[inline(always)]
-    pub fn push_dynamic(&mut self, name: impl Into<Cow<'a, str>>, value: Dynamic) -> &mut Self {
+    pub fn push_dynamic(&mut self, name: impl Into<Identifier>, value: Dynamic) -> &mut Self {
         self.push_dynamic_value(name, value.access_mode(), value)
     }
     /// Add (push) a new constant to the [`Scope`].
@@ -212,7 +221,7 @@ impl<'a> Scope<'a> {
     #[inline(always)]
     pub fn push_constant(
         &mut self,
-        name: impl Into<Cow<'a, str>>,
+        name: impl Into<Identifier>,
         value: impl Variant + Clone,
     ) -> &mut Self {
         self.push_dynamic_value(name, AccessMode::ReadOnly, Dynamic::from(value))
@@ -235,7 +244,7 @@ impl<'a> Scope<'a> {
     #[inline(always)]
     pub fn push_constant_dynamic(
         &mut self,
-        name: impl Into<Cow<'a, str>>,
+        name: impl Into<Identifier>,
         value: Dynamic,
     ) -> &mut Self {
         self.push_dynamic_value(name, AccessMode::ReadOnly, value)
@@ -244,7 +253,7 @@ impl<'a> Scope<'a> {
     #[inline]
     pub(crate) fn push_dynamic_value(
         &mut self,
-        name: impl Into<Cow<'a, str>>,
+        name: impl Into<Identifier>,
         access: AccessMode,
         mut value: Dynamic,
     ) -> &mut Self {
@@ -301,7 +310,7 @@ impl<'a> Scope<'a> {
     #[inline]
     #[must_use]
     pub fn contains(&self, name: &str) -> bool {
-        self.names.iter().any(|(key, _)| name == key.as_ref())
+        self.names.iter().any(|(key, _)| name == key)
     }
     /// Find an entry in the [`Scope`], starting from the last.
     #[inline]
@@ -314,7 +323,7 @@ impl<'a> Scope<'a> {
             .rev() // Always search a Scope in reverse order
             .enumerate()
             .find_map(|(i, (key, _))| {
-                if name == key.as_ref() {
+                if name == key {
                     let index = len - 1 - i;
                     Some((index, self.values[index].access_mode()))
                 } else {
@@ -343,7 +352,7 @@ impl<'a> Scope<'a> {
             .iter()
             .rev()
             .enumerate()
-            .find(|(_, (key, _))| name == key.as_ref())
+            .find(|(_, (key, _))| name == key)
             .and_then(|(index, _)| self.values[len - 1 - index].flatten_clone().try_cast())
     }
     /// Check if the named entry in the [`Scope`] is constant.
@@ -398,7 +407,7 @@ impl<'a> Scope<'a> {
     #[inline]
     pub fn set_or_push(
         &mut self,
-        name: impl AsRef<str> + Into<Cow<'a, str>>,
+        name: impl AsRef<str> + Into<Identifier>,
         value: impl Variant + Clone,
     ) -> &mut Self {
         match self.get_index(name.as_ref()) {
@@ -437,7 +446,7 @@ impl<'a> Scope<'a> {
     #[inline]
     pub fn set_value(
         &mut self,
-        name: impl AsRef<str> + Into<Cow<'a, str>>,
+        name: impl AsRef<str> + Into<Identifier>,
         value: impl Variant + Clone,
     ) -> &mut Self {
         match self.get_index(name.as_ref()) {
@@ -535,9 +544,7 @@ impl<'a> Scope<'a> {
     /// Get an iterator to entries in the [`Scope`].
     #[inline]
     #[allow(dead_code)]
-    pub(crate) fn into_iter(
-        self,
-    ) -> impl Iterator<Item = (Cow<'a, str>, Dynamic, Vec<Identifier>)> {
+    pub(crate) fn into_iter(self) -> impl Iterator<Item = (Identifier, Dynamic, Vec<Identifier>)> {
         self.names
             .into_iter()
             .zip(self.values.into_iter())
@@ -597,7 +604,7 @@ impl<'a> Scope<'a> {
     }
 }
 
-impl<'a, K: Into<Cow<'a, str>>> Extend<(K, Dynamic)> for Scope<'a> {
+impl<K: Into<Identifier>> Extend<(K, Dynamic)> for Scope<'_> {
     #[inline]
     fn extend<T: IntoIterator<Item = (K, Dynamic)>>(&mut self, iter: T) {
         iter.into_iter().for_each(|(name, value)| {
@@ -606,7 +613,7 @@ impl<'a, K: Into<Cow<'a, str>>> Extend<(K, Dynamic)> for Scope<'a> {
     }
 }
 
-impl<'a, K: Into<Cow<'a, str>>> FromIterator<(K, Dynamic)> for Scope<'a> {
+impl<K: Into<Identifier>> FromIterator<(K, Dynamic)> for Scope<'_> {
     #[inline]
     fn from_iter<T: IntoIterator<Item = (K, Dynamic)>>(iter: T) -> Self {
         let mut scope = Self::new();
@@ -615,7 +622,7 @@ impl<'a, K: Into<Cow<'a, str>>> FromIterator<(K, Dynamic)> for Scope<'a> {
     }
 }
 
-impl<'a, K: Into<Cow<'a, str>>> Extend<(K, bool, Dynamic)> for Scope<'a> {
+impl<K: Into<Identifier>> Extend<(K, bool, Dynamic)> for Scope<'_> {
     #[inline]
     fn extend<T: IntoIterator<Item = (K, bool, Dynamic)>>(&mut self, iter: T) {
         iter.into_iter().for_each(|(name, is_constant, value)| {
@@ -632,7 +639,7 @@ impl<'a, K: Into<Cow<'a, str>>> Extend<(K, bool, Dynamic)> for Scope<'a> {
     }
 }
 
-impl<'a, K: Into<Cow<'a, str>>> FromIterator<(K, bool, Dynamic)> for Scope<'a> {
+impl<K: Into<Identifier>> FromIterator<(K, bool, Dynamic)> for Scope<'_> {
     #[inline]
     fn from_iter<T: IntoIterator<Item = (K, bool, Dynamic)>>(iter: T) -> Self {
         let mut scope = Self::new();

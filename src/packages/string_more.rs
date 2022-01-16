@@ -73,6 +73,15 @@ mod string_functions {
         string
     }
 
+    /// Return the length of the string, in number of characters.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "朝には紅顔ありて夕べには白骨となる";
+    ///
+    /// print(text.len);        // prints 17
+    /// ```
     #[rhai_fn(name = "len", get = "len")]
     pub fn len(string: &str) -> INT {
         if string.is_empty() {
@@ -81,6 +90,15 @@ mod string_functions {
             string.chars().count() as INT
         }
     }
+    /// Return the length of the string, in number of bytes used to store it in UTF-8 encoding.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "朝には紅顔ありて夕べには白骨となる";
+    ///
+    /// print(text.bytes);      // prints 51
+    /// ```
     #[rhai_fn(name = "bytes", get = "bytes")]
     pub fn bytes(string: &str) -> INT {
         if string.is_empty() {
@@ -89,18 +107,59 @@ mod string_functions {
             string.len() as INT
         }
     }
+    /// Remove all occurrences of a sub-string from the string.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world! hello, foobar!";
+    ///
+    /// text.remove("hello");
+    ///
+    /// print(text);        // prints ", world! , foobar!"
+    /// ```
     pub fn remove(string: &mut ImmutableString, sub_string: ImmutableString) {
         *string -= sub_string;
     }
+    /// Remove all occurrences of a character from the string.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world! hello, foobar!";
+    ///
+    /// text.remove("o");
+    ///
+    /// print(text);        // prints "hell, wrld! hell, fbar!"
+    /// ```
     #[rhai_fn(name = "remove")]
     pub fn remove_char(string: &mut ImmutableString, character: char) {
         *string -= character;
     }
+    /// Clear the string, making it empty.
     pub fn clear(string: &mut ImmutableString) {
         if !string.is_empty() {
             string.make_mut().clear();
         }
     }
+    /// Cut off the string at the specified number of characters.
+    ///
+    /// * If `len` ≤ 0, the string is cleared.
+    /// * If `len` ≥ length of string, the string is not truncated.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world! hello, foobar!";
+    ///
+    /// text.truncate(13);
+    ///
+    /// print(text);    // prints "hello, world!"
+    ///
+    /// x.truncate(10);
+    ///
+    /// print(text);    // prints "hello, world!"
+    /// ```
     pub fn truncate(string: &mut ImmutableString, len: INT) {
         if len > 0 {
             let chars: StaticVec<_> = string.chars().collect();
@@ -111,6 +170,15 @@ mod string_functions {
             string.make_mut().clear();
         }
     }
+    /// Remove whitespace characters from both ends of the string.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "   hello     ";
+    ///
+    /// print(text.trim());     // prints "hello"
+    /// ```
     pub fn trim(string: &mut ImmutableString) {
         let trimmed = string.trim();
 
@@ -118,6 +186,19 @@ mod string_functions {
             *string = trimmed.to_string().into();
         }
     }
+    /// Remove the last character from the string and return it.
+    ///
+    /// If the string is empty, `()` is returned.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world!";
+    ///
+    /// print(text.pop());      // prints '!'
+    ///
+    /// print(text);            // prints "hello, world"
+    /// ```
     pub fn pop(string: &mut ImmutableString) -> Dynamic {
         if string.is_empty() {
             Dynamic::UNIT
@@ -128,6 +209,21 @@ mod string_functions {
             }
         }
     }
+    /// Remove the a specified number of characters from the end of the string and return it as a
+    /// new string.
+    ///
+    /// * If `len` ≤ 0, the string is not modified and an empty string is returned.
+    /// * If `len` ≥ length of string, the string is cleared and the entire string returned.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world!";
+    ///
+    /// print(text.pop(4));     // prints "rld!"
+    ///
+    /// print(text);            // prints "hello, wo"
+    /// ```
     #[rhai_fn(name = "pop")]
     pub fn pop_string(
         ctx: NativeCallContext,
@@ -150,6 +246,17 @@ mod string_functions {
         chars.into_iter().rev().collect::<SmartString>().into()
     }
 
+    /// Convert the string to all upper-case and return it as a new string.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world!"
+    ///
+    /// print(text.to_upper());     // prints "HELLO, WORLD!"
+    ///
+    /// print(text);                // prints "hello, world!"
+    /// ```
     pub fn to_upper(string: ImmutableString) -> ImmutableString {
         if string.is_empty() {
             string
@@ -157,11 +264,33 @@ mod string_functions {
             string.to_uppercase().into()
         }
     }
+    /// Convert the string to all upper-case.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world!"
+    ///
+    /// text.make_upper();
+    ///
+    /// print(text);        // prints "HELLO, WORLD!";
+    /// ```
     pub fn make_upper(string: &mut ImmutableString) {
         if !string.is_empty() {
             *string = string.to_uppercase().into();
         }
     }
+    /// Convert the string to all lower-case and return it as a new string.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "HELLO, WORLD!"
+    ///
+    /// print(text.to_lower());     // prints "hello, world!"
+    ///
+    /// print(text);                // prints "HELLO, WORLD!"
+    /// ```
     pub fn to_lower(string: ImmutableString) -> ImmutableString {
         if string.is_empty() {
             string
@@ -169,12 +298,34 @@ mod string_functions {
             string.to_lowercase().into()
         }
     }
+    /// Convert the string to all lower-case.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "HELLO, WORLD!"
+    ///
+    /// text.make_lower();
+    ///
+    /// print(text);        // prints "hello, world!";
+    /// ```
     pub fn make_lower(string: &mut ImmutableString) {
         if !string.is_empty() {
             *string = string.to_lowercase().into();
         }
     }
 
+    /// Convert the character to upper-case and return it as a new character.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let ch = 'a';
+    ///
+    /// print(ch.to_upper());       // prints 'A'
+    ///
+    /// print(ch);                  // prints 'a'
+    /// ```
     #[rhai_fn(name = "to_upper")]
     pub fn to_upper_char(character: char) -> char {
         let mut stream = character.to_uppercase();
@@ -185,10 +336,32 @@ mod string_functions {
             ch
         }
     }
+    /// Convert the character to upper-case.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let ch = 'a';
+    ///
+    /// ch.make_upper();
+    ///
+    /// print(ch);          // prints 'A'
+    /// ```
     #[rhai_fn(name = "make_upper")]
     pub fn make_upper_char(character: &mut char) {
         *character = to_upper_char(*character)
     }
+    /// Convert the character to lower-case and return it as a new character.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let ch = 'A';
+    ///
+    /// print(ch.to_lower());       // prints 'a'
+    ///
+    /// print(ch);                  // prints 'A'
+    /// ```
     #[rhai_fn(name = "to_lower")]
     pub fn to_lower_char(character: char) -> char {
         let mut stream = character.to_lowercase();
@@ -199,11 +372,41 @@ mod string_functions {
             ch
         }
     }
+    /// Convert the character to lower-case.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let ch = 'A';
+    ///
+    /// ch.make_lower();
+    ///
+    /// print(ch);          // prints 'a'
+    /// ```
     #[rhai_fn(name = "make_lower")]
     pub fn make_lower_char(character: &mut char) {
         *character = to_lower_char(*character)
     }
 
+    /// Find the specified `character` in the string, starting from the specified `start` position,
+    /// and return the first index where it is found.
+    /// If the `character` is not found, `-1` is returned.
+    ///
+    /// * If `start` < 0, position counts from the end of the string (`-1` is the last character).
+    /// * If `start` < -length of string, position counts from the beginning of the string.
+    /// * If `start` ≥ length of string, `-1` is returned.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world!";
+    ///
+    /// print(text.index_of('l', 5));       // prints 10 (first index after 5)
+    ///
+    /// print(text.index_of('o', -7));      // prints 8
+    ///
+    /// print(text.index_of('x', 0));       // prints -1
+    /// ```
     #[rhai_fn(name = "index_of")]
     pub fn index_of_char_starting_from(string: &str, character: char, start: INT) -> INT {
         if string.is_empty() {
@@ -243,6 +446,18 @@ mod string_functions {
             .map(|index| string[0..start + index].chars().count() as INT)
             .unwrap_or(-1 as INT)
     }
+    /// Find the specified `character` in the string and return the first index where it is found.
+    /// If the `character` is not found, `-1` is returned.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world!";
+    ///
+    /// print(text.index_of('l'));      // prints 2 (first index)
+    ///
+    /// print(text.index_of('x'));      // prints -1
+    /// ```
     #[rhai_fn(name = "index_of")]
     pub fn index_of_char(string: &str, character: char) -> INT {
         if string.is_empty() {
@@ -254,6 +469,25 @@ mod string_functions {
                 .unwrap_or(-1 as INT)
         }
     }
+    /// Find the specified sub-string in the string, starting from the specified `start` position,
+    /// and return the first index where it is found.
+    /// If the sub-string is not found, `-1` is returned.
+    ///
+    /// * If `start` < 0, position counts from the end of the string (`-1` is the last character).
+    /// * If `start` < -length of string, position counts from the beginning of the string.
+    /// * If `start` ≥ length of string, `-1` is returned.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world! hello, foobar!";
+    ///
+    /// print(text.index_of("ll", 5));      // prints 16 (first index after 5)
+    ///
+    /// print(text.index_of("ll", -15));    // prints 16
+    ///
+    /// print(text.index_of("xx", 0));      // prints -1
+    /// ```
     #[rhai_fn(name = "index_of")]
     pub fn index_of_string_starting_from(string: &str, find_string: &str, start: INT) -> INT {
         if string.is_empty() {
@@ -293,6 +527,18 @@ mod string_functions {
             .map(|index| string[0..start + index].chars().count() as INT)
             .unwrap_or(-1 as INT)
     }
+    /// Find the specified `character` in the string and return the first index where it is found.
+    /// If the `character` is not found, `-1` is returned.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world! hello, foobar!";
+    ///
+    /// print(text.index_of("ll"));     // prints 2 (first index)
+    ///
+    /// print(text.index_of("xx:));     // prints -1
+    /// ```
     #[rhai_fn(name = "index_of")]
     pub fn index_of(string: &str, find_string: &str) -> INT {
         if string.is_empty() {
@@ -305,6 +551,15 @@ mod string_functions {
         }
     }
 
+    /// Copy an exclusive range of characters from the string and return it as a new string.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world!";
+    ///
+    /// print(text.sub_string(3..7));   // prints "lo, "
+    /// ```
     #[rhai_fn(name = "sub_string")]
     pub fn sub_string_range(
         ctx: NativeCallContext,
@@ -315,6 +570,15 @@ mod string_functions {
         let end = INT::max(range.end, start);
         sub_string(ctx, string, start, end - start)
     }
+    /// Copy an inclusive range of characters from the string and return it as a new string.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world!";
+    ///
+    /// print(text.sub_string(3..=7));  // prints "lo, w"
+    /// ```
     #[rhai_fn(name = "sub_string")]
     pub fn sub_string_inclusive_range(
         ctx: NativeCallContext,
@@ -325,6 +589,23 @@ mod string_functions {
         let end = INT::max(*range.end(), start);
         sub_string(ctx, string, start, end - start + 1)
     }
+    /// Copy a portion of the string and return it as a new string.
+    ///
+    /// * If `start` < 0, position counts from the end of the string (`-1` is the last character).
+    /// * If `start` < -length of string, position counts from the beginning of the string.
+    /// * If `start` ≥ length of string, an empty string is returned.
+    /// * If `len` ≤ 0, an empty string is returned.
+    /// * If `start` position + `len` ≥ length of string, entire portion of the string after the `start` position is copied and returned.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world!";
+    ///
+    /// print(text.sub_string(3, 4));   // prints "lo, "
+    ///
+    /// print(text.sub_string(-8, 3));  // prints ", w"
+    /// ```
     pub fn sub_string(
         ctx: NativeCallContext,
         string: &str,
@@ -374,6 +655,22 @@ mod string_functions {
             .collect::<String>()
             .into()
     }
+    /// Copy a portion of the string beginning at the `start` position till the end and return it as
+    /// a new string.
+    ///
+    /// * If `start` < 0, position counts from the end of the string (`-1` is the last character).
+    /// * If `start` < -length of string, the entire string is copied and returned.
+    /// * If `start` ≥ length of string, an empty string is returned.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world!";
+    ///
+    /// print(text.sub_string(5));      // prints ", world!"
+    ///
+    /// print(text.sub_string(-5));      // prints "orld!"
+    /// ```
     #[rhai_fn(name = "sub_string")]
     pub fn sub_string_starting_from(
         ctx: NativeCallContext,
@@ -388,18 +685,62 @@ mod string_functions {
         }
     }
 
+    /// Remove all characters from the string except those within an exclusive range.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world!";
+    ///
+    /// text.crop(2..8);
+    ///
+    /// print(text);        // prints "llo, w"
+    /// ```
     #[rhai_fn(name = "crop")]
     pub fn crop_range(string: &mut ImmutableString, range: ExclusiveRange) {
         let start = INT::max(range.start, 0);
         let end = INT::max(range.end, start);
         crop(string, start, end - start)
     }
+    /// Remove all characters from the string except those within an inclusive range.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world!";
+    ///
+    /// text.crop(2..=8);
+    ///
+    /// print(text);        // prints "llo, wo"
+    /// ```
     #[rhai_fn(name = "crop")]
     pub fn crop_inclusive_range(string: &mut ImmutableString, range: InclusiveRange) {
         let start = INT::max(*range.start(), 0);
         let end = INT::max(*range.end(), start);
         crop(string, start, end - start + 1)
     }
+
+    /// Remove all characters from the string except those within a range.
+    ///
+    /// * If `start` < 0, position counts from the end of the string (`-1` is the last character).
+    /// * If `start` < -length of string, position counts from the beginning of the string.
+    /// * If `start` ≥ length of string, the entire string is cleared.
+    /// * If `len` ≤ 0, the entire string is cleared.
+    /// * If `start` position + `len` ≥ length of string, only the portion of the string after the `start` position is retained.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world!";
+    ///
+    /// text.crop(2, 8);
+    ///
+    /// print(text);        // prints "llo, wor"
+    ///
+    /// text.crop(-5, 3);
+    ///
+    /// print(text);        // prints ", w"
+    /// ```
     #[rhai_fn(name = "crop")]
     pub fn crop(string: &mut ImmutableString, start: INT, len: INT) {
         if string.is_empty() {
@@ -443,17 +784,58 @@ mod string_functions {
         copy.clear();
         copy.extend(chars.iter().skip(offset).take(len));
     }
+    /// Remove all characters from the string except until the `start` position.
+    ///
+    /// * If `start` < 0, position counts from the end of the string (`-1` is the last character).
+    /// * If `start` < -length of string, the string is not modified.
+    /// * If `start` ≥ length of string, the entire string is cleared.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world!";
+    ///
+    /// text.crop(5);
+    ///
+    /// print(text);            // prints ", world!"
+    ///
+    /// text.crop(-3);
+    ///
+    /// print(text);            // prints "ld!"
+    /// ```
     #[rhai_fn(name = "crop")]
     pub fn crop_string_starting_from(string: &mut ImmutableString, start: INT) {
         crop(string, start, string.len() as INT);
     }
 
+    /// Replace all occurrences of the specified sub-string in the string with another string.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world! hello, foobar!";
+    ///
+    /// text.replace("hello", "hey");
+    ///
+    /// print(text);        // prints "hey, world! hey, foobar!"
+    /// ```
     #[rhai_fn(name = "replace")]
     pub fn replace(string: &mut ImmutableString, find_string: &str, substitute_string: &str) {
         if !string.is_empty() {
             *string = string.replace(find_string, substitute_string).into();
         }
     }
+    /// Replace all occurrences of the specified sub-string in the string with the specified character.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world! hello, foobar!";
+    ///
+    /// text.replace("hello", '*');
+    ///
+    /// print(text);        // prints "*, world! *, foobar!"
+    /// ```
     #[rhai_fn(name = "replace")]
     pub fn replace_string_with_char(
         string: &mut ImmutableString,
@@ -466,6 +848,17 @@ mod string_functions {
                 .into();
         }
     }
+    /// Replace all occurrences of the specified character in the string with another string.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world! hello, foobar!";
+    ///
+    /// text.replace('l', "(^)");
+    ///
+    /// print(text);        // prints "he(^)(^)o, wor(^)d! he(^)(^)o, foobar!"
+    /// ```
     #[rhai_fn(name = "replace")]
     pub fn replace_char_with_string(
         string: &mut ImmutableString,
@@ -478,6 +871,17 @@ mod string_functions {
                 .into();
         }
     }
+    /// Replace all occurrences of the specified character in the string with another character.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world! hello, foobar!";
+    ///
+    /// text.replace("l", '*');
+    ///
+    /// print(text);        // prints "he**o, wor*d! he**o, foobar!"
+    /// ```
     #[rhai_fn(name = "replace")]
     pub fn replace_char(
         string: &mut ImmutableString,
@@ -494,6 +898,23 @@ mod string_functions {
         }
     }
 
+    /// Pad the string to at least the specified number of characters with the specified `character`.
+    ///
+    /// If `len` ≤ length of string, no padding is done.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello";
+    ///
+    /// text.pad(8, '!');
+    ///
+    /// print(text);        // prints "hello!!!"
+    ///
+    /// text.pad(5, '*');
+    ///
+    /// print(text);        // prints "hello!!!"
+    /// ```
     #[rhai_fn(return_raw)]
     pub fn pad(
         ctx: NativeCallContext,
@@ -538,6 +959,23 @@ mod string_functions {
 
         Ok(())
     }
+    /// Pad the string to at least the specified number of characters with the specified string.
+    ///
+    /// If `len` ≤ length of string, no padding is done.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello";
+    ///
+    /// text.pad(10, "(!)");
+    ///
+    /// print(text);        // prints "hello(!)(!)"
+    ///
+    /// text.pad(8, '***');
+    ///
+    /// print(text);        // prints "hello(!)(!)"
+    /// ```
     #[rhai_fn(name = "pad", return_raw)]
     pub fn pad_with_string(
         ctx: NativeCallContext,
@@ -594,6 +1032,14 @@ mod string_functions {
     pub mod arrays {
         use crate::{Array, ImmutableString};
 
+        /// Return an array containing all the characters of the string.
+        ///
+        /// # Example
+        ///
+        /// ```rhai
+        /// let text = "hello";
+        ///
+        /// print(text.split());        // prints "['h', 'e', 'l', 'l', 'o']"
         #[rhai_fn(name = "split")]
         pub fn chars(string: &str) -> Array {
             if string.is_empty() {
@@ -602,10 +1048,32 @@ mod string_functions {
                 string.chars().map(Into::into).collect()
             }
         }
+        /// Split the string into two at the specified `index` position and return it both strings
+        /// as an array.
+        ///
+        /// The character at the `index` position (if any) is returned in the _second_ string.
+        ///
+        /// * If `index` < 0, position counts from the end of the string (`-1` is the last character).
+        /// * If `index` < -length of string, it is equivalent to cutting at position 0.
+        /// * If `index` ≥ length of string, it is equivalent to cutting at the end of the string.
+        ///
+        /// # Example
+        ///
+        /// ```rhai
+        /// let text = "hello, world!";
+        ///
+        /// print(text.split(6));       // prints ["hello,", " world!"]
+        ///
+        /// print(text.split(13));      // prints ["hello, world!", ""]
+        ///
+        /// print(text.split(-6));      // prints ["hello, ", "world!"]
+        ///
+        /// print(text.split(-99));     // prints ["", "hello, world!"]
+        /// ```
         #[rhai_fn(name = "split")]
-        pub fn split_at(ctx: NativeCallContext, string: ImmutableString, start: INT) -> Array {
-            if start <= 0 {
-                if let Some(n) = start.checked_abs() {
+        pub fn split_at(ctx: NativeCallContext, string: ImmutableString, index: INT) -> Array {
+            if index <= 0 {
+                if let Some(n) = index.checked_abs() {
                     let num_chars = string.chars().count();
                     if n as usize > num_chars {
                         vec![ctx.engine().const_empty_string().into(), string.into()]
@@ -618,41 +1086,127 @@ mod string_functions {
                     vec![ctx.engine().const_empty_string().into(), string.into()]
                 }
             } else {
-                let prefix: String = string.chars().take(start as usize).collect();
+                let prefix: String = string.chars().take(index as usize).collect();
                 let prefix_len = prefix.len();
                 vec![prefix.into(), string[prefix_len..].into()]
             }
         }
+        /// Split the string into segments based on a `delimiter` string, returning an array of the segments.
+        ///
+        /// # Example
+        ///
+        /// ```rhai
+        /// let text = "hello, world! hello, foo!";
+        ///
+        /// print(text.split("ll"));    // prints ["he", "o, world! he", "o, foo!"]
+        /// ```
         pub fn split(string: &str, delimiter: &str) -> Array {
             string.split(delimiter).map(Into::into).collect()
         }
+        /// Split the string into at most the specified number of `segments` based on a `delimiter` string,
+        /// returning an array of the segments.
+        ///
+        /// If `segments` < 1, only one segment is returned.
+        ///
+        /// # Example
+        ///
+        /// ```rhai
+        /// let text = "hello, world! hello, foo!";
+        ///
+        /// print(text.split("ll", 2));     // prints ["he", "o, world! hello, foo!"]
+        /// ```
         #[rhai_fn(name = "split")]
         pub fn splitn(string: &str, delimiter: &str, segments: INT) -> Array {
             let pieces: usize = if segments < 1 { 1 } else { segments as usize };
             string.splitn(pieces, delimiter).map(Into::into).collect()
         }
+        /// Split the string into segments based on a `delimiter` character, returning an array of the segments.
+        ///
+        /// # Example
+        ///
+        /// ```rhai
+        /// let text = "hello, world! hello, foo!";
+        ///
+        /// print(text.split('l'));     // prints ["he", "", "o, wor", "d! he", "", "o, foo!"]
+        /// ```
         #[rhai_fn(name = "split")]
         pub fn split_char(string: &str, delimiter: char) -> Array {
             string.split(delimiter).map(Into::into).collect()
         }
+        /// Split the string into at most the specified number of `segments` based on a `delimiter` character,
+        /// returning an array of the segments.
+        ///
+        /// If `segments` < 1, only one segment is returned.
+        ///
+        /// # Example
+        ///
+        /// ```rhai
+        /// let text = "hello, world! hello, foo!";
+        ///
+        /// print(text.split('l', 3));      // prints ["he", "", "o, world! hello, foo!"]
+        /// ```
         #[rhai_fn(name = "split")]
         pub fn splitn_char(string: &str, delimiter: char, segments: INT) -> Array {
             let pieces: usize = if segments < 1 { 1 } else { segments as usize };
             string.splitn(pieces, delimiter).map(Into::into).collect()
         }
+        /// Split the string into segments based on a `delimiter` string, returning an array of the
+        /// segments in _reverse_ order.
+        ///
+        /// # Example
+        ///
+        /// ```rhai
+        /// let text = "hello, world! hello, foo!";
+        ///
+        /// print(text.split_rev("ll"));    // prints ["o, foo!", "o, world! he", "he"]
+        /// ```
         #[rhai_fn(name = "split_rev")]
         pub fn rsplit(string: &str, delimiter: &str) -> Array {
             string.rsplit(delimiter).map(Into::into).collect()
         }
+        /// Split the string into at most a specified number of `segments` based on a `delimiter` string,
+        /// returning an array of the segments in _reverse_ order.
+        ///
+        /// If `segments` < 1, only one segment is returned.
+        ///
+        /// # Example
+        ///
+        /// ```rhai
+        /// let text = "hello, world! hello, foo!";
+        ///
+        /// print(text.split_rev("ll", 2));     // prints ["o, foo!", "hello, world! he"]
+        /// ```
         #[rhai_fn(name = "split_rev")]
         pub fn rsplitn(string: &str, delimiter: &str, segments: INT) -> Array {
             let pieces: usize = if segments < 1 { 1 } else { segments as usize };
             string.rsplitn(pieces, delimiter).map(Into::into).collect()
         }
+        /// Split the string into segments based on a `delimiter` character, returning an array of
+        /// the segments in _reverse_ order.
+        ///
+        /// # Example
+        ///
+        /// ```rhai
+        /// let text = "hello, world! hello, foo!";
+        ///
+        /// print(text.split_rev('l'));     // prints ["o, foo!", "", "d! he", "o, wor", "", "he"]
+        /// ```
         #[rhai_fn(name = "split_rev")]
         pub fn rsplit_char(string: &str, delimiter: char) -> Array {
             string.rsplit(delimiter).map(Into::into).collect()
         }
+        /// Split the string into at most the specified number of `segments` based on a `delimiter` character,
+        /// returning an array of the segments.
+        ///
+        /// If `segments` < 1, only one segment is returned.
+        ///
+        /// # Example
+        ///
+        /// ```rhai
+        /// let text = "hello, world! hello, foo!";
+        ///
+        /// print(text.split('l', 3));      // prints ["o, foo!", "", "hello, world! he"
+        /// ```
         #[rhai_fn(name = "split_rev")]
         pub fn rsplitn_char(string: &str, delimiter: char, segments: INT) -> Array {
             let pieces: usize = if segments < 1 { 1 } else { segments as usize };

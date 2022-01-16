@@ -12,7 +12,7 @@ use rhai::Array;
 use rhai::Map;
 #[cfg(not(feature = "no_float"))]
 use rhai::FLOAT;
-#[cfg(not(feature = "no_float"))]
+#[cfg(feature = "no_float")]
 #[cfg(feature = "decimal")]
 use rust_decimal::Decimal;
 
@@ -751,7 +751,7 @@ fn test_serde_json() -> serde_json::Result<()> {
 #[test]
 #[cfg(not(feature = "no_object"))]
 fn test_serde_optional() -> Result<(), Box<EvalAltResult>> {
-    #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     struct TestStruct {
         foo: Option<char>,
     }
@@ -773,6 +773,24 @@ fn test_serde_optional() -> Result<(), Box<EvalAltResult>> {
     let r = engine.eval::<Dynamic>("#{ }")?;
 
     assert_eq!(from_dynamic::<TestStruct>(&r)?, TestStruct { foo: None });
+
+    let ts = TestStruct { foo: Some('a') };
+
+    let r = to_dynamic(&ts)?;
+
+    let map = r.cast::<Map>();
+
+    assert_eq!(map.len(), 1);
+    assert_eq!(map.get("foo").unwrap().as_char().unwrap(), 'a');
+
+    let ts = TestStruct { foo: None };
+
+    let r = to_dynamic(&ts)?;
+
+    let map = r.cast::<Map>();
+
+    assert_eq!(map.len(), 1);
+    assert_eq!(map.get("foo").unwrap().as_unit().unwrap(), ());
 
     Ok(())
 }

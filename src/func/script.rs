@@ -4,7 +4,6 @@
 use super::call::FnCallArgs;
 use crate::ast::ScriptFnDef;
 use crate::eval::{EvalState, GlobalRuntimeState};
-use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::{Dynamic, Engine, Module, Position, RhaiError, RhaiResult, Scope, StaticVec, ERR};
 use std::mem;
 #[cfg(feature = "no_std")]
@@ -74,18 +73,10 @@ impl Engine {
         let orig_mods_len = global.num_imported_modules();
 
         // Put arguments into scope as variables
-        // Actually consume the arguments instead of cloning them
-        scope.extend(
-            fn_def
-                .params
-                .iter()
-                .zip(args.iter_mut().map(|v| mem::take(*v)))
-                .map(|(name, value)| {
-                    let var_name: std::borrow::Cow<'_, str> =
-                        unsafe_cast_var_name_to_lifetime(name).into();
-                    (var_name, value)
-                }),
-        );
+        scope.extend(fn_def.params.iter().cloned().zip(args.into_iter().map(|v| {
+            // Actually consume the arguments instead of cloning them
+            mem::take(*v)
+        })));
 
         // Merge in encapsulated environment, if any
         let mut lib_merged = StaticVec::with_capacity(lib.len() + 1);

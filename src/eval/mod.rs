@@ -12,4 +12,4 @@ pub use chaining::{ChainArgument, ChainType};
 pub use eval_context::EvalContext;
 pub use eval_state::EvalState;
 pub use global_state::GlobalRuntimeState;
-pub use target::Target;
+pub use target::{calc_index, calc_offset_len, Target};

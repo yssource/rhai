@@ -3,15 +3,11 @@
 use super::{EvalState, GlobalRuntimeState, Target};
 use crate::ast::{Expr, Ident, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
 use crate::func::get_hasher;
-use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::types::dynamic::{AccessMode, Union};
 use crate::{Dynamic, Engine, Module, Position, RhaiResult, RhaiResultOf, Scope, ERR, INT};
+use std::hash::{Hash, Hasher};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-use std::{
-    borrow::Cow,
-    hash::{Hash, Hasher},
-};
 
 impl Engine {
     /// Evaluate a statements block.
@@ -322,11 +318,10 @@ impl Engine {
                     if let Some(t) = table.get(&hash) {
                         if let Some(ref c) = t.0 {
                             if self
-                                .eval_expr(scope, global, state, lib, this_ptr, &c, level)
-                                .and_then(|v| {
-                                    v.as_bool().map_err(|typ| {
-                                        self.make_type_mismatch_err::<bool>(typ, c.position())
-                                    })
+                                .eval_expr(scope, global, state, lib, this_ptr, &c, level)?
+                                .as_bool()
+                                .map_err(|typ| {
+                                    self.make_type_mismatch_err::<bool>(typ, c.position())
                                 })?
                             {
                                 Some(&t.1)
@@ -349,11 +344,10 @@ impl Engine {
                         {
                             if let Some(c) = condition {
                                 if !self
-                                    .eval_expr(scope, global, state, lib, this_ptr, &c, level)
-                                    .and_then(|v| {
-                                        v.as_bool().map_err(|typ| {
-                                            self.make_type_mismatch_err::<bool>(typ, c.position())
-                                        })
+                                    .eval_expr(scope, global, state, lib, this_ptr, &c, level)?
+                                    .as_bool()
+                                    .map_err(|typ| {
+                                        self.make_type_mismatch_err::<bool>(typ, c.position())
                                     })?
                                 {
                                     continue;
@@ -466,7 +460,7 @@ impl Engine {
 
             // For loop
             Stmt::For(expr, x, _) => {
-                let (Ident { name, .. }, counter, statements) = x.as_ref();
+                let (Ident { name: var_name, .. }, counter, statements) = x.as_ref();
                 let iter_obj = self
                     .eval_expr(scope, global, state, lib, this_ptr, expr, level)?
                     .flatten();
@@ -494,24 +488,28 @@ impl Engine {
                     // Add the loop variables
                     let orig_scope_len = scope.len();
                     let counter_index = if let Some(counter) = counter {
-                        scope.push(unsafe_cast_var_name_to_lifetime(&counter.name), 0 as INT);
+                        scope.push(counter.name.clone(), 0 as INT);
                         scope.len() - 1
                     } else {
                         usize::MAX
                     };
-                    scope.push(unsafe_cast_var_name_to_lifetime(name), ());
+
+                    scope.push(var_name.clone(), ());
                     let index = scope.len() - 1;
+
+                    let mut loop_result = Ok(Dynamic::UNIT);
 
                     for (x, iter_value) in func(iter_obj).enumerate() {
                         // Increment counter
                         if counter_index < usize::MAX {
                             #[cfg(not(feature = "unchecked"))]
                             if x > INT::MAX as usize {
-                                return Err(ERR::ErrorArithmetic(
+                                loop_result = Err(ERR::ErrorArithmetic(
                                     format!("for-loop counter overflow: {}", x),
                                     counter.as_ref().expect("`Some`").pos,
                                 )
                                 .into());
+                                break;
                             }
 
                             let index_value = (x as INT).into();
@@ -548,7 +546,12 @@ impl Engine {
                         }
 
                         #[cfg(not(feature = "unchecked"))]
-                        self.inc_operations(&mut global.num_operations, statements.position())?;
+                        if let Err(err) =
+                            self.inc_operations(&mut global.num_operations, statements.position())
+                        {
+                            loop_result = Err(err);
+                            break;
+                        }
 
                         if statements.is_empty() {
                             continue;
@@ -563,13 +566,17 @@ impl Engine {
                             Err(err) => match *err {
                                 ERR::LoopBreak(false, _) => (),
                                 ERR::LoopBreak(true, _) => break,
-                                _ => return Err(err),
+                                _ => {
+                                    loop_result = Err(err);
+                                    break;
+                                }
                             },
                         }
                     }
 
                     scope.rewind(orig_scope_len);
-                    Ok(Dynamic::UNIT)
+
+                    loop_result
                 } else {
                     Err(ERR::ErrorFor(expr.position()).into())
                 }
@@ -582,7 +589,7 @@ impl Engine {
 
             // Try/Catch statement
             Stmt::TryCatch(x, _) => {
-                let (try_stmt, err_var, catch_stmt) = x.as_ref();
+                let (try_stmt, err_var_name, catch_stmt) = x.as_ref();
 
                 let result = self
                     .eval_stmt_block(scope, global, state, lib, this_ptr, try_stmt, true, level)
@@ -632,9 +639,9 @@ impl Engine {
 
                         let orig_scope_len = scope.len();
 
-                        err_var.as_ref().map(|Ident { name, .. }| {
-                            scope.push(unsafe_cast_var_name_to_lifetime(name), err_value)
-                        });
+                        err_var_name
+                            .as_ref()
+                            .map(|Ident { name, .. }| scope.push(name.clone(), err_value));
 
                         let result = self.eval_stmt_block(
                             scope, global, state, lib, this_ptr, catch_stmt, true, level,
@@ -685,7 +692,7 @@ impl Engine {
 
             // Let/const statement
             Stmt::Var(expr, x, options, _) => {
-                let name = &x.name;
+                let var_name = &x.name;
                 let entry_type = if options.contains(AST_OPTION_CONSTANT) {
                     AccessMode::ReadOnly
                 } else {
@@ -697,7 +704,7 @@ impl Engine {
                     .eval_expr(scope, global, state, lib, this_ptr, expr, level)?
                     .flatten();
 
-                let (var_name, _alias): (Cow<'_, str>, _) = if !rewind_scope {
+                let _alias = if !rewind_scope {
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(not(feature = "no_module"))]
                     if state.scope_level == 0
@@ -705,23 +712,26 @@ impl Engine {
                         && lib.iter().any(|&m| !m.is_empty())
                     {
                         // Add a global constant if at top level and there are functions
-                        global.set_constant(name.clone(), value.clone());
+                        global.set_constant(var_name.clone(), value.clone());
                     }
 
-                    (
-                        name.to_string().into(),
-                        if export { Some(name.clone()) } else { None },
-                    )
+                    if export {
+                        Some(var_name)
+                    } else {
+                        None
+                    }
                 } else if export {
                     unreachable!("exported variable not on global level");
                 } else {
-                    (unsafe_cast_var_name_to_lifetime(name).into(), None)
+                    None
                 };
 
-                scope.push_dynamic_value(var_name, entry_type, value);
+                scope.push_dynamic_value(var_name.clone(), entry_type, value);
 
                 #[cfg(not(feature = "no_module"))]
-                _alias.map(|alias| scope.add_entry_alias(scope.len() - 1, alias));
+                if let Some(alias) = _alias {
+                    scope.add_entry_alias(scope.len() - 1, alias.clone());
+                }
 
                 Ok(Dynamic::UNIT)
             }

@@ -242,6 +242,22 @@ impl ParseSettings {
     }
 }
 
+/// Make an anonymous function.
+#[cfg(not(feature = "no_function"))]
+#[inline]
+#[must_use]
+pub fn make_anonymous_fn(hash: u64) -> String {
+    format!("{}{:016x}", crate::engine::FN_ANONYMOUS, hash)
+}
+
+/// Is this function an anonymous function?
+#[cfg(not(feature = "no_function"))]
+#[inline(always)]
+#[must_use]
+pub fn is_anonymous_fn(fn_name: &str) -> bool {
+    fn_name.starts_with(crate::engine::FN_ANONYMOUS)
+}
+
 impl Expr {
     /// Convert a [`Variable`][Expr::Variable] into a [`Property`][Expr::Property].
     /// All other variants are untouched.
@@ -3253,7 +3269,7 @@ fn parse_anon_fn(
     params.iter().for_each(|p| p.hash(hasher));
     body.hash(hasher);
     let hash = hasher.finish();
-    let fn_name = state.get_identifier("", format!("{}{:016x}", crate::engine::FN_ANONYMOUS, hash));
+    let fn_name = state.get_identifier("", make_anonymous_fn(hash));
 
     // Define the function
     let script = ScriptFnDef {
