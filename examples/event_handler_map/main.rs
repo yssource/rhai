@@ -1,5 +1,8 @@
 //! Implementation of the Event Handler With State Pattern - Map Style
-use rhai::{Dynamic, Engine, Map, Scope, AST};
+use rhai::{Dynamic, Engine, Scope, AST};
+
+#[cfg(not(feature = "no_object"))]
+use rhai::Map;
 
 use std::io::{stdin, stdout, Write};
 
@@ -17,18 +20,25 @@ fn print_scope(scope: &Scope) {
         .iter_raw()
         .enumerate()
         .for_each(|(i, (name, constant, value))| {
+            #[cfg(not(feature = "no_closure"))]
+            let value_is_shared = if value.is_shared() { " (shared)" } else { "" };
+            #[cfg(feature = "no_closure")]
+            let value_is_shared = "";
+
             println!(
                 "[{}] {}{}{} = {:?}",
                 i + 1,
                 if constant { "const " } else { "" },
                 name,
-                if value.is_shared() { " (shared)" } else { "" },
+                value_is_shared,
                 *value.read_lock::<Dynamic>().unwrap(),
             )
         });
     println!();
 }
 
+#[cfg(not(feature = "no_function"))]
+#[cfg(not(feature = "no_object"))]
 pub fn main() {
     println!("Events Handler Example - Map Style");
     println!("==================================");
@@ -135,4 +145,9 @@ pub fn main() {
     }
 
     println!("Bye!");
+}
+
+#[cfg(any(feature = "no_function", feature = "no_object"))]
+pub fn main() {
+    panic!("This example does not run under 'no_function' or 'no_object'.")
 }

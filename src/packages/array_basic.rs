@@ -5,7 +5,7 @@ use crate::engine::OP_EQUALS;
 use crate::eval::{calc_index, calc_offset_len};
 use crate::plugin::*;
 use crate::{
-    def_package, Array, Dynamic, Engine, ExclusiveRange, FnPtr, InclusiveRange, NativeCallContext,
+    def_package, Array, Dynamic, ExclusiveRange, FnPtr, InclusiveRange, NativeCallContext,
     Position, RhaiResultOf, StaticVec, ERR, INT,
 };
 #[cfg(feature = "no_std")]
@@ -179,8 +179,8 @@ pub mod array_functions {
                 let mut arr_len = array.len();
                 let mut arr = Dynamic::from_array(mem::take(array));
 
-                let (mut a1, mut m1, mut s1) = Engine::calc_data_sizes(&arr, true);
-                let (a2, m2, s2) = Engine::calc_data_sizes(&item, true);
+                let (mut a1, mut m1, mut s1) = crate::Engine::calc_data_sizes(&arr, true);
+                let (a2, m2, s2) = crate::Engine::calc_data_sizes(&item, true);
 
                 {
                     let mut guard = arr.write_lock::<Array>().unwrap();
