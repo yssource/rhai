@@ -1,19 +1,6 @@
-#[cfg(any(not(feature = "serde"), feature = "no_object"))]
-fn main() {
-    println!("This example requires the 'serde' feature to run.");
-    println!("Try: cargo run --features serde --example serde");
-}
+#![cfg(feature = "serde")]
+#![cfg(not(feature = "no_object"))]
 
-#[cfg(feature = "serde")]
-#[cfg(not(feature = "no_object"))]
-fn main() {
-    example::ser();
-    println!();
-    example::de();
-}
-
-#[cfg(feature = "serde")]
-#[cfg(not(feature = "no_object"))]
 mod example {
     use rhai::serde::{from_dynamic, to_dynamic};
     use rhai::{Dynamic, Engine, Map};
@@ -87,4 +74,10 @@ mod example {
         );
         println!("Deserialized to struct: {:#?}", x);
     }
+}
+
+fn main() {
+    example::ser();
+    println!();
+    example::de();
 }

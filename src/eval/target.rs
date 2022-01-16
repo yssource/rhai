@@ -1,7 +1,7 @@
 //! Type to hold a mutable reference to the target of an evaluation.
 
 use crate::types::dynamic::Variant;
-use crate::{Dynamic, RhaiResultOf, INT};
+use crate::{Dynamic, RhaiResultOf};
 use std::ops::{Deref, DerefMut};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -11,8 +11,9 @@ use std::prelude::v1::*;
 // Negative starting positions count from the end.
 //
 // Values going over bounds are limited to the actual length.
-#[inline(always)]
-pub fn calc_offset_len(length: usize, start: INT, len: INT) -> (usize, usize) {
+#[inline]
+#[allow(dead_code)]
+pub fn calc_offset_len(length: usize, start: crate::INT, len: crate::INT) -> (usize, usize) {
     let start = if start < 0 {
         start.checked_abs().map_or(0, |positive_start| {
             length - usize::min(positive_start as usize, length)
@@ -39,10 +40,11 @@ pub fn calc_offset_len(length: usize, start: INT, len: INT) -> (usize, usize) {
 // Negative starting positions count from the end.
 //
 // Values going over bounds call the provided closure to return a default value or an error.
-#[inline(always)]
+#[inline]
+#[allow(dead_code)]
 pub fn calc_index<E>(
     length: usize,
-    start: INT,
+    start: crate::INT,
     negative_count_from_end: bool,
     err: impl Fn() -> Result<usize, E>,
 ) -> Result<usize, E> {

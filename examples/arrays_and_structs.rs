@@ -1,3 +1,6 @@
+#![cfg(not(feature = "no_index"))]
+#![cfg(not(feature = "no_object"))]
+
 use rhai::{Engine, EvalAltResult};
 
 #[derive(Debug, Clone)]
@@ -14,8 +17,6 @@ impl TestStruct {
     }
 }
 
-#[cfg(not(feature = "no_index"))]
-#[cfg(not(feature = "no_object"))]
 fn main() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
@@ -45,9 +46,4 @@ fn main() -> Result<(), Box<EvalAltResult>> {
     println!("{:?}", result);
 
     Ok(())
-}
-
-#[cfg(any(feature = "no_index", feature = "no_object"))]
-fn main() {
-    panic!("This example does not run under 'no_index' or 'no_object'.")
 }

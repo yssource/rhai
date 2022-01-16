@@ -1,5 +1,7 @@
 ///! This example registers a variety of functions that operate on strings.
 ///! Remember to use `ImmutableString` or `&str` instead of `String` as parameters.
+#![cfg(not(feature = "no_object"))]
+
 use rhai::{Engine, EvalAltResult, ImmutableString, Scope};
 use std::io::{stdin, stdout, Write};
 
@@ -64,10 +66,10 @@ fn main() -> Result<(), Box<EvalAltResult>> {
         engine.run_with_scope(
             &mut scope,
             r#"
-                display("Length", x.len());
+                display("Length", x.len);
                 x.trim();
                 display("Trimmed", x);
-                display("Trimmed Length", x.len());
+                display("Trimmed Length", x.len);
                 display("Index of \"!!!\"", x.index_of("!!!"));
             "#,
         )?;
