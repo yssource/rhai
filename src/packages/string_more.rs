@@ -551,6 +551,85 @@ mod string_functions {
         }
     }
 
+    /// Get the character at the `index` position in the string.
+    ///
+    /// * If `index` < 0, position counts from the end of the string (`-1` is the last character).
+    /// * If `index` < -length of string, zero is returned.
+    /// * If `index` ≥ length of string, zero is returned.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world!";
+    ///
+    /// print(text.get(0));     // prints 'h'
+    ///
+    /// print(text.get(-1));    // prints '!'
+    ///
+    /// print(text.get(99));    // prints empty (for '()')'
+    /// ```
+    pub fn get(string: &str, index: INT) -> Dynamic {
+        if index >= 0 {
+            string
+                .chars()
+                .nth(index as usize)
+                .map_or_else(|| Dynamic::UNIT, Into::into)
+        } else if let Some(abs_index) = index.checked_abs() {
+            // Count from end if negative
+            string
+                .chars()
+                .rev()
+                .nth((abs_index as usize) - 1)
+                .map_or_else(|| Dynamic::UNIT, Into::into)
+        } else {
+            Dynamic::UNIT
+        }
+    }
+    /// Set the `index` position in the string to a new `character`.
+    ///
+    /// * If `index` < 0, position counts from the end of the string (`-1` is the last character).
+    /// * If `index` < -length of string, the string is not modified.
+    /// * If `index` ≥ length of string, the string is not modified.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world!";
+    ///
+    /// text.set(3, 'x');
+    ///
+    /// print(text);     // prints "helxo, world!"
+    ///
+    /// text.set(-3, 'x');
+    ///
+    /// print(text);    // prints "hello, worxd!"
+    ///
+    /// text.set(99, 'x');
+    ///
+    /// print(text);    // prints "hello, worxd!"
+    /// ```
+    pub fn set(string: &mut ImmutableString, index: INT, character: char) {
+        if index >= 0 {
+            let index = index as usize;
+            *string = string
+                .chars()
+                .enumerate()
+                .map(|(i, ch)| if i == index { character } else { ch })
+                .collect();
+        } else if let Some(abs_index) = index.checked_abs() {
+            let string_len = string.chars().count();
+
+            if abs_index as usize <= string_len {
+                let index = string_len - (abs_index as usize);
+                *string = string
+                    .chars()
+                    .enumerate()
+                    .map(|(i, ch)| if i == index { character } else { ch })
+                    .collect();
+            }
+        }
+    }
+
     /// Copy an exclusive range of characters from the string and return it as a new string.
     ///
     /// # Example

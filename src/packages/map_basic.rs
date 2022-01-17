@@ -25,6 +25,51 @@ mod map_functions {
     pub fn len(map: &mut Map) -> INT {
         map.len() as INT
     }
+
+    /// Get the value of the `property` in the object map and return a copy.
+    ///
+    /// If `property` does not exist in the object map, `()` is returned.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let m = #{a: 1, b: 2, c: 3};
+    ///
+    /// print(m.get("b"));      // prints 2
+    ///
+    /// print(m.get("x"));      // prints empty (for '()')
+    /// ```
+    pub fn get(map: &mut Map, property: &str) -> Dynamic {
+        if map.is_empty() {
+            return Dynamic::UNIT;
+        }
+
+        map.get(property).cloned().unwrap_or(Dynamic::UNIT)
+    }
+    /// Set the value of the `property` in the object map to a new `value`.
+    ///
+    /// If `property` does not exist in the object map, it is added.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let m = #{a: 1, b: 2, c: 3};
+    ///
+    /// m.set("b", 42)'
+    ///
+    /// print(m);           // prints "#{a: 1, b: 42, c: 3}"
+    ///
+    /// x.set("x", 0);
+    ///
+    /// print(m);           // prints "#{a: 1, b: 42, c: 3, x: 0}"
+    /// ```
+    pub fn set(map: &mut Map, property: &str, value: Dynamic) {
+        if let Some(value_ref) = map.get_mut(property) {
+            *value_ref = value;
+        } else {
+            map.insert(property.into(), value);
+        }
+    }
     /// Clear the object map.
     pub fn clear(map: &mut Map) {
         if !map.is_empty() {
@@ -46,9 +91,9 @@ mod map_functions {
     ///
     /// print(m);       // prints "#{a:1, c:3}"
     /// ```
-    pub fn remove(map: &mut Map, name: ImmutableString) -> Dynamic {
+    pub fn remove(map: &mut Map, property: &str) -> Dynamic {
         if !map.is_empty() {
-            map.remove(name.as_str()).unwrap_or_else(|| Dynamic::UNIT)
+            map.remove(property).unwrap_or_else(|| Dynamic::UNIT)
         } else {
             Dynamic::UNIT
         }

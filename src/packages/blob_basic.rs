@@ -100,6 +100,75 @@ pub mod blob_functions {
     pub fn len(blob: &mut Blob) -> INT {
         blob.len() as INT
     }
+
+    /// Get the byte value at the `index` position in the BLOB.
+    ///
+    /// * If `index` < 0, position counts from the end of the BLOB (`-1` is the last element).
+    /// * If `index` < -length of BLOB, zero is returned.
+    /// * If `index` ≥ length of BLOB, zero is returned.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let b = blob();
+    ///
+    /// b += 1; b += 2; b += 3; b += 4; b += 5;
+    ///
+    /// print(b.get(0));        // prints 1
+    ///
+    /// print(b.get(-1));       // prints 5
+    ///
+    /// print(b.get(99));       // prints 0
+    /// ```
+    pub fn get(blob: &mut Blob, index: INT) -> INT {
+        if blob.is_empty() {
+            return 0;
+        }
+
+        let (index, _) = calc_offset_len(blob.len(), index, 0);
+
+        if index >= blob.len() {
+            0
+        } else {
+            blob[index] as INT
+        }
+    }
+    /// Set the particular `index` position in the BLOB to a new byte `value`.
+    ///
+    /// * If `index` < 0, position counts from the end of the BLOB (`-1` is the last byte).
+    /// * If `index` < -length of BLOB, the BLOB is not modified.
+    /// * If `index` ≥ length of BLOB, the BLOB is not modified.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let b = blob();
+    ///
+    /// b += 1; b += 2; b += 3; b += 4; b += 5;
+    ///
+    /// b.set(0, 0x42);
+    ///
+    /// print(b);           // prints "[4202030405]"
+    ///
+    /// b.set(-3, 0);
+    ///
+    /// print(b);           // prints "[4202000405]"
+    ///
+    /// b.set(99, 123);
+    ///
+    /// print(b);           // prints "[4202000405]"
+    /// ```
+    pub fn set(blob: &mut Blob, index: INT, value: INT) {
+        if blob.is_empty() {
+            return;
+        }
+
+        let (index, _) = calc_offset_len(blob.len(), index, 0);
+
+        if index < blob.len() {
+            blob[index] = (value & 0x000000ff) as u8;
+        }
+    }
     /// Add a new byte `value` to the end of the BLOB.
     ///
     /// Only the lower 8 bits of the `value` are used; all other bits are ignored.
@@ -114,8 +183,7 @@ pub mod blob_functions {
     /// print(b);       // prints "[42]"
     /// ```
     pub fn push(blob: &mut Blob, value: INT) {
-        let value = (value & 0x000000ff) as u8;
-        blob.push(value);
+        blob.push((value & 0x000000ff) as u8);
     }
     /// Add another BLOB to the end of the BLOB.
     ///

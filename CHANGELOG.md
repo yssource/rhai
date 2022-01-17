@@ -22,6 +22,7 @@ Enhancements
 * Formatting of return types in functions metadata info is improved.
 * Use `SmartString` for `Scope` variable names and remove `unsafe` lifetime casting.
 * Functions in the standard library now have doc-comments (which can be obtained via `Engine::gen_fn_metadata_to_json`).
+* `get` and `set` methods are added to arrays, BLOB's, object maps and strings.
 
 
 Version 1.4.0

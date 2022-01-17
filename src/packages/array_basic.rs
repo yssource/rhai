@@ -31,6 +31,70 @@ pub mod array_functions {
     pub fn len(array: &mut Array) -> INT {
         array.len() as INT
     }
+    /// Get a copy of the element at the `index` position in the array.
+    ///
+    /// * If `index` < 0, position counts from the end of the array (`-1` is the last element).
+    /// * If `index` < -length of array, `()` is returned.
+    /// * If `index` ≥ length of array, `()` is returned.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let x = [1, 2, 3];
+    ///
+    /// print(x.get(0));        // prints 1
+    ///
+    /// print(x.get(-1));       // prints 3
+    ///
+    /// print(x.get(99));       // prints empty (for '()')
+    /// ```
+    pub fn get(array: &mut Array, index: INT) -> Dynamic {
+        if array.is_empty() {
+            return Dynamic::UNIT;
+        }
+
+        let (index, _) = calc_offset_len(array.len(), index, 0);
+
+        if index >= array.len() {
+            Dynamic::UNIT
+        } else {
+            array[index].clone()
+        }
+    }
+    /// Set the element at the `index` position in the array to a new `value`.
+    ///
+    /// * If `index` < 0, position counts from the end of the array (`-1` is the last element).
+    /// * If `index` < -length of array, the array is not modified.
+    /// * If `index` ≥ length of array, the array is not modified.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let x = [1, 2, 3];
+    ///
+    /// x.set(0, 42);
+    ///
+    /// print(x);           // prints "[42, 2, 3]"
+    ///
+    /// x.set(-3, 0);
+    ///
+    /// print(x);           // prints "[0, 2, 3]"
+    ///
+    /// x.set(99, 123);
+    ///
+    /// print(x);           // prints "[0, 2, 3]"
+    /// ```
+    pub fn set(array: &mut Array, index: INT, value: Dynamic) {
+        if array.is_empty() {
+            return;
+        }
+
+        let (index, _) = calc_offset_len(array.len(), index, 0);
+
+        if index < array.len() {
+            array[index] = value;
+        }
+    }
     /// Add a new element, which is not another array, to the end of the array.
     ///
     /// If `item` is `Array`, then `append` is more specific and will be called instead.
