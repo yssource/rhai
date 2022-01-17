@@ -1594,7 +1594,7 @@ fn get_next_token_inner(
                         eat_next(stream, pos);
                         pos.new_line();
                         // `\r\n
-                        if stream.peek_next().map(|ch| ch == '\n').unwrap_or(false) {
+                        if let Some('\n') = stream.peek_next() {
                             eat_next(stream, pos);
                         }
                     }
@@ -1761,6 +1761,14 @@ fn get_next_token_inner(
                 };
 
                 while let Some(c) = stream.get_next() {
+                    if c == '\r' {
+                        pos.new_line();
+                        // \r\n
+                        if let Some('\n') = stream.peek_next() {
+                            eat_next(stream, pos);
+                        }
+                        break;
+                    }
                     if c == '\n' {
                         pos.new_line();
                         break;

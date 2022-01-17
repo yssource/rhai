@@ -16,6 +16,7 @@ Bug fixes
 * `remove` for arrays and BLOB's now treat negative index correctly.
 * `parse_int` now works properly for negative numbers.
 * `Engine::gen_fn_signatures` now generates signatures for external packages registered via `Engine::register_global_module`.
+* `\r\n` pairs are now recognized correctly for doc-comments.
 
 Enhancements
 ------------
