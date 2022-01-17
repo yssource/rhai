@@ -155,6 +155,13 @@ fn main() {
         engine.set_module_resolver(resolver);
     }
 
+    engine
+        .register_fn("test", |x: rhai::INT, y: rhai::INT| format!("{} {}", x, y))
+        .register_fn("test", |x: &mut rhai::INT, y: rhai::INT, z: &str| {
+            *x += y;
+            println!("{} {} {}", x, y, z);
+        });
+
     // Make Engine immutable
     let engine = engine;
 
