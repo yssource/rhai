@@ -101,7 +101,7 @@ impl FuncInfo {
         match typ {
             "" | "()" => "".into(),
             RHAI_RESULT_TYPE => RHAI_RESULT_TYPE_EXPAND.into(),
-            ty if ty.starts_with(RHAI_RESULT_OF_TYPE) && ty.ends_with(">") => {
+            ty if ty.starts_with(RHAI_RESULT_OF_TYPE) && ty.ends_with('>') => {
                 RHAI_RESULT_OF_TYPE_EXPAND
                     .replace("{}", ty[RHAI_RESULT_OF_TYPE.len()..ty.len() - 1].trim())
                     .into()
