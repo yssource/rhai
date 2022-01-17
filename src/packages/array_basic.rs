@@ -1993,7 +1993,7 @@ pub mod array_functions {
     ) -> RhaiResultOf<Array> {
         drain(ctx, array, FnPtr::new(filter)?)
     }
-    /// Remove all elements in the array within an exclusive range and return them as a new array.
+    /// Remove all elements in the array within an exclusive `range` and return them as a new array.
     ///
     /// # Example
     ///
@@ -2018,7 +2018,7 @@ pub mod array_functions {
         let end = INT::max(range.end, start);
         drain_range(array, start, end - start)
     }
-    /// Remove all elements in the array within an inclusive range and return them as a new array.
+    /// Remove all elements in the array within an inclusive `range` and return them as a new array.
     ///
     /// # Example
     ///
@@ -2189,7 +2189,7 @@ pub mod array_functions {
     ) -> RhaiResultOf<Array> {
         retain(ctx, array, FnPtr::new(filter)?)
     }
-    /// Remove all elements in the array not within an exclusive range and return them as a new array.
+    /// Remove all elements in the array not within an exclusive `range` and return them as a new array.
     ///
     /// # Example
     ///
@@ -2214,7 +2214,7 @@ pub mod array_functions {
         let end = INT::max(range.end, start);
         retain_range(array, start, end - start)
     }
-    /// Remove all elements in the array not within an inclusive range and return them as a new array.
+    /// Remove all elements in the array not within an inclusive `range` and return them as a new array.
     ///
     /// # Example
     ///

@@ -764,7 +764,7 @@ mod string_functions {
         }
     }
 
-    /// Remove all characters from the string except those within an exclusive range.
+    /// Remove all characters from the string except those within an exclusive `range`.
     ///
     /// # Example
     ///
@@ -781,7 +781,7 @@ mod string_functions {
         let end = INT::max(range.end, start);
         crop(string, start, end - start)
     }
-    /// Remove all characters from the string except those within an inclusive range.
+    /// Remove all characters from the string except those within an inclusive `range`.
     ///
     /// # Example
     ///
