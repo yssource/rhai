@@ -15,6 +15,7 @@ Bug fixes
 * Missing `to_hex`, `to_octal` and `to_binary` for `i128` and `u128` are added.
 * `remove` for arrays and BLOB's now treat negative index correctly.
 * `parse_int` now works properly for negative numbers.
+* `Engine::gen_fn_signatures` now generates signatures for external packages registered via `Engine::register_global_module`.
 
 Enhancements
 ------------

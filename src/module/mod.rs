@@ -182,11 +182,6 @@ impl FuncInfo {
                 .collect();
             sig.push_str(&params.join(", "));
             sig.push(')');
-
-            if !return_type.is_empty() {
-                sig.push_str(" -> ");
-                sig.push_str(&return_type);
-            }
         } else {
             for x in 0..self.metadata.params {
                 sig.push('_');
@@ -194,17 +189,12 @@ impl FuncInfo {
                     sig.push_str(", ");
                 }
             }
-
             sig.push(')');
+        }
 
-            if !self.func.is_script() {
-                sig.push(')');
-
-                if !return_type.is_empty() {
-                    sig.push_str(" -> ");
-                    sig.push_str(&return_type);
-                }
-            }
+        if !self.func.is_script() && !return_type.is_empty() {
+            sig.push_str(" -> ");
+            sig.push_str(&return_type);
         }
 
         sig
@@ -596,7 +586,7 @@ impl Module {
                     #[cfg(feature = "metadata")]
                     params_info,
                     #[cfg(feature = "metadata")]
-                    return_type: "Dynamic".into(),
+                    return_type: "".into(),
                     #[cfg(feature = "metadata")]
                     comments: None,
                 },

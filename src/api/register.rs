@@ -1027,7 +1027,8 @@ impl Engine {
     /// Functions from the following sources are included, in order:
     /// 1) Functions registered into the global namespace
     /// 2) Functions in registered sub-modules
-    /// 3) Functions in packages (optional)
+    /// 3) Functions in registered packages
+    /// 4) Functions in standard packages (optional)
     #[cfg(feature = "metadata")]
     #[inline]
     #[must_use]
@@ -1040,14 +1041,13 @@ impl Engine {
             signatures.extend(m.gen_fn_signatures().map(|f| format!("{}::{}", name, f)))
         });
 
-        if include_packages {
-            signatures.extend(
-                self.global_modules
-                    .iter()
-                    .skip(1)
-                    .flat_map(|m| m.gen_fn_signatures()),
-            );
-        }
+        signatures.extend(
+            self.global_modules
+                .iter()
+                .skip(1)
+                .filter(|m| !m.internal && (include_packages || !m.standard))
+                .flat_map(|m| m.gen_fn_signatures()),
+        );
 
         signatures
     }

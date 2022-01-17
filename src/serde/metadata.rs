@@ -196,11 +196,12 @@ impl Engine {
     /// 1) Functions defined in an [`AST`][crate::AST]
     /// 2) Functions registered into the global namespace
     /// 3) Functions in static modules
-    /// 4) Functions in global modules (optional)
+    /// 4) Functions in registered global packages
+    /// 5) Functions in standard packages (optional)
     pub fn gen_fn_metadata_with_ast_to_json(
         &self,
         ast: &AST,
-        include_global: bool,
+        include_packages: bool,
     ) -> serde_json::Result<String> {
         let _ast = ast;
         let mut global = ModuleMetadata::new();
@@ -211,14 +212,20 @@ impl Engine {
 
         self.global_modules
             .iter()
-            .take(if include_global { usize::MAX } else { 1 })
+            .filter(|m| include_packages || !m.standard)
             .flat_map(|m| m.iter_fn())
-            .for_each(|f| global.functions.push(f.into()));
+            .for_each(|f| {
+                let mut meta: FnMetadata = f.into();
+                meta.namespace = FnNamespace::Global;
+                global.functions.push(meta);
+            });
 
         #[cfg(not(feature = "no_function"))]
-        _ast.shared_lib()
-            .iter_fn()
-            .for_each(|f| global.functions.push(f.into()));
+        _ast.shared_lib().iter_fn().for_each(|f| {
+            let mut meta: FnMetadata = f.into();
+            meta.namespace = FnNamespace::Global;
+            global.functions.push(meta);
+        });
 
         global.functions.sort();
 
@@ -233,7 +240,7 @@ impl Engine {
     /// 2) Functions in static modules
     /// 3) Functions in global modules (optional)
     #[inline(always)]
-    pub fn gen_fn_metadata_to_json(&self, include_global: bool) -> serde_json::Result<String> {
-        self.gen_fn_metadata_with_ast_to_json(&AST::empty(), include_global)
+    pub fn gen_fn_metadata_to_json(&self, include_packages: bool) -> serde_json::Result<String> {
+        self.gen_fn_metadata_with_ast_to_json(&AST::empty(), include_packages)
     }
 }
