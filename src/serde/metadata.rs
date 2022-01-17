@@ -7,7 +7,7 @@ use crate::{calc_fn_hash, Engine, AST};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-use std::{cmp::Ordering, collections::BTreeMap, iter::empty};
+use std::{borrow::Cow, cmp::Ordering, collections::BTreeMap, iter::empty};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,7 +54,7 @@ struct FnParam<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<&'a str>,
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    pub typ: Option<&'a str>,
+    pub typ: Option<Cow<'a, str>>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -125,12 +125,12 @@ impl<'a> From<&'a FuncInfo> for FnMetadata<'a> {
                         "_" => None,
                         s => Some(s),
                     };
-                    let typ = seg.next().map(&str::trim);
+                    let typ = seg.next().map(|s| FuncInfo::format_type(s, false));
                     FnParam { name, typ }
                 })
                 .collect(),
             _dummy: None,
-            return_type: FuncInfo::format_return_type(&info.metadata.return_type).into_owned(),
+            return_type: FuncInfo::format_type(&info.metadata.return_type, true).into_owned(),
             signature: info.gen_signature(),
             doc_comments: if info.func.is_script() {
                 #[cfg(feature = "no_function")]

@@ -60,12 +60,12 @@ impl Engine {
         #[cfg(feature = "metadata")]
         let mut param_type_names: crate::StaticVec<_> = F::param_names()
             .iter()
-            .map(|ty| format!("_: {}", self.map_type_name(ty)))
+            .map(|ty| format!("_: {}", self.format_type_name(ty)))
             .collect();
 
         #[cfg(feature = "metadata")]
         if F::return_type() != TypeId::of::<()>() {
-            param_type_names.push(self.map_type_name(F::return_type_name()).into());
+            param_type_names.push(self.format_type_name(F::return_type_name()).into());
         }
 
         #[cfg(feature = "metadata")]
@@ -122,9 +122,9 @@ impl Engine {
         #[cfg(feature = "metadata")]
         let param_type_names: crate::StaticVec<_> = F::param_names()
             .iter()
-            .map(|ty| format!("_: {}", self.map_type_name(ty)))
+            .map(|ty| format!("_: {}", self.format_type_name(ty)))
             .chain(std::iter::once(
-                self.map_type_name(F::return_type_name()).into(),
+                self.format_type_name(F::return_type_name()).into(),
             ))
             .collect();
 

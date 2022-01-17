@@ -481,6 +481,12 @@ def_package! {
         // Register string iterator
         lib.set_iterator::<CharsStream>();
 
+        #[cfg(feature = "metadata")]
+        let (range_type, range_inclusive_type) = (
+            format!("range: Range<{}>", std::any::type_name::<INT>()),
+            format!("range: RangeInclusive<{}>", std::any::type_name::<INT>()),
+        );
+
         let _hash = lib.set_native_fn("chars", |string, range: ExclusiveRange| {
             let from = INT::max(range.start, 0);
             let to = INT::max(range.end, from);
@@ -489,7 +495,7 @@ def_package! {
         #[cfg(feature = "metadata")]
         lib.update_fn_metadata_with_comments(
             _hash,
-            ["string: &str", "range: Range<INT>", "Iterator<Item=char>"],
+            ["string: &str", &range_type, "Iterator<Item=char>"],
             [
                 "/// Return an iterator over an exclusive range of characters in the string.",
                 "///",
@@ -511,7 +517,7 @@ def_package! {
         #[cfg(feature = "metadata")]
         lib.update_fn_metadata_with_comments(
             _hash,
-            ["string: &str", "range: RangeInclusive<INT>", "Iterator<Item=char>"],
+            ["string: &str", &range_inclusive_type, "Iterator<Item=char>"],
             [
                 "/// Return an iterator over an inclusive range of characters in the string.",
                 "///",
@@ -621,7 +627,7 @@ def_package! {
         #[cfg(feature = "metadata")]
         lib.update_fn_metadata_with_comments(
             _hash,
-            ["value: INT", "range: Range<INT>", "Iterator<Item=bool>"],
+            ["value: INT", &range_type, "Iterator<Item=bool>"],
             [
                 "/// Return an iterator over an exclusive range of bits in the number.",
                 "///",
@@ -645,7 +651,7 @@ def_package! {
         #[cfg(feature = "metadata")]
         lib.update_fn_metadata_with_comments(
             _hash,
-            ["value: INT", "range: RangeInclusive<INT>", "Iterator<Item=bool>"],
+            ["value: INT", &range_inclusive_type, "Iterator<Item=bool>"],
             [
                 "/// Return an iterator over an inclusive range of bits in the number.",
                 "///",
@@ -733,7 +739,7 @@ def_package! {
             #[cfg(feature = "metadata")]
             lib.update_fn_metadata_with_comments(
                 _hash,
-                ["value: &mut INT", "range: Range<INT>", "Iterator<Item=bool>"],
+                ["value: &mut INT", "Iterator<Item=bool>"],
                 [
                     "/// Return an iterator over all the bits in the number.",
                     "///",
