@@ -254,3 +254,51 @@ fn test_get_set_chain_without_write_back() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_get_set_collection() -> Result<(), Box<EvalAltResult>> {
+    type MyItem = INT;
+    type MyBag = std::collections::BTreeSet<MyItem>;
+
+    let mut engine = Engine::new();
+
+    engine
+        .register_type_with_name::<MyBag>("MyBag")
+        .register_iterator::<MyBag>()
+        .register_fn("new_bag", || MyBag::new())
+        .register_fn("len", |col: &mut MyBag| col.len() as INT)
+        .register_get("len", |col: &mut MyBag| col.len() as INT)
+        .register_fn("clear", |col: &mut MyBag| col.clear())
+        .register_fn("contains", |col: &mut MyBag, item: i64| col.contains(&item))
+        .register_fn("add", |col: &mut MyBag, item: MyItem| col.insert(item))
+        .register_fn("+=", |col: &mut MyBag, item: MyItem| col.insert(item))
+        .register_fn("remove", |col: &mut MyBag, item: MyItem| col.remove(&item))
+        .register_fn("-=", |col: &mut MyBag, item: MyItem| col.remove(&item))
+        .register_fn("+", |mut col1: MyBag, col2: MyBag| {
+            col1.extend(col2.into_iter());
+            col1
+        });
+
+    let result = engine.eval::<INT>(
+        "
+            let bag = new_bag();
+
+            bag += 1;
+            bag += 2;
+            bag += 39;
+            bag -= 2;
+
+            if !bag.contains(2) {
+                let sum = 0;
+                for n in bag { sum += n; }
+                sum + bag.len
+            } else {
+                -1
+            }
+        ",
+    )?;
+
+    assert_eq!(result, 42);
+
+    Ok(())
+}
