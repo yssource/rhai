@@ -407,7 +407,7 @@ impl Parse for ExportedFn {
             params: Default::default(),
             cfg_attrs,
             #[cfg(feature = "metadata")]
-            comments: Default::default(),
+            comments: Vec::new(),
         })
     }
 }
