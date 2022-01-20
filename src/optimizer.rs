@@ -96,7 +96,7 @@ impl<'a> OptimizerState<'a> {
     pub fn restore_var(&mut self, len: usize) {
         self.variables.truncate(len)
     }
-    /// Add a new constant to the list.
+    /// Add a new variable to the list.
     #[inline(always)]
     pub fn push_var(
         &mut self,

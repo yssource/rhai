@@ -32,12 +32,12 @@ impl Engine {
         };
 
         if let Some(index) = index {
-            let offset = global.num_imported_modules() - index.get();
-            Some(global.get_shared_module(offset).unwrap())
+            let offset = global.num_imports() - index.get();
+            Some(global.get_shared_import(offset).unwrap())
         } else {
             global
-                .find_module(root)
-                .map(|n| global.get_shared_module(n).unwrap())
+                .find_import(root)
+                .map(|n| global.get_shared_import(n).unwrap())
                 .or_else(|| self.global_sub_modules.get(root).cloned())
         }
     }

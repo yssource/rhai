@@ -1447,14 +1447,14 @@ impl Module {
     /// Merge another [`Module`] into this [`Module`].
     #[inline(always)]
     pub fn merge(&mut self, other: &Self) -> &mut Self {
-        self.merge_filtered(other, &|_, _, _, _, _| true)
+        self.merge_filtered(other, |_, _, _, _, _| true)
     }
 
     /// Merge another [`Module`] into this [`Module`] based on a filter predicate.
     pub(crate) fn merge_filtered(
         &mut self,
         other: &Self,
-        _filter: &impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
+        _filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool + Copy,
     ) -> &mut Self {
         #[cfg(not(feature = "no_function"))]
         other.modules.iter().for_each(|(k, v)| {
@@ -1665,7 +1665,7 @@ impl Module {
     ) -> RhaiResultOf<Self> {
         let mut scope = scope;
         let mut global = crate::eval::GlobalRuntimeState::new();
-        let orig_mods_len = global.num_imported_modules();
+        let orig_mods_len = global.num_imports();
 
         // Run the script
         engine.eval_ast_with_scope_raw(&mut scope, &mut global, &ast, 0)?;

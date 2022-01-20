@@ -56,7 +56,7 @@ impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, 'pt> {
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
-        self.global.iter_modules()
+        self.global.iter_imports()
     }
     /// _(internals)_ The current [`GlobalRuntimeState`].
     /// Exported under the `internals` feature only.

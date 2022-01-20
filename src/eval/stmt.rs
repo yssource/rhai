@@ -28,7 +28,7 @@ impl Engine {
 
         let orig_always_search_scope = state.always_search_scope;
         let orig_scope_len = scope.len();
-        let orig_mods_len = global.num_imported_modules();
+        let orig_mods_len = global.num_imports();
         let orig_fn_resolution_caches_len = state.fn_resolution_caches_len();
 
         if restore_orig_state {
@@ -38,7 +38,7 @@ impl Engine {
         let mut result = Dynamic::UNIT;
 
         for stmt in statements {
-            let _mods_len = global.num_imported_modules();
+            let _mods_len = global.num_imports();
 
             result = self.eval_stmt(
                 scope,
@@ -56,7 +56,7 @@ impl Engine {
                 // Get the extra modules - see if any functions are marked global.
                 // Without global functions, the extra modules never affect function resolution.
                 if global
-                    .scan_modules_raw()
+                    .scan_imports_raw()
                     .skip(_mods_len)
                     .any(|(_, m)| m.contains_indexed_global_functions())
                 {
@@ -82,7 +82,7 @@ impl Engine {
         if restore_orig_state {
             scope.rewind(orig_scope_len);
             state.scope_level -= 1;
-            global.truncate_modules(orig_mods_len);
+            global.truncate_imports(orig_mods_len);
 
             // The impact of new local variables goes away at the end of a block
             // because any new variables introduced will go out of scope
@@ -778,9 +778,9 @@ impl Engine {
                             // Index the module (making a clone copy if necessary) if it is not indexed
                             let mut module = crate::func::native::shared_take_or_clone(module);
                             module.build_index();
-                            global.push_module(name, module);
+                            global.push_import(name, module);
                         } else {
-                            global.push_module(name, module);
+                            global.push_import(name, module);
                         }
                     }
 

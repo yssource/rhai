@@ -199,7 +199,7 @@ impl<'a> NativeCallContext<'a> {
     #[cfg(not(feature = "no_module"))]
     #[inline]
     pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
-        self.global.iter().flat_map(|&m| m.iter_modules())
+        self.global.iter().flat_map(|&m| m.iter_imports())
     }
     /// Get an iterator over the current set of modules imported via `import` statements in reverse order.
     #[cfg(not(feature = "no_module"))]
@@ -208,7 +208,7 @@ impl<'a> NativeCallContext<'a> {
     pub(crate) fn iter_imports_raw(
         &self,
     ) -> impl Iterator<Item = (&crate::Identifier, &Shared<Module>)> {
-        self.global.iter().flat_map(|&m| m.iter_modules_raw())
+        self.global.iter().flat_map(|&m| m.iter_imports_raw())
     }
     /// _(internals)_ The current [`GlobalRuntimeState`], if any.
     /// Exported under the `internals` feature only.
