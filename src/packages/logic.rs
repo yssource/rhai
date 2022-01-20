@@ -62,6 +62,8 @@ def_package! {
             reg_functions!(lib += float; f64);
             combine_with_exported_module!(lib, "f64", f64_functions);
         }
+
+        combine_with_exported_module!(lib, "logic", logic_functions);
     }
 }
 
@@ -82,6 +84,14 @@ gen_cmp_functions!(float => f32);
 #[cfg(not(feature = "no_float"))]
 #[cfg(feature = "f32_float")]
 gen_cmp_functions!(float => f64);
+
+#[export_module]
+mod logic_functions {
+    #[rhai_fn(name = "!")]
+    pub fn not(x: bool) -> bool {
+        !x
+    }
+}
 
 #[cfg(not(feature = "no_float"))]
 #[export_module]

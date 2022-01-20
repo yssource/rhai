@@ -10,16 +10,13 @@ def_package! {
     crate::LanguageCorePackage => |lib| {
         lib.standard = true;
 
-        combine_with_exported_module!(lib, "language_core", core_functions);
+        combine_with_exported_module!(lib, "core", core_functions);
+        combine_with_exported_module!(lib, "reflection", reflection_functions);
     }
 }
 
 #[export_module]
 mod core_functions {
-    #[rhai_fn(name = "!")]
-    pub fn not(x: bool) -> bool {
-        !x
-    }
     #[rhai_fn(name = "tag", get = "tag", pure)]
     pub fn get_tag(value: &mut Dynamic) -> INT {
         value.tag() as INT
@@ -53,19 +50,38 @@ mod core_functions {
             Ok(())
         }
     }
+}
 
-    #[cfg(not(feature = "no_function"))]
-    #[cfg(not(feature = "no_index"))]
-    #[cfg(not(feature = "no_object"))]
+#[cfg(not(feature = "no_function"))]
+#[cfg(not(feature = "no_index"))]
+#[cfg(not(feature = "no_object"))]
+#[export_module]
+mod reflection_functions {
     pub fn get_fn_metadata_list(ctx: NativeCallContext) -> crate::Array {
-        collect_fn_metadata(ctx)
+        collect_fn_metadata(ctx, |_, _, _, _, _| true)
+    }
+    #[rhai_fn(name = "get_fn_metadata_list")]
+    pub fn get_fn_metadata(ctx: NativeCallContext, name: &str) -> crate::Array {
+        collect_fn_metadata(ctx, |_, _, n, _, _| n == name)
+    }
+    #[rhai_fn(name = "get_fn_metadata_list")]
+    pub fn get_fn_metadata2(ctx: NativeCallContext, name: &str, params: INT) -> crate::Array {
+        if params < 0 {
+            crate::Array::new()
+        } else {
+            collect_fn_metadata(ctx, |_, _, n, p, _| p == (params as usize) && n == name)
+        }
     }
 }
 
 #[cfg(not(feature = "no_function"))]
 #[cfg(not(feature = "no_index"))]
 #[cfg(not(feature = "no_object"))]
-fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
+fn collect_fn_metadata(
+    ctx: NativeCallContext,
+    filter: impl Fn(FnNamespace, FnAccess, &str, usize, &crate::Shared<crate::ast::ScriptFnDef>) -> bool
+        + Copy,
+) -> crate::Array {
     use crate::{ast::ScriptFnDef, Array, Identifier, Map};
     use std::collections::BTreeSet;
 
@@ -125,13 +141,26 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
     .map(|&s| s.into())
     .collect();
 
-    let mut _list = ctx.iter_namespaces().flat_map(Module::iter_script_fn).fold(
-        Array::new(),
-        |mut list, (_, _, _, _, f)| {
-            list.push(make_metadata(&dict, None, f).into());
-            list
-        },
-    );
+    let mut list = Array::new();
+
+    ctx.iter_namespaces()
+        .flat_map(Module::iter_script_fn)
+        .filter(|(s, a, n, p, f)| filter(*s, *a, n, *p, f))
+        .for_each(|(_, _, _, _, f)| list.push(make_metadata(&dict, None, f).into()));
+
+    ctx.engine()
+        .global_modules
+        .iter()
+        .flat_map(|m| m.iter_script_fn())
+        .filter(|(ns, a, n, p, f)| filter(*ns, *a, n, *p, f))
+        .for_each(|(_, _, _, _, f)| list.push(make_metadata(&dict, None, f).into()));
+
+    ctx.engine()
+        .global_sub_modules
+        .values()
+        .flat_map(|m| m.iter_script_fn())
+        .filter(|(ns, a, n, p, f)| filter(*ns, *a, n, *p, f))
+        .for_each(|(_, _, _, _, f)| list.push(make_metadata(&dict, None, f).into()));
 
     #[cfg(not(feature = "no_module"))]
     {
@@ -141,10 +170,21 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
             dict: &BTreeSet<Identifier>,
             namespace: Identifier,
             module: &Module,
+            filter: impl Fn(
+                    FnNamespace,
+                    FnAccess,
+                    &str,
+                    usize,
+                    &crate::Shared<crate::ast::ScriptFnDef>,
+                ) -> bool
+                + Copy,
         ) {
-            module.iter_script_fn().for_each(|(_, _, _, _, f)| {
-                list.push(make_metadata(dict, Some(namespace.clone()), f).into())
-            });
+            module
+                .iter_script_fn()
+                .filter(|(s, a, n, p, f)| filter(*s, *a, n, *p, f))
+                .for_each(|(_, _, _, _, f)| {
+                    list.push(make_metadata(dict, Some(namespace.clone()), f).into())
+                });
             module.iter_sub_modules().for_each(|(ns, m)| {
                 let ns = format!(
                     "{}{}{}",
@@ -152,13 +192,13 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
                     crate::tokenizer::Token::DoubleColon.literal_syntax(),
                     ns
                 );
-                scan_module(list, dict, ns.into(), m.as_ref())
+                scan_module(list, dict, ns.into(), m.as_ref(), filter)
             });
         }
 
         ctx.iter_imports_raw()
-            .for_each(|(ns, m)| scan_module(&mut _list, &dict, ns.clone(), m.as_ref()));
+            .for_each(|(ns, m)| scan_module(&mut list, &dict, ns.clone(), m.as_ref(), filter));
     }
 
-    _list
+    list
 }
