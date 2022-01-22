@@ -65,7 +65,7 @@ pub struct NativeCallContext<'a> {
     /// Function source, if any.
     source: Option<&'a str>,
     /// The current [`GlobalRuntimeState`], if any.
-    global: Option<&'a GlobalRuntimeState>,
+    global: Option<&'a GlobalRuntimeState<'a>>,
     /// The current stack of loaded [modules][Module].
     lib: &'a [&'a Module],
     /// [Position] of the function call.
@@ -77,7 +77,7 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized, S: AsRef<str> + 'a + ?Sized>
         &'a Engine,
         &'a S,
         Option<&'a S>,
-        &'a GlobalRuntimeState,
+        &'a GlobalRuntimeState<'a>,
         &'a M,
         Position,
     )> for NativeCallContext<'a>

@@ -18,7 +18,7 @@ fn bench_eval_module(bench: &mut Bencher) {
 
     let ast = engine.compile(script).unwrap();
 
-    let module = Module::eval_ast_as_new(Default::default(), &ast, &engine).unwrap();
+    let module = Module::eval_ast_as_new(&mut Scope::new(), &ast, &engine).unwrap();
 
     engine.register_static_module("testing", module.into());
 

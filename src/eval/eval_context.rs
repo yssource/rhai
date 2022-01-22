@@ -7,15 +7,15 @@ use std::prelude::v1::*;
 
 /// Context of a script evaluation process.
 #[derive(Debug)]
-pub struct EvalContext<'a, 'x, 'px, 'm, 's, 'b, 't, 'pt> {
+pub struct EvalContext<'a, 'x, 'px, 'm, 'pm, 's, 'ps, 'b, 't, 'pt> {
     /// The current [`Engine`].
     pub(crate) engine: &'a Engine,
     /// The current [`Scope`].
     pub(crate) scope: &'x mut Scope<'px>,
     /// The current [`GlobalRuntimeState`].
-    pub(crate) global: &'m mut GlobalRuntimeState,
+    pub(crate) global: &'m mut GlobalRuntimeState<'pm>,
     /// The current [evaluation state][EvalState].
-    pub(crate) state: &'s mut EvalState,
+    pub(crate) state: &'s mut EvalState<'ps>,
     /// The current stack of imported [modules][Module].
     pub(crate) lib: &'b [&'b Module],
     /// The current bound `this` pointer, if any.
@@ -24,7 +24,7 @@ pub struct EvalContext<'a, 'x, 'px, 'm, 's, 'b, 't, 'pt> {
     pub(crate) level: usize,
 }
 
-impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, 'pt> {
+impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, '_, '_, 'pt> {
     /// The current [`Engine`].
     #[inline(always)]
     #[must_use]

@@ -750,7 +750,7 @@ impl Module {
                 let return_type = param_names.pop().unwrap();
                 (param_names, return_type)
             } else {
-                (param_names, Default::default())
+                (param_names, crate::SmartString::new_const())
             };
             f.metadata.params_info = param_names;
             f.metadata.return_type = return_type_name;
@@ -882,7 +882,7 @@ impl Module {
             let return_type = if names.len() > arg_types.as_ref().len() {
                 names.pop().unwrap()
             } else {
-                Default::default()
+                crate::SmartString::new_const()
             };
             names.shrink_to_fit();
             (names, return_type)
