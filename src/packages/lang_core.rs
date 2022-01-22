@@ -11,6 +11,10 @@ def_package! {
         lib.standard = true;
 
         combine_with_exported_module!(lib, "core", core_functions);
+
+        #[cfg(not(feature = "no_function"))]
+        #[cfg(not(feature = "no_index"))]
+        #[cfg(not(feature = "no_object"))]
         combine_with_exported_module!(lib, "reflection", reflection_functions);
     }
 }

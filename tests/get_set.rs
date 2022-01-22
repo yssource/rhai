@@ -269,7 +269,7 @@ fn test_get_set_collection() -> Result<(), Box<EvalAltResult>> {
         .register_fn("len", |col: &mut MyBag| col.len() as INT)
         .register_get("len", |col: &mut MyBag| col.len() as INT)
         .register_fn("clear", |col: &mut MyBag| col.clear())
-        .register_fn("contains", |col: &mut MyBag, item: i64| col.contains(&item))
+        .register_fn("contains", |col: &mut MyBag, item: INT| col.contains(&item))
         .register_fn("add", |col: &mut MyBag, item: MyItem| col.insert(item))
         .register_fn("+=", |col: &mut MyBag, item: MyItem| col.insert(item))
         .register_fn("remove", |col: &mut MyBag, item: MyItem| col.remove(&item))
