@@ -1,8 +1,14 @@
 Rhai Release Notes
 ==================
 
+Version 1.5.0
+=============
+
+
 Version 1.4.1
 =============
+
+This is primarily a bug-fix version which fixes a large number of bugs.
 
 Bug fixes
 ---------
