@@ -127,7 +127,7 @@ impl Parse for Module {
                             f.set_cfg_attrs(crate::attrs::collect_cfg_attr(&item_fn.attrs));
 
                             #[cfg(feature = "metadata")]
-                            f.set_comments(crate::attrs::doc_attributes(&mut item_fn.attrs)?);
+                            f.set_comments(crate::attrs::doc_attributes(&item_fn.attrs)?);
                             Ok(f)
                         })?;
 
@@ -144,12 +144,12 @@ impl Parse for Module {
                         attrs,
                         ty,
                         ..
-                    }) if matches!(vis, syn::Visibility::Public(_)) => consts.push((
-                        ident.to_string(),
-                        ty.clone(),
-                        expr.as_ref().clone(),
-                        crate::attrs::collect_cfg_attr(&attrs),
-                    )),
+                    }) if matches!(vis, syn::Visibility::Public(_)) => consts.push(ExportedConst {
+                        name: ident.to_string(),
+                        typ: ty.clone(),
+                        expr: expr.as_ref().clone(),
+                        cfg_attrs: crate::attrs::collect_cfg_attr(&attrs),
+                    }),
                     _ => {}
                 }
             }

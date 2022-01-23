@@ -107,8 +107,8 @@ macro_rules! def_register {
     //   ^ function ABI type
     //                  ^ function parameter generic type name (A, B, C etc.)
     //                                ^ call argument(like A, *B, &mut C etc)
-    //                                             ^ function parameter marker type (T, Ref<T> or Mut<T>)
-    //                                                         ^ function parameter actual type (T, &T or &mut T)
+    //                                             ^ function parameter marker type (A, Ref<B> or Mut<C>)
+    //                                                         ^ function parameter actual type (A, &B or &mut C)
     //                                                                      ^ argument let statement
 
         impl<
@@ -117,7 +117,7 @@ macro_rules! def_register {
             RET: Variant + Clone
         > RegisterNativeFunction<($($mark,)*), ()> for FN {
             #[inline(always)] fn param_types() -> Box<[TypeId]> { vec![$(TypeId::of::<$par>()),*].into_boxed_slice() }
-            #[cfg(feature = "metadata")] #[inline(always)] fn param_names() -> Box<[&'static str]> { vec![$(std::any::type_name::<$par>()),*].into_boxed_slice() }
+            #[cfg(feature = "metadata")] #[inline(always)] fn param_names() -> Box<[&'static str]> { vec![$(std::any::type_name::<$param>()),*].into_boxed_slice() }
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type() -> TypeId { TypeId::of::<RET>() }
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<RET>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
@@ -145,7 +145,7 @@ macro_rules! def_register {
             RET: Variant + Clone
         > RegisterNativeFunction<(NativeCallContext<'static>, $($mark,)*), ()> for FN {
             #[inline(always)] fn param_types() -> Box<[TypeId]> { vec![$(TypeId::of::<$par>()),*].into_boxed_slice() }
-            #[cfg(feature = "metadata")] #[inline(always)] fn param_names() -> Box<[&'static str]> { vec![$(std::any::type_name::<$par>()),*].into_boxed_slice() }
+            #[cfg(feature = "metadata")] #[inline(always)] fn param_names() -> Box<[&'static str]> { vec![$(std::any::type_name::<$param>()),*].into_boxed_slice() }
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type() -> TypeId { TypeId::of::<RET>() }
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<RET>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
@@ -173,7 +173,7 @@ macro_rules! def_register {
             RET: Variant + Clone
         > RegisterNativeFunction<($($mark,)*), RhaiResultOf<RET>> for FN {
             #[inline(always)] fn param_types() -> Box<[TypeId]> { vec![$(TypeId::of::<$par>()),*].into_boxed_slice() }
-            #[cfg(feature = "metadata")] #[inline(always)] fn param_names() -> Box<[&'static str]> { vec![$(std::any::type_name::<$par>()),*].into_boxed_slice() }
+            #[cfg(feature = "metadata")] #[inline(always)] fn param_names() -> Box<[&'static str]> { vec![$(std::any::type_name::<$param>()),*].into_boxed_slice() }
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type() -> TypeId { TypeId::of::<RhaiResultOf<RET>>() }
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<RhaiResultOf<RET>>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
@@ -198,7 +198,7 @@ macro_rules! def_register {
             RET: Variant + Clone
         > RegisterNativeFunction<(NativeCallContext<'static>, $($mark,)*), RhaiResultOf<RET>> for FN {
             #[inline(always)] fn param_types() -> Box<[TypeId]> { vec![$(TypeId::of::<$par>()),*].into_boxed_slice() }
-            #[cfg(feature = "metadata")] #[inline(always)] fn param_names() -> Box<[&'static str]> { vec![$(std::any::type_name::<$par>()),*].into_boxed_slice() }
+            #[cfg(feature = "metadata")] #[inline(always)] fn param_names() -> Box<[&'static str]> { vec![$(std::any::type_name::<$param>()),*].into_boxed_slice() }
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type() -> TypeId { TypeId::of::<RhaiResultOf<RET>>() }
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<RhaiResultOf<RET>>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {

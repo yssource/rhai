@@ -10,7 +10,13 @@ use crate::function::{
 };
 use crate::module::Module;
 
-pub type ExportedConst = (String, Box<syn::Type>, syn::Expr, Vec<syn::Attribute>);
+#[derive(Debug)]
+pub struct ExportedConst {
+    pub name: String,
+    pub typ: Box<syn::Type>,
+    pub expr: syn::Expr,
+    pub cfg_attrs: Vec<syn::Attribute>,
+}
 
 pub fn generate_body(
     fns: &mut [ExportedFn],
@@ -25,7 +31,12 @@ pub fn generate_body(
     let str_type_path = syn::parse2::<syn::Path>(quote! { str }).unwrap();
     let string_type_path = syn::parse2::<syn::Path>(quote! { String }).unwrap();
 
-    for (const_name, _, _, cfg_attrs) in consts {
+    for ExportedConst {
+        name: const_name,
+        cfg_attrs,
+        ..
+    } in consts
+    {
         let const_literal = syn::LitStr::new(&const_name, Span::call_site());
         let const_ref = syn::Ident::new(&const_name, Span::call_site());
 

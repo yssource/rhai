@@ -142,33 +142,34 @@ pub fn inner_item_attributes<T: ExportedParams>(
 }
 
 #[cfg(feature = "metadata")]
-pub fn doc_attributes(attrs: &mut Vec<syn::Attribute>) -> syn::Result<Vec<String>> {
+pub fn doc_attributes(attrs: &[syn::Attribute]) -> syn::Result<Vec<String>> {
     // Find the #[doc] attribute which will turn be read for function documentation.
     let mut comments = Vec::new();
 
-    while let Some(index) = attrs
-        .iter()
-        .position(|attr| attr.path.get_ident().map(|i| *i == "doc").unwrap_or(false))
-    {
-        match attrs.remove(index).parse_meta()? {
-            syn::Meta::NameValue(syn::MetaNameValue {
-                lit: syn::Lit::Str(s),
-                ..
-            }) => {
-                let mut line = s.value();
+    for attr in attrs {
+        if let Some(i) = attr.path.get_ident() {
+            if *i == "doc" {
+                match attr.parse_meta()? {
+                    syn::Meta::NameValue(syn::MetaNameValue {
+                        lit: syn::Lit::Str(s),
+                        ..
+                    }) => {
+                        let mut line = s.value();
 
-                if line.contains('\n') {
-                    // Must be a block comment `/** ... */`
-                    line.insert_str(0, "/**");
-                    line.push_str("*/");
-                } else {
-                    // Single line - assume it is `///`
-                    line.insert_str(0, "///");
+                        if line.contains('\n') {
+                            // Must be a block comment `/** ... */`
+                            line.insert_str(0, "/**");
+                            line.push_str("*/");
+                        } else {
+                            // Single line - assume it is `///`
+                            line.insert_str(0, "///");
+                        }
+
+                        comments.push(line);
+                    }
+                    _ => (),
                 }
-
-                comments.push(line);
             }
-            _ => continue,
         }
     }
 

@@ -968,18 +968,11 @@ impl Engine {
             _ if use_indexers => {
                 let args = &mut [target, &mut idx];
                 let hash_get = crate::ast::FnCallHashes::from_native(global.hash_idx_get());
+                let fn_name = crate::engine::FN_IDX_GET;
+                let pos = Position::NONE;
+
                 self.exec_fn_call(
-                    global,
-                    state,
-                    lib,
-                    crate::engine::FN_IDX_GET,
-                    hash_get,
-                    args,
-                    true,
-                    true,
-                    Position::NONE,
-                    None,
-                    level,
+                    global, state, lib, fn_name, hash_get, args, true, true, pos, None, level,
                 )
                 .map(|(v, _)| v.into())
             }

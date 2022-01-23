@@ -45,7 +45,7 @@ impl OpAssignment<'_> {
     #[must_use]
     pub fn new_from_token(op: Token) -> Self {
         let op_raw = op
-            .map_op_assignment()
+            .get_base_op_from_assignment()
             .expect("op-assignment operator")
             .literal_syntax();
         Self {
@@ -53,6 +53,26 @@ impl OpAssignment<'_> {
             hash_op: calc_fn_hash(op_raw, 2),
             op: op.literal_syntax(),
         }
+    }
+    /// Create a new [`OpAssignment`] from a base operator.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the name is not an operator that can be converted into an op-operator.
+    #[must_use]
+    #[inline(always)]
+    pub fn new_from_base(name: &str) -> Self {
+        Self::new_from_base_token(Token::lookup_from_syntax(name).expect("operator"))
+    }
+    /// Convert a [`Token`] into a new [`OpAssignment`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the token is cannot be converted into an op-assignment operator.
+    #[inline(always)]
+    #[must_use]
+    pub fn new_from_base_token(op: Token) -> Self {
+        Self::new_from_token(op.convert_to_op_assignment().expect("operator"))
     }
 }
 

@@ -8,6 +8,7 @@ use std::{
     any::TypeId,
     fmt,
     iter::{FromIterator, Rev, Zip},
+    marker::PhantomData,
 };
 
 /// _(internals)_ A stack of imported [modules][Module] plus mutable global runtime states.
@@ -19,7 +20,7 @@ use std::{
 // Most usage will be looking up a particular key from the list and then getting the module that
 // corresponds to that key.
 #[derive(Clone)]
-pub struct GlobalRuntimeState {
+pub struct GlobalRuntimeState<'a> {
     /// Stack of module names.
     //
     // We cannot use Cow<str> here because `eval` may load a [module][Module] and
@@ -45,20 +46,22 @@ pub struct GlobalRuntimeState {
     #[cfg(not(feature = "no_function"))]
     constants:
         Option<Shared<crate::Locked<std::collections::BTreeMap<Identifier, crate::Dynamic>>>>,
+    /// Take care of the lifetime parameter.
+    dummy: PhantomData<&'a ()>,
 }
 
-impl Default for GlobalRuntimeState {
+impl Default for GlobalRuntimeState<'_> {
     #[inline(always)]
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl GlobalRuntimeState {
+impl GlobalRuntimeState<'_> {
     /// Create a new [`GlobalRuntimeState`].
     #[inline(always)]
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             keys: StaticVec::new_const(),
             modules: StaticVec::new_const(),
@@ -72,31 +75,32 @@ impl GlobalRuntimeState {
             #[cfg(not(feature = "no_module"))]
             #[cfg(not(feature = "no_function"))]
             constants: None,
+            dummy: PhantomData::default(),
         }
     }
     /// Get the length of the stack of globally-imported [modules][Module].
     #[inline(always)]
     #[must_use]
-    pub fn num_imported_modules(&self) -> usize {
+    pub fn num_imports(&self) -> usize {
         self.keys.len()
     }
     /// Get the globally-imported [module][Module] at a particular index.
     #[inline(always)]
     #[must_use]
-    pub fn get_shared_module(&self, index: usize) -> Option<Shared<Module>> {
+    pub fn get_shared_import(&self, index: usize) -> Option<Shared<Module>> {
         self.modules.get(index).cloned()
     }
     /// Get a mutable reference to the globally-imported [module][Module] at a particular index.
     #[allow(dead_code)]
     #[inline(always)]
     #[must_use]
-    pub(crate) fn get_shared_module_mut(&mut self, index: usize) -> Option<&mut Shared<Module>> {
+    pub(crate) fn get_shared_import_mut(&mut self, index: usize) -> Option<&mut Shared<Module>> {
         self.modules.get_mut(index)
     }
     /// Get the index of a globally-imported [module][Module] by name.
     #[inline]
     #[must_use]
-    pub fn find_module(&self, name: &str) -> Option<usize> {
+    pub fn find_import(&self, name: &str) -> Option<usize> {
         let len = self.keys.len();
 
         self.keys.iter().rev().enumerate().find_map(|(i, key)| {
@@ -109,20 +113,20 @@ impl GlobalRuntimeState {
     }
     /// Push an imported [module][Module] onto the stack.
     #[inline(always)]
-    pub fn push_module(&mut self, name: impl Into<Identifier>, module: impl Into<Shared<Module>>) {
+    pub fn push_import(&mut self, name: impl Into<Identifier>, module: impl Into<Shared<Module>>) {
         self.keys.push(name.into());
         self.modules.push(module.into());
     }
     /// Truncate the stack of globally-imported [modules][Module] to a particular length.
     #[inline(always)]
-    pub fn truncate_modules(&mut self, size: usize) {
+    pub fn truncate_imports(&mut self, size: usize) {
         self.keys.truncate(size);
         self.modules.truncate(size);
     }
     /// Get an iterator to the stack of globally-imported [modules][Module] in reverse order.
     #[allow(dead_code)]
     #[inline]
-    pub fn iter_modules(&self) -> impl Iterator<Item = (&str, &Module)> {
+    pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.keys
             .iter()
             .rev()
@@ -132,26 +136,26 @@ impl GlobalRuntimeState {
     /// Get an iterator to the stack of globally-imported [modules][Module] in reverse order.
     #[allow(dead_code)]
     #[inline]
-    pub(crate) fn iter_modules_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
+    pub(crate) fn iter_imports_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
         self.keys.iter().rev().zip(self.modules.iter().rev())
     }
     /// Get an iterator to the stack of globally-imported [modules][Module] in forward order.
     #[allow(dead_code)]
     #[inline]
-    pub(crate) fn scan_modules_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
+    pub(crate) fn scan_imports_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
         self.keys.iter().zip(self.modules.iter())
     }
     /// Does the specified function hash key exist in the stack of globally-imported [modules][Module]?
     #[allow(dead_code)]
     #[inline]
     #[must_use]
-    pub fn contains_fn(&self, hash: u64) -> bool {
+    pub fn contains_qualified_fn(&self, hash: u64) -> bool {
         self.modules.iter().any(|m| m.contains_qualified_fn(hash))
     }
     /// Get the specified function via its hash key from the stack of globally-imported [modules][Module].
     #[inline]
     #[must_use]
-    pub fn get_fn(&self, hash: u64) -> Option<(&CallableFunction, Option<&str>)> {
+    pub fn get_qualified_fn(&self, hash: u64) -> Option<(&CallableFunction, Option<&str>)> {
         self.modules
             .iter()
             .rev()
@@ -230,7 +234,7 @@ impl GlobalRuntimeState {
     }
 }
 
-impl IntoIterator for GlobalRuntimeState {
+impl IntoIterator for GlobalRuntimeState<'_> {
     type Item = (Identifier, Shared<Module>);
     type IntoIter =
         Zip<Rev<smallvec::IntoIter<[Identifier; 3]>>, Rev<smallvec::IntoIter<[Shared<Module>; 3]>>>;
@@ -244,7 +248,7 @@ impl IntoIterator for GlobalRuntimeState {
     }
 }
 
-impl<K: Into<Identifier>, M: Into<Shared<Module>>> FromIterator<(K, M)> for GlobalRuntimeState {
+impl<K: Into<Identifier>, M: Into<Shared<Module>>> FromIterator<(K, M)> for GlobalRuntimeState<'_> {
     #[inline]
     fn from_iter<T: IntoIterator<Item = (K, M)>>(iter: T) -> Self {
         let mut lib = Self::new();
@@ -253,7 +257,7 @@ impl<K: Into<Identifier>, M: Into<Shared<Module>>> FromIterator<(K, M)> for Glob
     }
 }
 
-impl<K: Into<Identifier>, M: Into<Shared<Module>>> Extend<(K, M)> for GlobalRuntimeState {
+impl<K: Into<Identifier>, M: Into<Shared<Module>>> Extend<(K, M)> for GlobalRuntimeState<'_> {
     #[inline]
     fn extend<T: IntoIterator<Item = (K, M)>>(&mut self, iter: T) {
         iter.into_iter().for_each(|(k, m)| {
@@ -263,7 +267,7 @@ impl<K: Into<Identifier>, M: Into<Shared<Module>>> Extend<(K, M)> for GlobalRunt
     }
 }
 
-impl fmt::Debug for GlobalRuntimeState {
+impl fmt::Debug for GlobalRuntimeState<'_> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut f = f.debug_struct("GlobalRuntimeState");

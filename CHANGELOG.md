@@ -1,12 +1,13 @@
 Rhai Release Notes
 ==================
 
-Version 1.5.0
+Version 1.4.1
 =============
 
 Bug fixes
 ---------
 
+* Expressions such as `x = x + 1` no longer panics.
 * Padding arrays with another array via `pad` no longer loops indefinitely.
 * `chop` for arrays and BLOB's now works properly.
 * `set_bit` for bit-flags with negative index now works correctly.
@@ -15,6 +16,8 @@ Bug fixes
 * Missing `to_hex`, `to_octal` and `to_binary` for `i128` and `u128` are added.
 * `remove` for arrays and BLOB's now treat negative index correctly.
 * `parse_int` now works properly for negative numbers.
+* `Engine::gen_fn_signatures` now generates signatures for external packages registered via `Engine::register_global_module`.
+* `\r\n` pairs are now recognized correctly for doc-comments.
 
 Enhancements
 ------------
@@ -22,6 +25,7 @@ Enhancements
 * Formatting of return types in functions metadata info is improved.
 * Use `SmartString` for `Scope` variable names and remove `unsafe` lifetime casting.
 * Functions in the standard library now have doc-comments (which can be obtained via `Engine::gen_fn_metadata_to_json`).
+* `get` and `set` methods are added to arrays, BLOB's, object maps and strings.
 
 
 Version 1.4.0

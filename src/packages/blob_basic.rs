@@ -100,6 +100,75 @@ pub mod blob_functions {
     pub fn len(blob: &mut Blob) -> INT {
         blob.len() as INT
     }
+
+    /// Get the byte value at the `index` position in the BLOB.
+    ///
+    /// * If `index` < 0, position counts from the end of the BLOB (`-1` is the last element).
+    /// * If `index` < -length of BLOB, zero is returned.
+    /// * If `index` ≥ length of BLOB, zero is returned.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let b = blob();
+    ///
+    /// b += 1; b += 2; b += 3; b += 4; b += 5;
+    ///
+    /// print(b.get(0));        // prints 1
+    ///
+    /// print(b.get(-1));       // prints 5
+    ///
+    /// print(b.get(99));       // prints 0
+    /// ```
+    pub fn get(blob: &mut Blob, index: INT) -> INT {
+        if blob.is_empty() {
+            return 0;
+        }
+
+        let (index, _) = calc_offset_len(blob.len(), index, 0);
+
+        if index >= blob.len() {
+            0
+        } else {
+            blob[index] as INT
+        }
+    }
+    /// Set the particular `index` position in the BLOB to a new byte `value`.
+    ///
+    /// * If `index` < 0, position counts from the end of the BLOB (`-1` is the last byte).
+    /// * If `index` < -length of BLOB, the BLOB is not modified.
+    /// * If `index` ≥ length of BLOB, the BLOB is not modified.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let b = blob();
+    ///
+    /// b += 1; b += 2; b += 3; b += 4; b += 5;
+    ///
+    /// b.set(0, 0x42);
+    ///
+    /// print(b);           // prints "[4202030405]"
+    ///
+    /// b.set(-3, 0);
+    ///
+    /// print(b);           // prints "[4202000405]"
+    ///
+    /// b.set(99, 123);
+    ///
+    /// print(b);           // prints "[4202000405]"
+    /// ```
+    pub fn set(blob: &mut Blob, index: INT, value: INT) {
+        if blob.is_empty() {
+            return;
+        }
+
+        let (index, _) = calc_offset_len(blob.len(), index, 0);
+
+        if index < blob.len() {
+            blob[index] = (value & 0x000000ff) as u8;
+        }
+    }
     /// Add a new byte `value` to the end of the BLOB.
     ///
     /// Only the lower 8 bits of the `value` are used; all other bits are ignored.
@@ -114,8 +183,7 @@ pub mod blob_functions {
     /// print(b);       // prints "[42]"
     /// ```
     pub fn push(blob: &mut Blob, value: INT) {
-        let value = (value & 0x000000ff) as u8;
-        blob.push(value);
+        blob.push((value & 0x000000ff) as u8);
     }
     /// Add another BLOB to the end of the BLOB.
     ///
@@ -396,7 +464,7 @@ pub mod blob_functions {
             blob.reverse();
         }
     }
-    /// Replace an exclusive range of the BLOB with another BLOB.
+    /// Replace an exclusive `range` of the BLOB with another BLOB.
     ///
     /// # Example
     ///
@@ -414,7 +482,7 @@ pub mod blob_functions {
         let end = INT::max(range.end, start);
         splice(blob, start, end - start, replace)
     }
-    /// Replace an inclusive range of the BLOB with another BLOB.
+    /// Replace an inclusive `range` of the BLOB with another BLOB.
     ///
     /// # Example
     ///
@@ -468,7 +536,7 @@ pub mod blob_functions {
             blob.splice(start..start + len, replace);
         }
     }
-    /// Copy an exclusive range of the BLOB and return it as a new BLOB.
+    /// Copy an exclusive `range` of the BLOB and return it as a new BLOB.
     ///
     /// # Example
     ///
@@ -487,7 +555,7 @@ pub mod blob_functions {
         let end = INT::max(range.end, start);
         extract(blob, start, end - start)
     }
-    /// Copy an inclusive range of the BLOB and return it as a new BLOB.
+    /// Copy an inclusive `range` of the BLOB and return it as a new BLOB.
     ///
     /// # Example
     ///
@@ -608,7 +676,7 @@ pub mod blob_functions {
             result
         }
     }
-    /// Remove all bytes in the BLOB within an exclusive range and return them as a new BLOB.
+    /// Remove all bytes in the BLOB within an exclusive `range` and return them as a new BLOB.
     ///
     /// # Example
     ///
@@ -635,7 +703,7 @@ pub mod blob_functions {
         let end = INT::max(range.end, start);
         drain(blob, start, end - start)
     }
-    /// Remove all bytes in the BLOB within an inclusive range and return them as a new BLOB.
+    /// Remove all bytes in the BLOB within an inclusive `range` and return them as a new BLOB.
     ///
     /// # Example
     ///
@@ -702,7 +770,7 @@ pub mod blob_functions {
             blob.drain(start..start + len).collect()
         }
     }
-    /// Remove all bytes in the BLOB not within an exclusive range and return them as a new BLOB.
+    /// Remove all bytes in the BLOB not within an exclusive `range` and return them as a new BLOB.
     ///
     /// # Example
     ///
@@ -729,7 +797,7 @@ pub mod blob_functions {
         let end = INT::max(range.end, start);
         retain(blob, start, end - start)
     }
-    /// Remove all bytes in the BLOB not within an inclusive range and return them as a new BLOB.
+    /// Remove all bytes in the BLOB not within an inclusive `range` and return them as a new BLOB.
     ///
     /// # Example
     ///
@@ -827,33 +895,135 @@ mod parse_int_functions {
         }
     }
 
+    /// Parse the bytes within an exclusive `range` in the BLOB as an `INT`
+    /// in little-endian byte order.
+    ///
+    /// * If number of bytes in `range` < number of bytes for `INT`, zeros are padded.
+    /// * If number of bytes in `range` > number of bytes for `INT`, extra bytes are ignored.
+    ///
+    /// ```ignore
+    /// let b = blob();
+    ///
+    /// b += 1; b += 2; b += 3; b += 4; b += 5;
+    ///
+    /// let x = b.parse_le_int(1..3);   // parse two bytes
+    ///
+    /// print(x.to_hex());              // prints "0302"
+    /// ```
     #[rhai_fn(name = "parse_le_int")]
     pub fn parse_le_int_range(blob: &mut Blob, range: ExclusiveRange) -> INT {
         let start = INT::max(range.start, 0);
         let end = INT::max(range.end, start);
         parse_le_int(blob, start, end - start)
     }
+    /// Parse the bytes within an inclusive `range` in the BLOB as an `INT`
+    /// in little-endian byte order.
+    ///
+    /// * If number of bytes in `range` < number of bytes for `INT`, zeros are padded.
+    /// * If number of bytes in `range` > number of bytes for `INT`, extra bytes are ignored.
+    ///
+    /// ```ignore
+    /// let b = blob();
+    ///
+    /// b += 1; b += 2; b += 3; b += 4; b += 5;
+    ///
+    /// let x = b.parse_le_int(1..=3);  // parse three bytes
+    ///
+    /// print(x.to_hex());              // prints "040302"
+    /// ```
     #[rhai_fn(name = "parse_le_int")]
     pub fn parse_le_int_range_inclusive(blob: &mut Blob, range: InclusiveRange) -> INT {
         let start = INT::max(*range.start(), 0);
         let end = INT::max(*range.end(), start);
         parse_le_int(blob, start, end - start + 1)
     }
+    /// Parse the bytes beginning at the `start` position in the BLOB as an `INT`
+    /// in little-endian byte order.
+    ///
+    /// * If `start` < 0, position counts from the end of the BLOB (`-1` is the last byte).
+    /// * If `start` < -length of BLOB, position counts from the beginning of the BLOB.
+    /// * If `start` ≥ length of BLOB, zero is returned.
+    /// * If `len` ≤ 0, zero is returned.
+    /// * If `start` position + `len` ≥ length of BLOB, entire portion of the BLOB after the `start` position is parsed.
+    ///
+    /// * If number of bytes in range < number of bytes for `INT`, zeros are padded.
+    /// * If number of bytes in range > number of bytes for `INT`, extra bytes are ignored.
+    ///
+    /// ```ignore
+    /// let b = blob();
+    ///
+    /// b += 1; b += 2; b += 3; b += 4; b += 5;
+    ///
+    /// let x = b.parse_le_int(1, 2);
+    ///
+    /// print(x.to_hex());      // prints "0302"
+    /// ```
     pub fn parse_le_int(blob: &mut Blob, start: INT, len: INT) -> INT {
         parse_int(blob, start, len, true)
     }
+    /// Parse the bytes within an exclusive `range` in the BLOB as an `INT`
+    /// in big-endian byte order.
+    ///
+    /// * If number of bytes in `range` < number of bytes for `INT`, zeros are padded.
+    /// * If number of bytes in `range` > number of bytes for `INT`, extra bytes are ignored.
+    ///
+    /// ```ignore
+    /// let b = blob();
+    ///
+    /// b += 1; b += 2; b += 3; b += 4; b += 5;
+    ///
+    /// let x = b.parse_be_int(1..3);   // parse two bytes
+    ///
+    /// print(x.to_hex());              // prints "02030000...00"
+    /// ```
     #[rhai_fn(name = "parse_be_int")]
     pub fn parse_be_int_range(blob: &mut Blob, range: ExclusiveRange) -> INT {
         let start = INT::max(range.start, 0);
         let end = INT::max(range.end, start);
         parse_be_int(blob, start, end - start)
     }
+    /// Parse the bytes within an inclusive `range` in the BLOB as an `INT`
+    /// in big-endian byte order.
+    ///
+    /// * If number of bytes in `range` < number of bytes for `INT`, zeros are padded.
+    /// * If number of bytes in `range` > number of bytes for `INT`, extra bytes are ignored.
+    ///
+    /// ```ignore
+    /// let b = blob();
+    ///
+    /// b += 1; b += 2; b += 3; b += 4; b += 5;
+    ///
+    /// let x = b.parse_be_int(1..=3);  // parse three bytes
+    ///
+    /// print(x.to_hex());              // prints "0203040000...00"
+    /// ```
     #[rhai_fn(name = "parse_be_int")]
     pub fn parse_be_int_range_inclusive(blob: &mut Blob, range: InclusiveRange) -> INT {
         let start = INT::max(*range.start(), 0);
         let end = INT::max(*range.end(), start);
         parse_be_int(blob, start, end - start + 1)
     }
+    /// Parse the bytes beginning at the `start` position in the BLOB as an `INT`
+    /// in big-endian byte order.
+    ///
+    /// * If `start` < 0, position counts from the end of the BLOB (`-1` is the last byte).
+    /// * If `start` < -length of BLOB, position counts from the beginning of the BLOB.
+    /// * If `start` ≥ length of BLOB, zero is returned.
+    /// * If `len` ≤ 0, zero is returned.
+    /// * If `start` position + `len` ≥ length of BLOB, entire portion of the BLOB after the `start` position is parsed.
+    ///
+    /// * If number of bytes in range < number of bytes for `INT`, zeros are padded.
+    /// * If number of bytes in range > number of bytes for `INT`, extra bytes are ignored.
+    ///
+    /// ```ignore
+    /// let b = blob();
+    ///
+    /// b += 1; b += 2; b += 3; b += 4; b += 5;
+    ///
+    /// let x = b.parse_be_int(1, 2);
+    ///
+    /// print(x.to_hex());      // prints "02030000...00"
+    /// ```
     pub fn parse_be_int(blob: &mut Blob, start: INT, len: INT) -> INT {
         parse_int(blob, start, len, false)
     }
@@ -887,33 +1057,75 @@ mod parse_float_functions {
         }
     }
 
+    /// Parse the bytes within an exclusive `range` in the BLOB as a `FLOAT`
+    /// in little-endian byte order.
+    ///
+    /// * If number of bytes in `range` < number of bytes for `FLOAT`, zeros are padded.
+    /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes are ignored.
     #[rhai_fn(name = "parse_le_float")]
     pub fn parse_le_float_range(blob: &mut Blob, range: ExclusiveRange) -> FLOAT {
         let start = INT::max(range.start, 0);
         let end = INT::max(range.end, start);
         parse_le_float(blob, start, end - start)
     }
+    /// Parse the bytes within an inclusive `range` in the BLOB as a `FLOAT`
+    /// in little-endian byte order.
+    ///
+    /// * If number of bytes in `range` < number of bytes for `FLOAT`, zeros are padded.
+    /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes are ignored.
     #[rhai_fn(name = "parse_le_float")]
     pub fn parse_le_float_range_inclusive(blob: &mut Blob, range: InclusiveRange) -> FLOAT {
         let start = INT::max(*range.start(), 0);
         let end = INT::max(*range.end(), start);
         parse_le_float(blob, start, end - start + 1)
     }
+    /// Parse the bytes beginning at the `start` position in the BLOB as a `FLOAT`
+    /// in little-endian byte order.
+    ///
+    /// * If `start` < 0, position counts from the end of the BLOB (`-1` is the last byte).
+    /// * If `start` < -length of BLOB, position counts from the beginning of the BLOB.
+    /// * If `start` ≥ length of BLOB, zero is returned.
+    /// * If `len` ≤ 0, zero is returned.
+    /// * If `start` position + `len` ≥ length of BLOB, entire portion of the BLOB after the `start` position is parsed.
+    ///
+    /// * If number of bytes in range < number of bytes for `FLOAT`, zeros are padded.
+    /// * If number of bytes in range > number of bytes for `FLOAT`, extra bytes are ignored.
     pub fn parse_le_float(blob: &mut Blob, start: INT, len: INT) -> FLOAT {
         parse_float(blob, start, len, true)
     }
+    /// Parse the bytes within an exclusive `range` in the BLOB as a `FLOAT`
+    /// in big-endian byte order.
+    ///
+    /// * If number of bytes in `range` < number of bytes for `FLOAT`, zeros are padded.
+    /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes are ignored.
     #[rhai_fn(name = "parse_be_float")]
     pub fn parse_be_float_range(blob: &mut Blob, range: ExclusiveRange) -> FLOAT {
         let start = INT::max(range.start, 0);
         let end = INT::max(range.end, start);
         parse_be_float(blob, start, end - start)
     }
+    /// Parse the bytes within an inclusive `range` in the BLOB as a `FLOAT`
+    /// in big-endian byte order.
+    ///
+    /// * If number of bytes in `range` < number of bytes for `FLOAT`, zeros are padded.
+    /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes are ignored.
     #[rhai_fn(name = "parse_be_float")]
     pub fn parse_be_float_range_inclusive(blob: &mut Blob, range: InclusiveRange) -> FLOAT {
         let start = INT::max(*range.start(), 0);
         let end = INT::max(*range.end(), start);
         parse_be_float(blob, start, end - start + 1)
     }
+    /// Parse the bytes beginning at the `start` position in the BLOB as a `FLOAT`
+    /// in big-endian byte order.
+    ///
+    /// * If `start` < 0, position counts from the end of the BLOB (`-1` is the last byte).
+    /// * If `start` < -length of BLOB, position counts from the beginning of the BLOB.
+    /// * If `start` ≥ length of BLOB, zero is returned.
+    /// * If `len` ≤ 0, zero is returned.
+    /// * If `start` position + `len` ≥ length of BLOB, entire portion of the BLOB after the `start` position is parsed.
+    ///
+    /// * If number of bytes in range < number of bytes for `FLOAT`, zeros are padded.
+    /// * If number of bytes in range > number of bytes for `FLOAT`, extra bytes are ignored.
     pub fn parse_be_float(blob: &mut Blob, start: INT, len: INT) -> FLOAT {
         parse_float(blob, start, len, false)
     }
@@ -943,34 +1155,124 @@ mod write_int_functions {
 
         blob[start..][..len].copy_from_slice(&buf[..len]);
     }
+    /// Write an `INT` value to the bytes within an exclusive `range` in the BLOB
+    /// in little-endian byte order.
+    ///
+    /// * If number of bytes in `range` < number of bytes for `INT`, extra bytes in `INT` are not written.
+    /// * If number of bytes in `range` > number of bytes for `INT`, extra bytes in `range` are not modified.
+    ///
+    /// ```ignore
+    /// let b = blob(8);
+    ///
+    /// b.write_le_int(1..3, 0x12345678);
+    ///
+    /// print(b);       // prints "[0078560000000000]"
+    /// ```
     #[rhai_fn(name = "write_le")]
     pub fn write_le_int_range(blob: &mut Blob, range: ExclusiveRange, value: INT) {
         let start = INT::max(range.start, 0);
         let end = INT::max(range.end, start);
         write_le_int(blob, start, end - start, value)
     }
+    /// Write an `INT` value to the bytes within an inclusive `range` in the BLOB
+    /// in little-endian byte order.
+    ///
+    /// * If number of bytes in `range` < number of bytes for `INT`, extra bytes in `INT` are not written.
+    /// * If number of bytes in `range` > number of bytes for `INT`, extra bytes in `range` are not modified.
+    ///
+    /// ```ignore
+    /// let b = blob(8);
+    ///
+    /// b.write_le_int(1..=3, 0x12345678);
+    ///
+    /// print(b);       // prints "[0078563400000000]"
+    /// ```
     #[rhai_fn(name = "write_le")]
     pub fn write_le_int_range_inclusive(blob: &mut Blob, range: InclusiveRange, value: INT) {
         let start = INT::max(*range.start(), 0);
         let end = INT::max(*range.end(), start);
         write_le_int(blob, start, end - start + 1, value)
     }
+    /// Write an `INT` value to the bytes beginning at the `start` position in the BLOB
+    /// in little-endian byte order.
+    ///
+    /// * If `start` < 0, position counts from the end of the BLOB (`-1` is the last byte).
+    /// * If `start` < -length of BLOB, position counts from the beginning of the BLOB.
+    /// * If `start` ≥ length of BLOB, zero is returned.
+    /// * If `len` ≤ 0, zero is returned.
+    /// * If `start` position + `len` ≥ length of BLOB, entire portion of the BLOB after the `start` position is parsed.
+    ///
+    /// * If number of bytes in `range` < number of bytes for `INT`, extra bytes in `INT` are not written.
+    /// * If number of bytes in `range` > number of bytes for `INT`, extra bytes in `range` are not modified.
+    ///
+    /// ```ignore
+    /// let b = blob(8);
+    ///
+    /// b.write_le_int(1, 3, 0x12345678);
+    ///
+    /// print(b);       // prints "[0078563400000000]"
+    /// ```
     #[rhai_fn(name = "write_le")]
     pub fn write_le_int(blob: &mut Blob, start: INT, len: INT, value: INT) {
         write_int(blob, start, len, value, true)
     }
+    /// Write an `INT` value to the bytes within an exclusive `range` in the BLOB
+    /// in big-endian byte order.
+    ///
+    /// * If number of bytes in `range` < number of bytes for `INT`, extra bytes in `INT` are not written.
+    /// * If number of bytes in `range` > number of bytes for `INT`, extra bytes in `range` are not modified.
+    ///
+    /// ```ignore
+    /// let b = blob(8, 0x42);
+    ///
+    /// b.write_be_int(1..3, 0x99);
+    ///
+    /// print(b);       // prints "[4200004242424242]"
+    /// ```
     #[rhai_fn(name = "write_be")]
     pub fn write_be_int_range(blob: &mut Blob, range: ExclusiveRange, value: INT) {
         let start = INT::max(range.start, 0);
         let end = INT::max(range.end, start);
         write_be_int(blob, start, end - start, value)
     }
+    /// Write an `INT` value to the bytes within an inclusive `range` in the BLOB
+    /// in big-endian byte order.
+    ///
+    /// * If number of bytes in `range` < number of bytes for `INT`, extra bytes in `INT` are not written.
+    /// * If number of bytes in `range` > number of bytes for `INT`, extra bytes in `range` are not modified.
+    ///
+    /// ```ignore
+    /// let b = blob(8, 0x42);
+    ///
+    /// b.write_be_int(1..=3, 0x99);
+    ///
+    /// print(b);       // prints "[4200000042424242]"
+    /// ```
     #[rhai_fn(name = "write_be")]
     pub fn write_be_int_range_inclusive(blob: &mut Blob, range: InclusiveRange, value: INT) {
         let start = INT::max(*range.start(), 0);
         let end = INT::max(*range.end(), start);
         write_be_int(blob, start, end - start + 1, value)
     }
+    /// Write an `INT` value to the bytes beginning at the `start` position in the BLOB
+    /// in big-endian byte order.
+    ///
+    /// * If `start` < 0, position counts from the end of the BLOB (`-1` is the last byte).
+    /// * If `start` < -length of BLOB, position counts from the beginning of the BLOB.
+    /// * If `start` ≥ length of BLOB, zero is returned.
+    /// * If `len` ≤ 0, zero is returned.
+    /// * If `start` position + `len` ≥ length of BLOB, entire portion of the BLOB after the `start` position is parsed.
+    ///
+    /// * If number of bytes in `range` < number of bytes for `INT`, extra bytes in `INT` are not written.
+    /// * If number of bytes in `range` > number of bytes for `INT`, extra bytes in `range` are not modified.
+    ///
+    /// ```ignore
+    /// let b = blob(8, 0x42);
+    ///
+    /// b.write_be_int(1, 3, 0x99);
+    ///
+    /// print(b);       // prints "[4200000042424242]"
+    /// ```
     #[rhai_fn(name = "write_be")]
     pub fn write_be_int(blob: &mut Blob, start: INT, len: INT, value: INT) {
         write_int(blob, start, len, value, false)
@@ -1001,34 +1303,76 @@ mod write_float_functions {
 
         blob[start..][..len].copy_from_slice(&buf[..len]);
     }
+    /// Write a `FLOAT` value to the bytes within an exclusive `range` in the BLOB
+    /// in little-endian byte order.
+    ///
+    /// * If number of bytes in `range` < number of bytes for `FLOAT`, extra bytes in `FLOAT` are not written.
+    /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes in `range` are not modified.
     #[rhai_fn(name = "write_le")]
     pub fn write_le_float_range(blob: &mut Blob, range: ExclusiveRange, value: FLOAT) {
         let start = INT::max(range.start, 0);
         let end = INT::max(range.end, start);
         write_le_float(blob, start, end - start, value)
     }
+    /// Write a `FLOAT` value to the bytes within an inclusive `range` in the BLOB
+    /// in little-endian byte order.
+    ///
+    /// * If number of bytes in `range` < number of bytes for `FLOAT`, extra bytes in `FLOAT` are not written.
+    /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes in `range` are not modified.
     #[rhai_fn(name = "write_le")]
     pub fn write_le_float_range_inclusive(blob: &mut Blob, range: InclusiveRange, value: FLOAT) {
         let start = INT::max(*range.start(), 0);
         let end = INT::max(*range.end(), start);
         write_le_float(blob, start, end - start + 1, value)
     }
+    /// Write a `FLOAT` value to the bytes beginning at the `start` position in the BLOB
+    /// in little-endian byte order.
+    ///
+    /// * If `start` < 0, position counts from the end of the BLOB (`-1` is the last byte).
+    /// * If `start` < -length of BLOB, position counts from the beginning of the BLOB.
+    /// * If `start` ≥ length of BLOB, zero is returned.
+    /// * If `len` ≤ 0, zero is returned.
+    /// * If `start` position + `len` ≥ length of BLOB, entire portion of the BLOB after the `start` position is parsed.
+    ///
+    /// * If number of bytes in `range` < number of bytes for `FLOAT`, extra bytes in `FLOAT` are not written.
+    /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes in `range` are not modified.
     #[rhai_fn(name = "write_le")]
     pub fn write_le_float(blob: &mut Blob, start: INT, len: INT, value: FLOAT) {
         write_float(blob, start, len, value, true)
     }
+    /// Write a `FLOAT` value to the bytes within an exclusive `range` in the BLOB
+    /// in big-endian byte order.
+    ///
+    /// * If number of bytes in `range` < number of bytes for `FLOAT`, extra bytes in `FLOAT` are not written.
+    /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes in `range` are not modified.
     #[rhai_fn(name = "write_be")]
     pub fn write_be_float_range(blob: &mut Blob, range: ExclusiveRange, value: FLOAT) {
         let start = INT::max(range.start, 0);
         let end = INT::max(range.end, start);
         write_be_float(blob, start, end - start, value)
     }
+    /// Write a `FLOAT` value to the bytes within an inclusive `range` in the BLOB
+    /// in big-endian byte order.
+    ///
+    /// * If number of bytes in `range` < number of bytes for `FLOAT`, extra bytes in `FLOAT` are not written.
+    /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes in `range` are not modified.
     #[rhai_fn(name = "write_be")]
     pub fn write_be_float_range_inclusive(blob: &mut Blob, range: InclusiveRange, value: FLOAT) {
         let start = INT::max(*range.start(), 0);
         let end = INT::max(*range.end(), start);
         write_be_float(blob, start, end - start + 1, value)
     }
+    /// Write a `FLOAT` value to the bytes beginning at the `start` position in the BLOB
+    /// in big-endian byte order.
+    ///
+    /// * If `start` < 0, position counts from the end of the BLOB (`-1` is the last byte).
+    /// * If `start` < -length of BLOB, position counts from the beginning of the BLOB.
+    /// * If `start` ≥ length of BLOB, zero is returned.
+    /// * If `len` ≤ 0, zero is returned.
+    /// * If `start` position + `len` ≥ length of BLOB, entire portion of the BLOB after the `start` position is parsed.
+    ///
+    /// * If number of bytes in `range` < number of bytes for `FLOAT`, extra bytes in `FLOAT` are not written.
+    /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes in `range` are not modified.
     #[rhai_fn(name = "write_be")]
     pub fn write_be_float(blob: &mut Blob, start: INT, len: INT, value: FLOAT) {
         write_float(blob, start, len, value, false)
@@ -1063,32 +1407,100 @@ mod write_string_functions {
             blob[start..][..len].copy_from_slice(&string.as_bytes()[..len]);
         }
     }
-    #[rhai_fn(name = "write_utf8")]
-    pub fn write_utf8_string(blob: &mut Blob, start: INT, len: INT, string: &str) {
-        write_string(blob, start, len, string, false)
-    }
+    /// Write a string to the bytes within an exclusive `range` in the BLOB in UTF-8 encoding.
+    ///
+    /// * If number of bytes in `range` < length of `string`, extra bytes in `string` are not written.
+    /// * If number of bytes in `range` > length of `string`, extra bytes in `range` are not modified.
+    ///
+    /// ```ignore
+    /// let b = blob(8);
+    ///
+    /// b.write_utf8(1..5, "朝には紅顔ありて夕べには白骨となる");
+    ///
+    /// print(b);       // prints "[00e69c9de3000000]"
+    /// ```
     #[rhai_fn(name = "write_utf8")]
     pub fn write_utf8_string_range(blob: &mut Blob, range: ExclusiveRange, string: &str) {
         let start = INT::max(range.start, 0);
         let end = INT::max(range.end, start);
         write_string(blob, start, end - start, string, false)
     }
+    /// Write a string to the bytes within an inclusive `range` in the BLOB in UTF-8 encoding.
+    ///
+    /// * If number of bytes in `range` < length of `string`, extra bytes in `string` are not written.
+    /// * If number of bytes in `range` > length of `string`, extra bytes in `range` are not modified.
+    ///
+    /// ```ignore
+    /// let b = blob(8);
+    ///
+    /// b.write_utf8(1..=5, "朝には紅顔ありて夕べには白骨となる");
+    ///
+    /// print(b);       // prints "[00e69c9de3810000]"
+    /// ```
     #[rhai_fn(name = "write_utf8")]
     pub fn write_utf8_string_range_inclusive(blob: &mut Blob, range: InclusiveRange, string: &str) {
         let start = INT::max(*range.start(), 0);
         let end = INT::max(*range.end(), start);
         write_string(blob, start, end - start + 1, string, false)
     }
-    #[rhai_fn(name = "write_ascii")]
-    pub fn write_ascii_string(blob: &mut Blob, start: INT, len: INT, string: &str) {
-        write_string(blob, start, len, string, true)
+    /// Write a string to the bytes within an inclusive `range` in the BLOB in UTF-8 encoding.
+    ///
+    /// * If `start` < 0, position counts from the end of the BLOB (`-1` is the last byte).
+    /// * If `start` < -length of BLOB, position counts from the beginning of the BLOB.
+    /// * If `start` ≥ length of BLOB, the BLOB is not modified.
+    /// * If `len` ≤ 0, the BLOB is not modified.
+    /// * If `start` position + `len` ≥ length of BLOB, only the portion of the BLOB after the `start` position is modified.
+    ///
+    /// * If number of bytes in `range` < length of `string`, extra bytes in `string` are not written.
+    /// * If number of bytes in `range` > length of `string`, extra bytes in `range` are not modified.
+    ///
+    /// ```ignore
+    /// let b = blob(8);
+    ///
+    /// b.write_utf8(1, 5, "朝には紅顔ありて夕べには白骨となる");
+    ///
+    /// print(b);       // prints "[00e69c9de3810000]"
+    /// ```
+    #[rhai_fn(name = "write_utf8")]
+    pub fn write_utf8_string(blob: &mut Blob, start: INT, len: INT, string: &str) {
+        write_string(blob, start, len, string, false)
     }
+    /// Write an ASCII string to the bytes within an exclusive `range` in the BLOB.
+    ///
+    /// Each ASCII character encodes to one single byte in the BLOB.
+    /// Non-ASCII characters are ignored.
+    ///
+    /// * If number of bytes in `range` < length of `string`, extra bytes in `string` are not written.
+    /// * If number of bytes in `range` > length of `string`, extra bytes in `range` are not modified.
+    ///
+    /// ```ignore
+    /// let b = blob(8);
+    ///
+    /// b.write_ascii(1..5, "hello, world!");
+    ///
+    /// print(b);       // prints "[0068656c6c000000]"
+    /// ```
     #[rhai_fn(name = "write_ascii")]
     pub fn write_ascii_string_range(blob: &mut Blob, range: ExclusiveRange, string: &str) {
         let start = INT::max(range.start, 0);
         let end = INT::max(range.end, start);
         write_string(blob, start, end - start, string, true)
     }
+    /// Write an ASCII string to the bytes within an inclusive `range` in the BLOB.
+    ///
+    /// Each ASCII character encodes to one single byte in the BLOB.
+    /// Non-ASCII characters are ignored.
+    ///
+    /// * If number of bytes in `range` < length of `string`, extra bytes in `string` are not written.
+    /// * If number of bytes in `range` > length of `string`, extra bytes in `range` are not modified.
+    ///
+    /// ```ignore
+    /// let b = blob(8);
+    ///
+    /// b.write_ascii(1..=5, "hello, world!");
+    ///
+    /// print(b);       // prints "[0068656c6c6f0000]"
+    /// ```
     #[rhai_fn(name = "write_ascii")]
     pub fn write_ascii_string_range_inclusive(
         blob: &mut Blob,
@@ -1098,5 +1510,27 @@ mod write_string_functions {
         let start = INT::max(*range.start(), 0);
         let end = INT::max(*range.end(), start);
         write_string(blob, start, end - start + 1, string, true)
+    }
+    /// Write an ASCII string to the bytes within an exclusive `range` in the BLOB.
+    ///
+    /// * If `start` < 0, position counts from the end of the BLOB (`-1` is the last byte).
+    /// * If `start` < -length of BLOB, position counts from the beginning of the BLOB.
+    /// * If `start` ≥ length of BLOB, the BLOB is not modified.
+    /// * If `len` ≤ 0, the BLOB is not modified.
+    /// * If `start` position + `len` ≥ length of BLOB, only the portion of the BLOB after the `start` position is modified.
+    ///
+    /// * If number of bytes in `range` < length of `string`, extra bytes in `string` are not written.
+    /// * If number of bytes in `range` > length of `string`, extra bytes in `range` are not modified.
+    ///
+    /// ```ignore
+    /// let b = blob(8);
+    ///
+    /// b.write_ascii(1, 5, "hello, world!");
+    ///
+    /// print(b);       // prints "[0068656c6c6f0000]"
+    /// ```
+    #[rhai_fn(name = "write_ascii")]
+    pub fn write_ascii_string(blob: &mut Blob, start: INT, len: INT, string: &str) {
+        write_string(blob, start, len, string, true)
     }
 }

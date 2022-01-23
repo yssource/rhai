@@ -3,13 +3,14 @@
 use crate::func::call::FnResolutionCache;
 use crate::StaticVec;
 use std::collections::BTreeMap;
+use std::marker::PhantomData;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
 /// _(internals)_ A type that holds all the current states of the [`Engine`].
 /// Exported under the `internals` feature only.
 #[derive(Debug, Clone)]
-pub struct EvalState {
+pub struct EvalState<'a> {
     /// Force a [`Scope`] search by name.
     ///
     /// Normally, access to variables are parsed with a relative offset into the [`Scope`] to avoid a lookup.
@@ -25,17 +26,20 @@ pub struct EvalState {
     pub scope_level: usize,
     /// Stack of function resolution caches.
     fn_resolution_caches: StaticVec<FnResolutionCache>,
+    /// Take care of the lifetime parameter
+    dummy: PhantomData<Option<&'a ()>>,
 }
 
-impl EvalState {
+impl EvalState<'_> {
     /// Create a new [`EvalState`].
     #[inline(always)]
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             always_search_scope: false,
             scope_level: 0,
             fn_resolution_caches: StaticVec::new_const(),
+            dummy: PhantomData::default(),
         }
     }
     /// Get the number of function resolution cache(s) in the stack.

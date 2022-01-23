@@ -1,4 +1,4 @@
-use rhai::{Dynamic, Engine, EvalAltResult, Module, Scope, AST};
+use rhai::{Dynamic, Engine, EvalAltResult, Module, Scope, AST, INT};
 
 use std::{
     env,
@@ -46,6 +46,7 @@ fn print_help() {
     println!("help       => print this help");
     println!("quit, exit => quit");
     println!("scope      => print all variables in the scope");
+    println!("strict     => toggle on/off Strict Variables Mode");
     #[cfg(feature = "metadata")]
     println!("functions  => print all functions defined");
     #[cfg(feature = "metadata")]
@@ -53,6 +54,30 @@ fn print_help() {
     println!("ast        => print the last AST (optimized)");
     println!("astu       => print the last raw, un-optimized AST");
     println!(r"end a line with '\' to continue to the next line.");
+    println!();
+}
+
+/// Display the scope.
+fn print_scope(scope: &Scope) {
+    scope
+        .iter_raw()
+        .enumerate()
+        .for_each(|(i, (name, constant, value))| {
+            #[cfg(not(feature = "no_closure"))]
+            let value_is_shared = if value.is_shared() { " (shared)" } else { "" };
+            #[cfg(feature = "no_closure")]
+            let value_is_shared = "";
+
+            println!(
+                "[{}] {}{}{} = {:?}",
+                i + 1,
+                if constant { "const " } else { "" },
+                name,
+                value_is_shared,
+                *value.read_lock::<Dynamic>().unwrap(),
+            )
+        });
+
     println!();
 }
 
@@ -155,8 +180,12 @@ fn main() {
         engine.set_module_resolver(resolver);
     }
 
-    // Make Engine immutable
-    let engine = engine;
+    engine
+        .register_fn("test", |x: INT, y: INT| format!("{} {}", x, y))
+        .register_fn("test", |x: &mut INT, y: INT, z: &str| {
+            *x += y;
+            println!("{} {} {}", x, y, z);
+        });
 
     // Create scope
     let mut scope = Scope::new();
@@ -208,26 +237,18 @@ fn main() {
                 continue;
             }
             "exit" | "quit" => break, // quit
+            "strict" if engine.strict_variables() => {
+                engine.set_strict_variables(false);
+                println!("Strict Variables Mode turned OFF.");
+                continue;
+            }
+            "strict" => {
+                engine.set_strict_variables(true);
+                println!("Strict Variables Mode turned ON.");
+                continue;
+            }
             "scope" => {
-                scope
-                    .iter_raw()
-                    .enumerate()
-                    .for_each(|(i, (name, constant, value))| {
-                        #[cfg(not(feature = "no_closure"))]
-                        let value_is_shared = if value.is_shared() { " (shared)" } else { "" };
-                        #[cfg(feature = "no_closure")]
-                        let value_is_shared = "";
-
-                        println!(
-                            "[{}] {}{}{} = {:?}",
-                            i + 1,
-                            if constant { "const " } else { "" },
-                            name,
-                            value_is_shared,
-                            *value.read_lock::<Dynamic>().unwrap(),
-                        )
-                    });
-                println!();
+                print_scope(&scope);
                 continue;
             }
             "astu" => {

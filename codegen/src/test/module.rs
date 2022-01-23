@@ -38,6 +38,7 @@ mod module_tests {
     }
 
     #[test]
+    #[cfg(feature = "metadata")]
     fn one_factory_fn_with_comments_module() {
         let input_tokens: TokenStream = quote! {
             pub mod one_fn {
@@ -150,9 +151,9 @@ mod module_tests {
         assert!(item_mod.fns().is_empty());
         assert!(item_mod.consts().is_empty());
         assert_eq!(item_mod.sub_modules().len(), 1);
-        assert_eq!(&item_mod.sub_modules()[0].consts()[0].0, "MYSTIC_NUMBER");
+        assert_eq!(&item_mod.sub_modules()[0].consts()[0].name, "MYSTIC_NUMBER");
         assert_eq!(
-            item_mod.sub_modules()[0].consts()[0].2,
+            item_mod.sub_modules()[0].consts()[0].expr,
             syn::parse2::<syn::Expr>(quote! { 42 }).unwrap()
         );
     }
@@ -211,9 +212,9 @@ mod module_tests {
         let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
         assert!(item_mod.fns().is_empty());
         assert_eq!(item_mod.consts().len(), 1);
-        assert_eq!(&item_mod.consts()[0].0, "MYSTIC_NUMBER");
+        assert_eq!(&item_mod.consts()[0].name, "MYSTIC_NUMBER");
         assert_eq!(
-            item_mod.consts()[0].2,
+            item_mod.consts()[0].expr,
             syn::parse2::<syn::Expr>(quote! { 42 }).unwrap()
         );
     }
@@ -386,6 +387,14 @@ mod generate_tests {
 
         let expected_tokens = quote! {
             pub mod one_fn {
+                /// This is a doc-comment.
+                /// Another line.
+                /** block doc-comment */
+                // Regular comment
+                /// Final line.
+                /** doc-comment
+                    in multiple lines
+                 */
                 pub fn get_mystic_number() -> INT {
                     42
                 }
@@ -401,8 +410,13 @@ mod generate_tests {
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn_with_comments("get_mystic_number", FnNamespace::Internal, FnAccess::Public,
-                             Some(get_mystic_number_token::PARAM_NAMES), &[], &["/// This is a doc-comment.","/// Another line.","/// block doc-comment ","/// Final line.","/** doc-comment\n                    in multiple lines\n                 */"],
-                             get_mystic_number_token().into());
+                             Some(get_mystic_number_token::PARAM_NAMES), &[], &[
+                                 "/// This is a doc-comment.",
+                                 "/// Another line.",
+                                 "/// block doc-comment ",
+                                 "/// Final line.",
+                                 "/** doc-comment\n                    in multiple lines\n                 */"
+                             ], get_mystic_number_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]

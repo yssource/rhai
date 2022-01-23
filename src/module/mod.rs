@@ -92,18 +92,60 @@ impl FuncInfo {
     /// `()` is cleared.  
     /// [`RhaiResult`][crate::RhaiResult] and [`RhaiResultOf<T>`] are expanded.
     #[cfg(feature = "metadata")]
-    pub fn format_return_type(typ: &str) -> std::borrow::Cow<str> {
+    pub fn format_type(typ: &str, is_return_type: bool) -> std::borrow::Cow<str> {
         const RHAI_RESULT_TYPE: &str = "RhaiResult";
         const RHAI_RESULT_TYPE_EXPAND: &str = "Result<Dynamic, Box<EvalAltResult>>";
         const RHAI_RESULT_OF_TYPE: &str = "RhaiResultOf<";
         const RHAI_RESULT_OF_TYPE_EXPAND: &str = "Result<{}, Box<EvalAltResult>>";
+        const RHAI_RANGE: &str = "ExclusiveRange";
+        const RHAI_RANGE_TYPE: &str = "Range<";
+        const RHAI_RANGE_EXPAND: &str = "Range<{}>";
+        const RHAI_INCLUSIVE_RANGE: &str = "InclusiveRange";
+        const RHAI_INCLUSIVE_RANGE_TYPE: &str = "RangeInclusive<";
+        const RHAI_INCLUSIVE_RANGE_EXPAND: &str = "RangeInclusive<{}>";
+
+        let typ = typ.trim();
+
+        if typ.starts_with("rhai::") {
+            return Self::format_type(&typ[6..], is_return_type);
+        } else if typ.starts_with("&mut ") {
+            let x = &typ[5..];
+            let r = Self::format_type(x, false);
+            return if r == x {
+                typ.into()
+            } else {
+                format!("&mut {}", r).into()
+            };
+        }
 
         match typ {
-            "" | "()" => "".into(),
+            "" | "()" if is_return_type => "".into(),
+            "INT" => std::any::type_name::<crate::INT>().into(),
+            #[cfg(not(feature = "no_float"))]
+            "FLOAT" => std::any::type_name::<crate::FLOAT>().into(),
+            RHAI_RANGE => RHAI_RANGE_EXPAND
+                .replace("{}", std::any::type_name::<crate::INT>())
+                .into(),
+            RHAI_INCLUSIVE_RANGE => RHAI_INCLUSIVE_RANGE_EXPAND
+                .replace("{}", std::any::type_name::<crate::INT>())
+                .into(),
             RHAI_RESULT_TYPE => RHAI_RESULT_TYPE_EXPAND.into(),
+            ty if ty.starts_with(RHAI_RANGE_TYPE) && ty.ends_with('>') => {
+                let inner = &ty[RHAI_RANGE_TYPE.len()..ty.len() - 1];
+                RHAI_RANGE_EXPAND
+                    .replace("{}", Self::format_type(inner, false).trim())
+                    .into()
+            }
+            ty if ty.starts_with(RHAI_INCLUSIVE_RANGE_TYPE) && ty.ends_with('>') => {
+                let inner = &ty[RHAI_INCLUSIVE_RANGE_TYPE.len()..ty.len() - 1];
+                RHAI_INCLUSIVE_RANGE_EXPAND
+                    .replace("{}", Self::format_type(inner, false).trim())
+                    .into()
+            }
             ty if ty.starts_with(RHAI_RESULT_OF_TYPE) && ty.ends_with('>') => {
+                let inner = &ty[RHAI_RESULT_OF_TYPE.len()..ty.len() - 1];
                 RHAI_RESULT_OF_TYPE_EXPAND
-                    .replace("{}", ty[RHAI_RESULT_OF_TYPE.len()..ty.len() - 1].trim())
+                    .replace("{}", Self::format_type(inner, false).trim())
                     .into()
             }
             ty => ty.into(),
@@ -116,22 +158,30 @@ impl FuncInfo {
     pub fn gen_signature(&self) -> String {
         let mut sig = format!("{}(", self.metadata.name);
 
-        let return_type = Self::format_return_type(&self.metadata.return_type);
+        let return_type = Self::format_type(&self.metadata.return_type, true);
 
         if !self.metadata.params_info.is_empty() {
             let params: StaticVec<_> = self
                 .metadata
                 .params_info
                 .iter()
-                .map(|s| s.as_str())
+                .map(|s| {
+                    let mut seg = s.splitn(2, ':');
+                    let name = match seg.next().unwrap().trim() {
+                        "" => "_",
+                        s => s,
+                    };
+                    let result: std::borrow::Cow<str> = match seg.next() {
+                        Some(typ) => {
+                            format!("{}: {}", name, FuncInfo::format_type(typ, false)).into()
+                        }
+                        None => name.into(),
+                    };
+                    result
+                })
                 .collect();
             sig.push_str(&params.join(", "));
             sig.push(')');
-
-            if !return_type.is_empty() {
-                sig.push_str(" -> ");
-                sig.push_str(&return_type);
-            }
         } else {
             for x in 0..self.metadata.params {
                 sig.push('_');
@@ -139,17 +189,12 @@ impl FuncInfo {
                     sig.push_str(", ");
                 }
             }
-
             sig.push(')');
+        }
 
-            if !self.func.is_script() {
-                sig.push(')');
-
-                if !return_type.is_empty() {
-                    sig.push_str(" -> ");
-                    sig.push_str(&return_type);
-                }
-            }
+        if !self.func.is_script() && !return_type.is_empty() {
+            sig.push_str(" -> ");
+            sig.push_str(&return_type);
         }
 
         sig
@@ -541,7 +586,7 @@ impl Module {
                     #[cfg(feature = "metadata")]
                     params_info,
                     #[cfg(feature = "metadata")]
-                    return_type: "Dynamic".into(),
+                    return_type: "".into(),
                     #[cfg(feature = "metadata")]
                     comments: None,
                 },
@@ -705,7 +750,7 @@ impl Module {
                 let return_type = param_names.pop().unwrap();
                 (param_names, return_type)
             } else {
-                (param_names, Default::default())
+                (param_names, crate::SmartString::new_const())
             };
             f.metadata.params_info = param_names;
             f.metadata.return_type = return_type_name;
@@ -837,7 +882,7 @@ impl Module {
             let return_type = if names.len() > arg_types.as_ref().len() {
                 names.pop().unwrap()
             } else {
-                Default::default()
+                crate::SmartString::new_const()
             };
             names.shrink_to_fit();
             (names, return_type)
@@ -1402,14 +1447,14 @@ impl Module {
     /// Merge another [`Module`] into this [`Module`].
     #[inline(always)]
     pub fn merge(&mut self, other: &Self) -> &mut Self {
-        self.merge_filtered(other, &|_, _, _, _, _| true)
+        self.merge_filtered(other, |_, _, _, _, _| true)
     }
 
     /// Merge another [`Module`] into this [`Module`] based on a filter predicate.
     pub(crate) fn merge_filtered(
         &mut self,
         other: &Self,
-        _filter: &impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
+        _filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool + Copy,
     ) -> &mut Self {
         #[cfg(not(feature = "no_function"))]
         other.modules.iter().for_each(|(k, v)| {
@@ -1620,7 +1665,7 @@ impl Module {
     ) -> RhaiResultOf<Self> {
         let mut scope = scope;
         let mut global = crate::eval::GlobalRuntimeState::new();
-        let orig_mods_len = global.num_imported_modules();
+        let orig_mods_len = global.num_imports();
 
         // Run the script
         engine.eval_ast_with_scope_raw(&mut scope, &mut global, &ast, 0)?;

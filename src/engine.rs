@@ -329,13 +329,47 @@ impl Engine {
     ///
     /// If a type is registered via [`register_type_with_name`][Engine::register_type_with_name],
     /// the type name provided for the registration will be used.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the type name is `&mut`.
     #[inline]
     #[must_use]
     pub fn map_type_name<'a>(&'a self, name: &'a str) -> &'a str {
         self.type_names
             .get(name)
             .map(|s| s.as_str())
-            .unwrap_or_else(|| map_std_type_name(name))
+            .unwrap_or_else(|| map_std_type_name(name, true))
+    }
+
+    /// Format a type name.
+    ///
+    /// If a type is registered via [`register_type_with_name`][Engine::register_type_with_name],
+    /// the type name provided for the registration will be used.
+    #[cfg(feature = "metadata")]
+    #[inline]
+    #[must_use]
+    pub(crate) fn format_type_name<'a>(&'a self, name: &'a str) -> std::borrow::Cow<'a, str> {
+        if name.starts_with("&mut ") {
+            let x = &name[5..];
+            let r = self.format_type_name(x);
+            return if x != r {
+                format!("&mut {}", r).into()
+            } else {
+                name.into()
+            };
+        }
+
+        self.type_names
+            .get(name)
+            .map(|s| s.as_str())
+            .unwrap_or_else(|| match name {
+                "INT" => return type_name::<crate::INT>(),
+                #[cfg(not(feature = "no_float"))]
+                "FLOAT" => return type_name::<crate::FLOAT>(),
+                _ => map_std_type_name(name, false),
+            })
+            .into()
     }
 
     /// Make a `Box<`[`EvalAltResult<ErrorMismatchDataType>`][ERR::ErrorMismatchDataType]`>`.

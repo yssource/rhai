@@ -70,7 +70,7 @@ impl Engine {
         }
 
         let orig_scope_len = scope.len();
-        let orig_mods_len = global.num_imported_modules();
+        let orig_mods_len = global.num_imports();
 
         // Put arguments into scope as variables
         scope.extend(fn_def.params.iter().cloned().zip(args.into_iter().map(|v| {
@@ -100,7 +100,7 @@ impl Engine {
             modules
                 .iter()
                 .cloned()
-                .for_each(|(n, m)| global.push_module(n, m));
+                .for_each(|(n, m)| global.push_import(n, m));
         }
 
         // Evaluate the function
@@ -144,7 +144,7 @@ impl Engine {
             // Remove arguments only, leaving new variables in the scope
             scope.remove_range(orig_scope_len, args.len())
         }
-        global.truncate_modules(orig_mods_len);
+        global.truncate_imports(orig_mods_len);
 
         // Restore state
         state.rewind_fn_resolution_caches(orig_fn_resolution_caches_len);
@@ -172,7 +172,7 @@ impl Engine {
             // Then check the global namespace and packages
             || self.global_modules.iter().any(|m| m.contains_fn(hash_script))
             // Then check imported modules
-            || global.map_or(false, |m| m.contains_fn(hash_script))
+            || global.map_or(false, |m| m.contains_qualified_fn(hash_script))
             // Then check sub-modules
             || self.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash_script));
 

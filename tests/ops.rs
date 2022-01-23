@@ -6,6 +6,11 @@ fn test_ops() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(engine.eval::<INT>("60 + 5")?, 65);
     assert_eq!(engine.eval::<INT>("(1 + 2) * (6 - 4) / 2")?, 3);
+    assert_eq!(engine.eval::<INT>("let x = 41; x = x + 1; x")?, 42);
+    assert_eq!(
+        engine.eval::<String>(r#"let s = "hello"; s = s + 42; s"#)?,
+        "hello42"
+    );
 
     Ok(())
 }

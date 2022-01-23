@@ -179,9 +179,9 @@ impl Engine {
     /// Search order:
     /// 1) AST - script functions in the AST
     /// 2) Global namespace - functions registered via Engine::register_XXX
-    /// 3) Global modules - packages
+    /// 3) Global registered modules - packages
     /// 4) Imported modules - functions marked with global namespace
-    /// 5) Global sub-modules - functions marked with global namespace
+    /// 5) Static registered modules
     #[must_use]
     fn resolve_fn<'s>(
         &self,
@@ -220,7 +220,7 @@ impl Engine {
                 loop {
                     let func = lib
                         .iter()
-                        .find_map(|m| {
+                        .find_map(|&m| {
                             m.get_fn(hash).cloned().map(|func| FnResolutionCacheEntry {
                                 func,
                                 source: m.id_raw().clone(),
@@ -235,13 +235,13 @@ impl Engine {
                             })
                         })
                         .or_else(|| {
-                            global
-                                .get_fn(hash)
-                                .map(|(func, source)| FnResolutionCacheEntry {
+                            global.get_qualified_fn(hash).map(|(func, source)| {
+                                FnResolutionCacheEntry {
                                     func: func.clone(),
                                     source: source
                                         .map_or_else(|| Identifier::new_const(), Into::into),
-                                })
+                                }
+                            })
                         })
                         .or_else(|| {
                             self.global_sub_modules.values().find_map(|m| {
