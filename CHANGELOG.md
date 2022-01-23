@@ -1,12 +1,13 @@
 Rhai Release Notes
 ==================
 
-Version 1.5.0
+Version 1.4.1
 =============
 
 Bug fixes
 ---------
 
+* Expressions such as `x = x + 1` no longer panics.
 * Padding arrays with another array via `pad` no longer loops indefinitely.
 * `chop` for arrays and BLOB's now works properly.
 * `set_bit` for bit-flags with negative index now works correctly.

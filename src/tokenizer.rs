@@ -636,7 +636,7 @@ impl Token {
 
     /// Get the corresponding operator of the token if it is an op-assignment operator.
     #[must_use]
-    pub const fn map_op_assignment(&self) -> Option<Self> {
+    pub const fn get_base_op_from_assignment(&self) -> Option<Self> {
         Some(match self {
             Self::PlusAssign => Self::Plus,
             Self::MinusAssign => Self::Minus,
@@ -675,7 +675,7 @@ impl Token {
 
     /// Get the corresponding op-assignment operator of the token.
     #[must_use]
-    pub const fn make_op_assignment(&self) -> Option<Self> {
+    pub const fn convert_to_op_assignment(&self) -> Option<Self> {
         Some(match self {
             Self::Plus => Self::PlusAssign,
             Self::Minus => Self::MinusAssign,

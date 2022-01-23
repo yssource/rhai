@@ -423,7 +423,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
             match x.2 {
                 Expr::FnCall(ref mut x2, _) => {
                     state.set_dirty();
-                    x.1 = Some(OpAssignment::new(&x2.name));
+                    x.1 = Some(OpAssignment::new_from_base(&x2.name));
 
                     let value = mem::take(&mut x2.args[1]);
 
