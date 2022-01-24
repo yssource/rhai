@@ -1,8 +1,13 @@
 Rhai Release Notes
 ==================
 
-Version 1.5.0
+Version 1.4.2
 =============
+
+Bug fixes
+---------
+
+* Variables introduced inside `try` blocks are now properly cleaned up upon an exception.
 
 
 Version 1.4.1
