@@ -35,7 +35,7 @@ impl Engine {
             state.scope_level += 1;
         }
 
-        let mut result = Dynamic::UNIT;
+        let mut result = Ok(Dynamic::UNIT);
 
         for stmt in statements {
             let _mods_len = global.num_imports();
@@ -49,7 +49,11 @@ impl Engine {
                 stmt,
                 restore_orig_state,
                 level,
-            )?;
+            );
+
+            if result.is_err() {
+                break;
+            }
 
             #[cfg(not(feature = "no_module"))]
             if matches!(stmt, Stmt::Import(_, _, _)) {
@@ -89,7 +93,7 @@ impl Engine {
             state.always_search_scope = orig_always_search_scope;
         }
 
-        Ok(result)
+        result
     }
 
     /// Evaluate an op-assignment statement.

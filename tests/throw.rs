@@ -29,6 +29,12 @@ fn test_try_catch() -> Result<(), Box<EvalAltResult>> {
         123
     );
 
+    #[cfg(not(feature = "unchecked"))]
+    assert_eq!(
+        engine.eval::<INT>("let x = 42; try { let y = 123; print(x/0); } catch { x = 0 } x")?,
+        0
+    );
+
     #[cfg(not(feature = "no_function"))]
     assert_eq!(
         engine.eval::<INT>(
