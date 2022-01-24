@@ -8,6 +8,12 @@ Bug fixes
 ---------
 
 * Variables introduced inside `try` blocks are now properly cleaned up upon an exception.
+* Off-by-one error in character positions after a comment line is now fixed.
+
+Enhancements
+------------
+
+* `rhai-repl` tool has a few more commands, such as `strict` to turn on/off _Strict Variables Mode_ and `optimize` to turn on/off script optimization.
 
 
 Version 1.4.1
