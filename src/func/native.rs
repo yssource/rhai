@@ -301,10 +301,7 @@ impl<'a> NativeCallContext<'a> {
 
         self.engine()
             .exec_fn_call(
-                &mut self
-                    .global
-                    .cloned()
-                    .unwrap_or_else(|| GlobalRuntimeState::new()),
+                &mut self.global.cloned().unwrap_or_else(GlobalRuntimeState::new),
                 &mut EvalState::new(),
                 self.lib,
                 fn_name,

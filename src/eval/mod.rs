@@ -1,5 +1,6 @@
 mod chaining;
 mod data_check;
+mod debugger;
 mod eval_context;
 mod eval_state;
 mod expr;
@@ -9,6 +10,8 @@ mod target;
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 pub use chaining::{ChainArgument, ChainType};
+#[cfg(feature = "debugging")]
+pub use debugger::{BreakPoint, Debugger, DebuggerCommand, OnDebuggerCallback};
 pub use eval_context::EvalContext;
 pub use eval_state::EvalState;
 pub use global_state::GlobalRuntimeState;

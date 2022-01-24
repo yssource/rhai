@@ -64,7 +64,7 @@ impl Engine {
         self.resolve_var = Some(Box::new(callback));
         self
     }
-    /// _(internals)_ Provide a callback that will be invoked during parsing to remap certain tokens.
+    /// _(internals)_ Register a callback that will be invoked during parsing to remap certain tokens.
     /// Exported under the `internals` feature only.
     ///
     /// # Callback Function Signature
@@ -259,6 +259,24 @@ impl Engine {
         callback: impl Fn(&str, Option<&str>, Position) + SendSync + 'static,
     ) -> &mut Self {
         self.debug = Some(Box::new(callback));
+        self
+    }
+    /// _(debugging)_ Register a callback for debugging.
+    /// Exported under the `debugging` feature only.
+    #[cfg(feature = "debugging")]
+    #[inline(always)]
+    pub fn on_debugger(
+        &mut self,
+        callback: impl Fn(
+                &mut EvalContext,
+                crate::ast::ASTNode,
+                Option<&str>,
+                Position,
+            ) -> crate::eval::DebuggerCommand
+            + SendSync
+            + 'static,
+    ) -> &mut Self {
+        self.debugger = Some(Box::new(callback));
         self
     }
 }

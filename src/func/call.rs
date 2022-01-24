@@ -889,8 +889,20 @@ impl Engine {
     ) -> RhaiResultOf<(Dynamic, Position)> {
         Ok((
             if let Expr::Stack(slot, _) = arg_expr {
+                #[cfg(feature = "debugging")]
+                let active =
+                    self.run_debugger(scope, global, state, lib, this_ptr, arg_expr.into(), level);
+                #[cfg(feature = "debugging")]
+                global.debugger.activate(active);
+
                 constants[*slot].clone()
             } else if let Some(value) = arg_expr.get_literal_value() {
+                #[cfg(feature = "debugging")]
+                let active =
+                    self.run_debugger(scope, global, state, lib, this_ptr, arg_expr.into(), level);
+                #[cfg(feature = "debugging")]
+                global.debugger.activate(active);
+
                 value
             } else {
                 self.eval_expr(scope, global, state, lib, this_ptr, arg_expr, level)?
@@ -1133,9 +1145,17 @@ impl Engine {
             // convert to method-call style in order to leverage potential &mut first argument and
             // avoid cloning the value
             if curry.is_empty() && first_arg.map_or(false, |expr| expr.is_variable_access(false)) {
-                // func(x, ...) -> x.func(...)
                 let first_expr = first_arg.unwrap();
 
+                #[cfg(feature = "debugging")]
+                {
+                    let node = first_expr.into();
+                    let active =
+                        self.run_debugger(scope, global, state, lib, this_ptr, node, level);
+                    global.debugger.activate(active);
+                }
+
+                // func(x, ...) -> x.func(...)
                 a_expr.iter().try_for_each(|expr| {
                     self.get_arg_value(scope, global, state, lib, this_ptr, level, expr, constants)
                         .map(|(value, _)| arg_values.push(value.flatten()))
@@ -1215,6 +1235,14 @@ impl Engine {
             // If so, convert to method-call style in order to leverage potential
             // &mut first argument and avoid cloning the value
             if !args_expr.is_empty() && args_expr[0].is_variable_access(true) {
+                #[cfg(feature = "debugging")]
+                {
+                    let node = (&args_expr[0]).into();
+                    let active =
+                        self.run_debugger(scope, global, state, lib, this_ptr, node, level);
+                    global.debugger.activate(active);
+                }
+
                 // func(x, ...) -> x.func(...)
                 arg_values.push(Dynamic::UNIT);
 

@@ -24,7 +24,7 @@ pub struct EvalContext<'a, 'x, 'px, 'm, 'pm, 's, 'ps, 'b, 't, 'pt> {
     pub(crate) level: usize,
 }
 
-impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, '_, '_, 'pt> {
+impl<'x, 'px, 'm, 'pm, 'pt> EvalContext<'_, 'x, 'px, 'm, 'pm, '_, '_, '_, '_, 'pt> {
     /// The current [`Engine`].
     #[inline(always)]
     #[must_use]
@@ -46,7 +46,7 @@ impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, '_, '_, 'pt> {
     pub const fn scope(&self) -> &Scope<'px> {
         self.scope
     }
-    /// Mutable reference to the current [`Scope`].
+    /// Get a mutable reference to the current [`Scope`].
     #[inline(always)]
     #[must_use]
     pub fn scope_mut(&mut self) -> &mut &'x mut Scope<'px> {
@@ -66,6 +66,15 @@ impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, '_, '_, 'pt> {
     #[must_use]
     pub const fn global_runtime_state(&self) -> &GlobalRuntimeState {
         self.global
+    }
+    /// _(internals)_ Get a mutable reference to the current [`GlobalRuntimeState`].
+    /// Exported under the `internals` feature only.
+    #[cfg(feature = "internals")]
+    #[cfg(not(feature = "no_module"))]
+    #[inline(always)]
+    #[must_use]
+    pub fn global_runtime_state_mut(&mut self) -> &mut &'m mut GlobalRuntimeState<'pm> {
+        &mut self.global
     }
     /// Get an iterator over the namespaces containing definition of all script-defined functions.
     #[inline]

@@ -63,7 +63,7 @@ pub struct ParseState<'e> {
     pub allow_capture: bool,
     /// Encapsulates a local stack with imported [module][crate::Module] names.
     #[cfg(not(feature = "no_module"))]
-    pub modules: StaticVec<Identifier>,
+    pub imports: StaticVec<Identifier>,
     /// Maximum levels of expression nesting.
     #[cfg(not(feature = "unchecked"))]
     pub max_expr_depth: Option<NonZeroUsize>,
@@ -94,7 +94,7 @@ impl<'e> ParseState<'e> {
             stack: StaticVec::new_const(),
             entry_stack_len: 0,
             #[cfg(not(feature = "no_module"))]
-            modules: StaticVec::new_const(),
+            imports: StaticVec::new_const(),
         }
     }
 
@@ -158,7 +158,7 @@ impl<'e> ParseState<'e> {
     #[inline]
     #[must_use]
     pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
-        self.modules
+        self.imports
             .iter()
             .rev()
             .enumerate()
@@ -2564,7 +2564,7 @@ fn parse_import(
     // import expr as name ...
     let (name, pos) = parse_var_name(input)?;
     let name = state.get_identifier("", name);
-    state.modules.push(name.clone());
+    state.imports.push(name.clone());
 
     Ok(Stmt::Import(
         expr,
@@ -2677,7 +2677,7 @@ fn parse_block(
     state.entry_stack_len = state.stack.len();
 
     #[cfg(not(feature = "no_module"))]
-    let prev_mods_len = state.modules.len();
+    let orig_imports_len = state.imports.len();
 
     loop {
         // Terminated?
@@ -2744,7 +2744,7 @@ fn parse_block(
     state.entry_stack_len = prev_entry_stack_len;
 
     #[cfg(not(feature = "no_module"))]
-    state.modules.truncate(prev_mods_len);
+    state.imports.truncate(orig_imports_len);
 
     Ok(Stmt::Block(statements.into_boxed_slice(), settings.pos))
 }

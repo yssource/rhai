@@ -155,6 +155,10 @@ impl Engine {
     ) -> RhaiResult {
         let state = &mut EvalState::new();
         let global = &mut GlobalRuntimeState::new();
+
+        #[cfg(feature = "debugging")]
+        global.debugger.activate(self.debugger.is_some());
+
         let statements = ast.statements();
 
         let orig_scope_len = scope.len();

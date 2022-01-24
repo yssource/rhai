@@ -46,6 +46,9 @@ pub struct GlobalRuntimeState<'a> {
     #[cfg(not(feature = "no_function"))]
     constants:
         Option<Shared<crate::Locked<std::collections::BTreeMap<Identifier, crate::Dynamic>>>>,
+    /// Debugging interface.
+    #[cfg(feature = "debugging")]
+    pub debugger: super::Debugger,
     /// Take care of the lifetime parameter.
     dummy: PhantomData<&'a ()>,
 }
@@ -75,6 +78,8 @@ impl GlobalRuntimeState<'_> {
             #[cfg(not(feature = "no_module"))]
             #[cfg(not(feature = "no_function"))]
             constants: None,
+            #[cfg(feature = "debugging")]
+            debugger: crate::eval::Debugger::new(),
             dummy: PhantomData::default(),
         }
     }
@@ -178,6 +183,15 @@ impl GlobalRuntimeState<'_> {
             .iter()
             .rev()
             .find_map(|m| m.get_qualified_iter(id))
+    }
+    /// Get the current source.
+    #[inline]
+    #[must_use]
+    pub fn source(&self) -> Option<&str> {
+        match self.source.as_str() {
+            "" => None,
+            s => Some(s),
+        }
     }
     /// Get a mutable reference to the cache of globally-defined constants.
     #[cfg(not(feature = "no_module"))]

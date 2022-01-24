@@ -811,7 +811,7 @@ impl AsRef<crate::Shared<crate::Module>> for AST {
 
 /// _(internals)_ An [`AST`] node, consisting of either an [`Expr`] or a [`Stmt`].
 /// Exported under the `internals` feature only.
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Copy, Hash)]
 pub enum ASTNode<'a> {
     /// A statement ([`Stmt`]).
     Stmt(&'a Stmt),
@@ -830,6 +830,19 @@ impl<'a> From<&'a Expr> for ASTNode<'a> {
         Self::Expr(expr)
     }
 }
+
+impl PartialEq for ASTNode<'_> {
+    #[inline(always)]
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Stmt(x), Self::Stmt(y)) => std::ptr::eq(*x, *y),
+            (Self::Expr(x), Self::Expr(y)) => std::ptr::eq(*x, *y),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for ASTNode<'_> {}
 
 impl ASTNode<'_> {
     /// Get the [`Position`] of this [`ASTNode`].

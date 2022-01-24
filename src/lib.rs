@@ -156,6 +156,13 @@ pub use types::{
     Dynamic, EvalAltResult, FnPtr, ImmutableString, LexError, ParseError, ParseErrorType, Scope,
 };
 
+/// _(debugging)_ Module containing types for debugging.
+/// Exported under the `debugging` feature only.
+#[cfg(feature = "debugging")]
+pub mod debugger {
+    pub use super::eval::{BreakPoint, Debugger, DebuggerCommand};
+}
+
 /// An identifier in Rhai. [`SmartString`](https://crates.io/crates/smartstring) is used because most
 /// identifiers are ASCII and short, fewer than 23 characters, so they can be stored inline.
 #[cfg(not(feature = "internals"))]

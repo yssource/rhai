@@ -137,6 +137,10 @@ pub struct Engine {
     /// Max limits.
     #[cfg(not(feature = "unchecked"))]
     pub(crate) limits: crate::api::limits::Limits,
+
+    /// Callback closure for debugging.
+    #[cfg(feature = "debugging")]
+    pub(crate) debugger: Option<crate::eval::OnDebuggerCallback>,
 }
 
 impl fmt::Debug for Engine {
@@ -226,7 +230,7 @@ impl Engine {
             engine.print = Some(Box::new(|s| println!("{}", s)));
             engine.debug = Some(Box::new(|s, source, pos| {
                 if let Some(source) = source {
-                    println!("{}{:?} | {}", source, pos, s);
+                    println!("{} @ {:?} | {}", source, pos, s);
                 } else if pos.is_none() {
                     println!("{}", s);
                 } else {
@@ -280,6 +284,9 @@ impl Engine {
 
             #[cfg(not(feature = "unchecked"))]
             limits: crate::api::limits::Limits::new(),
+
+            #[cfg(feature = "debugging")]
+            debugger: None,
         };
 
         // Add the global namespace module

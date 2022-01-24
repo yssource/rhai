@@ -70,13 +70,28 @@ impl Engine {
         }
 
         let orig_scope_len = scope.len();
-        let orig_mods_len = global.num_imports();
+        let orig_imports_len = global.num_imports();
+        #[cfg(feature = "debugging")]
+        let orig_call_stack_len = global.debugger.call_stack_len();
 
         // Put arguments into scope as variables
         scope.extend(fn_def.params.iter().cloned().zip(args.into_iter().map(|v| {
             // Actually consume the arguments instead of cloning them
             mem::take(*v)
         })));
+
+        // Push a new call stack frame
+        #[cfg(feature = "debugging")]
+        global.debugger.push_call_stack_frame(
+            fn_def.name.clone(),
+            scope
+                .iter()
+                .skip(orig_scope_len)
+                .map(|(_, _, v)| v.clone())
+                .collect(),
+            global.source.clone(),
+            pos,
+        );
 
         // Merge in encapsulated environment, if any
         let mut lib_merged = StaticVec::with_capacity(lib.len() + 1);
@@ -144,10 +159,14 @@ impl Engine {
             // Remove arguments only, leaving new variables in the scope
             scope.remove_range(orig_scope_len, args.len())
         }
-        global.truncate_imports(orig_mods_len);
+        global.truncate_imports(orig_imports_len);
 
         // Restore state
         state.rewind_fn_resolution_caches(orig_fn_resolution_caches_len);
+
+        // Pop the call stack
+        #[cfg(feature = "debugging")]
+        global.debugger.rewind_call_stack(orig_call_stack_len);
 
         result
     }

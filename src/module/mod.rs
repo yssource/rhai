@@ -151,7 +151,7 @@ impl FuncInfo {
             ty => ty.into(),
         }
     }
-    /// Generate a signature of the function.
+    /// _(metadata)_ Generate a signature of the function.
     /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
     #[must_use]
@@ -462,7 +462,7 @@ impl Module {
         self.indexed
     }
 
-    /// Generate signatures for all the non-private functions in the [`Module`].
+    /// _(metadata)_ Generate signatures for all the non-private functions in the [`Module`].
     /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
     #[inline]
@@ -759,8 +759,7 @@ impl Module {
         self
     }
 
-    /// _(metadata)_ Update the metadata (parameter names/types, return type and doc-comments) of a
-    /// registered function.
+    /// _(metadata)_ Update the metadata (parameter names/types, return type and doc-comments) of a registered function.
     /// Exported under the `metadata` feature only.
     ///
     /// The [`u64`] hash is returned by the [`set_native_fn`][Module::set_native_fn] call.
@@ -1665,7 +1664,11 @@ impl Module {
     ) -> RhaiResultOf<Self> {
         let mut scope = scope;
         let mut global = crate::eval::GlobalRuntimeState::new();
-        let orig_mods_len = global.num_imports();
+
+        #[cfg(feature = "debugging")]
+        global.debugger.activate(engine.debugger.is_some());
+
+        let orig_imports_len = global.num_imports();
 
         // Run the script
         engine.eval_ast_with_scope_raw(&mut scope, &mut global, &ast, 0)?;
@@ -1698,7 +1701,7 @@ impl Module {
         #[cfg(not(feature = "no_function"))]
         let mut func_global = None;
 
-        global.into_iter().skip(orig_mods_len).for_each(|kv| {
+        global.into_iter().skip(orig_imports_len).for_each(|kv| {
             #[cfg(not(feature = "no_function"))]
             if func_global.is_none() {
                 func_global = Some(StaticVec::new());
@@ -1914,8 +1917,8 @@ impl Module {
     }
 }
 
-/// _(internals)_ A chain of [module][Module] names to namespace-qualify a variable or function
-/// call. Exported under the `internals` feature only.
+/// _(internals)_ A chain of [module][Module] names to namespace-qualify a variable or function call.
+/// Exported under the `internals` feature only.
 ///
 /// A [`u64`] offset to the current [stack of imported modules][crate::GlobalRuntimeState] is
 /// cached for quick search purposes.

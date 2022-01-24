@@ -1,6 +1,16 @@
 Rhai Release Notes
 ==================
 
+Version 1.5.0
+=============
+
+New features
+------------
+
+* A debugging interface is added.
+* A new bin tool, `rhai-dbg` (aka _The Rhai Debugger_), is added to showcase the debugging interface.
+
+
 Version 1.4.2
 =============
 
