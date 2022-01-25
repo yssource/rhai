@@ -9,6 +9,7 @@ New features
 
 * A debugging interface is added.
 * A new bin tool, `rhai-dbg` (aka _The Rhai Debugger_), is added to showcase the debugging interface.
+* A new package, `DebuggingPackage`, is added which contains the `stack_trace` function to get the current call stack anywhere in a script.
 
 
 Version 1.4.2
