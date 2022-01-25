@@ -53,6 +53,8 @@ pub enum BreakPoint {
         args: usize,
         enabled: bool,
     },
+    /// Break at a particular property .
+    AtProperty { name: Identifier, enabled: bool },
 }
 
 impl fmt::Display for BreakPoint {
@@ -102,6 +104,16 @@ impl fmt::Display for BreakPoint {
                 }
                 Ok(())
             }
+            Self::AtProperty {
+                name: prop,
+                enabled,
+            } => {
+                write!(f, ".{}", prop)?;
+                if !*enabled {
+                    f.write_str(" (disabled)")?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -113,7 +125,9 @@ impl BreakPoint {
         match self {
             #[cfg(not(feature = "no_position"))]
             Self::AtPosition { enabled, .. } => *enabled,
-            Self::AtFunctionName { enabled, .. } | Self::AtFunctionCall { enabled, .. } => *enabled,
+            Self::AtFunctionName { enabled, .. }
+            | Self::AtFunctionCall { enabled, .. }
+            | Self::AtProperty { enabled, .. } => *enabled,
         }
     }
     /// Enable/disable this [`BreakPoint`].
@@ -122,9 +136,9 @@ impl BreakPoint {
         match self {
             #[cfg(not(feature = "no_position"))]
             Self::AtPosition { enabled, .. } => *enabled = value,
-            Self::AtFunctionName { enabled, .. } | Self::AtFunctionCall { enabled, .. } => {
-                *enabled = value
-            }
+            Self::AtFunctionName { enabled, .. }
+            | Self::AtFunctionCall { enabled, .. }
+            | Self::AtProperty { enabled, .. } => *enabled = value,
         }
     }
 }
@@ -270,6 +284,10 @@ impl Debugger {
                     ASTNode::Expr(Expr::FnCall(x, _)) | ASTNode::Stmt(Stmt::FnCall(x, _)) => {
                         x.args.len() == *args && x.name == *name
                     }
+                    _ => false,
+                },
+                BreakPoint::AtProperty { name, .. } => match node {
+                    ASTNode::Expr(Expr::Property(x)) => (x.2).0 == *name,
                     _ => false,
                 },
             })

@@ -12,7 +12,7 @@ use std::{
 };
 
 /// Pretty-print source line.
-fn print_source(lines: &[String], pos: Position) {
+fn print_source(lines: &[String], pos: Position, offset: usize) {
     let line_no = if lines.len() > 1 {
         if pos.is_none() {
             "".to_string()
@@ -32,7 +32,9 @@ fn print_source(lines: &[String], pos: Position) {
         println!("{}{}", line_no, lines[pos.line().unwrap() - 1]);
 
         // Display position marker
-        println!("{0:>1$}", "^", line_no.len() + pos.position().unwrap(),);
+        if let Some(pos) = pos.position() {
+            println!("{0:>1$}", "^", line_no.len() + pos + offset);
+        }
     }
 }
 
@@ -83,6 +85,7 @@ fn print_debug_help() {
     println!("clear                 => delete all break-points");
     println!("break                 => set a new break-point at the current position");
     println!("break <line#>         => set a new break-point at a line number");
+    println!("break .<prop>         => set a new break-point for a property access");
     println!("break <func>          => set a new break-point for a function call");
     println!(
         "break <func> <#args>  => set a new break-point for a function call with #args arguments"
@@ -198,7 +201,7 @@ fn main() {
     let lines: Vec<_> = script.trim().split('\n').map(|s| s.to_string()).collect();
 
     engine.on_debugger(move |context, node, source, pos| {
-        print_source(&lines, pos);
+        print_source(&lines, pos, 0);
 
         let mut input = String::new();
 
@@ -210,7 +213,12 @@ fn main() {
 
             match stdin().read_line(&mut input) {
                 Ok(0) => break DebuggerCommand::Continue,
-                Ok(_) => match input.trim_end().split(' ').collect::<Vec<_>>().as_slice() {
+                Ok(_) => match input
+                    .trim_end()
+                    .split_whitespace()
+                    .collect::<Vec<_>>()
+                    .as_slice()
+                {
                     ["help", ..] => print_debug_help(),
                     ["exit", ..] | ["quit", ..] | ["kill", ..] => {
                         println!("Script terminated. Bye!");
@@ -221,7 +229,7 @@ fn main() {
                         println!();
                     }
                     ["continue", ..] => break DebuggerCommand::Continue,
-                    [""] | ["step", ..] => break DebuggerCommand::StepInto,
+                    [] | ["step", ..] => break DebuggerCommand::StepInto,
                     ["next", ..] => break DebuggerCommand::StepOver,
                     ["scope", ..] => print_scope(context.scope()),
                     #[cfg(not(feature = "no_function"))]
@@ -250,10 +258,11 @@ fn main() {
                         .enumerate()
                         .for_each(|(i, bp)| match bp {
                             BreakPoint::AtPosition { pos, .. } => {
-                                println!("[{}]", i + 1);
-                                print_source(&lines, *pos);
+                                let line_num = format!("[{}] line ", i + 1);
+                                print!("{}", line_num);
+                                print_source(&lines, *pos, line_num.len());
                             }
-                            _ => println!("[{}]\n{}", i + 1, bp),
+                            _ => println!("[{}] {}", i + 1, bp),
                         }),
                     ["enable", n, ..] => {
                         if let Ok(n) = n.parse::<usize>() {
@@ -340,7 +349,19 @@ fn main() {
                         }
                     }
                     ["break", param] => {
-                        if let Ok(n) = param.parse::<usize>() {
+                        if param.starts_with('.') && param.len() > 1 {
+                            // Property name
+                            let bp = rhai::debugger::BreakPoint::AtProperty {
+                                name: param[1..].into(),
+                                enabled: true,
+                            };
+                            println!("Break-point added for {}", bp);
+                            context
+                                .global_runtime_state_mut()
+                                .debugger
+                                .break_points_mut()
+                                .push(bp);
+                        } else if let Ok(n) = param.parse::<usize>() {
                             // Numeric parameter
                             let range = 1..=lines.len();
                             if range.contains(&n) {
@@ -385,7 +406,7 @@ fn main() {
                             .break_points_mut()
                             .push(bp);
                     }
-                    cmd => eprintln!("Invalid debugger command: '{}'", cmd[0]),
+                    [cmd, ..] => eprintln!("Invalid debugger command: '{}'", cmd),
                 },
                 Err(err) => panic!("input error: {}", err),
             }
