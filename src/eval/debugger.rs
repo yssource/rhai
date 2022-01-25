@@ -40,36 +40,91 @@ pub enum BreakPoint {
     ///
     /// Source is empty if not available.
     #[cfg(not(feature = "no_position"))]
-    AtPosition { source: Identifier, pos: Position },
+    AtPosition {
+        source: Identifier,
+        pos: Position,
+        enabled: bool,
+    },
     /// Break at a particular function call.
-    AtFunctionName { name: Identifier },
+    AtFunctionName { name: Identifier, enabled: bool },
     /// Break at a particular function call with a particular number of arguments.
-    AtFunctionCall { name: Identifier, args: usize },
+    AtFunctionCall {
+        name: Identifier,
+        args: usize,
+        enabled: bool,
+    },
 }
 
 impl fmt::Display for BreakPoint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::AtPosition { source, pos } => {
+            Self::AtPosition {
+                source,
+                pos,
+                enabled,
+            } => {
                 if !source.is_empty() {
-                    write!(f, "{} @ {:?}", source, pos)
+                    write!(f, "{} @ {:?}", source, pos)?;
                 } else {
-                    write!(f, "@ {:?}", pos)
+                    write!(f, "@ {:?}", pos)?;
                 }
+                if !*enabled {
+                    f.write_str(" (disabled)")?;
+                }
+                Ok(())
             }
-            Self::AtFunctionName { name: fn_name } => write!(f, "{} (...)", fn_name),
+            Self::AtFunctionName {
+                name: fn_name,
+                enabled,
+            } => {
+                write!(f, "{} (...)", fn_name)?;
+                if !*enabled {
+                    f.write_str(" (disabled)")?;
+                }
+                Ok(())
+            }
             Self::AtFunctionCall {
                 name: fn_name,
                 args,
-            } => write!(
-                f,
-                "{} ({})",
-                fn_name,
-                std::iter::repeat("_")
-                    .take(*args)
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
+                enabled,
+            } => {
+                write!(
+                    f,
+                    "{} ({})",
+                    fn_name,
+                    std::iter::repeat("_")
+                        .take(*args)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )?;
+                if !*enabled {
+                    f.write_str(" (disabled)")?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl BreakPoint {
+    /// Is this [`BreakPoint`] enabled?
+    #[inline(always)]
+    pub fn is_enabled(&self) -> bool {
+        match self {
+            #[cfg(not(feature = "no_position"))]
+            Self::AtPosition { enabled, .. } => *enabled,
+            Self::AtFunctionName { enabled, .. } | Self::AtFunctionCall { enabled, .. } => *enabled,
+        }
+    }
+    /// Enable/disable this [`BreakPoint`].
+    #[inline(always)]
+    pub fn enable(&mut self, value: bool) {
+        match self {
+            #[cfg(not(feature = "no_position"))]
+            Self::AtPosition { enabled, .. } => *enabled = value,
+            Self::AtFunctionName { enabled, .. } | Self::AtFunctionCall { enabled, .. } => {
+                *enabled = value
+            }
         }
     }
 }
@@ -191,22 +246,33 @@ impl Debugger {
     }
     /// Does a particular [`AST` Node][ASTNode] trigger a break-point?
     pub fn is_break_point(&self, src: &str, node: ASTNode) -> bool {
-        self.break_points().iter().any(|bp| match bp {
-            #[cfg(not(feature = "no_position"))]
-            BreakPoint::AtPosition { source, pos } => node.position() == *pos && src == source,
-            BreakPoint::AtFunctionName { name } => match node {
-                ASTNode::Expr(Expr::FnCall(x, _)) | ASTNode::Stmt(Stmt::FnCall(x, _)) => {
-                    x.name == *name
+        self.break_points()
+            .iter()
+            .filter(|&bp| bp.is_enabled())
+            .any(|bp| match bp {
+                #[cfg(not(feature = "no_position"))]
+                BreakPoint::AtPosition { pos, .. } if pos.is_none() => false,
+                #[cfg(not(feature = "no_position"))]
+                BreakPoint::AtPosition { source, pos, .. } if pos.is_beginning_of_line() => {
+                    node.position().line().unwrap_or(0) == pos.line().unwrap() && src == source
                 }
-                _ => false,
-            },
-            BreakPoint::AtFunctionCall { name, args } => match node {
-                ASTNode::Expr(Expr::FnCall(x, _)) | ASTNode::Stmt(Stmt::FnCall(x, _)) => {
-                    x.args.len() == *args && x.name == *name
+                #[cfg(not(feature = "no_position"))]
+                BreakPoint::AtPosition { source, pos, .. } => {
+                    node.position() == *pos && src == source
                 }
-                _ => false,
-            },
-        })
+                BreakPoint::AtFunctionName { name, .. } => match node {
+                    ASTNode::Expr(Expr::FnCall(x, _)) | ASTNode::Stmt(Stmt::FnCall(x, _)) => {
+                        x.name == *name
+                    }
+                    _ => false,
+                },
+                BreakPoint::AtFunctionCall { name, args, .. } => match node {
+                    ASTNode::Expr(Expr::FnCall(x, _)) | ASTNode::Stmt(Stmt::FnCall(x, _)) => {
+                        x.args.len() == *args && x.name == *name
+                    }
+                    _ => false,
+                },
+            })
     }
     /// Get a slice of all [`BreakPoint`]'s.
     #[inline(always)]

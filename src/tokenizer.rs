@@ -260,7 +260,11 @@ impl fmt::Display for Position {
 impl fmt::Debug for Position {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         #[cfg(not(feature = "no_position"))]
-        write!(f, "{}:{}", self.line, self.pos)?;
+        if self.is_beginning_of_line() {
+            write!(f, "{}", self.line)?;
+        } else {
+            write!(f, "{}:{}", self.line, self.pos)?;
+        }
         #[cfg(feature = "no_position")]
         f.write_str("none")?;
 

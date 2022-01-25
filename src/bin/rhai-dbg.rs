@@ -77,9 +77,12 @@ fn print_debug_help() {
     println!("node                  => print the current AST node");
     println!("backtrace             => print the current call-stack");
     println!("breakpoints           => print all break-points");
-    println!("delete <breakpoint#>  => delete a break-point");
+    println!("enable <bp#>          => enable a break-point");
+    println!("disable <bp#>         => disable a break-point");
+    println!("delete <bp#>          => delete a break-point");
     println!("clear                 => delete all break-points");
     println!("break                 => set a new break-point at the current position");
+    println!("break <line#>         => set a new break-point at a line number");
     println!("break <func>          => set a new break-point for a function call");
     println!(
         "break <func> <#args>  => set a new break-point for a function call with #args arguments"
@@ -252,6 +255,52 @@ fn main() {
                             }
                             _ => println!("[{}]\n{}", i + 1, bp),
                         }),
+                    ["enable", n, ..] => {
+                        if let Ok(n) = n.parse::<usize>() {
+                            let range = 1..=context
+                                .global_runtime_state_mut()
+                                .debugger
+                                .break_points()
+                                .len();
+                            if range.contains(&n) {
+                                context
+                                    .global_runtime_state_mut()
+                                    .debugger
+                                    .break_points_mut()
+                                    .get_mut(n - 1)
+                                    .unwrap()
+                                    .enable(true);
+                                println!("Break-point #{} enabled.", n)
+                            } else {
+                                eprintln!("Invalid break-point: {}", n);
+                            }
+                        } else {
+                            eprintln!("Invalid break-point: '{}'", n);
+                        }
+                    }
+                    ["disable", n, ..] => {
+                        if let Ok(n) = n.parse::<usize>() {
+                            let range = 1..=context
+                                .global_runtime_state_mut()
+                                .debugger
+                                .break_points()
+                                .len();
+                            if range.contains(&n) {
+                                context
+                                    .global_runtime_state_mut()
+                                    .debugger
+                                    .break_points_mut()
+                                    .get_mut(n - 1)
+                                    .unwrap()
+                                    .enable(false);
+                                println!("Break-point #{} disabled.", n)
+                            } else {
+                                eprintln!("Invalid break-point: {}", n);
+                            }
+                        } else {
+                            eprintln!("Invalid break-point: '{}'", n);
+                        }
+                    }
                     ["delete", n, ..] => {
                         if let Ok(n) = n.parse::<usize>() {
                             let range = 1..=context
@@ -278,6 +327,7 @@ fn main() {
                             let bp = rhai::debugger::BreakPoint::AtFunctionCall {
                                 name: fn_name.trim().into(),
                                 args,
+                                enabled: true,
                             };
                             println!("Break-point added for {}", bp);
                             context
@@ -289,21 +339,44 @@ fn main() {
                             eprintln!("Invalid number of arguments: '{}'", args);
                         }
                     }
-                    ["break", fn_name] => {
-                        let bp = rhai::debugger::BreakPoint::AtFunctionName {
-                            name: fn_name.trim().into(),
-                        };
-                        println!("Break-point added for {}", bp);
-                        context
-                            .global_runtime_state_mut()
-                            .debugger
-                            .break_points_mut()
-                            .push(bp);
+                    ["break", param] => {
+                        if let Ok(n) = param.parse::<usize>() {
+                            // Numeric parameter
+                            let range = 1..=lines.len();
+                            if range.contains(&n) {
+                                let bp = rhai::debugger::BreakPoint::AtPosition {
+                                    source: source.unwrap_or("").into(),
+                                    pos: Position::new(n as u16, 0),
+                                    enabled: true,
+                                };
+                                println!("Break-point added {}", bp);
+                                context
+                                    .global_runtime_state_mut()
+                                    .debugger
+                                    .break_points_mut()
+                                    .push(bp);
+                            } else {
+                                eprintln!("Invalid line number: {}", n);
+                            }
+                        } else {
+                            // Function name parameter
+                            let bp = rhai::debugger::BreakPoint::AtFunctionName {
+                                name: param.trim().into(),
+                                enabled: true,
+                            };
+                            println!("Break-point added for {}", bp);
+                            context
+                                .global_runtime_state_mut()
+                                .debugger
+                                .break_points_mut()
+                                .push(bp);
+                        }
                     }
                     ["break", ..] => {
                         let bp = rhai::debugger::BreakPoint::AtPosition {
                             source: source.unwrap_or("").into(),
                             pos,
+                            enabled: true,
                         };
                         println!("Break-point added {}", bp);
                         context
