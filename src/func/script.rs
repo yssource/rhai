@@ -71,7 +71,9 @@ impl Engine {
 
         let orig_scope_len = scope.len();
         let orig_imports_len = global.num_imports();
+
         #[cfg(feature = "debugging")]
+        #[cfg(not(feature = "no_function"))]
         let orig_call_stack_len = global.debugger.call_stack_len();
 
         // Put arguments into scope as variables
@@ -82,6 +84,7 @@ impl Engine {
 
         // Push a new call stack frame
         #[cfg(feature = "debugging")]
+        #[cfg(not(feature = "no_function"))]
         global.debugger.push_call_stack_frame(
             fn_def.name.clone(),
             scope
@@ -166,6 +169,7 @@ impl Engine {
 
         // Pop the call stack
         #[cfg(feature = "debugging")]
+        #[cfg(not(feature = "no_function"))]
         global.debugger.rewind_call_stack(orig_call_stack_len);
 
         result

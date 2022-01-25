@@ -221,6 +221,7 @@ fn main() {
                     [""] | ["step", ..] => break DebuggerCommand::StepInto,
                     ["next", ..] => break DebuggerCommand::StepOver,
                     ["scope", ..] => print_scope(context.scope()),
+                    #[cfg(not(feature = "no_function"))]
                     ["backtrace", ..] => {
                         context
                             .global_runtime_state()

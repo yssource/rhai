@@ -3,7 +3,7 @@
 
 use super::{EvalContext, EvalState, GlobalRuntimeState};
 use crate::ast::{ASTNode, Expr, Stmt};
-use crate::{Dynamic, Engine, Identifier, Module, Position, Scope, StaticVec};
+use crate::{Dynamic, Engine, Identifier, Module, Position, Scope};
 use std::fmt;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -75,14 +75,16 @@ impl fmt::Display for BreakPoint {
 }
 
 /// A function call.
+#[cfg(not(feature = "no_function"))]
 #[derive(Debug, Clone, Hash)]
 pub struct CallStackFrame {
     pub fn_name: Identifier,
-    pub args: StaticVec<Dynamic>,
+    pub args: crate::StaticVec<Dynamic>,
     pub source: Identifier,
     pub pos: Position,
 }
 
+#[cfg(not(feature = "no_function"))]
 impl fmt::Display for CallStackFrame {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut fp = f.debug_tuple(&self.fn_name);
@@ -110,6 +112,7 @@ impl fmt::Display for CallStackFrame {
 pub struct Debugger {
     status: DebuggerCommand,
     break_points: Vec<BreakPoint>,
+    #[cfg(not(feature = "no_function"))]
     call_stack: Vec<CallStackFrame>,
 }
 
@@ -119,30 +122,35 @@ impl Debugger {
         Self {
             status: DebuggerCommand::Continue,
             break_points: Vec::new(),
+            #[cfg(not(feature = "no_function"))]
             call_stack: Vec::new(),
         }
     }
     /// Get the function call stack depth.
+    #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn call_stack_len(&self) -> usize {
         self.call_stack.len()
     }
     /// Get the current call stack.
+    #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn call_stack(&self) -> &[CallStackFrame] {
         &self.call_stack
     }
     /// Rewind the function call stack to a particular depth.
+    #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub(crate) fn rewind_call_stack(&mut self, len: usize) {
         self.call_stack.truncate(len);
     }
     /// Add a new frame to the function call stack.
+    #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub(crate) fn push_call_stack_frame(
         &mut self,
         fn_name: impl Into<Identifier>,
-        args: StaticVec<Dynamic>,
+        args: crate::StaticVec<Dynamic>,
         source: impl Into<Identifier>,
         pos: Position,
     ) {

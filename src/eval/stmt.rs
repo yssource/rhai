@@ -712,17 +712,15 @@ impl Engine {
                                     err_map.insert("source".into(), global.source.clone().into());
                                 }
 
-                                if err_pos.is_none() {
-                                    // No position info
-                                } else {
-                                    let line = err_pos.line().unwrap() as INT;
-                                    let position = if err_pos.is_beginning_of_line() {
-                                        0
-                                    } else {
-                                        err_pos.position().unwrap()
-                                    } as INT;
-                                    err_map.insert("line".into(), line.into());
-                                    err_map.insert("position".into(), position.into());
+                                if !err_pos.is_none() {
+                                    err_map.insert(
+                                        "line".into(),
+                                        (err_pos.line().unwrap() as INT).into(),
+                                    );
+                                    err_map.insert(
+                                        "position".into(),
+                                        (err_pos.position().unwrap_or(0) as INT).into(),
+                                    );
                                 }
 
                                 err.dump_fields(&mut err_map);

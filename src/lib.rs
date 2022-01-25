@@ -160,7 +160,9 @@ pub use types::{
 /// Exported under the `debugging` feature only.
 #[cfg(feature = "debugging")]
 pub mod debugger {
-    pub use super::eval::{BreakPoint, CallStackFrame, Debugger, DebuggerCommand};
+    #[cfg(not(feature = "no_function"))]
+    pub use super::eval::CallStackFrame;
+    pub use super::eval::{BreakPoint, Debugger, DebuggerCommand};
 }
 
 /// An identifier in Rhai. [`SmartString`](https://crates.io/crates/smartstring) is used because most
