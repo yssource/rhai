@@ -3,19 +3,21 @@
 
 use super::{EvalContext, EvalState, GlobalRuntimeState};
 use crate::ast::{ASTNode, Expr, Stmt};
-use crate::{Dynamic, Engine, Identifier, Module, Position, Scope};
+use crate::{Dynamic, Engine, Identifier, Module, Position, RhaiResultOf, Scope};
 use std::fmt;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
 /// A standard callback function for debugging.
 #[cfg(not(feature = "sync"))]
-pub type OnDebuggerCallback =
-    Box<dyn Fn(&mut EvalContext, ASTNode, Option<&str>, Position) -> DebuggerCommand + 'static>;
+pub type OnDebuggerCallback = Box<
+    dyn Fn(&mut EvalContext, ASTNode, Option<&str>, Position) -> RhaiResultOf<DebuggerCommand>
+        + 'static,
+>;
 /// A standard callback function for debugging.
 #[cfg(feature = "sync")]
 pub type OnDebuggerCallback = Box<
-    dyn Fn(&mut EvalContext, ASTNode, Option<&str>, Position) -> DebuggerCommand
+    dyn Fn(&mut EvalContext, ASTNode, Option<&str>, Position) -> RhaiResultOf<DebuggerCommand>
         + Send
         + Sync
         + 'static,
@@ -28,8 +30,10 @@ pub enum DebuggerCommand {
     Continue,
     // Step into the next expression, diving into functions.
     StepInto,
-    // Run to the next statement, stepping over functions.
+    // Run to the next expression or statement, stepping over functions.
     StepOver,
+    // Run to the next statement, skipping over functions.
+    Next,
 }
 
 /// A break-point for debugging.
@@ -318,12 +322,14 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         node: impl Into<ASTNode<'a>>,
         level: usize,
-    ) {
+    ) -> RhaiResultOf<()> {
         if let Some(cmd) =
-            self.run_debugger_with_reset(scope, global, state, lib, this_ptr, node, level)
+            self.run_debugger_with_reset(scope, global, state, lib, this_ptr, node, level)?
         {
             global.debugger.set_status(cmd);
         }
+
+        Ok(())
     }
     /// Run the debugger callback.
     ///
@@ -347,18 +353,18 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         node: impl Into<ASTNode<'a>>,
         level: usize,
-    ) -> Option<DebuggerCommand> {
+    ) -> RhaiResultOf<Option<DebuggerCommand>> {
         if let Some(ref on_debugger) = self.debugger {
             let node = node.into();
 
             let stop = match global.debugger.status {
                 DebuggerCommand::Continue => false,
-                DebuggerCommand::StepOver => matches!(node, ASTNode::Stmt(_)),
-                DebuggerCommand::StepInto => true,
+                DebuggerCommand::Next => matches!(node, ASTNode::Stmt(_)),
+                DebuggerCommand::StepInto | DebuggerCommand::StepOver => true,
             };
 
             if !stop && !global.debugger.is_break_point(&global.source, node) {
-                return None;
+                return Ok(None);
             }
 
             let source = global.source.clone();
@@ -378,24 +384,28 @@ impl Engine {
                 level,
             };
 
-            let command = on_debugger(&mut context, node, source, node.position());
+            let command = on_debugger(&mut context, node, source, node.position())?;
 
             match command {
                 DebuggerCommand::Continue => {
                     global.debugger.set_status(DebuggerCommand::Continue);
-                    None
+                    Ok(None)
+                }
+                DebuggerCommand::Next => {
+                    global.debugger.set_status(DebuggerCommand::Continue);
+                    Ok(Some(DebuggerCommand::Next))
                 }
                 DebuggerCommand::StepInto => {
                     global.debugger.set_status(DebuggerCommand::StepInto);
-                    None
+                    Ok(None)
                 }
                 DebuggerCommand::StepOver => {
                     global.debugger.set_status(DebuggerCommand::Continue);
-                    Some(DebuggerCommand::StepOver)
+                    Ok(Some(DebuggerCommand::StepOver))
                 }
             }
         } else {
-            None
+            Ok(None)
         }
     }
 }

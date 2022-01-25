@@ -90,8 +90,11 @@ fn print_debug_help() {
     println!(
         "break <func> <#args>  => set a new break-point for a function call with #args arguments"
     );
+    println!("throw [message]       => throw an exception (message optional)");
+    println!("run                   => restart the script evaluation from beginning");
     println!("step                  => go to the next expression, diving into functions");
-    println!("next                  => go to the next statement but don't dive into functions");
+    println!("over                  => go to the next expression, skipping oer functions");
+    println!("next                  => go to the next statement, skipping over functions");
     println!("continue              => continue normal execution");
     println!();
 }
@@ -212,9 +215,9 @@ fn main() {
             input.clear();
 
             match stdin().read_line(&mut input) {
-                Ok(0) => break DebuggerCommand::Continue,
+                Ok(0) => break Ok(DebuggerCommand::Continue),
                 Ok(_) => match input
-                    .trim_end()
+                    .trim()
                     .split_whitespace()
                     .collect::<Vec<_>>()
                     .as_slice()
@@ -228,9 +231,10 @@ fn main() {
                         println!("{:?} {}@{:?}", node, source.unwrap_or_default(), pos);
                         println!();
                     }
-                    ["continue", ..] => break DebuggerCommand::Continue,
-                    [] | ["step", ..] => break DebuggerCommand::StepInto,
-                    ["next", ..] => break DebuggerCommand::StepOver,
+                    ["continue", ..] => break Ok(DebuggerCommand::Continue),
+                    [] | ["step", ..] => break Ok(DebuggerCommand::StepInto),
+                    ["over", ..] => break Ok(DebuggerCommand::StepOver),
+                    ["next", ..] => break Ok(DebuggerCommand::Next),
                     ["scope", ..] => print_scope(context.scope()),
                     #[cfg(not(feature = "no_function"))]
                     ["backtrace", ..] => {
@@ -406,6 +410,15 @@ fn main() {
                             .break_points_mut()
                             .push(bp);
                     }
+                    ["throw"] => break Err(EvalAltResult::ErrorRuntime(Dynamic::UNIT, pos).into()),
+                    ["throw", _msg, ..] => {
+                        let msg = input.trim().splitn(2, ' ').skip(1).next().unwrap_or("");
+                        break Err(EvalAltResult::ErrorRuntime(msg.trim().into(), pos).into());
+                    }
+                    ["run", ..] => {
+                        println!("Restarting script...");
+                        break Err(EvalAltResult::ErrorTerminated(Dynamic::UNIT, pos).into());
+                    }
                     [cmd, ..] => eprintln!("Invalid debugger command: '{}'", cmd),
                 },
                 Err(err) => panic!("input error: {}", err),
@@ -422,14 +435,19 @@ fn main() {
         engine.set_module_resolver(resolver);
     }
 
-    // Create scope
-    let mut scope = Scope::new();
-
     print_debug_help();
 
     // Evaluate
-    if let Err(err) = engine.run_ast_with_scope(&mut scope, &main_ast) {
-        print_error(&script, *err);
+    while let Err(err) = engine.run_ast_with_scope(&mut Scope::new(), &main_ast) {
+        match *err {
+            // Loop back to restart
+            EvalAltResult::ErrorTerminated(_, _) => (),
+            // Break evaluation
+            _ => {
+                print_error(&script, *err);
+                break;
+            }
+        }
     }
 }
 

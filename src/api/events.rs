@@ -272,7 +272,7 @@ impl Engine {
                 crate::ast::ASTNode,
                 Option<&str>,
                 Position,
-            ) -> crate::eval::DebuggerCommand
+            ) -> RhaiResultOf<crate::eval::DebuggerCommand>
             + SendSync
             + 'static,
     ) -> &mut Self {

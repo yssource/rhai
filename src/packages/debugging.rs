@@ -62,7 +62,7 @@ mod debugging_functions {
                             if !pos.is_none() {
                                 map.insert("line".into(), (pos.line().unwrap() as INT).into());
                                 map.insert(
-                                    "pos".into(),
+                                    "position".into(),
                                     (pos.position().unwrap_or(0) as INT).into(),
                                 );
                             }

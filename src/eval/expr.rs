@@ -267,7 +267,7 @@ impl Engine {
         if let Expr::FnCall(x, pos) = expr {
             #[cfg(feature = "debugging")]
             let reset_debugger =
-                self.run_debugger_with_reset(scope, global, state, lib, this_ptr, expr, level);
+                self.run_debugger_with_reset(scope, global, state, lib, this_ptr, expr, level)?;
 
             #[cfg(not(feature = "unchecked"))]
             self.inc_operations(&mut global.num_operations, expr.position())?;
@@ -286,7 +286,7 @@ impl Engine {
         // will cost more than the mis-predicted `match` branch.
         if let Expr::Variable(index, var_pos, x) = expr {
             #[cfg(feature = "debugging")]
-            self.run_debugger(scope, global, state, lib, this_ptr, expr, level);
+            self.run_debugger(scope, global, state, lib, this_ptr, expr, level)?;
 
             #[cfg(not(feature = "unchecked"))]
             self.inc_operations(&mut global.num_operations, expr.position())?;
@@ -304,7 +304,7 @@ impl Engine {
 
         #[cfg(feature = "debugging")]
         let reset_debugger =
-            self.run_debugger_with_reset(scope, global, state, lib, this_ptr, expr, level);
+            self.run_debugger_with_reset(scope, global, state, lib, this_ptr, expr, level)?;
 
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(&mut global.num_operations, expr.position())?;
