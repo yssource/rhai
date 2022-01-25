@@ -133,6 +133,7 @@ impl Engine {
         level: usize,
         new_val: Option<((Dynamic, Position), (Option<OpAssignment>, Position))>,
     ) -> RhaiResultOf<(Dynamic, bool)> {
+        let _parent = parent;
         let is_ref_mut = target.is_ref();
         let _terminate_chaining = terminate_chaining;
 
@@ -155,7 +156,7 @@ impl Engine {
                         if !_terminate_chaining =>
                     {
                         #[cfg(feature = "debugging")]
-                        self.run_debugger(scope, global, state, lib, this_ptr, parent, level);
+                        self.run_debugger(scope, global, state, lib, this_ptr, _parent, level);
 
                         let mut idx_val_for_setter = idx_val.clone();
                         let idx_pos = x.lhs.position();
@@ -203,7 +204,7 @@ impl Engine {
                     // xxx[rhs] op= new_val
                     _ if new_val.is_some() => {
                         #[cfg(feature = "debugging")]
-                        self.run_debugger(scope, global, state, lib, this_ptr, parent, level);
+                        self.run_debugger(scope, global, state, lib, this_ptr, _parent, level);
 
                         let ((new_val, new_pos), (op_info, op_pos)) = new_val.expect("`Some`");
                         let mut idx_val_for_setter = idx_val.clone();
@@ -248,7 +249,7 @@ impl Engine {
                     // xxx[rhs]
                     _ => {
                         #[cfg(feature = "debugging")]
-                        self.run_debugger(scope, global, state, lib, this_ptr, parent, level);
+                        self.run_debugger(scope, global, state, lib, this_ptr, _parent, level);
 
                         self.get_indexed_mut(
                             global, state, lib, target, idx_val, pos, false, true, level,
@@ -438,12 +439,14 @@ impl Engine {
                     Expr::Index(x, term, x_pos) | Expr::Dot(x, term, x_pos)
                         if target.is::<crate::Map>() =>
                     {
-                        let node = &x.lhs;
+                        let _node = &x.lhs;
 
                         let val_target = &mut match x.lhs {
                             Expr::Property(ref p) => {
                                 #[cfg(feature = "debugging")]
-                                self.run_debugger(scope, global, state, lib, this_ptr, node, level);
+                                self.run_debugger(
+                                    scope, global, state, lib, this_ptr, _node, level,
+                                );
 
                                 let (name, pos) = &p.2;
                                 let index = name.into();
@@ -458,7 +461,7 @@ impl Engine {
 
                                 #[cfg(feature = "debugging")]
                                 let reset_debugger = self.run_debugger_with_reset(
-                                    scope, global, state, lib, this_ptr, node, level,
+                                    scope, global, state, lib, this_ptr, _node, level,
                                 );
 
                                 let result = self.make_method_call(
@@ -488,13 +491,15 @@ impl Engine {
                     }
                     // xxx.sub_lhs[expr] | xxx.sub_lhs.expr
                     Expr::Index(x, term, x_pos) | Expr::Dot(x, term, x_pos) => {
-                        let node = &x.lhs;
+                        let _node = &x.lhs;
 
                         match x.lhs {
                             // xxx.prop[expr] | xxx.prop.expr
                             Expr::Property(ref p) => {
                                 #[cfg(feature = "debugging")]
-                                self.run_debugger(scope, global, state, lib, this_ptr, node, level);
+                                self.run_debugger(
+                                    scope, global, state, lib, this_ptr, _node, level,
+                                );
 
                                 let ((getter, hash_get), (setter, hash_set), (name, pos)) =
                                     p.as_ref();
@@ -597,7 +602,7 @@ impl Engine {
 
                                 #[cfg(feature = "debugging")]
                                 let reset_debugger = self.run_debugger_with_reset(
-                                    scope, global, state, lib, this_ptr, node, level,
+                                    scope, global, state, lib, this_ptr, _node, level,
                                 );
 
                                 let result = self.make_method_call(
