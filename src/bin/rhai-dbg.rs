@@ -1,7 +1,7 @@
 use rhai::{Dynamic, Engine, EvalAltResult, Position, Scope};
 
 #[cfg(feature = "debugging")]
-use rhai::debugger::{BreakPoint, DebuggerCommand};
+use rhai::debugger::DebuggerCommand;
 
 use std::{
     env,
@@ -83,8 +83,11 @@ fn print_debug_help() {
     println!("disable <bp#>         => disable a break-point");
     println!("delete <bp#>          => delete a break-point");
     println!("clear                 => delete all break-points");
+    #[cfg(not(feature = "no_position"))]
     println!("break                 => set a new break-point at the current position");
+    #[cfg(not(feature = "no_position"))]
     println!("break <line#>         => set a new break-point at a line number");
+    #[cfg(not(feature = "no_object"))]
     println!("break .<prop>         => set a new break-point for a property access");
     println!("break <func>          => set a new break-point for a function call");
     println!(
@@ -261,7 +264,8 @@ fn main() {
                         .iter()
                         .enumerate()
                         .for_each(|(i, bp)| match bp {
-                            BreakPoint::AtPosition { pos, .. } => {
+                            #[cfg(not(feature = "no_position"))]
+                            rhai::debugger::BreakPoint::AtPosition { pos, .. } => {
                                 let line_num = format!("[{}] line ", i + 1);
                                 print!("{}", line_num);
                                 print_source(&lines, *pos, line_num.len());
@@ -352,51 +356,55 @@ fn main() {
                             eprintln!("Invalid number of arguments: '{}'", args);
                         }
                     }
-                    ["break", param] => {
-                        if param.starts_with('.') && param.len() > 1 {
-                            // Property name
-                            let bp = rhai::debugger::BreakPoint::AtProperty {
-                                name: param[1..].into(),
+                    // Property name
+                    #[cfg(not(feature = "no_object"))]
+                    ["break", param] if param.starts_with('.') && param.len() > 1 => {
+                        let bp = rhai::debugger::BreakPoint::AtProperty {
+                            name: param[1..].into(),
+                            enabled: true,
+                        };
+                        println!("Break-point added for {}", bp);
+                        context
+                            .global_runtime_state_mut()
+                            .debugger
+                            .break_points_mut()
+                            .push(bp);
+                    }
+                    // Numeric parameter
+                    #[cfg(not(feature = "no_position"))]
+                    ["break", param] if param.parse::<usize>().is_ok() => {
+                        let n = param.parse::<usize>().unwrap();
+
+                        if (1..=lines.len()).contains(&n) {
+                            let bp = rhai::debugger::BreakPoint::AtPosition {
+                                source: source.unwrap_or("").into(),
+                                pos: Position::new(n as u16, 0),
                                 enabled: true,
                             };
-                            println!("Break-point added for {}", bp);
+                            println!("Break-point added {}", bp);
                             context
                                 .global_runtime_state_mut()
                                 .debugger
                                 .break_points_mut()
                                 .push(bp);
-                        } else if let Ok(n) = param.parse::<usize>() {
-                            // Numeric parameter
-                            let range = 1..=lines.len();
-                            if range.contains(&n) {
-                                let bp = rhai::debugger::BreakPoint::AtPosition {
-                                    source: source.unwrap_or("").into(),
-                                    pos: Position::new(n as u16, 0),
-                                    enabled: true,
-                                };
-                                println!("Break-point added {}", bp);
-                                context
-                                    .global_runtime_state_mut()
-                                    .debugger
-                                    .break_points_mut()
-                                    .push(bp);
-                            } else {
-                                eprintln!("Invalid line number: {}", n);
-                            }
                         } else {
-                            // Function name parameter
-                            let bp = rhai::debugger::BreakPoint::AtFunctionName {
-                                name: param.trim().into(),
-                                enabled: true,
-                            };
-                            println!("Break-point added for {}", bp);
-                            context
-                                .global_runtime_state_mut()
-                                .debugger
-                                .break_points_mut()
-                                .push(bp);
+                            eprintln!("Invalid line number: {}", n);
                         }
                     }
+                    // Function name parameter
+                    ["break", param] => {
+                        let bp = rhai::debugger::BreakPoint::AtFunctionName {
+                            name: param.trim().into(),
+                            enabled: true,
+                        };
+                        println!("Break-point added for {}", bp);
+                        context
+                            .global_runtime_state_mut()
+                            .debugger
+                            .break_points_mut()
+                            .push(bp);
+                    }
+                    #[cfg(not(feature = "no_position"))]
                     ["break", ..] => {
                         let bp = rhai::debugger::BreakPoint::AtPosition {
                             source: source.unwrap_or("").into(),

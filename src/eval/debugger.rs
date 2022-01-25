@@ -40,6 +40,7 @@ pub enum DebuggerCommand {
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum BreakPoint {
     /// Break at a particular position under a particular source.
+    ///
     /// Not available under `no_position`.
     ///
     /// Source is empty if not available.
@@ -58,12 +59,16 @@ pub enum BreakPoint {
         enabled: bool,
     },
     /// Break at a particular property .
+    ///
+    /// Not available under `no_object`.
+    #[cfg(not(feature = "no_object"))]
     AtProperty { name: Identifier, enabled: bool },
 }
 
 impl fmt::Display for BreakPoint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            #[cfg(not(feature = "no_position"))]
             Self::AtPosition {
                 source,
                 pos,
@@ -108,6 +113,7 @@ impl fmt::Display for BreakPoint {
                 }
                 Ok(())
             }
+            #[cfg(not(feature = "no_object"))]
             Self::AtProperty {
                 name: prop,
                 enabled,
@@ -129,9 +135,9 @@ impl BreakPoint {
         match self {
             #[cfg(not(feature = "no_position"))]
             Self::AtPosition { enabled, .. } => *enabled,
-            Self::AtFunctionName { enabled, .. }
-            | Self::AtFunctionCall { enabled, .. }
-            | Self::AtProperty { enabled, .. } => *enabled,
+            Self::AtFunctionName { enabled, .. } | Self::AtFunctionCall { enabled, .. } => *enabled,
+            #[cfg(not(feature = "no_object"))]
+            Self::AtProperty { enabled, .. } => *enabled,
         }
     }
     /// Enable/disable this [`BreakPoint`].
@@ -140,9 +146,11 @@ impl BreakPoint {
         match self {
             #[cfg(not(feature = "no_position"))]
             Self::AtPosition { enabled, .. } => *enabled = value,
-            Self::AtFunctionName { enabled, .. }
-            | Self::AtFunctionCall { enabled, .. }
-            | Self::AtProperty { enabled, .. } => *enabled = value,
+            Self::AtFunctionName { enabled, .. } | Self::AtFunctionCall { enabled, .. } => {
+                *enabled = value
+            }
+            #[cfg(not(feature = "no_object"))]
+            Self::AtProperty { enabled, .. } => *enabled = value,
         }
     }
 }
@@ -151,9 +159,13 @@ impl BreakPoint {
 #[cfg(not(feature = "no_function"))]
 #[derive(Debug, Clone, Hash)]
 pub struct CallStackFrame {
+    /// Function name.
     pub fn_name: Identifier,
+    /// Copies of function call arguments, if any.
     pub args: crate::StaticVec<Dynamic>,
+    /// Source of the function, empty if none.
     pub source: Identifier,
+    /// [Position][`Position`] of the function call.
     pub pos: Position,
 }
 
@@ -183,8 +195,11 @@ impl fmt::Display for CallStackFrame {
 /// A type providing debugging facilities.
 #[derive(Debug, Clone, Hash)]
 pub struct Debugger {
+    /// The current status command.
     status: DebuggerCommand,
+    /// The current set of break-points.
     break_points: Vec<BreakPoint>,
+    /// The current function call stack.
     #[cfg(not(feature = "no_function"))]
     call_stack: Vec<CallStackFrame>,
 }
@@ -200,24 +215,32 @@ impl Debugger {
         }
     }
     /// Get the function call stack depth.
+    ///
+    /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn call_stack_len(&self) -> usize {
         self.call_stack.len()
     }
     /// Get the current call stack.
+    ///
+    /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn call_stack(&self) -> &[CallStackFrame] {
         &self.call_stack
     }
     /// Rewind the function call stack to a particular depth.
+    ///
+    /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub(crate) fn rewind_call_stack(&mut self, len: usize) {
         self.call_stack.truncate(len);
     }
     /// Add a new frame to the function call stack.
+    ///
+    /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub(crate) fn push_call_stack_frame(
@@ -264,6 +287,8 @@ impl Debugger {
     }
     /// Does a particular [`AST` Node][ASTNode] trigger a break-point?
     pub fn is_break_point(&self, src: &str, node: ASTNode) -> bool {
+        let _src = src;
+
         self.break_points()
             .iter()
             .filter(|&bp| bp.is_enabled())
@@ -272,11 +297,11 @@ impl Debugger {
                 BreakPoint::AtPosition { pos, .. } if pos.is_none() => false,
                 #[cfg(not(feature = "no_position"))]
                 BreakPoint::AtPosition { source, pos, .. } if pos.is_beginning_of_line() => {
-                    node.position().line().unwrap_or(0) == pos.line().unwrap() && src == source
+                    node.position().line().unwrap_or(0) == pos.line().unwrap() && _src == source
                 }
                 #[cfg(not(feature = "no_position"))]
                 BreakPoint::AtPosition { source, pos, .. } => {
-                    node.position() == *pos && src == source
+                    node.position() == *pos && _src == source
                 }
                 BreakPoint::AtFunctionName { name, .. } => match node {
                     ASTNode::Expr(Expr::FnCall(x, _)) | ASTNode::Stmt(Stmt::FnCall(x, _)) => {
@@ -290,6 +315,7 @@ impl Debugger {
                     }
                     _ => false,
                 },
+                #[cfg(not(feature = "no_object"))]
                 BreakPoint::AtProperty { name, .. } => match node {
                     ASTNode::Expr(Expr::Property(x)) => (x.2).0 == *name,
                     _ => false,

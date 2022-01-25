@@ -123,6 +123,7 @@ type UNSIGNED_INT = u64;
 type UNSIGNED_INT = u32;
 
 /// The system floating-point type. It is defined as [`f64`].
+///
 /// Not available under `no_float`.
 ///
 /// If the `f32_float` feature is enabled, this will be [`f32`] instead.
@@ -132,6 +133,7 @@ pub type FLOAT = f64;
 
 /// The system floating-point type.
 /// It is defined as [`f32`] since the `f32_float` feature is used.
+///
 /// Not available under `no_float`.
 ///
 /// If the `f32_float` feature is not used, this will be `f64` instead.
@@ -197,16 +199,19 @@ pub use func::Func;
 pub use ast::ScriptFnMetadata;
 
 /// Variable-sized array of [`Dynamic`] values.
+///
 /// Not available under `no_index`.
 #[cfg(not(feature = "no_index"))]
 pub type Array = Vec<Dynamic>;
 
 /// Variable-sized array of [`u8`] values (byte array).
+///
 /// Not available under `no_index`.
 #[cfg(not(feature = "no_index"))]
 pub type Blob = Vec<u8>;
 
 /// A dictionary of [`Dynamic`] values with string keys.
+///
 /// Not available under `no_object`.
 ///
 /// [`SmartString`](https://crates.io/crates/smartstring) is used as the key type because most

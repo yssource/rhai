@@ -6,7 +6,7 @@ use crate::plugin::*;
 use std::prelude::v1::*;
 
 #[cfg(not(feature = "no_function"))]
-use crate::{Dynamic, NativeCallContext, INT};
+use crate::{Dynamic, NativeCallContext};
 
 #[cfg(not(feature = "no_function"))]
 #[cfg(not(feature = "no_index"))]
@@ -38,10 +38,10 @@ mod debugging_functions {
                 .rev()
                 .map(
                     |frame @ crate::debugger::CallStackFrame {
-                         fn_name,
-                         args,
-                         source,
-                         pos,
+                         fn_name: _fn_name,
+                         args: _args,
+                         source: _source,
+                         pos: _pos,
                      }| {
                         let call = frame.to_string();
 
@@ -49,21 +49,24 @@ mod debugging_functions {
                         {
                             let mut map = Map::new();
                             map.insert("call".into(), call.into());
-                            map.insert("fn_name".into(), fn_name.into());
-                            if !args.is_empty() {
+                            map.insert("fn_name".into(), _fn_name.into());
+                            if !_args.is_empty() {
                                 map.insert(
                                     "args".into(),
-                                    Dynamic::from_array(args.clone().to_vec()),
+                                    Dynamic::from_array(_args.clone().to_vec()),
                                 );
                             }
-                            if !source.is_empty() {
-                                map.insert("source".into(), source.into());
+                            if !_source.is_empty() {
+                                map.insert("source".into(), _source.into());
                             }
-                            if !pos.is_none() {
-                                map.insert("line".into(), (pos.line().unwrap() as INT).into());
+                            if !_pos.is_none() {
+                                map.insert(
+                                    "line".into(),
+                                    (_pos.line().unwrap() as crate::INT).into(),
+                                );
                                 map.insert(
                                     "position".into(),
-                                    (pos.position().unwrap_or(0) as INT).into(),
+                                    (_pos.position().unwrap_or(0) as crate::INT).into(),
                                 );
                             }
                             Dynamic::from_map(map)
