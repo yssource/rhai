@@ -195,8 +195,8 @@ impl Engine {
         level: usize,
     ) -> RhaiResult {
         #[cfg(feature = "debugging")]
-        let reset_debugger_command =
-            self.run_debugger(scope, global, state, lib, this_ptr, stmt.into(), level);
+        let reset_debugger =
+            self.run_debugger_with_reset(scope, global, state, lib, this_ptr, stmt, level);
 
         // Coded this way for better branch prediction.
         // Popular branches are lifted out of the `match` statement into their own branches.
@@ -210,7 +210,7 @@ impl Engine {
                 self.eval_fn_call_expr(scope, global, state, lib, this_ptr, x, *pos, level);
 
             #[cfg(feature = "debugging")]
-            global.debugger.activate(reset_debugger_command);
+            global.debugger.reset_status(reset_debugger);
 
             return result;
         }
@@ -301,7 +301,7 @@ impl Engine {
             };
 
             #[cfg(feature = "debugging")]
-            global.debugger.activate(reset_debugger_command);
+            global.debugger.reset_status(reset_debugger);
 
             return result;
         }
@@ -931,7 +931,7 @@ impl Engine {
         };
 
         #[cfg(feature = "debugging")]
-        global.debugger.activate(reset_debugger_command);
+        global.debugger.reset_status(reset_debugger);
 
         return result;
     }

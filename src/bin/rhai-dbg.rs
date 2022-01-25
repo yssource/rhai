@@ -71,16 +71,22 @@ fn print_error(input: &str, mut err: EvalAltResult) {
 
 /// Print debug help.
 fn print_debug_help() {
-    println!("help        => print this help");
-    println!("quit, exit  => quit");
-    println!("scope       => print all variables in the scope");
-    println!("node        => print the current AST node");
-    println!("breakpoints => print all break-points");
-    println!("clear       => delete all break-points");
-    println!("break       => set a new break-point at the current position");
-    println!("step        => go to the next expression, diving into functions");
-    println!("next        => go to the next statement but don't dive into functions");
-    println!("continue    => continue normal execution");
+    println!("help                  => print this help");
+    println!("quit, exit, kill      => quit");
+    println!("scope                 => print all variables in the scope");
+    println!("node                  => print the current AST node");
+    println!("backtrace             => print the current call-stack");
+    println!("breakpoints           => print all break-points");
+    println!("delete <breakpoint#>  => delete a break-point");
+    println!("clear                 => delete all break-points");
+    println!("break                 => set a new break-point at the current position");
+    println!("break <func>          => set a new break-point for a function call");
+    println!(
+        "break <func> <#args>  => set a new break-point for a function call with #args arguments"
+    );
+    println!("step                  => go to the next expression, diving into functions");
+    println!("next                  => go to the next statement but don't dive into functions");
+    println!("continue              => continue normal execution");
     println!();
 }
 
@@ -201,21 +207,30 @@ fn main() {
 
             match stdin().read_line(&mut input) {
                 Ok(0) => break DebuggerCommand::Continue,
-                Ok(_) => match input.as_str().trim_end() {
-                    "help" => print_debug_help(),
-                    "exit" | "quit" => {
+                Ok(_) => match input.trim_end().split(' ').collect::<Vec<_>>().as_slice() {
+                    ["help", ..] => print_debug_help(),
+                    ["exit", ..] | ["quit", ..] | ["kill", ..] => {
                         println!("Script terminated. Bye!");
                         exit(0);
                     }
-                    "node" => {
+                    ["node", ..] => {
                         println!("{:?} {}@{:?}", node, source.unwrap_or_default(), pos);
                         println!();
                     }
-                    "continue" => break DebuggerCommand::Continue,
-                    "" | "step" => break DebuggerCommand::StepInto,
-                    "next" => break DebuggerCommand::StepOver,
-                    "scope" => print_scope(context.scope()),
-                    "clear" => {
+                    ["continue", ..] => break DebuggerCommand::Continue,
+                    [""] | ["step", ..] => break DebuggerCommand::StepInto,
+                    ["next", ..] => break DebuggerCommand::StepOver,
+                    ["scope", ..] => print_scope(context.scope()),
+                    ["backtrace", ..] => {
+                        context
+                            .global_runtime_state()
+                            .debugger
+                            .call_stack()
+                            .iter()
+                            .rev()
+                            .for_each(|frame| println!("{}", frame));
+                    }
+                    ["clear", ..] => {
                         context
                             .global_runtime_state_mut()
                             .debugger
@@ -223,30 +238,80 @@ fn main() {
                             .clear();
                         println!("All break-points cleared.");
                     }
-                    "breakpoints" => context
-                        .global_runtime_state_mut()
+                    ["breakpoints", ..] => context
+                        .global_runtime_state()
                         .debugger
-                        .iter_break_points()
+                        .break_points()
+                        .iter()
                         .enumerate()
                         .for_each(|(i, bp)| match bp {
                             BreakPoint::AtPosition { pos, .. } => {
-                                println!("[{}]", i);
+                                println!("[{}]", i + 1);
                                 print_source(&lines, *pos);
                             }
-                            _ => println!("[{}]\n{}", i, bp),
+                            _ => println!("[{}]\n{}", i + 1, bp),
                         }),
-                    "break" => {
+                    ["delete", n, ..] => {
+                        if let Ok(n) = n.parse::<usize>() {
+                            let range = 1..=context
+                                .global_runtime_state_mut()
+                                .debugger
+                                .break_points()
+                                .len();
+                            if range.contains(&n) {
+                                context
+                                    .global_runtime_state_mut()
+                                    .debugger
+                                    .break_points_mut()
+                                    .remove(n - 1);
+                                println!("Break-point #{} deleted.", n)
+                            } else {
+                                eprintln!("Invalid break-point: {}", n);
+                            }
+                        } else {
+                            eprintln!("Invalid break-point: '{}'", n);
+                        }
+                    }
+                    ["break", fn_name, args, ..] => {
+                        if let Ok(args) = args.parse::<usize>() {
+                            let bp = rhai::debugger::BreakPoint::AtFunctionCall {
+                                name: fn_name.trim().into(),
+                                args,
+                            };
+                            println!("Break-point added for {}", bp);
+                            context
+                                .global_runtime_state_mut()
+                                .debugger
+                                .break_points_mut()
+                                .push(bp);
+                        } else {
+                            eprintln!("Invalid number of arguments: '{}'", args);
+                        }
+                    }
+                    ["break", fn_name] => {
+                        let bp = rhai::debugger::BreakPoint::AtFunctionName {
+                            name: fn_name.trim().into(),
+                        };
+                        println!("Break-point added for {}", bp);
                         context
                             .global_runtime_state_mut()
                             .debugger
                             .break_points_mut()
-                            .push(rhai::debugger::BreakPoint::AtPosition {
-                                source: source.unwrap_or("").into(),
-                                pos,
-                            });
-                        println!("Break-point added at the current position.");
+                            .push(bp);
                     }
-                    cmd => eprintln!("Invalid debugger command: '{}'", cmd),
+                    ["break", ..] => {
+                        let bp = rhai::debugger::BreakPoint::AtPosition {
+                            source: source.unwrap_or("").into(),
+                            pos,
+                        };
+                        println!("Break-point added {}", bp);
+                        context
+                            .global_runtime_state_mut()
+                            .debugger
+                            .break_points_mut()
+                            .push(bp);
+                    }
+                    cmd => eprintln!("Invalid debugger command: '{}'", cmd[0]),
                 },
                 Err(err) => panic!("input error: {}", err),
             }

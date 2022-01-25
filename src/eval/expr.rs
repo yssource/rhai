@@ -259,16 +259,16 @@ impl Engine {
         expr: &Expr,
         level: usize,
     ) -> RhaiResult {
-        #[cfg(feature = "debugging")]
-        let reset_debugger_command =
-            self.run_debugger(scope, global, state, lib, this_ptr, expr.into(), level);
-
         // Coded this way for better branch prediction.
         // Popular branches are lifted out of the `match` statement into their own branches.
 
         // Function calls should account for a relatively larger portion of expressions because
         // binary operators are also function calls.
         if let Expr::FnCall(x, pos) = expr {
+            #[cfg(feature = "debugging")]
+            let reset_debugger =
+                self.run_debugger_with_reset(scope, global, state, lib, this_ptr, expr, level);
+
             #[cfg(not(feature = "unchecked"))]
             self.inc_operations(&mut global.num_operations, expr.position())?;
 
@@ -276,7 +276,7 @@ impl Engine {
                 self.eval_fn_call_expr(scope, global, state, lib, this_ptr, x, *pos, level);
 
             #[cfg(feature = "debugging")]
-            global.debugger.activate(reset_debugger_command);
+            global.debugger.reset_status(reset_debugger);
 
             return result;
         }
@@ -285,10 +285,13 @@ impl Engine {
         // We shouldn't do this for too many variants because, soon or later, the added comparisons
         // will cost more than the mis-predicted `match` branch.
         if let Expr::Variable(index, var_pos, x) = expr {
+            #[cfg(feature = "debugging")]
+            self.run_debugger(scope, global, state, lib, this_ptr, expr, level);
+
             #[cfg(not(feature = "unchecked"))]
             self.inc_operations(&mut global.num_operations, expr.position())?;
 
-            let result = if index.is_none() && x.0.is_none() && x.2 == KEYWORD_THIS {
+            return if index.is_none() && x.0.is_none() && x.2 == KEYWORD_THIS {
                 this_ptr
                     .as_deref()
                     .cloned()
@@ -297,12 +300,11 @@ impl Engine {
                 self.search_namespace(scope, global, state, lib, this_ptr, expr)
                     .map(|(val, _)| val.take_or_clone())
             };
-
-            #[cfg(feature = "debugging")]
-            global.debugger.activate(reset_debugger_command);
-
-            return result;
         }
+
+        #[cfg(feature = "debugging")]
+        let reset_debugger =
+            self.run_debugger_with_reset(scope, global, state, lib, this_ptr, expr, level);
 
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(&mut global.num_operations, expr.position())?;
@@ -523,7 +525,7 @@ impl Engine {
         };
 
         #[cfg(feature = "debugging")]
-        global.debugger.activate(reset_debugger_command);
+        global.debugger.reset_status(reset_debugger);
 
         return result;
     }

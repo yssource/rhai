@@ -11,7 +11,7 @@ mod target;
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 pub use chaining::{ChainArgument, ChainType};
 #[cfg(feature = "debugging")]
-pub use debugger::{BreakPoint, Debugger, DebuggerCommand, OnDebuggerCallback};
+pub use debugger::{BreakPoint, CallStackFrame, Debugger, DebuggerCommand, OnDebuggerCallback};
 pub use eval_context::EvalContext;
 pub use eval_state::EvalState;
 pub use global_state::GlobalRuntimeState;

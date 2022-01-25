@@ -890,19 +890,11 @@ impl Engine {
         Ok((
             if let Expr::Stack(slot, _) = arg_expr {
                 #[cfg(feature = "debugging")]
-                let active =
-                    self.run_debugger(scope, global, state, lib, this_ptr, arg_expr.into(), level);
-                #[cfg(feature = "debugging")]
-                global.debugger.activate(active);
-
+                self.run_debugger(scope, global, state, lib, this_ptr, arg_expr, level);
                 constants[*slot].clone()
             } else if let Some(value) = arg_expr.get_literal_value() {
                 #[cfg(feature = "debugging")]
-                let active =
-                    self.run_debugger(scope, global, state, lib, this_ptr, arg_expr.into(), level);
-                #[cfg(feature = "debugging")]
-                global.debugger.activate(active);
-
+                self.run_debugger(scope, global, state, lib, this_ptr, arg_expr, level);
                 value
             } else {
                 self.eval_expr(scope, global, state, lib, this_ptr, arg_expr, level)?
@@ -1148,12 +1140,7 @@ impl Engine {
                 let first_expr = first_arg.unwrap();
 
                 #[cfg(feature = "debugging")]
-                {
-                    let node = first_expr.into();
-                    let active =
-                        self.run_debugger(scope, global, state, lib, this_ptr, node, level);
-                    global.debugger.activate(active);
-                }
+                self.run_debugger(scope, global, state, lib, this_ptr, first_expr, level);
 
                 // func(x, ...) -> x.func(...)
                 a_expr.iter().try_for_each(|expr| {
@@ -1236,12 +1223,7 @@ impl Engine {
             // &mut first argument and avoid cloning the value
             if !args_expr.is_empty() && args_expr[0].is_variable_access(true) {
                 #[cfg(feature = "debugging")]
-                {
-                    let node = (&args_expr[0]).into();
-                    let active =
-                        self.run_debugger(scope, global, state, lib, this_ptr, node, level);
-                    global.debugger.activate(active);
-                }
+                self.run_debugger(scope, global, state, lib, this_ptr, &args_expr[0], level);
 
                 // func(x, ...) -> x.func(...)
                 arg_values.push(Dynamic::UNIT);
