@@ -51,6 +51,7 @@ Standard features
 * Organize code base with dynamically-loadable [modules](https://rhai.rs/book/language/modules.html), optionally [overriding the resolution process](https://rhai.rs/book/rust/modules/resolvers.html).
 * Serialization/deserialization support via [serde](https://crates.io/crates/serde) (requires the `serde` feature).
 * Support for [minimal builds](https://rhai.rs/book/start/builds/minimal.html) by excluding unneeded language [features](https://rhai.rs/book/start/features.html).
+* A [debugging](https://rhai.rs/book/engine/debugging.html) interface.
 
 
 Protected against attacks
