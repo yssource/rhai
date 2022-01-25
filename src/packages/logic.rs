@@ -1,5 +1,3 @@
-#![allow(non_snake_case)]
-
 use crate::def_package;
 use crate::plugin::*;
 #[cfg(feature = "no_std")]

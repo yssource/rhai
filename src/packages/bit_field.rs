@@ -1,5 +1,3 @@
-#![allow(non_snake_case)]
-
 use crate::eval::calc_index;
 use crate::plugin::*;
 use crate::{

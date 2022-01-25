@@ -1,5 +1,3 @@
-#![cfg(not(feature = "no_std"))]
-
 use super::arithmetic::make_err as make_arithmetic_err;
 use crate::plugin::*;
 use crate::{def_package, Dynamic, EvalAltResult, RhaiResult, RhaiResultOf, INT};
