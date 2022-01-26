@@ -383,6 +383,12 @@ impl Engine {
         if let Some(ref on_debugger) = self.debugger {
             let node = node.into();
 
+            // Skip transitive nodes
+            match node {
+                ASTNode::Expr(Expr::Stmt(_)) | ASTNode::Stmt(Stmt::Expr(_)) => return Ok(None),
+                _ => (),
+            }
+
             let stop = match global.debugger.status {
                 DebuggerCommand::Continue => false,
                 DebuggerCommand::Next => matches!(node, ASTNode::Stmt(_)),
