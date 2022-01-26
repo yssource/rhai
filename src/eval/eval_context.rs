@@ -52,7 +52,8 @@ impl<'x, 'px, 'm, 'pm, 'pt> EvalContext<'_, 'x, 'px, 'm, 'pm, '_, '_, '_, '_, 'p
     pub fn scope_mut(&mut self) -> &mut &'x mut Scope<'px> {
         &mut self.scope
     }
-    /// Get an iterator over the current set of modules imported via `import` statements.
+    /// Get an iterator over the current set of modules imported via `import` statements,
+    /// in reverse order (i.e. modules imported last come first).
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {

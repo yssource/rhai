@@ -147,7 +147,7 @@ impl GlobalRuntimeState<'_> {
     /// Get an iterator to the stack of globally-imported [modules][Module] in forward order.
     #[allow(dead_code)]
     #[inline]
-    pub(crate) fn scan_imports_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
+    pub fn scan_imports_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
         self.keys.iter().zip(self.modules.iter())
     }
     /// Does the specified function hash key exist in the stack of globally-imported [modules][Module]?
