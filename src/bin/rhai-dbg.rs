@@ -1,9 +1,10 @@
-use rhai::{Dynamic, Engine, EvalAltResult, Position, Scope};
+use rhai::{Dynamic, Engine, EvalAltResult, Identifier, Position, Scope};
 
 #[cfg(feature = "debugging")]
 use rhai::debugger::DebuggerCommand;
 
 use std::{
+    cell::RefCell,
     env,
     fs::File,
     io::{stdin, stdout, Read, Write},
@@ -75,7 +76,10 @@ fn print_error(input: &str, mut err: EvalAltResult) {
 fn print_debug_help() {
     println!("help                  => print this help");
     println!("quit, exit, kill      => quit");
-    println!("scope                 => print all variables in the scope");
+    println!("scope                 => print the scope");
+    println!("print                 => print all variables de-duplicated");
+    println!("print <variable>      => print the current value of a variable");
+    println!("imports               => print all imported modules");
     println!("node                  => print the current AST node");
     println!("backtrace             => print the current call-stack");
     println!("breakpoints           => print all break-points");
@@ -103,7 +107,15 @@ fn print_debug_help() {
 }
 
 /// Display the scope.
-fn print_scope(scope: &Scope) {
+fn print_scope(scope: &Scope, dedup: bool) {
+    let flattened_clone;
+    let scope = if dedup {
+        flattened_clone = scope.clone_visible();
+        &flattened_clone
+    } else {
+        scope
+    };
+
     scope
         .iter_raw()
         .enumerate()
@@ -113,14 +125,24 @@ fn print_scope(scope: &Scope) {
             #[cfg(feature = "no_closure")]
             let value_is_shared = "";
 
-            println!(
-                "[{}] {}{}{} = {:?}",
-                i + 1,
-                if constant { "const " } else { "" },
-                name,
-                value_is_shared,
-                *value.read_lock::<Dynamic>().unwrap(),
-            )
+            if dedup {
+                println!(
+                    "{}{}{} = {:?}",
+                    if constant { "const " } else { "" },
+                    name,
+                    value_is_shared,
+                    *value.read_lock::<Dynamic>().unwrap(),
+                );
+            } else {
+                println!(
+                    "[{}] {}{}{} = {:?}",
+                    i + 1,
+                    if constant { "const " } else { "" },
+                    name,
+                    value_is_shared,
+                    *value.read_lock::<Dynamic>().unwrap(),
+                );
+            }
         });
 
     println!();
@@ -206,9 +228,27 @@ fn main() {
     // Hook up debugger
     let lines: Vec<_> = script.trim().split('\n').map(|s| s.to_string()).collect();
 
-    engine.on_debugger(move |context, node, source, pos| {
-        print_source(&lines, pos, 0);
+    let current_source = RefCell::new(Identifier::new_const());
 
+    engine.on_debugger(move |context, node, source, pos| {
+        // Check source
+        if let Some(src) = source {
+            if src != &*current_source.borrow() {
+                println!(">>> Source => {}", src);
+            }
+            // Print just a line number for imported modules
+            println!("{} @ {:?}", src, pos);
+        } else {
+            // The root file has no source
+            if !current_source.borrow().is_empty() {
+                println!(">>> Source => main script.");
+            }
+            // Print the current source line
+            print_source(&lines, pos, 0);
+        }
+        *current_source.borrow_mut() = source.unwrap_or("").into();
+
+        // Read stdin for commands
         let mut input = String::new();
 
         loop {
@@ -238,7 +278,35 @@ fn main() {
                     [] | ["step", ..] => break Ok(DebuggerCommand::StepInto),
                     ["over", ..] => break Ok(DebuggerCommand::StepOver),
                     ["next", ..] => break Ok(DebuggerCommand::Next),
-                    ["scope", ..] => print_scope(context.scope()),
+                    ["scope", ..] => print_scope(context.scope(), false),
+                    ["print", var_name, ..] => {
+                        if let Some(value) = context.scope().get_value::<Dynamic>(var_name) {
+                            if value.is::<()>() {
+                                println!("=> ()");
+                            } else {
+                                println!("=> {}", value);
+                            }
+                        } else {
+                            eprintln!("Variable not found: {}", var_name);
+                        }
+                    }
+                    ["print", ..] => print_scope(context.scope(), true),
+                    ["imports", ..] => {
+                        context
+                            .global_runtime_state()
+                            .scan_imports_raw()
+                            .enumerate()
+                            .for_each(|(i, (name, module))| {
+                                println!(
+                                    "[{}] {} = {}",
+                                    i + 1,
+                                    name,
+                                    module.id().unwrap_or("<unknown>")
+                                );
+                            });
+
+                        println!();
+                    }
                     #[cfg(not(feature = "no_function"))]
                     ["backtrace", ..] => {
                         context
@@ -374,8 +442,13 @@ fn main() {
                     #[cfg(not(feature = "no_position"))]
                     ["break", param] if param.parse::<usize>().is_ok() => {
                         let n = param.parse::<usize>().unwrap();
+                        let range = if source.is_none() {
+                            1..=lines.len()
+                        } else {
+                            1..=(u16::MAX as usize)
+                        };
 
-                        if (1..=lines.len()).contains(&n) {
+                        if range.contains(&n) {
                             let bp = rhai::debugger::BreakPoint::AtPosition {
                                 source: source.unwrap_or("").into(),
                                 pos: Position::new(n as u16, 0),
