@@ -47,3 +47,6 @@ extern "C" fn rust_eh_register_frames() {}
 
 #[no_mangle]
 extern "C" fn rust_eh_unregister_frames() {}
+
+#[no_mangle]
+extern "C" fn _Unwind_Resume() {}
