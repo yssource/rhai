@@ -4,6 +4,11 @@ Rhai Release Notes
 Version 1.5.0
 =============
 
+Bug fixes
+---------
+
+* In `Scope::clone_visible`, constants are now properly cloned as constants.
+
 New features
 ------------
 
