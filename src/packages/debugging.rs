@@ -43,12 +43,12 @@ mod debugging_functions {
                          source: _source,
                          pos: _pos,
                      }| {
-                        let call = frame.to_string();
+                        let display = frame.to_string();
 
                         #[cfg(not(feature = "no_object"))]
                         {
                             let mut map = Map::new();
-                            map.insert("call".into(), call.into());
+                            map.insert("display".into(), display.into());
                             map.insert("fn_name".into(), _fn_name.into());
                             if !_args.is_empty() {
                                 map.insert(
