@@ -21,7 +21,7 @@ use std::{
 use std::str::FromStr;
 
 #[cfg(not(feature = "no_float"))]
-use num_traits::Float;
+use num_traits::float::FloatCore as Float;
 
 /// _(internals)_ A binary expression.
 /// Exported under the `internals` feature only.

@@ -14,6 +14,7 @@ Enhancements
 ------------
 
 * `rhai-repl` tool has a few more commands, such as `strict` to turn on/off _Strict Variables Mode_ and `optimize` to turn on/off script optimization.
+* Default features for dependencies (such as `ahash/std` and `num-traits/std`) are no longer required.
 
 
 Version 1.4.1
