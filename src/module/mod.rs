@@ -244,9 +244,9 @@ pub struct Module {
     /// including those in sub-modules.
     all_functions: BTreeMap<u64, Shared<CallableFunction>>,
     /// Iterator functions, keyed by the type producing the iterator.
-    type_iterators: BTreeMap<TypeId, IteratorFn>,
+    type_iterators: BTreeMap<TypeId, Shared<IteratorFn>>,
     /// Flattened collection of iterator functions, including those in sub-modules.
-    all_type_iterators: BTreeMap<TypeId, IteratorFn>,
+    all_type_iterators: BTreeMap<TypeId, Shared<IteratorFn>>,
     /// Is the [`Module`] indexed?
     indexed: bool,
     /// Does the [`Module`] contain indexed functions that have been exposed to the global namespace?
@@ -1432,8 +1432,8 @@ impl Module {
         other.functions.iter().for_each(|(&k, v)| {
             self.functions.entry(k).or_insert_with(|| v.clone());
         });
-        other.type_iterators.iter().for_each(|(&k, &v)| {
-            self.type_iterators.entry(k).or_insert(v);
+        other.type_iterators.iter().for_each(|(&k, v)| {
+            self.type_iterators.entry(k).or_insert(v.clone());
         });
         self.all_functions.clear();
         self.all_variables.clear();
@@ -1483,7 +1483,8 @@ impl Module {
                 .map(|(&k, v)| (k, v.clone())),
         );
 
-        self.type_iterators.extend(other.type_iterators.iter());
+        self.type_iterators
+            .extend(other.type_iterators.iter().map(|(&k, v)| (k, v.clone())));
         self.all_functions.clear();
         self.all_variables.clear();
         self.all_type_iterators.clear();
@@ -1768,7 +1769,7 @@ impl Module {
             path: &mut Vec<&'a str>,
             variables: &mut BTreeMap<u64, Dynamic>,
             functions: &mut BTreeMap<u64, Shared<CallableFunction>>,
-            type_iterators: &mut BTreeMap<TypeId, IteratorFn>,
+            type_iterators: &mut BTreeMap<TypeId, Shared<IteratorFn>>,
         ) -> bool {
             let mut contains_indexed_global_functions = false;
 
@@ -1789,7 +1790,7 @@ impl Module {
 
             // Index type iterators
             module.type_iterators.iter().for_each(|(&type_id, func)| {
-                type_iterators.insert(type_id, *func);
+                type_iterators.insert(type_id, func.clone());
                 contains_indexed_global_functions = true;
             });
 
@@ -1868,10 +1869,33 @@ impl Module {
     }
 
     /// Set a type iterator into the [`Module`].
+    #[cfg(not(feature = "sync"))]
     #[inline]
-    pub fn set_iter(&mut self, type_id: TypeId, func: IteratorFn) -> &mut Self {
+    pub fn set_iter(
+        &mut self,
+        type_id: TypeId,
+        func: impl Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static,
+    ) -> &mut Self {
+        let func = Shared::new(func);
         if self.indexed {
-            self.all_type_iterators.insert(type_id, func);
+            self.all_type_iterators.insert(type_id, func.clone());
+            self.contains_indexed_global_functions = true;
+        }
+        self.type_iterators.insert(type_id, func);
+        self
+    }
+
+    /// Set a type iterator into the [`Module`].
+    #[cfg(feature = "sync")]
+    #[inline]
+    pub fn set_iter(
+        &mut self,
+        type_id: TypeId,
+        func: impl Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + SendSync + 'static,
+    ) -> &mut Self {
+        let func = Shared::new(func);
+        if self.indexed {
+            self.all_type_iterators.insert(type_id, func.clone());
             self.contains_indexed_global_functions = true;
         }
         self.type_iterators.insert(type_id, func);
@@ -1905,15 +1929,15 @@ impl Module {
     /// Get the specified type iterator.
     #[inline]
     #[must_use]
-    pub(crate) fn get_qualified_iter(&self, id: TypeId) -> Option<IteratorFn> {
-        self.all_type_iterators.get(&id).cloned()
+    pub(crate) fn get_qualified_iter(&self, id: TypeId) -> Option<&IteratorFn> {
+        self.all_type_iterators.get(&id).map(|f| f.as_ref())
     }
 
     /// Get the specified type iterator.
     #[inline]
     #[must_use]
-    pub(crate) fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
-        self.type_iterators.get(&id).cloned()
+    pub(crate) fn get_iter(&self, id: TypeId) -> Option<&IteratorFn> {
+        self.type_iterators.get(&id).map(|f| f.as_ref())
     }
 }
 

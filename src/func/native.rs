@@ -376,7 +376,11 @@ pub type FnAny = dyn Fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult + Send
 pub type FnBuiltin = fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult;
 
 /// A standard function that gets an iterator from a type.
-pub type IteratorFn = fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
+#[cfg(not(feature = "sync"))]
+pub type IteratorFn = dyn Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
+/// A standard function that gets an iterator from a type.
+#[cfg(feature = "sync")]
+pub type IteratorFn = dyn Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync;
 
 #[cfg(not(feature = "sync"))]
 pub type FnPlugin = dyn PluginFunction;
@@ -386,39 +390,37 @@ pub type FnPlugin = dyn PluginFunction + Send + Sync;
 /// A standard callback function for progress reporting.
 #[cfg(not(feature = "unchecked"))]
 #[cfg(not(feature = "sync"))]
-pub type OnProgressCallback = Box<dyn Fn(u64) -> Option<Dynamic> + 'static>;
+pub type OnProgressCallback = dyn Fn(u64) -> Option<Dynamic>;
 /// A standard callback function for progress reporting.
 #[cfg(not(feature = "unchecked"))]
 #[cfg(feature = "sync")]
-pub type OnProgressCallback = Box<dyn Fn(u64) -> Option<Dynamic> + Send + Sync + 'static>;
+pub type OnProgressCallback = dyn Fn(u64) -> Option<Dynamic> + Send + Sync;
 
 /// A standard callback function for printing.
 #[cfg(not(feature = "sync"))]
-pub type OnPrintCallback = Box<dyn Fn(&str) + 'static>;
+pub type OnPrintCallback = dyn Fn(&str);
 /// A standard callback function for printing.
 #[cfg(feature = "sync")]
-pub type OnPrintCallback = Box<dyn Fn(&str) + Send + Sync + 'static>;
+pub type OnPrintCallback = dyn Fn(&str) + Send + Sync;
 
 /// A standard callback function for debugging.
 #[cfg(not(feature = "sync"))]
-pub type OnDebugCallback = Box<dyn Fn(&str, Option<&str>, Position) + 'static>;
+pub type OnDebugCallback = dyn Fn(&str, Option<&str>, Position);
 /// A standard callback function for debugging.
 #[cfg(feature = "sync")]
-pub type OnDebugCallback = Box<dyn Fn(&str, Option<&str>, Position) + Send + Sync + 'static>;
+pub type OnDebugCallback = dyn Fn(&str, Option<&str>, Position) + Send + Sync;
 
 /// A standard callback function for mapping tokens during parsing.
 #[cfg(not(feature = "sync"))]
 pub type OnParseTokenCallback = dyn Fn(Token, Position, &TokenizeState) -> Token;
 /// A standard callback function for mapping tokens during parsing.
 #[cfg(feature = "sync")]
-pub type OnParseTokenCallback =
-    dyn Fn(Token, Position, &TokenizeState) -> Token + Send + Sync + 'static;
+pub type OnParseTokenCallback = dyn Fn(Token, Position, &TokenizeState) -> Token + Send + Sync;
 
 /// A standard callback function for variable access.
 #[cfg(not(feature = "sync"))]
-pub type OnVarCallback =
-    Box<dyn Fn(&str, usize, &EvalContext) -> RhaiResultOf<Option<Dynamic>> + 'static>;
+pub type OnVarCallback = dyn Fn(&str, usize, &EvalContext) -> RhaiResultOf<Option<Dynamic>>;
 /// A standard callback function for variable access.
 #[cfg(feature = "sync")]
 pub type OnVarCallback =
-    Box<dyn Fn(&str, usize, &EvalContext) -> RhaiResultOf<Option<Dynamic>> + Send + Sync + 'static>;
+    dyn Fn(&str, usize, &EvalContext) -> RhaiResultOf<Option<Dynamic>> + Send + Sync;

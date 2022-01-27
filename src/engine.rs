@@ -115,17 +115,17 @@ pub struct Engine {
     /// Custom syntax.
     pub(crate) custom_syntax: BTreeMap<Identifier, Box<CustomSyntax>>,
     /// Callback closure for resolving variable access.
-    pub(crate) resolve_var: Option<OnVarCallback>,
+    pub(crate) resolve_var: Option<Box<OnVarCallback>>,
     /// Callback closure to remap tokens during parsing.
     pub(crate) token_mapper: Option<Box<OnParseTokenCallback>>,
 
     /// Callback closure for implementing the `print` command.
-    pub(crate) print: Option<OnPrintCallback>,
+    pub(crate) print: Option<Box<OnPrintCallback>>,
     /// Callback closure for implementing the `debug` command.
-    pub(crate) debug: Option<OnDebugCallback>,
+    pub(crate) debug: Option<Box<OnDebugCallback>>,
     /// Callback closure for progress reporting.
     #[cfg(not(feature = "unchecked"))]
-    pub(crate) progress: Option<crate::func::native::OnProgressCallback>,
+    pub(crate) progress: Option<Box<crate::func::native::OnProgressCallback>>,
 
     /// Optimize the [`AST`][crate::AST] after compilation.
     #[cfg(not(feature = "no_optimize"))]
@@ -140,7 +140,7 @@ pub struct Engine {
 
     /// Callback closure for debugging.
     #[cfg(feature = "debugging")]
-    pub(crate) debugger: Option<crate::eval::OnDebuggerCallback>,
+    pub(crate) debugger: Option<Box<crate::eval::OnDebuggerCallback>>,
 }
 
 impl fmt::Debug for Engine {

@@ -12,8 +12,7 @@ impl Engine {
     ///
     /// The callback function signature takes the following form:
     ///
-    /// > `Fn(name: &str, index: usize, context: &EvalContext)`  
-    /// > `   -> Result<Option<Dynamic>, Box<EvalAltResult>> + 'static`
+    /// > `Fn(name: &str, index: usize, context: &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>`
     ///
     /// where:
     /// * `index`: an offset from the bottom of the current [`Scope`][crate::Scope] that the

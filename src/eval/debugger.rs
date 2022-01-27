@@ -10,18 +10,13 @@ use std::prelude::v1::*;
 
 /// A standard callback function for debugging.
 #[cfg(not(feature = "sync"))]
-pub type OnDebuggerCallback = Box<
-    dyn Fn(&mut EvalContext, ASTNode, Option<&str>, Position) -> RhaiResultOf<DebuggerCommand>
-        + 'static,
->;
+pub type OnDebuggerCallback =
+    dyn Fn(&mut EvalContext, ASTNode, Option<&str>, Position) -> RhaiResultOf<DebuggerCommand>;
 /// A standard callback function for debugging.
 #[cfg(feature = "sync")]
-pub type OnDebuggerCallback = Box<
-    dyn Fn(&mut EvalContext, ASTNode, Option<&str>, Position) -> RhaiResultOf<DebuggerCommand>
-        + Send
-        + Sync
-        + 'static,
->;
+pub type OnDebuggerCallback = dyn Fn(&mut EvalContext, ASTNode, Option<&str>, Position) -> RhaiResultOf<DebuggerCommand>
+    + Send
+    + Sync;
 
 /// A command for the debugger on the next iteration.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]

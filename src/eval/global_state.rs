@@ -178,7 +178,7 @@ impl GlobalRuntimeState<'_> {
     /// [modules][Module].
     #[inline]
     #[must_use]
-    pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
+    pub fn get_iter(&self, id: TypeId) -> Option<&IteratorFn> {
         self.modules
             .iter()
             .rev()
