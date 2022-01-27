@@ -1,4 +1,4 @@
-use rhai::{Dynamic, Engine, EvalAltResult, Identifier, Position, Scope};
+use rhai::{Dynamic, Engine, EvalAltResult, Position, Scope};
 
 #[cfg(feature = "debugging")]
 use rhai::debugger::DebuggerCommand;
@@ -228,7 +228,7 @@ fn main() {
     // Hook up debugger
     let lines: Vec<_> = script.trim().split('\n').map(|s| s.to_string()).collect();
 
-    let current_source = RefCell::new(Identifier::new_const());
+    let current_source = RefCell::new(rhai::Identifier::new_const());
 
     engine.on_debugger(move |context, node, source, pos| {
         // Check source
