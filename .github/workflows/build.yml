@@ -3,8 +3,8 @@ name: Build
 on:
   push:
     branches:
+      - main
       - master
-      - v1.3-fixes
   pull_request: {}
 
 jobs:

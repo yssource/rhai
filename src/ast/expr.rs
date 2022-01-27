@@ -21,7 +21,7 @@ use std::{
 use std::str::FromStr;
 
 #[cfg(not(feature = "no_float"))]
-use num_traits::Float;
+use num_traits::float::FloatCore as Float;
 
 /// _(internals)_ A binary expression.
 /// Exported under the `internals` feature only.
@@ -646,15 +646,14 @@ impl Expr {
             | Self::Variable(_, pos, _)
             | Self::Stack(_, pos)
             | Self::FnCall(_, pos)
+            | Self::Index(_, _, pos)
             | Self::Custom(_, pos)
             | Self::InterpolatedString(_, pos) => *pos,
 
             Self::Property(x) => (x.2).1,
             Self::Stmt(x) => x.position(),
 
-            Self::And(x, _) | Self::Or(x, _) | Self::Dot(x, _, _) | Self::Index(x, _, _) => {
-                x.lhs.position()
-            }
+            Self::And(x, _) | Self::Or(x, _) | Self::Dot(x, _, _) => x.lhs.position(),
         }
     }
     /// Override the [position][Position] of the expression.

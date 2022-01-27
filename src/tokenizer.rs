@@ -1592,11 +1592,11 @@ fn get_next_token_inner(
                     // `\r - start from next line
                     Some('\r') => {
                         eat_next(stream, pos);
-                        pos.new_line();
                         // `\r\n
                         if let Some('\n') = stream.peek_next() {
                             eat_next(stream, pos);
                         }
+                        pos.new_line();
                     }
                     // `\n - start from next line
                     Some('\n') => {
@@ -1762,11 +1762,11 @@ fn get_next_token_inner(
 
                 while let Some(c) = stream.get_next() {
                     if c == '\r' {
-                        pos.new_line();
                         // \r\n
                         if let Some('\n') = stream.peek_next() {
                             eat_next(stream, pos);
                         }
+                        pos.new_line();
                         break;
                     }
                     if c == '\n' {

@@ -47,6 +47,8 @@ fn print_help() {
     println!("quit, exit => quit");
     println!("scope      => print all variables in the scope");
     println!("strict     => toggle on/off Strict Variables Mode");
+    #[cfg(not(feature = "no_optimize"))]
+    println!("optimize   => toggle on/off script optimization");
     #[cfg(feature = "metadata")]
     println!("functions  => print all functions defined");
     #[cfg(feature = "metadata")]
@@ -85,7 +87,9 @@ fn main() {
     let title = format!("Rhai REPL tool (version {})", env!("CARGO_PKG_VERSION"));
     println!("{}", title);
     println!("{0:=<1$}", "", title.len());
-    print_help();
+
+    #[cfg(not(feature = "no_optimize"))]
+    let mut optimize_level = rhai::OptimizationLevel::Simple;
 
     // Initialize scripting engine
     let mut engine = Engine::new();
@@ -196,6 +200,8 @@ fn main() {
     let mut ast_u = AST::empty();
     let mut ast = AST::empty();
 
+    print_help();
+
     'main_loop: loop {
         print!("rhai-repl> ");
         stdout().flush().expect("couldn't flush stdout");
@@ -247,6 +253,18 @@ fn main() {
                 println!("Strict Variables Mode turned ON.");
                 continue;
             }
+            #[cfg(not(feature = "no_optimize"))]
+            "optimize" if optimize_level == rhai::OptimizationLevel::Simple => {
+                optimize_level = rhai::OptimizationLevel::None;
+                println!("Script optimization turned OFF.");
+                continue;
+            }
+            #[cfg(not(feature = "no_optimize"))]
+            "optimize" => {
+                optimize_level = rhai::OptimizationLevel::Simple;
+                println!("Script optimization turned ON.");
+                continue;
+            }
             "scope" => {
                 print_scope(&scope);
                 continue;
@@ -296,7 +314,7 @@ fn main() {
 
                 #[cfg(not(feature = "no_optimize"))]
                 {
-                    ast = engine.optimize_ast(&scope, r, rhai::OptimizationLevel::Simple);
+                    ast = engine.optimize_ast(&scope, r, optimize_level);
                 }
 
                 #[cfg(feature = "no_optimize")]
