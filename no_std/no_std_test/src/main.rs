@@ -14,7 +14,7 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 #[cfg(all(windows, target_env = "msvc"))]
 #[link(name = "msvcrt")]
 #[link(name = "libcmt")]
-extern {}
+extern "C" {}
 
 use rhai::{Engine, INT};
 
@@ -39,8 +39,11 @@ extern "C" fn rust_begin_panic(_: &core::panic::PanicInfo) -> ! {
     core::intrinsics::abort();
 }
 
-#[lang = "eh_personality"]
-extern "C" fn eh_personality() {}
+#[no_mangle]
+extern "C" fn _rust_eh_personality() {}
+
+#[no_mangle]
+extern "C" fn rust_eh_personality() {}
 
 #[no_mangle]
 extern "C" fn rust_eh_register_frames() {}
