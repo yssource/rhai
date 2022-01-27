@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - master
-      - v1.3-fixes
   pull_request: {}
 
 jobs:
