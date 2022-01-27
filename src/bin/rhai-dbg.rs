@@ -1,8 +1,10 @@
+#[cfg(feature = "debugging")]
 use rhai::{Dynamic, Engine, EvalAltResult, Position, Scope};
 
 #[cfg(feature = "debugging")]
 use rhai::debugger::DebuggerCommand;
 
+#[cfg(feature = "debugging")]
 use std::{
     cell::RefCell,
     env,
@@ -13,6 +15,7 @@ use std::{
 };
 
 /// Pretty-print source line.
+#[cfg(feature = "debugging")]
 fn print_source(lines: &[String], pos: Position, offset: usize) {
     let line_no = if lines.len() > 1 {
         if pos.is_none() {
@@ -40,6 +43,7 @@ fn print_source(lines: &[String], pos: Position, offset: usize) {
 }
 
 /// Pretty-print error.
+#[cfg(feature = "debugging")]
 fn print_error(input: &str, mut err: EvalAltResult) {
     let lines: Vec<_> = input.trim().split('\n').collect();
     let pos = err.take_position();
@@ -73,6 +77,7 @@ fn print_error(input: &str, mut err: EvalAltResult) {
 }
 
 /// Print debug help.
+#[cfg(feature = "debugging")]
 fn print_debug_help() {
     println!("help                  => print this help");
     println!("quit, exit, kill      => quit");
@@ -107,6 +112,7 @@ fn print_debug_help() {
 }
 
 /// Display the scope.
+#[cfg(feature = "debugging")]
 fn print_scope(scope: &Scope, dedup: bool) {
     let flattened_clone;
     let scope = if dedup {
