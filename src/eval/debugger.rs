@@ -8,11 +8,18 @@ use std::fmt;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
-/// A standard callback function for debugging.
+/// Callback function to initialize the debugger.
+#[cfg(not(feature = "sync"))]
+pub type OnDebuggingInit = dyn Fn() -> Dynamic;
+/// Callback function to initialize the debugger.
+#[cfg(feature = "sync")]
+pub type OnDebuggingInit = dyn Fn() -> Dynamic + Send + Sync;
+
+/// Callback function for debugging.
 #[cfg(not(feature = "sync"))]
 pub type OnDebuggerCallback =
     dyn Fn(&mut EvalContext, ASTNode, Option<&str>, Position) -> RhaiResultOf<DebuggerCommand>;
-/// A standard callback function for debugging.
+/// Callback function for debugging.
 #[cfg(feature = "sync")]
 pub type OnDebuggerCallback = dyn Fn(&mut EvalContext, ASTNode, Option<&str>, Position) -> RhaiResultOf<DebuggerCommand>
     + Send
@@ -192,6 +199,8 @@ impl fmt::Display for CallStackFrame {
 pub struct Debugger {
     /// The current status command.
     status: DebuggerCommand,
+    /// The current state.
+    state: Dynamic,
     /// The current set of break-points.
     break_points: Vec<BreakPoint>,
     /// The current function call stack.
@@ -200,28 +209,44 @@ pub struct Debugger {
 }
 
 impl Debugger {
-    /// Create a new [`Debugger`].
-    pub const fn new() -> Self {
+    /// Create a new [`Debugger`] based on an [`Engine`].
+    #[inline(always)]
+    #[must_use]
+    pub fn new(engine: &Engine) -> Self {
         Self {
-            status: DebuggerCommand::Continue,
+            status: if engine.debugger.is_some() {
+                DebuggerCommand::StepInto
+            } else {
+                DebuggerCommand::Continue
+            },
+            state: if let Some((ref init, _)) = engine.debugger {
+                init()
+            } else {
+                Dynamic::UNIT
+            },
             break_points: Vec::new(),
             #[cfg(not(feature = "no_function"))]
             call_stack: Vec::new(),
         }
     }
-    /// Get the function call stack depth.
-    ///
-    /// Not available under `no_function`.
-    #[cfg(not(feature = "no_function"))]
+    /// Get a reference to the current state.
     #[inline(always)]
-    pub fn call_stack_len(&self) -> usize {
-        self.call_stack.len()
+    #[must_use]
+    pub fn state(&self) -> &Dynamic {
+        &self.state
+    }
+    /// Get a mutable reference to the current state.
+    #[inline(always)]
+    #[must_use]
+    pub fn state_mut(&mut self) -> &mut Dynamic {
+        &mut self.state
     }
     /// Get the current call stack.
     ///
     /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
+    #[must_use]
     pub fn call_stack(&self) -> &[CallStackFrame] {
         &self.call_stack
     }
@@ -258,10 +283,11 @@ impl Debugger {
     pub fn status(&self) -> DebuggerCommand {
         self.status
     }
-    /// Set the status of this [`Debugger`].
+    /// Get a mutable reference to the current status of this [`Debugger`].
     #[inline(always)]
-    pub fn set_status(&mut self, status: DebuggerCommand) {
-        self.status = status;
+    #[must_use]
+    pub fn status_mut(&mut self) -> &mut DebuggerCommand {
+        &mut self.status
     }
     /// Set the status of this [`Debugger`].
     #[inline(always)]
@@ -270,17 +296,8 @@ impl Debugger {
             self.status = cmd;
         }
     }
-    /// Activate: set the status of this [`Debugger`] to [`DebuggerCommand::StepInto`].  
-    /// Deactivate: set the status of this [`Debugger`] to [`DebuggerCommand::Continue`].
-    #[inline(always)]
-    pub fn activate(&mut self, active: bool) {
-        if active {
-            self.set_status(DebuggerCommand::StepInto);
-        } else {
-            self.set_status(DebuggerCommand::Continue);
-        }
-    }
     /// Does a particular [`AST` Node][ASTNode] trigger a break-point?
+    #[must_use]
     pub fn is_break_point(&self, src: &str, node: ASTNode) -> bool {
         let _src = src;
 
@@ -347,7 +364,7 @@ impl Engine {
         if let Some(cmd) =
             self.run_debugger_with_reset(scope, global, state, lib, this_ptr, node, level)?
         {
-            global.debugger.set_status(cmd);
+            global.debugger.status = cmd;
         }
 
         Ok(())
@@ -375,7 +392,7 @@ impl Engine {
         node: impl Into<ASTNode<'a>>,
         level: usize,
     ) -> RhaiResultOf<Option<DebuggerCommand>> {
-        if let Some(ref on_debugger) = self.debugger {
+        if let Some((_, ref on_debugger)) = self.debugger {
             let node = node.into();
 
             // Skip transitive nodes
@@ -415,19 +432,19 @@ impl Engine {
 
             match command {
                 DebuggerCommand::Continue => {
-                    global.debugger.set_status(DebuggerCommand::Continue);
+                    global.debugger.status = DebuggerCommand::Continue;
                     Ok(None)
                 }
                 DebuggerCommand::Next => {
-                    global.debugger.set_status(DebuggerCommand::Continue);
+                    global.debugger.status = DebuggerCommand::Continue;
                     Ok(Some(DebuggerCommand::Next))
                 }
                 DebuggerCommand::StepInto => {
-                    global.debugger.set_status(DebuggerCommand::StepInto);
+                    global.debugger.status = DebuggerCommand::StepInto;
                     Ok(None)
                 }
                 DebuggerCommand::StepOver => {
-                    global.debugger.set_status(DebuggerCommand::Continue);
+                    global.debugger.status = DebuggerCommand::Continue;
                     Ok(Some(DebuggerCommand::StepOver))
                 }
             }

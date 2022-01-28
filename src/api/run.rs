@@ -45,9 +45,7 @@ impl Engine {
     #[inline]
     pub fn run_ast_with_scope(&self, scope: &mut Scope, ast: &AST) -> RhaiResultOf<()> {
         let state = &mut EvalState::new();
-        let global = &mut GlobalRuntimeState::new();
-        #[cfg(feature = "debugging")]
-        global.debugger.activate(self.debugger.is_some());
+        let global = &mut GlobalRuntimeState::new(self);
         global.source = ast.source_raw().clone();
 
         #[cfg(not(feature = "no_module"))]

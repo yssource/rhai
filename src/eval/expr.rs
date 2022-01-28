@@ -64,8 +64,8 @@ impl Engine {
                 // Qualified variable access
                 #[cfg(not(feature = "no_module"))]
                 (_, Some((namespace, hash_var)), var_name) => {
+                    // foo:bar::baz::VARIABLE
                     if let Some(module) = self.search_imports(global, state, namespace) {
-                        // foo:bar::baz::VARIABLE
                         return match module.get_qualified_var(*hash_var) {
                             Ok(target) => {
                                 let mut target = target.clone();
@@ -89,18 +89,16 @@ impl Engine {
                         };
                     }
 
+                    // global::VARIABLE
                     #[cfg(not(feature = "no_function"))]
                     if namespace.len() == 1 && namespace[0].name == crate::engine::KEYWORD_GLOBAL {
-                        // global::VARIABLE
-                        let global_constants = global.constants_mut();
+                        let mut guard = crate::func::native::locked_write(&global.constants);
 
-                        if let Some(mut guard) = global_constants {
-                            if let Some(value) = guard.get_mut(var_name) {
-                                let mut target: Target = value.clone().into();
-                                // Module variables are constant
-                                target.set_access_mode(AccessMode::ReadOnly);
-                                return Ok((target.into(), *_var_pos));
-                            }
+                        if let Some(value) = guard.get_mut(var_name) {
+                            let mut target: Target = value.clone().into();
+                            // Module variables are constant
+                            target.set_access_mode(AccessMode::ReadOnly);
+                            return Ok((target.into(), *_var_pos));
                         }
 
                         return Err(ERR::ErrorVariableNotFound(

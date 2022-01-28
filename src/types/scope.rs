@@ -611,9 +611,9 @@ impl Scope<'_> {
 impl<K: Into<Identifier>> Extend<(K, Dynamic)> for Scope<'_> {
     #[inline]
     fn extend<T: IntoIterator<Item = (K, Dynamic)>>(&mut self, iter: T) {
-        iter.into_iter().for_each(|(name, value)| {
+        for (name, value) in iter {
             self.push_dynamic_value(name, AccessMode::ReadWrite, value);
-        });
+        }
     }
 }
 
@@ -629,7 +629,7 @@ impl<K: Into<Identifier>> FromIterator<(K, Dynamic)> for Scope<'_> {
 impl<K: Into<Identifier>> Extend<(K, bool, Dynamic)> for Scope<'_> {
     #[inline]
     fn extend<T: IntoIterator<Item = (K, bool, Dynamic)>>(&mut self, iter: T) {
-        iter.into_iter().for_each(|(name, is_constant, value)| {
+        for (name, is_constant, value) in iter {
             self.push_dynamic_value(
                 name,
                 if is_constant {
@@ -639,7 +639,7 @@ impl<K: Into<Identifier>> Extend<(K, bool, Dynamic)> for Scope<'_> {
                 },
                 value,
             );
-        });
+        }
     }
 }
 

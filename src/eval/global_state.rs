@@ -1,13 +1,13 @@
 //! Global runtime state.
 
 use crate::func::{CallableFunction, IteratorFn};
-use crate::{Identifier, Module, Shared, StaticVec};
+use crate::{Engine, Identifier, Module, Shared, StaticVec};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
     any::TypeId,
     fmt,
-    iter::{FromIterator, Rev, Zip},
+    iter::{Rev, Zip},
     marker::PhantomData,
 };
 
@@ -44,8 +44,7 @@ pub struct GlobalRuntimeState<'a> {
     /// Cache of globally-defined constants.
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
-    constants:
-        Option<Shared<crate::Locked<std::collections::BTreeMap<Identifier, crate::Dynamic>>>>,
+    pub(crate) constants: crate::Locked<std::collections::BTreeMap<Identifier, crate::Dynamic>>,
     /// Debugging interface.
     #[cfg(feature = "debugging")]
     pub debugger: super::Debugger,
@@ -53,18 +52,11 @@ pub struct GlobalRuntimeState<'a> {
     dummy: PhantomData<&'a ()>,
 }
 
-impl Default for GlobalRuntimeState<'_> {
-    #[inline(always)]
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl GlobalRuntimeState<'_> {
-    /// Create a new [`GlobalRuntimeState`].
+    /// Create a new [`GlobalRuntimeState`] based on an [`Engine`].
     #[inline(always)]
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(engine: &Engine) -> Self {
         Self {
             keys: StaticVec::new_const(),
             modules: StaticVec::new_const(),
@@ -77,9 +69,9 @@ impl GlobalRuntimeState<'_> {
             fn_hash_indexing: (0, 0),
             #[cfg(not(feature = "no_module"))]
             #[cfg(not(feature = "no_function"))]
-            constants: None,
+            constants: std::collections::BTreeMap::new().into(),
             #[cfg(feature = "debugging")]
-            debugger: crate::eval::Debugger::new(),
+            debugger: crate::eval::Debugger::new(engine),
             dummy: PhantomData::default(),
         }
     }
@@ -193,33 +185,6 @@ impl GlobalRuntimeState<'_> {
             s => Some(s),
         }
     }
-    /// Get a mutable reference to the cache of globally-defined constants.
-    #[cfg(not(feature = "no_module"))]
-    #[cfg(not(feature = "no_function"))]
-    #[must_use]
-    pub(crate) fn constants_mut<'a>(
-        &'a mut self,
-    ) -> Option<
-        impl std::ops::DerefMut<Target = std::collections::BTreeMap<Identifier, crate::Dynamic>> + 'a,
-    > {
-        if let Some(ref global_constants) = self.constants {
-            Some(crate::func::native::shared_write_lock(global_constants))
-        } else {
-            None
-        }
-    }
-    /// Set a constant into the cache of globally-defined constants.
-    #[cfg(not(feature = "no_module"))]
-    #[cfg(not(feature = "no_function"))]
-    pub(crate) fn set_constant(&mut self, name: impl Into<Identifier>, value: crate::Dynamic) {
-        if self.constants.is_none() {
-            let dict: crate::Locked<_> = std::collections::BTreeMap::new().into();
-            self.constants = Some(dict.into());
-        }
-
-        crate::func::native::shared_write_lock(self.constants.as_mut().expect("`Some`"))
-            .insert(name.into(), value);
-    }
     /// Get the pre-calculated index getter hash.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     #[must_use]
@@ -262,22 +227,13 @@ impl IntoIterator for GlobalRuntimeState<'_> {
     }
 }
 
-impl<K: Into<Identifier>, M: Into<Shared<Module>>> FromIterator<(K, M)> for GlobalRuntimeState<'_> {
-    #[inline]
-    fn from_iter<T: IntoIterator<Item = (K, M)>>(iter: T) -> Self {
-        let mut lib = Self::new();
-        lib.extend(iter);
-        lib
-    }
-}
-
 impl<K: Into<Identifier>, M: Into<Shared<Module>>> Extend<(K, M)> for GlobalRuntimeState<'_> {
     #[inline]
     fn extend<T: IntoIterator<Item = (K, M)>>(&mut self, iter: T) {
-        iter.into_iter().for_each(|(k, m)| {
+        for (k, m) in iter {
             self.keys.push(k.into());
             self.modules.push(m.into());
-        })
+        }
     }
 }
 

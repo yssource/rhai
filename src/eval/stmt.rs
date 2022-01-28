@@ -818,8 +818,8 @@ impl Engine {
                             && entry_type == AccessMode::ReadOnly
                             && lib.iter().any(|&m| !m.is_empty())
                         {
-                            // Add a global constant if at top level and there are functions
-                            global.set_constant(var_name.clone(), value.clone());
+                            crate::func::native::locked_write(&global.constants)
+                                .insert(var_name.clone(), value.clone());
                         }
 
                         if export {
@@ -869,23 +869,20 @@ impl Engine {
                 if let Ok(path) = path_result {
                     use crate::ModuleResolver;
 
-                    let source = match global.source.as_str() {
-                        "" => None,
-                        s => Some(s),
-                    };
                     let path_pos = expr.position();
 
-                    let module_result = global
-                        .embedded_module_resolver
+                    let resolver = global.embedded_module_resolver.clone();
+
+                    let module_result = resolver
                         .as_ref()
-                        .and_then(|r| match r.resolve(self, source, &path, path_pos) {
+                        .and_then(|r| match r.resolve_raw(self, global, &path, path_pos) {
                             Err(err) if matches!(*err, ERR::ErrorModuleNotFound(_, _)) => None,
                             result => Some(result),
                         })
                         .or_else(|| {
                             self.module_resolver
                                 .as_ref()
-                                .map(|r| r.resolve(self, source, &path, path_pos))
+                                .map(|r| r.resolve_raw(self, global, &path, path_pos))
                         })
                         .unwrap_or_else(|| {
                             Err(ERR::ErrorModuleNotFound(path.to_string(), path_pos).into())

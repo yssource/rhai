@@ -140,7 +140,10 @@ pub struct Engine {
 
     /// Callback closure for debugging.
     #[cfg(feature = "debugging")]
-    pub(crate) debugger: Option<Box<crate::eval::OnDebuggerCallback>>,
+    pub(crate) debugger: Option<(
+        Box<crate::eval::OnDebuggingInit>,
+        Box<crate::eval::OnDebuggerCallback>,
+    )>,
 }
 
 impl fmt::Debug for Engine {

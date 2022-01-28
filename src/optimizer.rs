@@ -138,7 +138,7 @@ impl<'a> OptimizerState<'a> {
 
         self.engine
             .call_native_fn(
-                &mut GlobalRuntimeState::new(),
+                &mut GlobalRuntimeState::new(&self.engine),
                 &mut EvalState::new(),
                 lib,
                 fn_name,
@@ -237,7 +237,7 @@ fn optimize_stmt_block(
         });
 
         // Optimize each statement in the block
-        statements.iter_mut().for_each(|stmt| {
+        for stmt in statements.iter_mut() {
             match stmt {
                 Stmt::Var(value_expr, x, options, _) => {
                     if options.contains(AST_OPTION_CONSTANT) {
@@ -260,7 +260,7 @@ fn optimize_stmt_block(
                 // Optimize the statement
                 _ => optimize_stmt(stmt, state, preserve_result),
             }
-        });
+        }
 
         // Remove all pure statements except the last one
         let mut index = 0;
@@ -640,7 +640,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
         // switch
         Stmt::Switch(match_expr, x, _) => {
             optimize_expr(match_expr, state, false);
-            x.cases.values_mut().for_each(|block| {
+            for block in x.cases.values_mut() {
                 let statements = mem::take(&mut *block.statements);
                 *block.statements =
                     optimize_stmt_block(statements, state, preserve_result, true, false);
@@ -652,7 +652,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                         _ => block.condition = Some(condition),
                     }
                 }
-            });
+            }
 
             // Remove false cases
             while let Some((&key, _)) = x.cases.iter().find(|(_, block)| match block.condition {
@@ -1159,13 +1159,13 @@ fn optimize_top_level(
     );
 
     // Add constants and variables from the scope
-    scope.iter().for_each(|(name, constant, value)| {
+    for (name, constant, value) in scope.iter() {
         if !constant {
             state.push_var(name, AccessMode::ReadWrite, None);
         } else {
             state.push_var(name, AccessMode::ReadOnly, Some(value));
         }
-    });
+    }
 
     statements = optimize_stmt_block(statements, &mut state, true, false, true);
     statements
@@ -1191,9 +1191,8 @@ pub fn optimize_into_ast(
             // We only need the script library's signatures for optimization purposes
             let mut lib2 = crate::Module::new();
 
-            functions
-                .iter()
-                .map(|fn_def| crate::ast::ScriptFnDef {
+            for fn_def in &functions {
+                lib2.set_script_fn(crate::ast::ScriptFnDef {
                     name: fn_def.name.clone(),
                     access: fn_def.access,
                     body: crate::ast::StmtBlock::NONE,
@@ -1204,33 +1203,25 @@ pub fn optimize_into_ast(
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(feature = "metadata")]
                     comments: None,
-                })
-                .for_each(|fn_def| {
-                    lib2.set_script_fn(fn_def);
                 });
+            }
 
             let lib2 = &[&lib2];
 
-            functions
-                .into_iter()
-                .map(|fn_def| {
-                    let mut fn_def = crate::func::native::shared_take_or_clone(fn_def);
+            for fn_def in functions {
+                let mut fn_def = crate::func::native::shared_take_or_clone(fn_def);
 
-                    // Optimize the function body
-                    let body = mem::take(&mut *fn_def.body);
+                // Optimize the function body
+                let body = mem::take(&mut *fn_def.body);
 
-                    *fn_def.body =
-                        optimize_top_level(body, engine, scope, lib2, optimization_level);
+                *fn_def.body = optimize_top_level(body, engine, scope, lib2, optimization_level);
 
-                    fn_def
-                })
-                .for_each(|fn_def| {
-                    module.set_script_fn(fn_def);
-                });
-        } else {
-            functions.into_iter().for_each(|fn_def| {
                 module.set_script_fn(fn_def);
-            });
+            }
+        } else {
+            for fn_def in functions {
+                module.set_script_fn(fn_def);
+            }
         }
 
         module

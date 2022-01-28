@@ -260,12 +260,13 @@ impl Engine {
         self.debug = Some(Box::new(callback));
         self
     }
-    /// _(debugging)_ Register a callback for debugging.
+    /// _(debugging)_ Register callbacks for debugging.
     /// Exported under the `debugging` feature only.
     #[cfg(feature = "debugging")]
     #[inline(always)]
     pub fn on_debugger(
         &mut self,
+        init: impl Fn() -> Dynamic + SendSync + 'static,
         callback: impl Fn(
                 &mut EvalContext,
                 crate::ast::ASTNode,
@@ -275,7 +276,7 @@ impl Engine {
             + SendSync
             + 'static,
     ) -> &mut Self {
-        self.debugger = Some(Box::new(callback));
+        self.debugger = Some((Box::new(init), Box::new(callback)));
         self
     }
 }

@@ -3450,9 +3450,9 @@ impl Engine {
         {
             let mut m = crate::Module::new();
 
-            _lib.into_iter().for_each(|fn_def| {
+            for fn_def in _lib {
                 m.set_script_fn(fn_def);
-            });
+            }
 
             return Ok(AST::new(statements, m));
         }

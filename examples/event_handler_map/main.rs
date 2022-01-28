@@ -16,24 +16,21 @@ struct Handler {
 }
 
 fn print_scope(scope: &Scope) {
-    scope
-        .iter_raw()
-        .enumerate()
-        .for_each(|(i, (name, constant, value))| {
-            #[cfg(not(feature = "no_closure"))]
-            let value_is_shared = if value.is_shared() { " (shared)" } else { "" };
-            #[cfg(feature = "no_closure")]
-            let value_is_shared = "";
+    for (i, (name, constant, value)) in scope.iter_raw().enumerate() {
+        #[cfg(not(feature = "no_closure"))]
+        let value_is_shared = if value.is_shared() { " (shared)" } else { "" };
+        #[cfg(feature = "no_closure")]
+        let value_is_shared = "";
 
-            println!(
-                "[{}] {}{}{} = {:?}",
-                i + 1,
-                if constant { "const " } else { "" },
-                name,
-                value_is_shared,
-                *value.read_lock::<Dynamic>().unwrap(),
-            )
-        });
+        println!(
+            "[{}] {}{}{} = {:?}",
+            i + 1,
+            if constant { "const " } else { "" },
+            name,
+            value_is_shared,
+            *value.read_lock::<Dynamic>().unwrap(),
+        )
+    }
     println!();
 }
 

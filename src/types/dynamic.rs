@@ -1119,18 +1119,18 @@ impl Dynamic {
             #[cfg(not(feature = "no_index"))]
             Union::Array(ref mut a, _, ref mut access) => {
                 *access = typ;
-                a.iter_mut().for_each(|v| {
+                for v in a.iter_mut() {
                     v.set_access_mode(typ);
-                });
+                }
             }
             #[cfg(not(feature = "no_index"))]
             Union::Blob(_, _, ref mut access) => *access = typ,
             #[cfg(not(feature = "no_object"))]
             Union::Map(ref mut m, _, ref mut access) => {
                 *access = typ;
-                m.values_mut().for_each(|v| {
+                for v in m.values_mut() {
                     v.set_access_mode(typ);
-                });
+                }
             }
             #[cfg(not(feature = "no_std"))]
             Union::TimeStamp(_, _, ref mut access) => *access = typ,
@@ -1708,14 +1708,14 @@ impl Dynamic {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(ref cell, _, _) => {
-                let value = crate::func::native::shared_write_lock(cell);
+                let guard = crate::func::native::locked_write(cell);
 
-                if (*value).type_id() != TypeId::of::<T>()
+                if (*guard).type_id() != TypeId::of::<T>()
                     && TypeId::of::<Dynamic>() != TypeId::of::<T>()
                 {
                     return None;
                 } else {
-                    return Some(DynamicWriteLock(DynamicWriteLockInner::Guard(value)));
+                    return Some(DynamicWriteLock(DynamicWriteLockInner::Guard(guard)));
                 }
             }
             _ => (),

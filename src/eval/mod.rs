@@ -14,7 +14,7 @@ pub use chaining::{ChainArgument, ChainType};
 #[cfg(not(feature = "no_function"))]
 pub use debugger::CallStackFrame;
 #[cfg(feature = "debugging")]
-pub use debugger::{BreakPoint, Debugger, DebuggerCommand, OnDebuggerCallback};
+pub use debugger::{BreakPoint, Debugger, DebuggerCommand, OnDebuggerCallback, OnDebuggingInit};
 pub use eval_context::EvalContext;
 pub use eval_state::EvalState;
 pub use global_state::GlobalRuntimeState;

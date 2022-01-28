@@ -1,5 +1,5 @@
 #[cfg(feature = "debugging")]
-use rhai::{Dynamic, Engine, EvalAltResult, Position, Scope};
+use rhai::{Dynamic, Engine, EvalAltResult, ImmutableString, Position, Scope};
 
 #[cfg(feature = "debugging")]
 use rhai::debugger::DebuggerCommand;
@@ -121,34 +121,31 @@ fn print_scope(scope: &Scope, dedup: bool) {
         scope
     };
 
-    scope
-        .iter_raw()
-        .enumerate()
-        .for_each(|(i, (name, constant, value))| {
-            #[cfg(not(feature = "no_closure"))]
-            let value_is_shared = if value.is_shared() { " (shared)" } else { "" };
-            #[cfg(feature = "no_closure")]
-            let value_is_shared = "";
+    for (i, (name, constant, value)) in scope.iter_raw().enumerate() {
+        #[cfg(not(feature = "no_closure"))]
+        let value_is_shared = if value.is_shared() { " (shared)" } else { "" };
+        #[cfg(feature = "no_closure")]
+        let value_is_shared = "";
 
-            if dedup {
-                println!(
-                    "{}{}{} = {:?}",
-                    if constant { "const " } else { "" },
-                    name,
-                    value_is_shared,
-                    *value.read_lock::<Dynamic>().unwrap(),
-                );
-            } else {
-                println!(
-                    "[{}] {}{}{} = {:?}",
-                    i + 1,
-                    if constant { "const " } else { "" },
-                    name,
-                    value_is_shared,
-                    *value.read_lock::<Dynamic>().unwrap(),
-                );
-            }
-        });
+        if dedup {
+            println!(
+                "{}{}{} = {:?}",
+                if constant { "const " } else { "" },
+                name,
+                value_is_shared,
+                *value.read_lock::<Dynamic>().unwrap(),
+            );
+        } else {
+            println!(
+                "[{}] {}{}{} = {:?}",
+                i + 1,
+                if constant { "const " } else { "" },
+                name,
+                value_is_shared,
+                *value.read_lock::<Dynamic>().unwrap(),
+            );
+        }
+    }
 
     println!();
 }
@@ -233,198 +230,221 @@ fn main() {
     // Hook up debugger
     let lines: Vec<_> = script.trim().split('\n').map(|s| s.to_string()).collect();
 
-    #[cfg(not(feature = "sync"))]
-    let current_source = std::cell::RefCell::new(rhai::Identifier::new_const());
-    #[cfg(feature = "sync")]
-    let current_source = std::sync::RwLock::new(rhai::Identifier::new_const());
+    engine.on_debugger(
+        // Store the current source in the debugger state
+        || "".into(),
+        // Main debugging interface
+        move |context, node, source, pos| {
+            {
+                let current_source = &mut *context
+                    .global_runtime_state_mut()
+                    .debugger
+                    .state_mut()
+                    .write_lock::<ImmutableString>()
+                    .unwrap();
 
-    engine.on_debugger(move |context, node, source, pos| {
-        #[cfg(not(feature = "sync"))]
-        let current_source = &mut *current_source.borrow_mut();
-        #[cfg(feature = "sync")]
-        let current_source = &mut *current_source.write().unwrap();
+                let src = source.unwrap_or("");
 
-        // Check source
-        if let Some(src) = source {
-            if src != current_source {
-                println!(">>> Source => {}", src);
+                // Check source
+                if src != current_source {
+                    println!(">>> Source => {}", source.unwrap_or("main script"));
+                    *current_source = src.into();
+                }
+
+                if !src.is_empty() {
+                    // Print just a line number for imported modules
+                    println!("{} @ {:?}", src, pos);
+                } else {
+                    // Print the current source line
+                    print_source(&lines, pos, 0);
+                }
             }
-            // Print just a line number for imported modules
-            println!("{} @ {:?}", src, pos);
-        } else {
-            // The root file has no source
-            if !current_source.is_empty() {
-                println!(">>> Source => main script.");
-            }
-            // Print the current source line
-            print_source(&lines, pos, 0);
-        }
-        *current_source = source.unwrap_or("").into();
 
-        // Read stdin for commands
-        let mut input = String::new();
+            // Read stdin for commands
+            let mut input = String::new();
 
-        loop {
-            print!("rhai-dbg> ");
-            stdout().flush().expect("couldn't flush stdout");
+            loop {
+                print!("rhai-dbg> ");
+                stdout().flush().expect("couldn't flush stdout");
 
-            input.clear();
+                input.clear();
 
-            match stdin().read_line(&mut input) {
-                Ok(0) => break Ok(DebuggerCommand::Continue),
-                Ok(_) => match input
-                    .trim()
-                    .split_whitespace()
-                    .collect::<Vec<_>>()
-                    .as_slice()
-                {
-                    ["help", ..] => print_debug_help(),
-                    ["exit", ..] | ["quit", ..] | ["kill", ..] => {
-                        println!("Script terminated. Bye!");
-                        exit(0);
-                    }
-                    ["node", ..] => {
-                        println!("{:?} {}@{:?}", node, source.unwrap_or_default(), pos);
-                        println!();
-                    }
-                    ["continue", ..] => break Ok(DebuggerCommand::Continue),
-                    [] | ["step", ..] => break Ok(DebuggerCommand::StepInto),
-                    ["over", ..] => break Ok(DebuggerCommand::StepOver),
-                    ["next", ..] => break Ok(DebuggerCommand::Next),
-                    ["scope", ..] => print_scope(context.scope(), false),
-                    ["print", var_name, ..] => {
-                        if let Some(value) = context.scope().get_value::<Dynamic>(var_name) {
-                            if value.is::<()>() {
-                                println!("=> ()");
-                            } else {
-                                println!("=> {}", value);
-                            }
-                        } else {
-                            eprintln!("Variable not found: {}", var_name);
+                match stdin().read_line(&mut input) {
+                    Ok(0) => break Ok(DebuggerCommand::Continue),
+                    Ok(_) => match input
+                        .trim()
+                        .split_whitespace()
+                        .collect::<Vec<_>>()
+                        .as_slice()
+                    {
+                        ["help", ..] => print_debug_help(),
+                        ["exit", ..] | ["quit", ..] | ["kill", ..] => {
+                            println!("Script terminated. Bye!");
+                            exit(0);
                         }
-                    }
-                    ["print", ..] => print_scope(context.scope(), true),
-                    ["imports", ..] => {
-                        context
-                            .global_runtime_state()
-                            .scan_imports_raw()
-                            .enumerate()
-                            .for_each(|(i, (name, module))| {
+                        ["node", ..] => {
+                            println!("{:?} {}@{:?}", node, source.unwrap_or_default(), pos);
+                            println!();
+                        }
+                        ["continue", ..] => break Ok(DebuggerCommand::Continue),
+                        [] | ["step", ..] => break Ok(DebuggerCommand::StepInto),
+                        ["over", ..] => break Ok(DebuggerCommand::StepOver),
+                        ["next", ..] => break Ok(DebuggerCommand::Next),
+                        ["scope", ..] => print_scope(context.scope(), false),
+                        ["print", var_name, ..] => {
+                            if let Some(value) = context.scope().get_value::<Dynamic>(var_name) {
+                                if value.is::<()>() {
+                                    println!("=> ()");
+                                } else {
+                                    println!("=> {}", value);
+                                }
+                            } else {
+                                eprintln!("Variable not found: {}", var_name);
+                            }
+                        }
+                        ["print", ..] => print_scope(context.scope(), true),
+                        ["imports", ..] => {
+                            for (i, (name, module)) in context
+                                .global_runtime_state()
+                                .scan_imports_raw()
+                                .enumerate()
+                            {
                                 println!(
                                     "[{}] {} = {}",
                                     i + 1,
                                     name,
                                     module.id().unwrap_or("<unknown>")
                                 );
-                            });
+                            }
 
-                        println!();
-                    }
-                    #[cfg(not(feature = "no_function"))]
-                    ["backtrace", ..] => {
-                        context
-                            .global_runtime_state()
-                            .debugger
-                            .call_stack()
-                            .iter()
-                            .rev()
-                            .for_each(|frame| println!("{}", frame));
-                    }
-                    ["clear", ..] => {
-                        context
-                            .global_runtime_state_mut()
-                            .debugger
-                            .break_points_mut()
-                            .clear();
-                        println!("All break-points cleared.");
-                    }
-                    ["breakpoints", ..] => context
-                        .global_runtime_state()
-                        .debugger
-                        .break_points()
-                        .iter()
-                        .enumerate()
-                        .for_each(|(i, bp)| match bp {
-                            #[cfg(not(feature = "no_position"))]
-                            rhai::debugger::BreakPoint::AtPosition { pos, .. } => {
-                                let line_num = format!("[{}] line ", i + 1);
-                                print!("{}", line_num);
-                                print_source(&lines, *pos, line_num.len());
+                            println!();
+                        }
+                        #[cfg(not(feature = "no_function"))]
+                        ["backtrace", ..] => {
+                            for frame in context
+                                .global_runtime_state()
+                                .debugger
+                                .call_stack()
+                                .iter()
+                                .rev()
+                            {
+                                println!("{}", frame)
                             }
-                            _ => println!("[{}] {}", i + 1, bp),
-                        }),
-                    ["enable", n, ..] => {
-                        if let Ok(n) = n.parse::<usize>() {
-                            let range = 1..=context
+                        }
+                        ["clear", ..] => {
+                            context
                                 .global_runtime_state_mut()
                                 .debugger
+                                .break_points_mut()
+                                .clear();
+                            println!("All break-points cleared.");
+                        }
+                        ["breakpoints", ..] => Iterator::for_each(
+                            context
+                                .global_runtime_state()
+                                .debugger
                                 .break_points()
-                                .len();
-                            if range.contains(&n) {
+                                .iter()
+                                .enumerate(),
+                            |(i, bp)| match bp {
+                                #[cfg(not(feature = "no_position"))]
+                                rhai::debugger::BreakPoint::AtPosition { pos, .. } => {
+                                    let line_num = format!("[{}] line ", i + 1);
+                                    print!("{}", line_num);
+                                    print_source(&lines, *pos, line_num.len());
+                                }
+                                _ => println!("[{}] {}", i + 1, bp),
+                            },
+                        ),
+                        ["enable", n, ..] => {
+                            if let Ok(n) = n.parse::<usize>() {
+                                let range = 1..=context
+                                    .global_runtime_state_mut()
+                                    .debugger
+                                    .break_points()
+                                    .len();
+                                if range.contains(&n) {
+                                    context
+                                        .global_runtime_state_mut()
+                                        .debugger
+                                        .break_points_mut()
+                                        .get_mut(n - 1)
+                                        .unwrap()
+                                        .enable(true);
+                                    println!("Break-point #{} enabled.", n)
+                                } else {
+                                    eprintln!("Invalid break-point: {}", n);
+                                }
+                            } else {
+                                eprintln!("Invalid break-point: '{}'", n);
+                            }
+                        }
+                        ["disable", n, ..] => {
+                            if let Ok(n) = n.parse::<usize>() {
+                                let range = 1..=context
+                                    .global_runtime_state_mut()
+                                    .debugger
+                                    .break_points()
+                                    .len();
+                                if range.contains(&n) {
+                                    context
+                                        .global_runtime_state_mut()
+                                        .debugger
+                                        .break_points_mut()
+                                        .get_mut(n - 1)
+                                        .unwrap()
+                                        .enable(false);
+                                    println!("Break-point #{} disabled.", n)
+                                } else {
+                                    eprintln!("Invalid break-point: {}", n);
+                                }
+                            } else {
+                                eprintln!("Invalid break-point: '{}'", n);
+                            }
+                        }
+                        ["delete", n, ..] => {
+                            if let Ok(n) = n.parse::<usize>() {
+                                let range = 1..=context
+                                    .global_runtime_state_mut()
+                                    .debugger
+                                    .break_points()
+                                    .len();
+                                if range.contains(&n) {
+                                    context
+                                        .global_runtime_state_mut()
+                                        .debugger
+                                        .break_points_mut()
+                                        .remove(n - 1);
+                                    println!("Break-point #{} deleted.", n)
+                                } else {
+                                    eprintln!("Invalid break-point: {}", n);
+                                }
+                            } else {
+                                eprintln!("Invalid break-point: '{}'", n);
+                            }
+                        }
+                        ["break", fn_name, args, ..] => {
+                            if let Ok(args) = args.parse::<usize>() {
+                                let bp = rhai::debugger::BreakPoint::AtFunctionCall {
+                                    name: fn_name.trim().into(),
+                                    args,
+                                    enabled: true,
+                                };
+                                println!("Break-point added for {}", bp);
                                 context
                                     .global_runtime_state_mut()
                                     .debugger
                                     .break_points_mut()
-                                    .get_mut(n - 1)
-                                    .unwrap()
-                                    .enable(true);
-                                println!("Break-point #{} enabled.", n)
+                                    .push(bp);
                             } else {
-                                eprintln!("Invalid break-point: {}", n);
+                                eprintln!("Invalid number of arguments: '{}'", args);
                             }
-                        } else {
-                            eprintln!("Invalid break-point: '{}'", n);
                         }
-                    }
-                    ["disable", n, ..] => {
-                        if let Ok(n) = n.parse::<usize>() {
-                            let range = 1..=context
-                                .global_runtime_state_mut()
-                                .debugger
-                                .break_points()
-                                .len();
-                            if range.contains(&n) {
-                                context
-                                    .global_runtime_state_mut()
-                                    .debugger
-                                    .break_points_mut()
-                                    .get_mut(n - 1)
-                                    .unwrap()
-                                    .enable(false);
-                                println!("Break-point #{} disabled.", n)
-                            } else {
-                                eprintln!("Invalid break-point: {}", n);
-                            }
-                        } else {
-                            eprintln!("Invalid break-point: '{}'", n);
-                        }
-                    }
-                    ["delete", n, ..] => {
-                        if let Ok(n) = n.parse::<usize>() {
-                            let range = 1..=context
-                                .global_runtime_state_mut()
-                                .debugger
-                                .break_points()
-                                .len();
-                            if range.contains(&n) {
-                                context
-                                    .global_runtime_state_mut()
-                                    .debugger
-                                    .break_points_mut()
-                                    .remove(n - 1);
-                                println!("Break-point #{} deleted.", n)
-                            } else {
-                                eprintln!("Invalid break-point: {}", n);
-                            }
-                        } else {
-                            eprintln!("Invalid break-point: '{}'", n);
-                        }
-                    }
-                    ["break", fn_name, args, ..] => {
-                        if let Ok(args) = args.parse::<usize>() {
-                            let bp = rhai::debugger::BreakPoint::AtFunctionCall {
-                                name: fn_name.trim().into(),
-                                args,
+                        // Property name
+                        #[cfg(not(feature = "no_object"))]
+                        ["break", param] if param.starts_with('.') && param.len() > 1 => {
+                            let bp = rhai::debugger::BreakPoint::AtProperty {
+                                name: param[1..].into(),
                                 enabled: true,
                             };
                             println!("Break-point added for {}", bp);
@@ -433,38 +453,51 @@ fn main() {
                                 .debugger
                                 .break_points_mut()
                                 .push(bp);
-                        } else {
-                            eprintln!("Invalid number of arguments: '{}'", args);
                         }
-                    }
-                    // Property name
-                    #[cfg(not(feature = "no_object"))]
-                    ["break", param] if param.starts_with('.') && param.len() > 1 => {
-                        let bp = rhai::debugger::BreakPoint::AtProperty {
-                            name: param[1..].into(),
-                            enabled: true,
-                        };
-                        println!("Break-point added for {}", bp);
-                        context
-                            .global_runtime_state_mut()
-                            .debugger
-                            .break_points_mut()
-                            .push(bp);
-                    }
-                    // Numeric parameter
-                    #[cfg(not(feature = "no_position"))]
-                    ["break", param] if param.parse::<usize>().is_ok() => {
-                        let n = param.parse::<usize>().unwrap();
-                        let range = if source.is_none() {
-                            1..=lines.len()
-                        } else {
-                            1..=(u16::MAX as usize)
-                        };
+                        // Numeric parameter
+                        #[cfg(not(feature = "no_position"))]
+                        ["break", param] if param.parse::<usize>().is_ok() => {
+                            let n = param.parse::<usize>().unwrap();
+                            let range = if source.is_none() {
+                                1..=lines.len()
+                            } else {
+                                1..=(u16::MAX as usize)
+                            };
 
-                        if range.contains(&n) {
+                            if range.contains(&n) {
+                                let bp = rhai::debugger::BreakPoint::AtPosition {
+                                    source: source.unwrap_or("").into(),
+                                    pos: Position::new(n as u16, 0),
+                                    enabled: true,
+                                };
+                                println!("Break-point added {}", bp);
+                                context
+                                    .global_runtime_state_mut()
+                                    .debugger
+                                    .break_points_mut()
+                                    .push(bp);
+                            } else {
+                                eprintln!("Invalid line number: {}", n);
+                            }
+                        }
+                        // Function name parameter
+                        ["break", param] => {
+                            let bp = rhai::debugger::BreakPoint::AtFunctionName {
+                                name: param.trim().into(),
+                                enabled: true,
+                            };
+                            println!("Break-point added for {}", bp);
+                            context
+                                .global_runtime_state_mut()
+                                .debugger
+                                .break_points_mut()
+                                .push(bp);
+                        }
+                        #[cfg(not(feature = "no_position"))]
+                        ["break", ..] => {
                             let bp = rhai::debugger::BreakPoint::AtPosition {
                                 source: source.unwrap_or("").into(),
-                                pos: Position::new(n as u16, 0),
+                                pos,
                                 enabled: true,
                             };
                             println!("Break-point added {}", bp);
@@ -473,52 +506,25 @@ fn main() {
                                 .debugger
                                 .break_points_mut()
                                 .push(bp);
-                        } else {
-                            eprintln!("Invalid line number: {}", n);
                         }
-                    }
-                    // Function name parameter
-                    ["break", param] => {
-                        let bp = rhai::debugger::BreakPoint::AtFunctionName {
-                            name: param.trim().into(),
-                            enabled: true,
-                        };
-                        println!("Break-point added for {}", bp);
-                        context
-                            .global_runtime_state_mut()
-                            .debugger
-                            .break_points_mut()
-                            .push(bp);
-                    }
-                    #[cfg(not(feature = "no_position"))]
-                    ["break", ..] => {
-                        let bp = rhai::debugger::BreakPoint::AtPosition {
-                            source: source.unwrap_or("").into(),
-                            pos,
-                            enabled: true,
-                        };
-                        println!("Break-point added {}", bp);
-                        context
-                            .global_runtime_state_mut()
-                            .debugger
-                            .break_points_mut()
-                            .push(bp);
-                    }
-                    ["throw"] => break Err(EvalAltResult::ErrorRuntime(Dynamic::UNIT, pos).into()),
-                    ["throw", _msg, ..] => {
-                        let msg = input.trim().splitn(2, ' ').skip(1).next().unwrap_or("");
-                        break Err(EvalAltResult::ErrorRuntime(msg.trim().into(), pos).into());
-                    }
-                    ["run", ..] => {
-                        println!("Restarting script...");
-                        break Err(EvalAltResult::ErrorTerminated(Dynamic::UNIT, pos).into());
-                    }
-                    [cmd, ..] => eprintln!("Invalid debugger command: '{}'", cmd),
-                },
-                Err(err) => panic!("input error: {}", err),
+                        ["throw"] => {
+                            break Err(EvalAltResult::ErrorRuntime(Dynamic::UNIT, pos).into())
+                        }
+                        ["throw", _msg, ..] => {
+                            let msg = input.trim().splitn(2, ' ').skip(1).next().unwrap_or("");
+                            break Err(EvalAltResult::ErrorRuntime(msg.trim().into(), pos).into());
+                        }
+                        ["run", ..] => {
+                            println!("Restarting script...");
+                            break Err(EvalAltResult::ErrorTerminated(Dynamic::UNIT, pos).into());
+                        }
+                        [cmd, ..] => eprintln!("Invalid debugger command: '{}'", cmd),
+                    },
+                    Err(err) => panic!("input error: {}", err),
+                }
             }
-        }
-    });
+        },
+    );
 
     // Set a file module resolver without caching
     #[cfg(not(feature = "no_module"))]

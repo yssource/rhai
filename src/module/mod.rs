@@ -1401,9 +1401,9 @@ impl Module {
     /// Sub-modules are flattened onto the root [`Module`], with higher level overriding lower level.
     #[inline]
     pub fn combine_flatten(&mut self, other: Self) -> &mut Self {
-        other.modules.into_iter().for_each(|(_, m)| {
+        for (_, m) in other.modules.into_iter() {
             self.combine_flatten(shared_take_or_clone(m));
-        });
+        }
         self.variables.extend(other.variables.into_iter());
         self.functions.extend(other.functions.into_iter());
         self.type_iterators.extend(other.type_iterators.into_iter());
@@ -1419,22 +1419,22 @@ impl Module {
     /// Only items not existing in this [`Module`] are added.
     #[inline]
     pub fn fill_with(&mut self, other: &Self) -> &mut Self {
-        other.modules.iter().for_each(|(k, v)| {
+        for (k, v) in &other.modules {
             if !self.modules.contains_key(k) {
                 self.modules.insert(k.clone(), v.clone());
             }
-        });
-        other.variables.iter().for_each(|(k, v)| {
+        }
+        for (k, v) in &other.variables {
             if !self.variables.contains_key(k) {
                 self.variables.insert(k.clone(), v.clone());
             }
-        });
-        other.functions.iter().for_each(|(&k, v)| {
+        }
+        for (&k, v) in &other.functions {
             self.functions.entry(k).or_insert_with(|| v.clone());
-        });
-        other.type_iterators.iter().for_each(|(&k, v)| {
+        }
+        for (&k, v) in &other.type_iterators {
             self.type_iterators.entry(k).or_insert(v.clone());
-        });
+        }
         self.all_functions.clear();
         self.all_variables.clear();
         self.all_type_iterators.clear();
@@ -1455,12 +1455,11 @@ impl Module {
         other: &Self,
         _filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool + Copy,
     ) -> &mut Self {
-        #[cfg(not(feature = "no_function"))]
-        other.modules.iter().for_each(|(k, v)| {
+        for (k, v) in &other.modules {
             let mut m = Self::new();
             m.merge_filtered(v, _filter);
             self.set_sub_module(k.clone(), m);
-        });
+        }
         #[cfg(feature = "no_function")]
         self.modules
             .extend(other.modules.iter().map(|(k, v)| (k.clone(), v.clone())));
@@ -1658,60 +1657,90 @@ impl Module {
     /// # }
     /// ```
     #[cfg(not(feature = "no_module"))]
+    #[inline(always)]
     pub fn eval_ast_as_new(
         scope: crate::Scope,
         ast: &crate::AST,
         engine: &crate::Engine,
     ) -> RhaiResultOf<Self> {
+        let global = &mut crate::eval::GlobalRuntimeState::new(engine);
+
+        Self::eval_ast_as_new_raw(engine, scope, global, ast)
+    }
+    /// Create a new [`Module`] by evaluating an [`AST`][crate::AST].
+    ///
+    /// The entire [`AST`][crate::AST] is encapsulated into each function, allowing functions
+    /// to cross-call each other.  Functions in the global namespace, plus all functions
+    /// defined in the [`Module`], are _merged_ into a _unified_ namespace before each call.
+    /// Therefore, all functions will be found.
+    #[cfg(not(feature = "no_module"))]
+    pub(crate) fn eval_ast_as_new_raw(
+        engine: &crate::Engine,
+        scope: crate::Scope,
+        global: &mut crate::eval::GlobalRuntimeState,
+        ast: &crate::AST,
+    ) -> RhaiResultOf<Self> {
         let mut scope = scope;
-        let mut global = crate::eval::GlobalRuntimeState::new();
 
-        #[cfg(feature = "debugging")]
-        global.debugger.activate(engine.debugger.is_some());
-
+        // Save global state
         let orig_imports_len = global.num_imports();
+        let orig_source = global.source.clone();
+        let orig_constants = std::mem::take(&mut global.constants);
 
         // Run the script
-        engine.eval_ast_with_scope_raw(&mut scope, &mut global, &ast, 0)?;
+        let result = engine.eval_ast_with_scope_raw(&mut scope, global, &ast, 0);
 
         // Create new module
-        let mut module =
-            scope
-                .into_iter()
-                .fold(Module::new(), |mut module, (_, value, mut aliases)| {
-                    // Variables with an alias left in the scope become module variables
-                    match aliases.len() {
-                        0 => (),
-                        1 => {
-                            let alias = aliases.pop().unwrap();
-                            module.set_var(alias, value);
-                        }
-                        _ => {
-                            let last_alias = aliases.pop().unwrap();
-                            aliases.into_iter().for_each(|alias| {
-                                module.set_var(alias, value.clone());
-                            });
-                            // Avoid cloning the last value
-                            module.set_var(last_alias, value);
-                        }
-                    }
-                    module
-                });
+        let mut module = Module::new();
 
-        // Extra modules left in the scope become sub-modules
+        // Extra modules left become sub-modules
         #[cfg(not(feature = "no_function"))]
         let mut func_global = None;
 
-        global.into_iter().skip(orig_imports_len).for_each(|kv| {
-            #[cfg(not(feature = "no_function"))]
-            if func_global.is_none() {
-                func_global = Some(StaticVec::new());
-            }
-            #[cfg(not(feature = "no_function"))]
-            func_global.as_mut().expect("`Some`").push(kv.clone());
+        if result.is_ok() {
+            global
+                .scan_imports_raw()
+                .skip(orig_imports_len)
+                .for_each(|(k, m)| {
+                    #[cfg(not(feature = "no_function"))]
+                    if func_global.is_none() {
+                        func_global = Some(StaticVec::new());
+                    }
+                    #[cfg(not(feature = "no_function"))]
+                    func_global
+                        .as_mut()
+                        .expect("`Some`")
+                        .push((k.clone(), m.clone()));
 
-            module.set_sub_module(kv.0, kv.1);
-        });
+                    module.set_sub_module(k.clone(), m.clone());
+                });
+        }
+
+        // Restore global state
+        global.constants = orig_constants;
+        global.truncate_imports(orig_imports_len);
+        global.source = orig_source;
+
+        result?;
+
+        // Variables with an alias left in the scope become module variables
+        for (_, value, mut aliases) in scope {
+            match aliases.len() {
+                0 => (),
+                1 => {
+                    let alias = aliases.pop().unwrap();
+                    module.set_var(alias, value);
+                }
+                _ => {
+                    let last_alias = aliases.pop().unwrap();
+                    for alias in aliases {
+                        module.set_var(alias, value.clone());
+                    }
+                    // Avoid cloning the last value
+                    module.set_var(last_alias, value);
+                }
+            }
+        }
 
         #[cfg(not(feature = "no_function"))]
         let func_global = func_global.map(|v| v.into_boxed_slice());
@@ -1773,29 +1802,29 @@ impl Module {
         ) -> bool {
             let mut contains_indexed_global_functions = false;
 
-            module.modules.iter().for_each(|(name, m)| {
+            for (name, m) in &module.modules {
                 // Index all the sub-modules first.
                 path.push(name);
                 if index_module(m, path, variables, functions, type_iterators) {
                     contains_indexed_global_functions = true;
                 }
                 path.pop();
-            });
+            }
 
             // Index all variables
-            module.variables.iter().for_each(|(var_name, value)| {
+            for (var_name, value) in &module.variables {
                 let hash_var = crate::calc_qualified_var_hash(path.iter().copied(), var_name);
                 variables.insert(hash_var, value.clone());
-            });
+            }
 
             // Index type iterators
-            module.type_iterators.iter().for_each(|(&type_id, func)| {
+            for (&type_id, func) in &module.type_iterators {
                 type_iterators.insert(type_id, func.clone());
                 contains_indexed_global_functions = true;
-            });
+            }
 
             // Index all Rust functions
-            module.functions.iter().for_each(|(&hash, f)| {
+            for (&hash, f) in &module.functions {
                 match f.metadata.namespace {
                     FnNamespace::Global => {
                         // Flatten all functions with global namespace
@@ -1806,7 +1835,7 @@ impl Module {
                 }
                 match f.metadata.access {
                     FnAccess::Public => (),
-                    FnAccess::Private => return, // Do not index private functions
+                    FnAccess::Private => continue, // Do not index private functions
                 }
 
                 if !f.func.is_script() {
@@ -1824,7 +1853,7 @@ impl Module {
                     );
                     functions.insert(hash_qualified_script, f.func.clone());
                 }
-            });
+            }
 
             contains_indexed_global_functions
         }

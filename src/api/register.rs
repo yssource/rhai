@@ -1037,9 +1037,9 @@ impl Engine {
 
         signatures.extend(self.global_namespace().gen_fn_signatures());
 
-        self.global_sub_modules.iter().for_each(|(name, m)| {
+        for (name, m) in &self.global_sub_modules {
             signatures.extend(m.gen_fn_signatures().map(|f| format!("{}::{}", name, f)))
-        });
+        }
 
         signatures.extend(
             self.global_modules

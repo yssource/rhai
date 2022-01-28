@@ -154,10 +154,7 @@ impl Engine {
         arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {
         let state = &mut EvalState::new();
-        let global = &mut GlobalRuntimeState::new();
-
-        #[cfg(feature = "debugging")]
-        global.debugger.activate(self.debugger.is_some());
+        let global = &mut GlobalRuntimeState::new(self);
 
         let statements = ast.statements();
 

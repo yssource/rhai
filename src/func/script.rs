@@ -74,7 +74,7 @@ impl Engine {
 
         #[cfg(feature = "debugging")]
         #[cfg(not(feature = "no_function"))]
-        let orig_call_stack_len = global.debugger.call_stack_len();
+        let orig_call_stack_len = global.debugger.call_stack().len();
 
         // Put arguments into scope as variables
         scope.extend(fn_def.params.iter().cloned().zip(args.into_iter().map(|v| {
@@ -115,10 +115,9 @@ impl Engine {
 
         #[cfg(not(feature = "no_module"))]
         if let Some(ref modules) = fn_def.global {
-            modules
-                .iter()
-                .cloned()
-                .for_each(|(n, m)| global.push_import(n, m));
+            for (n, m) in modules.iter().cloned() {
+                global.push_import(n, m)
+            }
         }
 
         // Evaluate the function

@@ -286,23 +286,29 @@ impl<'a> NativeCallContext<'a> {
         is_method_call: bool,
         args: &mut [&mut Dynamic],
     ) -> RhaiResult {
+        let mut global = self
+            .global
+            .cloned()
+            .unwrap_or_else(|| GlobalRuntimeState::new(self.engine()));
+        let mut state = EvalState::new();
+
         let fn_name = fn_name.as_ref();
-        let len = args.len();
+        let args_len = args.len();
 
         let hash = if is_method_call {
             FnCallHashes::from_all(
                 #[cfg(not(feature = "no_function"))]
-                calc_fn_hash(fn_name, len - 1),
-                calc_fn_hash(fn_name, len),
+                calc_fn_hash(fn_name, args_len - 1),
+                calc_fn_hash(fn_name, args_len),
             )
         } else {
-            calc_fn_hash(fn_name, len).into()
+            calc_fn_hash(fn_name, args_len).into()
         };
 
         self.engine()
             .exec_fn_call(
-                &mut self.global.cloned().unwrap_or_else(GlobalRuntimeState::new),
-                &mut EvalState::new(),
+                &mut global,
+                &mut state,
                 self.lib,
                 fn_name,
                 hash,
@@ -353,11 +359,11 @@ pub fn shared_take<T>(value: Shared<T>) -> T {
     shared_try_take(value).ok().expect("not shared")
 }
 
-/// Lock a [`Shared`] resource.
+/// Lock a [`Locked`] resource.
 #[inline(always)]
 #[must_use]
 #[allow(dead_code)]
-pub fn shared_write_lock<'a, T>(value: &'a Locked<T>) -> LockGuard<'a, T> {
+pub fn locked_write<'a, T>(value: &'a Locked<T>) -> LockGuard<'a, T> {
     #[cfg(not(feature = "sync"))]
     return value.borrow_mut();
 
@@ -365,20 +371,20 @@ pub fn shared_write_lock<'a, T>(value: &'a Locked<T>) -> LockGuard<'a, T> {
     return value.write().unwrap();
 }
 
-/// A general function trail object.
+/// General function trail object.
 #[cfg(not(feature = "sync"))]
 pub type FnAny = dyn Fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult;
-/// A general function trail object.
+/// General function trail object.
 #[cfg(feature = "sync")]
 pub type FnAny = dyn Fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult + Send + Sync;
 
-/// A trail object for built-in functions.
+/// Trail object for built-in functions.
 pub type FnBuiltin = fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult;
 
-/// A standard function that gets an iterator from a type.
+/// Function that gets an iterator from a type.
 #[cfg(not(feature = "sync"))]
 pub type IteratorFn = dyn Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;
-/// A standard function that gets an iterator from a type.
+/// Function that gets an iterator from a type.
 #[cfg(feature = "sync")]
 pub type IteratorFn = dyn Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + Send + Sync;
 
@@ -387,40 +393,40 @@ pub type FnPlugin = dyn PluginFunction;
 #[cfg(feature = "sync")]
 pub type FnPlugin = dyn PluginFunction + Send + Sync;
 
-/// A standard callback function for progress reporting.
+/// Callback function for progress reporting.
 #[cfg(not(feature = "unchecked"))]
 #[cfg(not(feature = "sync"))]
 pub type OnProgressCallback = dyn Fn(u64) -> Option<Dynamic>;
-/// A standard callback function for progress reporting.
+/// Callback function for progress reporting.
 #[cfg(not(feature = "unchecked"))]
 #[cfg(feature = "sync")]
 pub type OnProgressCallback = dyn Fn(u64) -> Option<Dynamic> + Send + Sync;
 
-/// A standard callback function for printing.
+/// Callback function for printing.
 #[cfg(not(feature = "sync"))]
 pub type OnPrintCallback = dyn Fn(&str);
-/// A standard callback function for printing.
+/// Callback function for printing.
 #[cfg(feature = "sync")]
 pub type OnPrintCallback = dyn Fn(&str) + Send + Sync;
 
-/// A standard callback function for debugging.
+/// Callback function for debugging.
 #[cfg(not(feature = "sync"))]
 pub type OnDebugCallback = dyn Fn(&str, Option<&str>, Position);
-/// A standard callback function for debugging.
+/// Callback function for debugging.
 #[cfg(feature = "sync")]
 pub type OnDebugCallback = dyn Fn(&str, Option<&str>, Position) + Send + Sync;
 
-/// A standard callback function for mapping tokens during parsing.
+/// Callback function for mapping tokens during parsing.
 #[cfg(not(feature = "sync"))]
 pub type OnParseTokenCallback = dyn Fn(Token, Position, &TokenizeState) -> Token;
-/// A standard callback function for mapping tokens during parsing.
+/// Callback function for mapping tokens during parsing.
 #[cfg(feature = "sync")]
 pub type OnParseTokenCallback = dyn Fn(Token, Position, &TokenizeState) -> Token + Send + Sync;
 
-/// A standard callback function for variable access.
+/// Callback function for variable access.
 #[cfg(not(feature = "sync"))]
 pub type OnVarCallback = dyn Fn(&str, usize, &EvalContext) -> RhaiResultOf<Option<Dynamic>>;
-/// A standard callback function for variable access.
+/// Callback function for variable access.
 #[cfg(feature = "sync")]
 pub type OnVarCallback =
     dyn Fn(&str, usize, &EvalContext) -> RhaiResultOf<Option<Dynamic>> + Send + Sync;

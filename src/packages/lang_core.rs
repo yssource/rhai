@@ -189,7 +189,7 @@ fn collect_fn_metadata(
                 .for_each(|(_, _, _, _, f)| {
                     list.push(make_metadata(dict, Some(namespace.clone()), f).into())
                 });
-            module.iter_sub_modules().for_each(|(ns, m)| {
+            for (ns, m) in module.iter_sub_modules() {
                 let ns = format!(
                     "{}{}{}",
                     namespace,
@@ -197,11 +197,12 @@ fn collect_fn_metadata(
                     ns
                 );
                 scan_module(list, dict, ns.into(), m.as_ref(), filter)
-            });
+            }
         }
 
-        ctx.iter_imports_raw()
-            .for_each(|(ns, m)| scan_module(&mut list, &dict, ns.clone(), m.as_ref(), filter));
+        for (ns, m) in ctx.iter_imports_raw() {
+            scan_module(&mut list, &dict, ns.clone(), m.as_ref(), filter)
+        }
     }
 
     list

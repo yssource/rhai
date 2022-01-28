@@ -206,9 +206,9 @@ impl Engine {
         let _ast = ast;
         let mut global = ModuleMetadata::new();
 
-        self.global_sub_modules.iter().for_each(|(name, m)| {
+        for (name, m) in &self.global_sub_modules {
             global.modules.insert(name, m.as_ref().into());
-        });
+        }
 
         self.global_modules
             .iter()
@@ -221,11 +221,11 @@ impl Engine {
             });
 
         #[cfg(not(feature = "no_function"))]
-        _ast.shared_lib().iter_fn().for_each(|f| {
+        for f in _ast.shared_lib().iter_fn() {
             let mut meta: FnMetadata = f.into();
             meta.namespace = FnNamespace::Global;
             global.functions.push(meta);
-        });
+        }
 
         global.functions.sort();
 
