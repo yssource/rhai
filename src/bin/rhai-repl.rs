@@ -283,6 +283,7 @@ fn main() {
                     println!("{}", f)
                 }
 
+                #[cfg(not(feature = "no_function"))]
                 for f in main_ast.iter_functions() {
                     println!("{}", f)
                 }

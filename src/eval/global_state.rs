@@ -22,9 +22,6 @@ use std::{
 #[derive(Clone)]
 pub struct GlobalRuntimeState<'a> {
     /// Stack of module names.
-    //
-    // We cannot use Cow<str> here because `eval` may load a [module][Module] and
-    // the module name will live beyond the AST of the eval script text.
     keys: StaticVec<Identifier>,
     /// Stack of imported [modules][Module].
     modules: StaticVec<Shared<Module>>,
