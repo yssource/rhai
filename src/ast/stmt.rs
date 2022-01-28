@@ -23,6 +23,8 @@ pub struct OpAssignment<'a> {
     /// Hash of the underlying operator call (for fallback).
     pub hash_op: u64,
     /// Op-assignment operator.
+    pub op_assign: &'a str,
+    /// Underlying operator.
     pub op: &'a str,
 }
 
@@ -51,7 +53,8 @@ impl OpAssignment<'_> {
         Self {
             hash_op_assign: calc_fn_hash(op.literal_syntax(), 2),
             hash_op: calc_fn_hash(op_raw, 2),
-            op: op.literal_syntax(),
+            op_assign: op.literal_syntax(),
+            op: op_raw,
         }
     }
     /// Create a new [`OpAssignment`] from a base operator.

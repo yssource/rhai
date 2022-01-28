@@ -127,6 +127,7 @@ impl Engine {
         if let Some(OpAssignment {
             hash_op_assign,
             hash_op,
+            op_assign,
             op,
         }) = op_info
         {
@@ -148,20 +149,22 @@ impl Engine {
             let hash = hash_op_assign;
             let args = &mut [lhs_ptr_inner, &mut new_val];
 
-            match self.call_native_fn(global, state, lib, op, hash, args, true, true, op_pos) {
+            match self.call_native_fn(
+                global, state, lib, op_assign, hash, args, true, true, op_pos,
+            ) {
                 Ok(_) => {
                     #[cfg(not(feature = "unchecked"))]
-                    self.check_data_size(&mut args[0], root.1)?;
+                    self.check_data_size(&args[0], root.1)?;
                 }
-                Err(err) if matches!(*err, ERR::ErrorFunctionNotFound(ref f, _) if f.starts_with(op)) =>
+                Err(err) if matches!(*err, ERR::ErrorFunctionNotFound(ref f, _) if f.starts_with(op_assign)) =>
                 {
                     // Expand to `var = var op rhs`
-                    let op = &op[..op.len() - 1]; // extract operator without =
-
-                    // Run function
                     let (value, _) = self.call_native_fn(
                         global, state, lib, op, hash_op, args, true, false, op_pos,
                     )?;
+
+                    #[cfg(not(feature = "unchecked"))]
+                    self.check_data_size(&value, root.1)?;
 
                     *args[0] = value.flatten();
                 }
