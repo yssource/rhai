@@ -1,5 +1,6 @@
+use crate::eval::GlobalRuntimeState;
 use crate::func::native::SendSync;
-use crate::{Engine, GlobalRuntimeState, Module, Position, RhaiResultOf, Shared, AST};
+use crate::{Engine, Module, Position, RhaiResultOf, Shared, AST};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 

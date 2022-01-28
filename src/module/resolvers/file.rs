@@ -1,10 +1,10 @@
 #![cfg(not(feature = "no_std"))]
 #![cfg(not(target_family = "wasm"))]
 
+use crate::eval::GlobalRuntimeState;
 use crate::func::native::locked_write;
 use crate::{
-    Engine, GlobalRuntimeState, Identifier, Module, ModuleResolver, Position, RhaiResultOf, Scope,
-    Shared, ERR,
+    Engine, Identifier, Module, ModuleResolver, Position, RhaiResultOf, Scope, Shared, ERR,
 };
 
 use std::{
