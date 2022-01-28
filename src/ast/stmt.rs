@@ -1,6 +1,6 @@
 //! Module defining script statements.
 
-use super::{ASTNode, Expr, FnCallExpr, Ident, OptionFlags, AST_OPTION_FLAGS};
+use super::{ASTNode, Expr, FnCallExpr, Ident, OptionFlags, AST_OPTION_FLAGS::*};
 use crate::engine::KEYWORD_EVAL;
 use crate::tokenizer::Token;
 use crate::{calc_fn_hash, Position, StaticVec, INT};
@@ -228,8 +228,8 @@ pub enum Stmt {
     ///
     /// ### Option Flags
     ///
-    /// * [`AST_OPTION_NONE`][AST_OPTION_FLAGS::AST_OPTION_NONE] = `while`
-    /// * [`AST_OPTION_NEGATED`][AST_OPTION_FLAGS::AST_OPTION_NEGATED] = `until`
+    /// * [`AST_OPTION_NONE`] = `while`
+    /// * [`AST_OPTION_NEGATED`] = `until`
     Do(Box<StmtBlock>, Expr, OptionFlags, Position),
     /// `for` `(` id `,` counter `)` `in` expr `{` stmt `}`
     For(Expr, Box<(Ident, Option<Ident>, StmtBlock)>, Position),
@@ -237,8 +237,8 @@ pub enum Stmt {
     ///
     /// ### Option Flags
     ///
-    /// * [`AST_OPTION_PUBLIC`][AST_OPTION_FLAGS::AST_OPTION_PUBLIC] = `export`
-    /// * [`AST_OPTION_CONSTANT`][AST_OPTION_FLAGS::AST_OPTION_CONSTANT] = `const`
+    /// * [`AST_OPTION_EXPORTED`] = `export`
+    /// * [`AST_OPTION_CONSTANT`] = `const`
     Var(Expr, Box<Ident>, OptionFlags, Position),
     /// expr op`=` expr
     Assignment(Box<(Expr, Option<OpAssignment<'static>>, Expr)>, Position),
@@ -257,15 +257,15 @@ pub enum Stmt {
     ///
     /// ### Option Flags
     ///
-    /// * [`AST_OPTION_NONE`][AST_OPTION_FLAGS::AST_OPTION_NONE] = `continue`
-    /// * [`AST_OPTION_BREAK_OUT`][AST_OPTION_FLAGS::AST_OPTION_BREAK_OUT] = `break`
+    /// * [`AST_OPTION_NONE`] = `continue`
+    /// * [`AST_OPTION_BREAK`] = `break`
     BreakLoop(OptionFlags, Position),
     /// `return`/`throw`
     ///
     /// ### Option Flags
     ///
-    /// * [`AST_OPTION_NONE`][AST_OPTION_FLAGS::AST_OPTION_NONE] = `return`
-    /// * [`AST_OPTION_BREAK_OUT`][AST_OPTION_FLAGS::AST_OPTION_BREAK_OUT] = `throw`
+    /// * [`AST_OPTION_NONE`] = `return`
+    /// * [`AST_OPTION_BREAK`] = `throw`
     Return(OptionFlags, Option<Expr>, Position),
     /// `import` expr `as` var
     ///
@@ -459,7 +459,7 @@ impl Stmt {
             // Loops that exit can be pure because it can never be infinite.
             Self::While(Expr::BoolConstant(false, _), _, _) => true,
             Self::Do(body, Expr::BoolConstant(x, _), options, _)
-                if *x == options.contains(AST_OPTION_FLAGS::AST_OPTION_NEGATED) =>
+                if *x == options.contains(AST_OPTION_NEGATED) =>
             {
                 body.iter().all(Stmt::is_pure)
             }

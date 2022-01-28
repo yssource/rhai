@@ -308,7 +308,7 @@ fn optimize_stmt_block(
                 match statements[..] {
                     // { return; } -> {}
                     [Stmt::Return(options, None, _)]
-                        if reduce_return && !options.contains(AST_OPTION_BREAK_OUT) =>
+                        if reduce_return && !options.contains(AST_OPTION_BREAK) =>
                     {
                         state.set_dirty();
                         statements.clear();
@@ -320,7 +320,7 @@ fn optimize_stmt_block(
                     // { ...; return; } -> { ... }
                     [.., ref last_stmt, Stmt::Return(options, None, _)]
                         if reduce_return
-                            && !options.contains(AST_OPTION_BREAK_OUT)
+                            && !options.contains(AST_OPTION_BREAK)
                             && !last_stmt.returns_value() =>
                     {
                         state.set_dirty();
@@ -328,7 +328,7 @@ fn optimize_stmt_block(
                     }
                     // { ...; return val; } -> { ...; val }
                     [.., Stmt::Return(options, ref mut expr, pos)]
-                        if reduce_return && !options.contains(AST_OPTION_BREAK_OUT) =>
+                        if reduce_return && !options.contains(AST_OPTION_BREAK) =>
                     {
                         state.set_dirty();
                         *statements.last_mut().unwrap() = expr
@@ -365,7 +365,7 @@ fn optimize_stmt_block(
                     }
                     // { ...; return; } -> { ... }
                     [.., Stmt::Return(options, None, _)]
-                        if reduce_return && !options.contains(AST_OPTION_BREAK_OUT) =>
+                        if reduce_return && !options.contains(AST_OPTION_BREAK) =>
                     {
                         state.set_dirty();
                         statements.pop().unwrap();
@@ -373,7 +373,7 @@ fn optimize_stmt_block(
                     // { ...; return pure_val; } -> { ... }
                     [.., Stmt::Return(options, Some(ref expr), _)]
                         if reduce_return
-                            && !options.contains(AST_OPTION_BREAK_OUT)
+                            && !options.contains(AST_OPTION_BREAK)
                             && expr.is_pure() =>
                     {
                         state.set_dirty();
@@ -663,7 +663,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
             if body.len() == 1 {
                 match body[0] {
                     // while expr { break; } -> { expr; }
-                    Stmt::BreakLoop(options, pos) if options.contains(AST_OPTION_BREAK_OUT) => {
+                    Stmt::BreakLoop(options, pos) if options.contains(AST_OPTION_BREAK) => {
                         // Only a single break statement - turn into running the guard expression once
                         state.set_dirty();
                         if !condition.is_unit() {

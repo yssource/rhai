@@ -2520,7 +2520,7 @@ fn parse_let(
     state.stack.push((name, var_type));
 
     let export = if is_export {
-        AST_OPTION_PUBLIC
+        AST_OPTION_EXPORTED
     } else {
         AST_OPTION_NONE
     };
@@ -2925,7 +2925,7 @@ fn parse_stmt(
         }
         Token::Break if settings.default_options.allow_loop && settings.is_breakable => {
             let pos = eat_token(input, Token::Break);
-            Ok(Stmt::BreakLoop(AST_OPTION_BREAK_OUT, pos))
+            Ok(Stmt::BreakLoop(AST_OPTION_BREAK, pos))
         }
         Token::Continue | Token::Break if settings.default_options.allow_loop => {
             Err(PERR::LoopBreak.into_err(token_pos))
@@ -2937,7 +2937,7 @@ fn parse_stmt(
                 .map(|(token, pos)| {
                     let flags = match token {
                         Token::Return => AST_OPTION_NONE,
-                        Token::Throw => AST_OPTION_BREAK_OUT,
+                        Token::Throw => AST_OPTION_BREAK,
                         token => unreachable!(
                             "Token::Return or Token::Throw expected but gets {:?}",
                             token

@@ -378,9 +378,9 @@ pub enum Expr {
     Stmt(Box<StmtBlock>),
     /// func `(` expr `,` ... `)`
     FnCall(Box<FnCallExpr>, Position),
-    /// lhs `.` rhs - bool variable is a dummy
+    /// lhs `.` rhs - boolean variable is a dummy
     Dot(Box<BinaryExpr>, bool, Position),
-    /// expr `[` expr `]` - boolean indicates whether the dotting/indexing chain stops
+    /// lhs `[` rhs `]` - boolean indicates whether the dotting/indexing chain stops
     Index(Box<BinaryExpr>, bool, Position),
     /// lhs `&&` rhs
     And(Box<BinaryExpr>, Position),

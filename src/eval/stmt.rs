@@ -677,7 +677,7 @@ impl Engine {
 
             // Continue/Break statement
             Stmt::BreakLoop(options, pos) => {
-                Err(ERR::LoopBreak(options.contains(AST_OPTION_BREAK_OUT), *pos).into())
+                Err(ERR::LoopBreak(options.contains(AST_OPTION_BREAK), *pos).into())
             }
 
             // Try/Catch statement
@@ -756,13 +756,12 @@ impl Engine {
             }
 
             // Throw value
-            Stmt::Return(options, Some(expr), pos) if options.contains(AST_OPTION_BREAK_OUT) => {
-                self.eval_expr(scope, global, state, lib, this_ptr, expr, level)
-                    .and_then(|v| Err(ERR::ErrorRuntime(v.flatten(), *pos).into()))
-            }
+            Stmt::Return(options, Some(expr), pos) if options.contains(AST_OPTION_BREAK) => self
+                .eval_expr(scope, global, state, lib, this_ptr, expr, level)
+                .and_then(|v| Err(ERR::ErrorRuntime(v.flatten(), *pos).into())),
 
             // Empty throw
-            Stmt::Return(options, None, pos) if options.contains(AST_OPTION_BREAK_OUT) => {
+            Stmt::Return(options, None, pos) if options.contains(AST_OPTION_BREAK) => {
                 Err(ERR::ErrorRuntime(Dynamic::UNIT, *pos).into())
             }
 
@@ -782,7 +781,7 @@ impl Engine {
                 } else {
                     AccessMode::ReadWrite
                 };
-                let export = options.contains(AST_OPTION_PUBLIC);
+                let export = options.contains(AST_OPTION_EXPORTED);
 
                 let value_result = self
                     .eval_expr(scope, global, state, lib, this_ptr, expr, level)
