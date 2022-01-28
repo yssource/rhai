@@ -1685,6 +1685,8 @@ impl Module {
         // Save global state
         let orig_imports_len = global.num_imports();
         let orig_source = global.source.clone();
+        #[cfg(not(feature = "no_module"))]
+        #[cfg(not(feature = "no_function"))]
         let orig_constants = std::mem::take(&mut global.constants);
 
         // Run the script
@@ -1717,7 +1719,11 @@ impl Module {
         }
 
         // Restore global state
-        global.constants = orig_constants;
+        #[cfg(not(feature = "no_module"))]
+        #[cfg(not(feature = "no_function"))]
+        {
+            global.constants = orig_constants;
+        }
         global.truncate_imports(orig_imports_len);
         global.source = orig_source;
 

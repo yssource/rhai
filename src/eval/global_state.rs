@@ -57,6 +57,8 @@ impl GlobalRuntimeState<'_> {
     #[inline(always)]
     #[must_use]
     pub fn new(engine: &Engine) -> Self {
+        let _engine = engine;
+
         Self {
             keys: StaticVec::new_const(),
             modules: StaticVec::new_const(),
@@ -71,7 +73,7 @@ impl GlobalRuntimeState<'_> {
             #[cfg(not(feature = "no_function"))]
             constants: std::collections::BTreeMap::new().into(),
             #[cfg(feature = "debugging")]
-            debugger: crate::eval::Debugger::new(engine),
+            debugger: crate::eval::Debugger::new(_engine),
             dummy: PhantomData::default(),
         }
     }

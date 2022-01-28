@@ -4,7 +4,7 @@ use crate::api::custom_syntax::{markers::*, CustomSyntax};
 use crate::api::options::LanguageOptions;
 use crate::ast::{
     BinaryExpr, ConditionalStmtBlock, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident,
-    OpAssignment, ScriptFnDef, Stmt, StmtBlock, SwitchCases, TryCatchBlock, AST_OPTION_FLAGS::*,
+    OpAssignment, ScriptFnDef, Stmt, SwitchCases, TryCatchBlock, AST_OPTION_FLAGS::*,
 };
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::func::hashing::get_hasher;
@@ -3184,7 +3184,7 @@ fn make_curry_from_externals(
     let mut statements = StaticVec::with_capacity(externals.len() + 1);
     statements.extend(externals.into_iter().map(Stmt::Share));
     statements.push(Stmt::Expr(expr));
-    Expr::Stmt(StmtBlock::new(statements, pos).into())
+    Expr::Stmt(crate::ast::StmtBlock::new(statements, pos).into())
 }
 
 /// Parse an anonymous function definition.
