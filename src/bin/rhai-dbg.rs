@@ -6,7 +6,6 @@ use rhai::debugger::DebuggerCommand;
 
 #[cfg(feature = "debugging")]
 use std::{
-    cell::RefCell,
     env,
     fs::File,
     io::{stdin, stdout, Read, Write},
@@ -234,25 +233,33 @@ fn main() {
     // Hook up debugger
     let lines: Vec<_> = script.trim().split('\n').map(|s| s.to_string()).collect();
 
-    let current_source = RefCell::new(rhai::Identifier::new_const());
+    #[cfg(not(feature = "sync"))]
+    let current_source = std::cell::RefCell::new(rhai::Identifier::new_const());
+    #[cfg(feature = "sync")]
+    let current_source = std::sync::RwLock::new(rhai::Identifier::new_const());
 
     engine.on_debugger(move |context, node, source, pos| {
+        #[cfg(not(feature = "sync"))]
+        let current_source = &mut *current_source.borrow_mut();
+        #[cfg(feature = "sync")]
+        let current_source = &mut *current_source.write().unwrap();
+
         // Check source
         if let Some(src) = source {
-            if src != &*current_source.borrow() {
+            if src != current_source {
                 println!(">>> Source => {}", src);
             }
             // Print just a line number for imported modules
             println!("{} @ {:?}", src, pos);
         } else {
             // The root file has no source
-            if !current_source.borrow().is_empty() {
+            if !current_source.is_empty() {
                 println!(">>> Source => main script.");
             }
             // Print the current source line
             print_source(&lines, pos, 0);
         }
-        *current_source.borrow_mut() = source.unwrap_or("").into();
+        *current_source = source.unwrap_or("").into();
 
         // Read stdin for commands
         let mut input = String::new();
