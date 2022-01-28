@@ -818,7 +818,12 @@ impl Engine {
                             && entry_type == AccessMode::ReadOnly
                             && lib.iter().any(|&m| !m.is_empty())
                         {
-                            crate::func::native::locked_write(&global.constants)
+                            if global.constants.is_none() {
+                                global.constants = Some(crate::Shared::new(crate::Locked::new(
+                                    std::collections::BTreeMap::new(),
+                                )));
+                            }
+                            crate::func::locked_write(global.constants.as_ref().unwrap())
                                 .insert(var_name.clone(), value.clone());
                         }
 

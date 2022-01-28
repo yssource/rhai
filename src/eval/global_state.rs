@@ -42,9 +42,13 @@ pub struct GlobalRuntimeState<'a> {
     #[cfg(not(feature = "no_module"))]
     pub embedded_module_resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
     /// Cache of globally-defined constants.
+    ///
+    /// Interior mutability is needed because it is shared in order to aid in cloning.
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
-    pub(crate) constants: crate::Locked<std::collections::BTreeMap<Identifier, crate::Dynamic>>,
+    pub(crate) constants: Option<
+        crate::Shared<crate::Locked<std::collections::BTreeMap<Identifier, crate::Dynamic>>>,
+    >,
     /// Debugging interface.
     #[cfg(feature = "debugging")]
     pub debugger: super::Debugger,
@@ -71,7 +75,7 @@ impl GlobalRuntimeState<'_> {
             fn_hash_indexing: (0, 0),
             #[cfg(not(feature = "no_module"))]
             #[cfg(not(feature = "no_function"))]
-            constants: std::collections::BTreeMap::new().into(),
+            constants: None,
             #[cfg(feature = "debugging")]
             debugger: crate::eval::Debugger::new(_engine),
             dummy: PhantomData::default(),

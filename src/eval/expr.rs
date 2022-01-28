@@ -92,13 +92,13 @@ impl Engine {
                     // global::VARIABLE
                     #[cfg(not(feature = "no_function"))]
                     if namespace.len() == 1 && namespace[0].name == crate::engine::KEYWORD_GLOBAL {
-                        let mut guard = crate::func::native::locked_write(&global.constants);
-
-                        if let Some(value) = guard.get_mut(var_name) {
-                            let mut target: Target = value.clone().into();
-                            // Module variables are constant
-                            target.set_access_mode(AccessMode::ReadOnly);
-                            return Ok((target.into(), *_var_pos));
+                        if let Some(ref constants) = global.constants {
+                            if let Some(value) = crate::func::locked_write(constants).get_mut(var_name) {
+                                let mut target: Target = value.clone().into();
+                                // Module variables are constant
+                                target.set_access_mode(AccessMode::ReadOnly);
+                                return Ok((target.into(), *_var_pos));
+                            }
                         }
 
                         return Err(ERR::ErrorVariableNotFound(
