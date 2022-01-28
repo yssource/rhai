@@ -9,6 +9,11 @@ Bug fixes
 
 * In `Scope::clone_visible`, constants are now properly cloned as constants.
 
+Script-breaking changes
+-----------------------
+
+* For consistency, the `export` statement no longer exports multiple variables.
+
 New features
 ------------
 

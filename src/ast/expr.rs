@@ -33,6 +33,16 @@ pub struct BinaryExpr {
     pub rhs: Expr,
 }
 
+impl From<(Expr, Expr)> for BinaryExpr {
+    #[inline(always)]
+    fn from(value: (Expr, Expr)) -> Self {
+        Self {
+            lhs: value.0,
+            rhs: value.1,
+        }
+    }
+}
+
 /// _(internals)_ A custom syntax expression.
 /// Exported under the `internals` feature only.
 #[derive(Debug, Clone, Hash)]
@@ -362,11 +372,8 @@ pub enum Expr {
     ),
     /// Property access - ((getter, hash), (setter, hash), prop)
     Property(
-        Box<(
-            (Identifier, u64),
-            (Identifier, u64),
-            (ImmutableString, Position),
-        )>,
+        Box<((Identifier, u64), (Identifier, u64), ImmutableString)>,
+        Position,
     ),
     /// Stack slot for function calls.  See [`FnCallExpr`] for more details.
     ///
@@ -436,7 +443,7 @@ impl fmt::Debug for Expr {
                 }
                 f.write_str(")")
             }
-            Self::Property(x) => write!(f, "Property({})", (x.2).0),
+            Self::Property(x, _) => write!(f, "Property({})", x.2),
             Self::Stack(x, _) => write!(f, "StackSlot({})", x),
             Self::Stmt(x) => {
                 f.write_str("ExprStmtBlock")?;
@@ -648,9 +655,9 @@ impl Expr {
             | Self::FnCall(_, pos)
             | Self::Index(_, _, pos)
             | Self::Custom(_, pos)
-            | Self::InterpolatedString(_, pos) => *pos,
+            | Self::InterpolatedString(_, pos)
+            | Self::Property(_, pos) => *pos,
 
-            Self::Property(x) => (x.2).1,
             Self::Stmt(x) => x.position(),
 
             Self::And(x, _) | Self::Or(x, _) | Self::Dot(x, _, _) => x.lhs.position(),
@@ -679,9 +686,9 @@ impl Expr {
             | Self::Stack(_, pos)
             | Self::FnCall(_, pos)
             | Self::Custom(_, pos)
-            | Self::InterpolatedString(_, pos) => *pos = new_pos,
+            | Self::InterpolatedString(_, pos)
+            | Self::Property(_, pos) => *pos = new_pos,
 
-            Self::Property(x) => (x.2).1 = new_pos,
             Self::Stmt(x) => x.set_position(new_pos),
         }
 
@@ -781,7 +788,7 @@ impl Expr {
                 _ => false,
             },
 
-            Self::Property(_) => match token {
+            Self::Property(_, _) => match token {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
                 Token::LeftParen => true,

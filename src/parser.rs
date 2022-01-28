@@ -3,8 +3,8 @@
 use crate::api::custom_syntax::{markers::*, CustomSyntax};
 use crate::api::options::LanguageOptions;
 use crate::ast::{
-    BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment, ScriptFnDef, Stmt,
-    StmtBlock, AST_OPTION_FLAGS::*,
+    BinaryExpr, ConditionalStmtBlock, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident,
+    OpAssignment, ScriptFnDef, Stmt, StmtBlock, SwitchCases, TryCatchBlock, AST_OPTION_FLAGS::*,
 };
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::func::hashing::get_hasher;
@@ -273,11 +273,14 @@ impl Expr {
                 let setter = state.get_identifier(crate::engine::FN_SET, &ident);
                 let hash_set = calc_fn_hash(&setter, 2);
 
-                Self::Property(Box::new((
-                    (getter, hash_get),
-                    (setter, hash_set),
-                    (state.get_interned_string("", &ident), pos),
-                )))
+                Self::Property(
+                    Box::new((
+                        (getter, hash_get),
+                        (setter, hash_set),
+                        state.get_interned_string("", &ident),
+                    )),
+                    pos,
+                )
             }
             _ => self,
         }
@@ -985,8 +988,8 @@ fn parse_switch(
         }
     }
 
-    let mut table = BTreeMap::<u64, Box<(Option<Expr>, StmtBlock)>>::new();
-    let mut ranges = StaticVec::<(INT, INT, bool, Option<Expr>, StmtBlock)>::new();
+    let mut cases = BTreeMap::<u64, Box<ConditionalStmtBlock>>::new();
+    let mut ranges = StaticVec::<(INT, INT, bool, ConditionalStmtBlock)>::new();
     let mut def_pos = Position::NONE;
     let mut def_stmt = None;
 
@@ -1050,7 +1053,7 @@ fn parse_switch(
                 value.hash(hasher);
                 let hash = hasher.finish();
 
-                if table.contains_key(&hash) {
+                if cases.contains_key(&hash) {
                     return Err(PERR::DuplicatedSwitchCase.into_err(expr.position()));
                 }
                 (Some(hash), None)
@@ -1092,18 +1095,20 @@ fn parse_switch(
                             value.hash(hasher);
                             let hash = hasher.finish();
 
-                            table
-                                .entry(hash)
-                                .or_insert_with(|| (condition.clone(), stmt.into()).into());
+                            cases.entry(hash).or_insert_with(|| {
+                                let block: ConditionalStmtBlock = (condition, stmt).into();
+                                block.into()
+                            });
                         }
                         // Other range
-                        _ => ranges.push((range.0, range.1, range.2, condition, stmt.into())),
+                        _ => ranges.push((range.0, range.1, range.2, (condition, stmt).into())),
                     }
                 }
                 None
             }
             (Some(hash), None) => {
-                table.insert(hash, (condition, stmt.into()).into());
+                let block: ConditionalStmtBlock = (condition, stmt).into();
+                cases.insert(hash, block.into());
                 None
             }
             (None, None) => Some(stmt.into()),
@@ -1133,11 +1138,16 @@ fn parse_switch(
         }
     }
 
-    let def_stmt_block = def_stmt.unwrap_or_else(|| Stmt::Noop(Position::NONE).into());
+    let def_case = def_stmt.unwrap_or_else(|| Stmt::Noop(Position::NONE).into());
 
     Ok(Stmt::Switch(
         item,
-        (table, def_stmt_block, ranges).into(),
+        SwitchCases {
+            cases,
+            def_case,
+            ranges,
+        }
+        .into(),
         settings.pos,
     ))
 }
@@ -1692,20 +1702,20 @@ fn make_assignment_stmt(
     fn check_lvalue(expr: &Expr, parent_is_dot: bool) -> Option<Position> {
         match expr {
             Expr::Index(x, term, _) | Expr::Dot(x, term, _) if parent_is_dot => match x.lhs {
-                Expr::Property(_) if !term => {
+                Expr::Property(_, _) if !term => {
                     check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _, _)))
                 }
-                Expr::Property(_) => None,
+                Expr::Property(_, _) => None,
                 // Anything other than a property after dotting (e.g. a method call) is not an l-value
                 ref e => Some(e.position()),
             },
             Expr::Index(x, term, _) | Expr::Dot(x, term, _) => match x.lhs {
-                Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
+                Expr::Property(_, _) => unreachable!("unexpected Expr::Property in indexing"),
                 _ if !term => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _, _))),
                 _ => None,
             },
-            Expr::Property(_) if parent_is_dot => None,
-            Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
+            Expr::Property(_, _) if parent_is_dot => None,
+            Expr::Property(_, _) => unreachable!("unexpected Expr::Property in indexing"),
             e if parent_is_dot => Some(e.position()),
             _ => None,
         }
@@ -1719,9 +1729,10 @@ fn make_assignment_stmt(
             Err(PERR::AssignmentToConstant("".into()).into_err(lhs.position()))
         }
         // var (non-indexed) = rhs
-        Expr::Variable(None, _, ref x) if x.0.is_none() => {
-            Ok(Stmt::Assignment((lhs, op_info, rhs).into(), op_pos))
-        }
+        Expr::Variable(None, _, ref x) if x.0.is_none() => Ok(Stmt::Assignment(
+            (op_info, (lhs, rhs).into()).into(),
+            op_pos,
+        )),
         // var (indexed) = rhs
         Expr::Variable(i, var_pos, ref x) => {
             let (index, _, name) = x.as_ref();
@@ -1730,7 +1741,10 @@ fn make_assignment_stmt(
                 |n| n.get() as usize,
             );
             match state.stack[state.stack.len() - index].1 {
-                AccessMode::ReadWrite => Ok(Stmt::Assignment((lhs, op_info, rhs).into(), op_pos)),
+                AccessMode::ReadWrite => Ok(Stmt::Assignment(
+                    (op_info, (lhs, rhs).into()).into(),
+                    op_pos,
+                )),
                 // Constant values cannot be assigned to
                 AccessMode::ReadOnly => {
                     Err(PERR::AssignmentToConstant(name.to_string()).into_err(var_pos))
@@ -1749,9 +1763,10 @@ fn make_assignment_stmt(
                 None => {
                     match x.lhs {
                         // var[???] = rhs, var.??? = rhs
-                        Expr::Variable(_, _, _) => {
-                            Ok(Stmt::Assignment((lhs, op_info, rhs).into(), op_pos))
-                        }
+                        Expr::Variable(_, _, _) => Ok(Stmt::Assignment(
+                            (op_info, (lhs, rhs).into()).into(),
+                            op_pos,
+                        )),
                         // expr[???] = rhs, expr.??? = rhs
                         ref expr => {
                             Err(PERR::AssignmentToInvalidLHS("".to_string())
@@ -1830,7 +1845,7 @@ fn make_dot_expr(
             Err(PERR::PropertyExpected.into_err(x.1.expect("`Some`").0[0].pos))
         }
         // lhs.prop
-        (lhs, prop @ Expr::Property(_)) => Ok(Expr::Dot(
+        (lhs, prop @ Expr::Property(_, _)) => Ok(Expr::Dot(
             BinaryExpr { lhs, rhs: prop }.into(),
             false,
             op_pos,
@@ -1844,7 +1859,7 @@ fn make_dot_expr(
             };
 
             match x.lhs {
-                Expr::Variable(_, _, _) | Expr::Property(_) => {
+                Expr::Variable(_, _, _) | Expr::Property(_, _) => {
                     let new_lhs = BinaryExpr {
                         lhs: x.lhs.into_property(state),
                         rhs: x.rhs,
@@ -2603,48 +2618,27 @@ fn parse_export(
         _ => (),
     }
 
-    let mut exports = Vec::<(Ident, Ident)>::with_capacity(4);
+    let (id, id_pos) = parse_var_name(input)?;
 
-    loop {
-        let (id, id_pos) = parse_var_name(input)?;
+    let (alias, alias_pos) = if match_token(input, Token::As).0 {
+        let (name, pos) = parse_var_name(input)?;
+        (Some(name), pos)
+    } else {
+        (None, Position::NONE)
+    };
 
-        let (rename, rename_pos) = if match_token(input, Token::As).0 {
-            let (name, pos) = parse_var_name(input)?;
-            if exports.iter().any(|(_, alias)| alias.name == name.as_ref()) {
-                return Err(PERR::DuplicatedVariable(name.to_string()).into_err(pos));
-            }
-            (Some(name), pos)
-        } else {
-            (None, Position::NONE)
-        };
+    let export = (
+        Ident {
+            name: state.get_identifier("", id),
+            pos: id_pos,
+        },
+        Ident {
+            name: state.get_identifier("", alias.as_ref().map_or("", <_>::as_ref)),
+            pos: alias_pos,
+        },
+    );
 
-        exports.push((
-            Ident {
-                name: state.get_identifier("", id),
-                pos: id_pos,
-            },
-            Ident {
-                name: state.get_identifier("", rename.as_ref().map_or("", <_>::as_ref)),
-                pos: rename_pos,
-            },
-        ));
-
-        match input.peek().expect(NEVER_ENDS) {
-            (Token::Comma, _) => {
-                eat_token(input, Token::Comma);
-            }
-            (Token::Identifier(_), pos) => {
-                return Err(PERR::MissingToken(
-                    Token::Comma.into(),
-                    "to separate the list of exports".into(),
-                )
-                .into_err(*pos))
-            }
-            _ => break,
-        }
-    }
-
-    Ok(Stmt::Export(exports.into_boxed_slice(), settings.pos))
+    Ok(Stmt::Export(export.into(), settings.pos))
 }
 
 /// Parse a statement block.
@@ -2996,10 +2990,10 @@ fn parse_try_catch(
     let mut settings = settings;
     settings.pos = eat_token(input, Token::Try);
 
-    // try { body }
-    let body = parse_block(input, state, lib, settings.level_up())?;
+    // try { try_block }
+    let try_block = parse_block(input, state, lib, settings.level_up())?;
 
-    // try { body } catch
+    // try { try_block } catch
     let (matched, catch_pos) = match_token(input, Token::Catch);
 
     if !matched {
@@ -3009,8 +3003,8 @@ fn parse_try_catch(
         );
     }
 
-    // try { body } catch (
-    let err_var = if match_token(input, Token::LeftParen).0 {
+    // try { try_block } catch (
+    let catch_var = if match_token(input, Token::LeftParen).0 {
         let (name, pos) = parse_var_name(input)?;
         let (matched, err_pos) = match_token(input, Token::RightParen);
 
@@ -3029,16 +3023,21 @@ fn parse_try_catch(
         None
     };
 
-    // try { body } catch ( var ) { catch_block }
-    let catch_body = parse_block(input, state, lib, settings.level_up())?;
+    // try { try_block } catch ( var ) { catch_block }
+    let catch_block = parse_block(input, state, lib, settings.level_up())?;
 
-    if err_var.is_some() {
+    if catch_var.is_some() {
         // Remove the error variable from the stack
         state.stack.pop().unwrap();
     }
 
     Ok(Stmt::TryCatch(
-        (body.into(), err_var, catch_body.into()).into(),
+        TryCatchBlock {
+            try_block: try_block.into(),
+            catch_var,
+            catch_block: catch_block.into(),
+        }
+        .into(),
         settings.pos,
     ))
 }

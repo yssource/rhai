@@ -312,7 +312,7 @@ impl Debugger {
                 },
                 #[cfg(not(feature = "no_object"))]
                 BreakPoint::AtProperty { name, .. } => match node {
-                    ASTNode::Expr(Expr::Property(x)) => (x.2).0 == *name,
+                    ASTNode::Expr(Expr::Property(x, _)) => x.2 == *name,
                     _ => false,
                 },
             })

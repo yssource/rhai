@@ -1,7 +1,9 @@
 //! Module defining functions for evaluating a statement.
 
 use super::{EvalState, GlobalRuntimeState, Target};
-use crate::ast::{Expr, Ident, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
+use crate::ast::{
+    BinaryExpr, Expr, Ident, OpAssignment, Stmt, SwitchCases, TryCatchBlock, AST_OPTION_FLAGS::*,
+};
 use crate::func::get_hasher;
 use crate::types::dynamic::{AccessMode, Union};
 use crate::{Dynamic, Engine, Module, Position, RhaiResult, RhaiResultOf, Scope, ERR, INT};
@@ -225,20 +227,21 @@ impl Engine {
             #[cfg(not(feature = "unchecked"))]
             self.inc_operations(&mut global.num_operations, stmt.position())?;
 
-            let result = if x.0.is_variable_access(false) {
-                let (lhs_expr, op_info, rhs_expr) = x.as_ref();
+            let result = if x.1.lhs.is_variable_access(false) {
+                let (op_info, BinaryExpr { lhs, rhs }) = x.as_ref();
+
                 let rhs_result = self
-                    .eval_expr(scope, global, state, lib, this_ptr, rhs_expr, level)
+                    .eval_expr(scope, global, state, lib, this_ptr, rhs, level)
                     .map(Dynamic::flatten);
 
                 if let Ok(rhs_val) = rhs_result {
                     let search_result =
-                        self.search_namespace(scope, global, state, lib, this_ptr, lhs_expr);
+                        self.search_namespace(scope, global, state, lib, this_ptr, lhs);
 
                     if let Ok(search_val) = search_result {
                         let (mut lhs_ptr, pos) = search_val;
 
-                        let var_name = lhs_expr.get_variable_name(false).expect("`Expr::Variable`");
+                        let var_name = lhs.get_variable_name(false).expect("`Expr::Variable`");
 
                         if !lhs_ptr.is_ref() {
                             return Err(
@@ -259,7 +262,7 @@ impl Engine {
                             (var_name, pos),
                             rhs_val,
                         )
-                        .map_err(|err| err.fill_position(rhs_expr.position()))
+                        .map_err(|err| err.fill_position(rhs.position()))
                         .map(|_| Dynamic::UNIT)
                     } else {
                         search_result.map(|_| Dynamic::UNIT)
@@ -268,16 +271,17 @@ impl Engine {
                     rhs_result
                 }
             } else {
-                let (lhs_expr, op_info, rhs_expr) = x.as_ref();
+                let (op_info, BinaryExpr { lhs, rhs }) = x.as_ref();
+
                 let rhs_result = self
-                    .eval_expr(scope, global, state, lib, this_ptr, rhs_expr, level)
+                    .eval_expr(scope, global, state, lib, this_ptr, rhs, level)
                     .map(Dynamic::flatten);
 
                 if let Ok(rhs_val) = rhs_result {
-                    let _new_val = Some(((rhs_val, rhs_expr.position()), (*op_info, *op_pos)));
+                    let _new_val = Some(((rhs_val, rhs.position()), (*op_info, *op_pos)));
 
                     // Must be either `var[index] op= val` or `var.prop op= val`
-                    match lhs_expr {
+                    match lhs {
                         // name op= rhs (handled above)
                         Expr::Variable(_, _, _) => {
                             unreachable!("Expr::Variable case is already handled")
@@ -286,17 +290,17 @@ impl Engine {
                         #[cfg(not(feature = "no_index"))]
                         Expr::Index(_, _, _) => self
                             .eval_dot_index_chain(
-                                scope, global, state, lib, this_ptr, lhs_expr, level, _new_val,
+                                scope, global, state, lib, this_ptr, lhs, level, _new_val,
                             )
                             .map(|_| Dynamic::UNIT),
                         // dot_lhs.dot_rhs op= rhs
                         #[cfg(not(feature = "no_object"))]
                         Expr::Dot(_, _, _) => self
                             .eval_dot_index_chain(
-                                scope, global, state, lib, this_ptr, lhs_expr, level, _new_val,
+                                scope, global, state, lib, this_ptr, lhs, level, _new_val,
                             )
                             .map(|_| Dynamic::UNIT),
-                        _ => unreachable!("cannot assign to expression: {:?}", lhs_expr),
+                        _ => unreachable!("cannot assign to expression: {:?}", lhs),
                     }
                 } else {
                     rhs_result
@@ -362,7 +366,11 @@ impl Engine {
 
             // Switch statement
             Stmt::Switch(match_expr, x, _) => {
-                let (table, def_stmt, ranges) = x.as_ref();
+                let SwitchCases {
+                    cases,
+                    def_case,
+                    ranges,
+                } = x.as_ref();
 
                 let value_result =
                     self.eval_expr(scope, global, state, lib, this_ptr, match_expr, level);
@@ -374,9 +382,9 @@ impl Engine {
                         let hash = hasher.finish();
 
                         // First check hashes
-                        if let Some(t) = table.get(&hash) {
+                        if let Some(t) = cases.get(&hash) {
                             let cond_result = t
-                                .0
+                                .condition
                                 .as_ref()
                                 .map(|cond| {
                                     self.eval_expr(scope, global, state, lib, this_ptr, cond, level)
@@ -392,7 +400,7 @@ impl Engine {
                                 .unwrap_or(Ok(true));
 
                             match cond_result {
-                                Ok(true) => Ok(Some(&t.1)),
+                                Ok(true) => Ok(Some(&t.statements)),
                                 Ok(false) => Ok(None),
                                 _ => cond_result.map(|_| None),
                             }
@@ -401,13 +409,14 @@ impl Engine {
                             let value = value.as_int().expect("`INT`");
                             let mut result = Ok(None);
 
-                            for (_, _, _, condition, stmt_block) in
-                                ranges.iter().filter(|&&(start, end, inclusive, _, _)| {
+                            for (_, _, _, block) in
+                                ranges.iter().filter(|&&(start, end, inclusive, _)| {
                                     (!inclusive && (start..end).contains(&value))
                                         || (inclusive && (start..=end).contains(&value))
                                 })
                             {
-                                let cond_result = condition
+                                let cond_result = block
+                                    .condition
                                     .as_ref()
                                     .map(|cond| {
                                         self.eval_expr(
@@ -425,7 +434,7 @@ impl Engine {
                                     .unwrap_or(Ok(true));
 
                                 match cond_result {
-                                    Ok(true) => result = Ok(Some(stmt_block)),
+                                    Ok(true) => result = Ok(Some(&block.statements)),
                                     Ok(false) => continue,
                                     _ => result = cond_result.map(|_| None),
                                 }
@@ -453,9 +462,9 @@ impl Engine {
                         }
                     } else if let Ok(None) = stmt_block_result {
                         // Default match clause
-                        if !def_stmt.is_empty() {
+                        if !def_case.is_empty() {
                             self.eval_stmt_block(
-                                scope, global, state, lib, this_ptr, def_stmt, true, level,
+                                scope, global, state, lib, this_ptr, def_case, true, level,
                             )
                         } else {
                             Ok(Dynamic::UNIT)
@@ -685,10 +694,14 @@ impl Engine {
 
             // Try/Catch statement
             Stmt::TryCatch(x, _) => {
-                let (try_stmt, err_var_name, catch_stmt) = x.as_ref();
+                let TryCatchBlock {
+                    try_block,
+                    catch_var,
+                    catch_block,
+                } = x.as_ref();
 
                 let result = self
-                    .eval_stmt_block(scope, global, state, lib, this_ptr, try_stmt, true, level)
+                    .eval_stmt_block(scope, global, state, lib, this_ptr, try_block, true, level)
                     .map(|_| Dynamic::UNIT);
 
                 match result {
@@ -733,12 +746,19 @@ impl Engine {
 
                         let orig_scope_len = scope.len();
 
-                        err_var_name
+                        catch_var
                             .as_ref()
                             .map(|Ident { name, .. }| scope.push(name.clone(), err_value));
 
                         let result = self.eval_stmt_block(
-                            scope, global, state, lib, this_ptr, catch_stmt, true, level,
+                            scope,
+                            global,
+                            state,
+                            lib,
+                            this_ptr,
+                            catch_block,
+                            true,
+                            level,
                         );
 
                         scope.rewind(orig_scope_len);
@@ -896,21 +916,18 @@ impl Engine {
 
             // Export statement
             #[cfg(not(feature = "no_module"))]
-            Stmt::Export(list, _) => {
-                list.iter()
-                    .try_for_each(|(Ident { name, pos, .. }, Ident { name: rename, .. })| {
-                        // Mark scope variables as public
-                        if let Some((index, _)) = scope.get_index(name) {
-                            scope.add_entry_alias(
-                                index,
-                                if rename.is_empty() { name } else { rename }.clone(),
-                            );
-                            Ok(()) as RhaiResultOf<_>
-                        } else {
-                            Err(ERR::ErrorVariableNotFound(name.to_string(), *pos).into())
-                        }
-                    })
-                    .map(|_| Dynamic::UNIT)
+            Stmt::Export(x, _) => {
+                let (Ident { name, pos, .. }, Ident { name: alias, .. }) = x.as_ref();
+                // Mark scope variables as public
+                if let Some((index, _)) = scope.get_index(name) {
+                    scope.add_entry_alias(
+                        index,
+                        if alias.is_empty() { name } else { alias }.clone(),
+                    );
+                    Ok(Dynamic::UNIT)
+                } else {
+                    Err(ERR::ErrorVariableNotFound(name.to_string(), *pos).into())
+                }
             }
 
             // Share statement

@@ -1,6 +1,6 @@
 //! Module defining script statements.
 
-use super::{ASTNode, Expr, FnCallExpr, Ident, OptionFlags, AST_OPTION_FLAGS::*};
+use super::{ASTNode, BinaryExpr, Expr, FnCallExpr, Ident, OptionFlags, AST_OPTION_FLAGS::*};
 use crate::engine::KEYWORD_EVAL;
 use crate::tokenizer::Token;
 use crate::{calc_fn_hash, Position, StaticVec, INT};
@@ -77,6 +77,58 @@ impl OpAssignment<'_> {
     pub fn new_from_base_token(op: Token) -> Self {
         Self::new_from_token(op.convert_to_op_assignment().expect("operator"))
     }
+}
+
+/// A statements block with an optional condition.
+#[derive(Debug, Clone, Hash)]
+pub struct ConditionalStmtBlock {
+    /// Optional condition.
+    pub condition: Option<Expr>,
+    /// Statements block.
+    pub statements: StmtBlock,
+}
+
+impl<B: Into<StmtBlock>> From<(Option<Expr>, B)> for ConditionalStmtBlock {
+    #[inline(always)]
+    fn from(value: (Option<Expr>, B)) -> Self {
+        Self {
+            condition: value.0,
+            statements: value.1.into(),
+        }
+    }
+}
+
+impl ConditionalStmtBlock {
+    /// Does the condition exist?
+    #[inline(always)]
+    #[must_use]
+    pub const fn has_condition(&self) -> bool {
+        self.condition.is_some()
+    }
+}
+
+/// _(internals)_ A type containing all cases for a `switch` statement.
+/// Exported under the `internals` feature only.
+#[derive(Debug, Clone, Hash)]
+pub struct SwitchCases {
+    /// Dictionary mapping value hashes to [`ConditionalStmtBlock`]'s.
+    pub cases: BTreeMap<u64, Box<ConditionalStmtBlock>>,
+    /// Statements block for the default case (there can be no condition for the default case).
+    pub def_case: StmtBlock,
+    /// List of range cases.
+    pub ranges: StaticVec<(INT, INT, bool, ConditionalStmtBlock)>,
+}
+
+/// _(internals)_ A `try-catch` block.
+/// Exported under the `internals` feature only.
+#[derive(Debug, Clone, Hash)]
+pub struct TryCatchBlock {
+    /// `try` block.
+    pub try_block: StmtBlock,
+    /// `catch` variable, if any.
+    pub catch_var: Option<Ident>,
+    /// `catch` block.
+    pub catch_block: StmtBlock,
 }
 
 /// _(internals)_ A scoped block of statements.
@@ -160,6 +212,20 @@ impl DerefMut for StmtBlock {
     }
 }
 
+impl AsRef<[Stmt]> for StmtBlock {
+    #[inline(always)]
+    fn as_ref(&self) -> &[Stmt] {
+        &self.0
+    }
+}
+
+impl AsMut<[Stmt]> for StmtBlock {
+    #[inline(always)]
+    fn as_mut(&mut self) -> &mut [Stmt] {
+        &mut self.0
+    }
+}
+
 impl fmt::Debug for StmtBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Block")?;
@@ -214,15 +280,7 @@ pub enum Stmt {
     /// 0) Hash table for (condition, block)
     /// 1) Default block
     /// 2) List of ranges: (start, end, inclusive, condition, statement)
-    Switch(
-        Expr,
-        Box<(
-            BTreeMap<u64, Box<(Option<Expr>, StmtBlock)>>,
-            StmtBlock,
-            StaticVec<(INT, INT, bool, Option<Expr>, StmtBlock)>,
-        )>,
-        Position,
-    ),
+    Switch(Expr, Box<SwitchCases>, Position),
     /// `while` expr `{` stmt `}` | `loop` `{` stmt `}`
     ///
     /// If the guard expression is [`UNIT`][Expr::Unit], then it is a `loop` statement.
@@ -244,7 +302,7 @@ pub enum Stmt {
     /// * [`AST_OPTION_CONSTANT`] = `const`
     Var(Expr, Box<Ident>, OptionFlags, Position),
     /// expr op`=` expr
-    Assignment(Box<(Expr, Option<OpAssignment<'static>>, Expr)>, Position),
+    Assignment(Box<(Option<OpAssignment<'static>>, BinaryExpr)>, Position),
     /// func `(` expr `,` ... `)`
     ///
     /// Note - this is a duplicate of [`Expr::FnCall`] to cover the very common pattern of a single
@@ -253,7 +311,7 @@ pub enum Stmt {
     /// `{` stmt`;` ... `}`
     Block(Box<[Stmt]>, Position),
     /// `try` `{` stmt; ... `}` `catch` `(` var `)` `{` stmt; ... `}`
-    TryCatch(Box<(StmtBlock, Option<Ident>, StmtBlock)>, Position),
+    TryCatch(Box<TryCatchBlock>, Position),
     /// [expression][Expr]
     Expr(Expr),
     /// `continue`/`break`
@@ -275,11 +333,11 @@ pub enum Stmt {
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     Import(Expr, Option<Box<Ident>>, Position),
-    /// `export` var `as` var `,` ...
+    /// `export` var `as` var
     ///
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
-    Export(Box<[(Ident, Ident)]>, Position),
+    Export(Box<(Ident, Ident)>, Position),
     /// Convert a variable to shared.
     ///
     /// Not available under `no_closure`.
@@ -443,20 +501,20 @@ impl Stmt {
             Self::Expr(expr) => expr.is_pure(),
             Self::If(condition, x, _) => {
                 condition.is_pure()
-                    && (x.0).0.iter().all(Stmt::is_pure)
-                    && (x.1).0.iter().all(Stmt::is_pure)
+                    && x.0.iter().all(Stmt::is_pure)
+                    && x.1.iter().all(Stmt::is_pure)
             }
             Self::Switch(expr, x, _) => {
                 expr.is_pure()
-                    && x.0.values().all(|block| {
-                        block.0.as_ref().map(Expr::is_pure).unwrap_or(true)
-                            && (block.1).0.iter().all(Stmt::is_pure)
+                    && x.cases.values().all(|block| {
+                        block.condition.as_ref().map(Expr::is_pure).unwrap_or(true)
+                            && block.statements.iter().all(Stmt::is_pure)
                     })
-                    && (x.2).iter().all(|(_, _, _, condition, stmt)| {
-                        condition.as_ref().map(Expr::is_pure).unwrap_or(true)
-                            && stmt.0.iter().all(Stmt::is_pure)
+                    && x.ranges.iter().all(|(_, _, _, block)| {
+                        block.condition.as_ref().map(Expr::is_pure).unwrap_or(true)
+                            && block.statements.iter().all(Stmt::is_pure)
                     })
-                    && (x.1).0.iter().all(Stmt::is_pure)
+                    && x.def_case.iter().all(Stmt::is_pure)
             }
 
             // Loops that exit can be pure because it can never be infinite.
@@ -472,13 +530,13 @@ impl Stmt {
 
             // For loops can be pure because if the iterable is pure, it is finite,
             // so infinite loops can never occur.
-            Self::For(iterable, x, _) => iterable.is_pure() && (x.2).0.iter().all(Stmt::is_pure),
+            Self::For(iterable, x, _) => iterable.is_pure() && x.2.iter().all(Stmt::is_pure),
 
             Self::Var(_, _, _, _) | Self::Assignment(_, _) | Self::FnCall(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
             Self::BreakLoop(_, _) | Self::Return(_, _, _) => false,
             Self::TryCatch(x, _) => {
-                (x.0).0.iter().all(Stmt::is_pure) && (x.2).0.iter().all(Stmt::is_pure)
+                x.try_block.iter().all(Stmt::is_pure) && x.catch_block.iter().all(Stmt::is_pure)
             }
 
             #[cfg(not(feature = "no_module"))]
@@ -574,12 +632,12 @@ impl Stmt {
                 if !e.walk(path, on_node) {
                     return false;
                 }
-                for s in &(x.0).0 {
+                for s in x.0.iter() {
                     if !s.walk(path, on_node) {
                         return false;
                     }
                 }
-                for s in &(x.1).0 {
+                for s in x.1.iter() {
                     if !s.walk(path, on_node) {
                         return false;
                     }
@@ -589,27 +647,37 @@ impl Stmt {
                 if !e.walk(path, on_node) {
                     return false;
                 }
-                for b in x.0.values() {
-                    if !b.0.as_ref().map(|e| e.walk(path, on_node)).unwrap_or(true) {
+                for b in x.cases.values() {
+                    if !b
+                        .condition
+                        .as_ref()
+                        .map(|e| e.walk(path, on_node))
+                        .unwrap_or(true)
+                    {
                         return false;
                     }
-                    for s in &(b.1).0 {
+                    for s in b.statements.iter() {
                         if !s.walk(path, on_node) {
                             return false;
                         }
                     }
                 }
-                for (_, _, _, c, stmt) in &x.2 {
-                    if !c.as_ref().map(|e| e.walk(path, on_node)).unwrap_or(true) {
+                for (_, _, _, b) in &x.ranges {
+                    if !b
+                        .condition
+                        .as_ref()
+                        .map(|e| e.walk(path, on_node))
+                        .unwrap_or(true)
+                    {
                         return false;
                     }
-                    for s in &stmt.0 {
+                    for s in b.statements.iter() {
                         if !s.walk(path, on_node) {
                             return false;
                         }
                     }
                 }
-                for s in &(x.1).0 {
+                for s in x.def_case.iter() {
                     if !s.walk(path, on_node) {
                         return false;
                     }
@@ -629,17 +697,17 @@ impl Stmt {
                 if !e.walk(path, on_node) {
                     return false;
                 }
-                for s in &(x.2).0 {
+                for s in x.2.iter() {
                     if !s.walk(path, on_node) {
                         return false;
                     }
                 }
             }
             Self::Assignment(x, _) => {
-                if !x.0.walk(path, on_node) {
+                if !x.1.lhs.walk(path, on_node) {
                     return false;
                 }
-                if !x.2.walk(path, on_node) {
+                if !x.1.rhs.walk(path, on_node) {
                     return false;
                 }
             }
@@ -658,12 +726,12 @@ impl Stmt {
                 }
             }
             Self::TryCatch(x, _) => {
-                for s in &(x.0).0 {
+                for s in x.try_block.iter() {
                     if !s.walk(path, on_node) {
                         return false;
                     }
                 }
-                for s in &(x.2).0 {
+                for s in x.catch_block.iter() {
                     if !s.walk(path, on_node) {
                         return false;
                     }

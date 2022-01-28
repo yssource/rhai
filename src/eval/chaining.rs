@@ -290,13 +290,12 @@ impl Engine {
                         unreachable!("function call in dot chain should not be namespace-qualified")
                     }
                     // {xxx:map}.id op= ???
-                    Expr::Property(x) if target.is::<crate::Map>() && new_val.is_some() => {
+                    Expr::Property(x, pos) if target.is::<crate::Map>() && new_val.is_some() => {
                         #[cfg(feature = "debugging")]
                         self.run_debugger(scope, global, state, lib, this_ptr, rhs, level)?;
 
-                        let (name, pos) = &x.2;
+                        let index = x.2.clone().into();
                         let ((new_val, new_pos), (op_info, op_pos)) = new_val.expect("`Some`");
-                        let index = name.into();
                         {
                             let val_target = &mut self.get_indexed_mut(
                                 global, state, lib, target, index, *pos, true, false, level,
@@ -311,23 +310,22 @@ impl Engine {
                         Ok((Dynamic::UNIT, true))
                     }
                     // {xxx:map}.id
-                    Expr::Property(x) if target.is::<crate::Map>() => {
+                    Expr::Property(x, pos) if target.is::<crate::Map>() => {
                         #[cfg(feature = "debugging")]
                         self.run_debugger(scope, global, state, lib, this_ptr, rhs, level)?;
 
-                        let (name, pos) = &x.2;
-                        let index = name.into();
+                        let index = x.2.clone().into();
                         let val = self.get_indexed_mut(
                             global, state, lib, target, index, *pos, false, false, level,
                         )?;
                         Ok((val.take_or_clone(), false))
                     }
                     // xxx.id op= ???
-                    Expr::Property(x) if new_val.is_some() => {
+                    Expr::Property(x, pos) if new_val.is_some() => {
                         #[cfg(feature = "debugging")]
                         self.run_debugger(scope, global, state, lib, this_ptr, rhs, level)?;
 
-                        let ((getter, hash_get), (setter, hash_set), (name, pos)) = x.as_ref();
+                        let ((getter, hash_get), (setter, hash_set), name) = x.as_ref();
                         let ((mut new_val, new_pos), (op_info, op_pos)) = new_val.expect("`Some`");
 
                         if op_info.is_some() {
@@ -402,11 +400,11 @@ impl Engine {
                         })
                     }
                     // xxx.id
-                    Expr::Property(x) => {
+                    Expr::Property(x, pos) => {
                         #[cfg(feature = "debugging")]
                         self.run_debugger(scope, global, state, lib, this_ptr, rhs, level)?;
 
-                        let ((getter, hash_get), _, (name, pos)) = x.as_ref();
+                        let ((getter, hash_get), _, name) = x.as_ref();
                         let hash = crate::ast::FnCallHashes::from_native(*hash_get);
                         let args = &mut [target.as_mut()];
                         self.exec_fn_call(
@@ -442,16 +440,15 @@ impl Engine {
                         let _node = &x.lhs;
 
                         let val_target = &mut match x.lhs {
-                            Expr::Property(ref p) => {
+                            Expr::Property(ref p, pos) => {
                                 #[cfg(feature = "debugging")]
                                 self.run_debugger(
                                     scope, global, state, lib, this_ptr, _node, level,
                                 )?;
 
-                                let (name, pos) = &p.2;
-                                let index = name.into();
+                                let index = p.2.clone().into();
                                 self.get_indexed_mut(
-                                    global, state, lib, target, index, *pos, false, true, level,
+                                    global, state, lib, target, index, pos, false, true, level,
                                 )?
                             }
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
@@ -495,14 +492,13 @@ impl Engine {
 
                         match x.lhs {
                             // xxx.prop[expr] | xxx.prop.expr
-                            Expr::Property(ref p) => {
+                            Expr::Property(ref p, pos) => {
                                 #[cfg(feature = "debugging")]
                                 self.run_debugger(
                                     scope, global, state, lib, this_ptr, _node, level,
                                 )?;
 
-                                let ((getter, hash_get), (setter, hash_set), (name, pos)) =
-                                    p.as_ref();
+                                let ((getter, hash_get), (setter, hash_set), name) = p.as_ref();
                                 let rhs_chain = rhs.into();
                                 let hash_get = crate::ast::FnCallHashes::from_native(*hash_get);
                                 let hash_set = crate::ast::FnCallHashes::from_native(*hash_set);
@@ -513,15 +509,15 @@ impl Engine {
                                 let (mut val, _) = self
                                     .exec_fn_call(
                                         global, state, lib, getter, hash_get, args, is_ref_mut,
-                                        true, *pos, None, level,
+                                        true, pos, None, level,
                                     )
                                     .or_else(|err| match *err {
                                         // Try an indexer if property does not exist
                                         ERR::ErrorDotExpr(_, _) => {
                                             let prop = name.into();
                                             self.get_indexed_mut(
-                                                global, state, lib, target, prop, *pos, false,
-                                                true, level,
+                                                global, state, lib, target, prop, pos, false, true,
+                                                level,
                                             )
                                             .map(|v| (v.take_or_clone(), false))
                                             .map_err(
@@ -561,7 +557,7 @@ impl Engine {
                                     let args = &mut arg_values;
                                     self.exec_fn_call(
                                         global, state, lib, setter, hash_set, args, is_ref_mut,
-                                        true, *pos, None, level,
+                                        true, pos, None, level,
                                     )
                                     .or_else(
                                         |err| match *err {
@@ -576,7 +572,7 @@ impl Engine {
                                                     );
                                                 self.exec_fn_call(
                                                     global, state, lib, fn_name, hash_set, args,
-                                                    is_ref_mut, true, *pos, None, level,
+                                                    is_ref_mut, true, pos, None, level,
                                                 )
                                                 .or_else(|idx_err| match *idx_err {
                                                     ERR::ErrorIndexingType(_, _) => {
@@ -754,10 +750,10 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_object"))]
-            Expr::Property(x) if _parent_chain_type == ChainType::Dotting => {
-                idx_values.push(super::ChainArgument::Property((x.2).1))
+            Expr::Property(_, pos) if _parent_chain_type == ChainType::Dotting => {
+                idx_values.push(super::ChainArgument::Property(*pos))
             }
-            Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
+            Expr::Property(_, _) => unreachable!("unexpected Expr::Property for indexing"),
 
             Expr::Index(x, term, _) | Expr::Dot(x, term, _) if !terminate_chaining => {
                 let crate::ast::BinaryExpr { lhs, rhs, .. } = x.as_ref();
@@ -765,10 +761,10 @@ impl Engine {
                 // Evaluate in left-to-right order
                 let lhs_arg_val = match lhs {
                     #[cfg(not(feature = "no_object"))]
-                    Expr::Property(x) if _parent_chain_type == ChainType::Dotting => {
-                        super::ChainArgument::Property((x.2).1)
+                    Expr::Property(_, pos) if _parent_chain_type == ChainType::Dotting => {
+                        super::ChainArgument::Property(*pos)
                     }
-                    Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
+                    Expr::Property(_, _) => unreachable!("unexpected Expr::Property for indexing"),
 
                     #[cfg(not(feature = "no_object"))]
                     Expr::FnCall(x, _)
