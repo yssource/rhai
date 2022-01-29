@@ -1,3 +1,5 @@
+use rustyline::error::ReadlineError;
+use rustyline::Editor;
 use rhai::{Dynamic, Engine, EvalAltResult, Module, Scope, AST, INT};
 
 use std::{
@@ -191,6 +193,12 @@ fn main() {
     // Create scope
     let mut scope = Scope::new();
 
+    // REPL line editor setup
+    let mut rl = Editor::<()>::new();
+    if rl.load_history(".rhai-repl-history.txt").is_err() {
+        println!("No previous history.");
+    }
+
     // REPL loop
     let mut input = String::new();
     let mut main_ast = AST::empty();
@@ -200,32 +208,47 @@ fn main() {
     print_help();
 
     'main_loop: loop {
-        print!("rhai-repl> ");
-        stdout().flush().expect("couldn't flush stdout");
-
         input.clear();
 
-        loop {
-            match stdin().read_line(&mut input) {
-                Ok(0) => break 'main_loop,
-                Ok(_) => (),
-                Err(err) => panic!("input error: {}", err),
+        let readline = rl.readline("rhai-repl> ");
+
+        match readline {
+            Ok(line) => {
+                rl.add_history_entry(line.as_str());
+                input = line;
+            },
+
+            Err(ReadlineError::Interrupted) |  Err(ReadlineError::Eof) => {
+                break 'main_loop
+            },
+
+            Err(err) => {
+                eprintln!("Error: {:?}", err);
+                break 'main_loop
             }
-
-            let line = input.as_str().trim_end();
-
-            // Allow line continuation
-            if line.ends_with('\\') {
-                let len = line.len();
-                input.truncate(len - 1);
-                input.push('\n');
-            } else {
-                break;
-            }
-
-            print!("> ");
-            stdout().flush().expect("couldn't flush stdout");
         }
+
+        //loop {
+        //    match stdin().read_line(&mut input) {
+        //        Ok(0) => break 'main_loop,
+        //        Ok(_) => (),
+        //        Err(err) => panic!("input error: {}", err),
+        //    }
+
+        //    let line = input.as_str().trim_end();
+
+        //    // Allow line continuation
+        //    if line.ends_with('\\') {
+        //        let len = line.len();
+        //        input.truncate(len - 1);
+        //        input.push('\n');
+        //    } else {
+        //        break;
+        //    }
+
+        //    print!("> ");
+        //    stdout().flush().expect("couldn't flush stdout");
+        //}
 
         let script = input.trim();
 
@@ -341,4 +364,6 @@ fn main() {
         // Throw away all the statements, leaving only the functions
         main_ast.clear_statements();
     }
+
+    rl.save_history(".rhai-repl-history.txt").unwrap();
 }
