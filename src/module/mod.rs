@@ -1,11 +1,10 @@
 //! Module defining external-loaded modules for Rhai.
 
-use crate::ast::{FnAccess, Ident};
+use crate::ast::FnAccess;
 use crate::func::{
     shared_take_or_clone, CallableFunction, FnCallArgs, IteratorFn, RegisterNativeFunction,
     SendSync,
 };
-use crate::tokenizer::Token;
 use crate::types::dynamic::Variant;
 use crate::{
     calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes, Dynamic, Identifier,
@@ -19,8 +18,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
     iter::{empty, once},
-    num::NonZeroUsize,
-    ops::{Add, AddAssign, Deref, DerefMut},
+    ops::{Add, AddAssign},
 };
 
 /// A type representing the namespace of a function.
@@ -29,6 +27,8 @@ pub enum FnNamespace {
     /// Expose to global namespace.
     Global,
     /// Module namespace only.
+    ///
+    /// Ignored under `no_module`.
     Internal,
 }
 
@@ -1372,6 +1372,7 @@ impl Module {
     /// Get a namespace-qualified function.
     ///
     /// The [`u64`] hash is calculated by [`build_index`][Module::build_index].
+    #[cfg(not(feature = "no_module"))]
     #[inline]
     #[must_use]
     pub(crate) fn get_qualified_fn(&self, hash_qualified_fn: u64) -> Option<&CallableFunction> {
@@ -1960,6 +1961,7 @@ impl Module {
     }
 
     /// Get the specified type iterator.
+    #[cfg(not(feature = "no_module"))]
     #[inline]
     #[must_use]
     pub(crate) fn get_qualified_iter(&self, id: TypeId) -> Option<&IteratorFn> {
@@ -1974,112 +1976,14 @@ impl Module {
     }
 }
 
-/// _(internals)_ A chain of [module][Module] names to namespace-qualify a variable or function call.
-/// Exported under the `internals` feature only.
-///
-/// A [`u64`] offset to the current [stack of imported modules][crate::GlobalRuntimeState] is
-/// cached for quick search purposes.
-///
-/// A [`StaticVec`] is used because the vast majority of namespace-qualified access contains only
-/// one level, and it is wasteful to always allocate a [`Vec`] with one element.
-#[derive(Clone, Eq, PartialEq, Default, Hash)]
-pub struct Namespace {
-    index: Option<NonZeroUsize>,
-    path: StaticVec<Ident>,
-}
-
-impl fmt::Debug for Namespace {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(index) = self.index {
-            write!(f, "{} -> ", index)?;
-        }
-
-        f.write_str(
-            &self
-                .path
-                .iter()
-                .map(|Ident { name, .. }| name.as_str())
-                .collect::<StaticVec<_>>()
-                .join(Token::DoubleColon.literal_syntax()),
-        )
-    }
-}
-
-impl fmt::Display for Namespace {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(
-            &self
-                .path
-                .iter()
-                .map(|Ident { name, .. }| name.as_str())
-                .collect::<StaticVec<_>>()
-                .join(Token::DoubleColon.literal_syntax()),
-        )
-    }
-}
-
-impl Deref for Namespace {
-    type Target = StaticVec<Ident>;
-
-    #[inline(always)]
-    fn deref(&self) -> &Self::Target {
-        &self.path
-    }
-}
-
-impl DerefMut for Namespace {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.path
-    }
-}
-
-impl From<Vec<Ident>> for Namespace {
-    #[inline(always)]
-    fn from(mut path: Vec<Ident>) -> Self {
-        path.shrink_to_fit();
-        Self {
-            index: None,
-            path: path.into(),
-        }
-    }
-}
-
-impl From<StaticVec<Ident>> for Namespace {
-    #[inline(always)]
-    fn from(mut path: StaticVec<Ident>) -> Self {
-        path.shrink_to_fit();
-        Self { index: None, path }
-    }
-}
-
-impl Namespace {
-    /// Create a new [`Namespace`].
-    #[inline(always)]
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            index: None,
-            path: StaticVec::new_const(),
-        }
-    }
-    /// Get the [`Scope`][crate::Scope] index offset.
-    #[inline(always)]
-    #[must_use]
-    pub(crate) const fn index(&self) -> Option<NonZeroUsize> {
-        self.index
-    }
-    /// Set the [`Scope`][crate::Scope] index offset.
-    #[cfg(not(feature = "no_module"))]
-    #[inline(always)]
-    pub(crate) fn set_index(&mut self, index: Option<NonZeroUsize>) {
-        self.index = index
-    }
-}
-
-#[cfg(not(feature = "no_module"))]
-pub use resolvers::ModuleResolver;
+mod namespace;
 
 /// Module containing all built-in [module resolvers][ModuleResolver].
 #[cfg(not(feature = "no_module"))]
 pub mod resolvers;
+
+#[cfg(not(feature = "no_module"))]
+pub use namespace::Namespace;
+
+#[cfg(not(feature = "no_module"))]
+pub use resolvers::ModuleResolver;

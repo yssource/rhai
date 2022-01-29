@@ -3,7 +3,6 @@
 use super::{ASTNode, Ident, Stmt, StmtBlock};
 use crate::engine::{KEYWORD_FN_PTR, OP_EXCLUSIVE_RANGE, OP_INCLUSIVE_RANGE};
 use crate::func::hashing::ALT_ZERO_HASH;
-use crate::module::Namespace;
 use crate::tokenizer::Token;
 use crate::types::dynamic::Union;
 use crate::{calc_fn_hash, Dynamic, FnPtr, Identifier, ImmutableString, Position, StaticVec, INT};
@@ -169,7 +168,10 @@ impl FnCallHashes {
 #[derive(Debug, Clone, Default, Hash)]
 pub struct FnCallExpr {
     /// Namespace of the function, if any.
-    pub namespace: Option<Namespace>,
+    ///
+    /// Not available under `no_module`.
+    #[cfg(not(feature = "no_module"))]
+    pub namespace: Option<crate::module::Namespace>,
     /// Function name.
     pub name: Identifier,
     /// Pre-calculated hashes.
@@ -193,10 +195,15 @@ pub struct FnCallExpr {
 
 impl FnCallExpr {
     /// Does this function call contain a qualified namespace?
+    ///
+    /// Always `false` under `no_module`.
     #[inline(always)]
     #[must_use]
     pub const fn is_qualified(&self) -> bool {
-        self.namespace.is_some()
+        #[cfg(not(feature = "no_module"))]
+        return self.namespace.is_some();
+        #[cfg(feature = "no_module")]
+        return false;
     }
     /// Convert this into an [`Expr::FnCall`].
     #[inline(always)]
@@ -368,7 +375,9 @@ pub enum Expr {
     Variable(
         Option<NonZeroU8>,
         Position,
-        Box<(Option<NonZeroUsize>, Option<(Namespace, u64)>, Identifier)>,
+        #[cfg(not(feature = "no_module"))]
+        Box<(Option<NonZeroUsize>, Option<(crate::module::Namespace, u64)>, Identifier)>,
+        #[cfg(feature = "no_module")] Box<(Option<NonZeroUsize>, (), Identifier)>,
     ),
     /// Property access - ((getter, hash), (setter, hash), prop)
     Property(
@@ -434,6 +443,8 @@ impl fmt::Debug for Expr {
             }
             Self::Variable(i, _, x) => {
                 f.write_str("Variable(")?;
+
+                #[cfg(not(feature = "no_module"))]
                 if let Some((_, ref namespace)) = x.1 {
                     write!(f, "{}{}", namespace, Token::DoubleColon.literal_syntax())?
                 }
@@ -451,6 +462,7 @@ impl fmt::Debug for Expr {
             }
             Self::FnCall(x, _) => {
                 let mut ff = f.debug_struct("FnCall");
+                #[cfg(not(feature = "no_module"))]
                 x.namespace.as_ref().map(|ns| ff.field("namespace", ns));
                 ff.field("name", &x.name)
                     .field("hash", &x.hashes)
@@ -602,6 +614,7 @@ impl Expr {
 
             Union::FnPtr(f, _, _) if !f.is_curried() => Self::FnCall(
                 FnCallExpr {
+                    #[cfg(not(feature = "no_module"))]
                     namespace: None,
                     name: KEYWORD_FN_PTR.into(),
                     hashes: calc_fn_hash(f.fn_name(), 1).into(),
@@ -617,20 +630,32 @@ impl Expr {
         }
     }
     /// Is the expression a simple variable access?
+    ///
+    /// `non_qualified` is ignored under `no_module`.
     #[inline]
     #[must_use]
     pub(crate) const fn is_variable_access(&self, non_qualified: bool) -> bool {
+        let _non_qualified = non_qualified;
+
         match self {
-            Self::Variable(_, _, x) => !non_qualified || x.1.is_none(),
+            #[cfg(not(feature = "no_module"))]
+            Self::Variable(_, _, x) if _non_qualified && x.1.is_some() => false,
+            Self::Variable(_, _, _) => true,
             _ => false,
         }
     }
     /// Return the variable name if the expression a simple variable access.
+    ///
+    /// `non_qualified` is ignored under `no_module`.
     #[inline]
     #[must_use]
     pub(crate) fn get_variable_name(&self, non_qualified: bool) -> Option<&str> {
+        let _non_qualified = non_qualified;
+
         match self {
-            Self::Variable(_, _, x) if !non_qualified || x.1.is_none() => Some(x.2.as_str()),
+            #[cfg(not(feature = "no_module"))]
+            Self::Variable(_, _, x) if _non_qualified && x.1.is_some() => None,
+            Self::Variable(_, _, x) => Some(x.2.as_str()),
             _ => None,
         }
     }

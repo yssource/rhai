@@ -3,25 +3,23 @@
 use super::{EvalContext, EvalState, GlobalRuntimeState, Target};
 use crate::ast::{Expr, FnCallExpr, OpAssignment};
 use crate::engine::{KEYWORD_THIS, OP_CONCAT};
-use crate::module::Namespace;
 use crate::types::dynamic::AccessMode;
-use crate::{
-    Dynamic, Engine, Module, Position, RhaiResult, RhaiResultOf, Scope, Shared, StaticVec, ERR,
-};
+use crate::{Dynamic, Engine, Module, Position, RhaiResult, RhaiResultOf, Scope, StaticVec, ERR};
 use std::num::NonZeroUsize;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
 impl Engine {
     /// Search for a module within an imports stack.
+    #[cfg(not(feature = "no_module"))]
     #[inline]
     #[must_use]
     pub(crate) fn search_imports(
         &self,
         global: &GlobalRuntimeState,
         state: &mut EvalState,
-        namespace: &Namespace,
-    ) -> Option<Shared<Module>> {
+        namespace: &crate::module::Namespace,
+    ) -> Option<crate::Shared<Module>> {
         let root = &namespace[0].name;
 
         // Qualified - check if the root module is directly indexed
@@ -59,7 +57,10 @@ impl Engine {
             }
             Expr::Variable(None, _var_pos, v) => match v.as_ref() {
                 // Normal variable access
+                #[cfg(not(feature = "no_module"))]
                 (_, None, _) => self.search_scope_only(scope, global, state, lib, this_ptr, expr),
+                #[cfg(feature = "no_module")]
+                (_, (), _) => self.search_scope_only(scope, global, state, lib, this_ptr, expr),
 
                 // Qualified variable access
                 #[cfg(not(feature = "no_module"))]
@@ -117,9 +118,6 @@ impl Engine {
 
                     Err(ERR::ErrorModuleNotFound(namespace.to_string(), namespace[0].pos).into())
                 }
-
-                #[cfg(feature = "no_module")]
-                (_, Some((_, _)), _) => unreachable!("qualified access under no_module"),
             },
             _ => unreachable!("Expr::Variable expected but gets {:?}", expr),
         }
@@ -211,6 +209,7 @@ impl Engine {
     ) -> RhaiResult {
         let FnCallExpr {
             name,
+            #[cfg(not(feature = "no_module"))]
             namespace,
             capture_parent_scope: capture,
             hashes,
@@ -219,26 +218,27 @@ impl Engine {
             ..
         } = expr;
 
+        #[cfg(not(feature = "no_module"))]
         if let Some(namespace) = namespace.as_ref() {
             // Qualified function call
             let hash = hashes.native;
 
-            self.make_qualified_function_call(
+            return self.make_qualified_function_call(
                 scope, global, state, lib, this_ptr, namespace, name, args, constants, hash, pos,
                 level,
-            )
-        } else {
-            // Normal function call
-            let (first_arg, args) = args.split_first().map_or_else(
-                || (None, args.as_ref()),
-                |(first, rest)| (Some(first), rest),
             );
-
-            self.make_function_call(
-                scope, global, state, lib, this_ptr, name, first_arg, args, constants, *hashes,
-                pos, *capture, level,
-            )
         }
+
+        // Normal function call
+        let (first_arg, args) = args.split_first().map_or_else(
+            || (None, args.as_ref()),
+            |(first, rest)| (Some(first), rest),
+        );
+
+        self.make_function_call(
+            scope, global, state, lib, this_ptr, name, first_arg, args, constants, *hashes, pos,
+            *capture, level,
+        )
     }
 
     /// Evaluate an expression.

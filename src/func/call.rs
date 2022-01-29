@@ -10,8 +10,6 @@ use crate::engine::{
     KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
 use crate::eval::{EvalState, GlobalRuntimeState};
-use crate::module::Namespace;
-use crate::tokenizer::Token;
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnArgsVec, FnPtr,
     Identifier, ImmutableString, Module, Position, RhaiResult, RhaiResultOf, Scope, ERR,
@@ -150,18 +148,26 @@ impl Engine {
     #[must_use]
     fn gen_call_signature(
         &self,
-        namespace: Option<&Namespace>,
+        #[cfg(not(feature = "no_module"))] namespace: Option<&crate::module::Namespace>,
         fn_name: &str,
         args: &[&mut Dynamic],
     ) -> String {
-        format!(
-            "{}{}{} ({})",
+        #[cfg(not(feature = "no_module"))]
+        let (ns, sep) = (
             namespace.map_or_else(|| String::new(), |ns| ns.to_string()),
             if namespace.is_some() {
-                Token::DoubleColon.literal_syntax()
+                crate::tokenizer::Token::DoubleColon.literal_syntax()
             } else {
                 ""
             },
+        );
+        #[cfg(feature = "no_module")]
+        let (ns, sep) = ("", "");
+
+        format!(
+            "{}{}{} ({})",
+            ns,
+            sep,
             fn_name,
             args.iter()
                 .map(|a| if a.is::<ImmutableString>() {
@@ -194,6 +200,8 @@ impl Engine {
         allow_dynamic: bool,
         is_op_assignment: bool,
     ) -> Option<&'s FnResolutionCacheEntry> {
+        let _global = global;
+
         if hash_script == 0 {
             return None;
         }
@@ -235,23 +243,29 @@ impl Engine {
                             })
                         })
                         .or_else(|| {
-                            global.get_qualified_fn(hash).map(|(func, source)| {
+                            #[cfg(not(feature = "no_module"))]
+                            return _global.get_qualified_fn(hash).map(|(func, source)| {
                                 FnResolutionCacheEntry {
                                     func: func.clone(),
                                     source: source
                                         .map_or_else(|| Identifier::new_const(), Into::into),
                                 }
-                            })
+                            });
+                            #[cfg(feature = "no_module")]
+                            return None;
                         })
                         .or_else(|| {
-                            self.global_sub_modules.values().find_map(|m| {
+                            #[cfg(not(feature = "no_module"))]
+                            return self.global_sub_modules.values().find_map(|m| {
                                 m.get_qualified_fn(hash).cloned().map(|func| {
                                     FnResolutionCacheEntry {
                                         func,
                                         source: m.id_raw().clone(),
                                     }
                                 })
-                            })
+                            });
+                            #[cfg(feature = "no_module")]
+                            return None;
                         });
 
                     match func {
@@ -506,9 +520,16 @@ impl Engine {
             }
 
             // Raise error
-            _ => Err(
-                ERR::ErrorFunctionNotFound(self.gen_call_signature(None, name, args), pos).into(),
-            ),
+            _ => Err(ERR::ErrorFunctionNotFound(
+                self.gen_call_signature(
+                    #[cfg(not(feature = "no_module"))]
+                    None,
+                    name,
+                    args,
+                ),
+                pos,
+            )
+            .into()),
         }
     }
 
@@ -1196,6 +1217,7 @@ impl Engine {
     }
 
     /// Call a namespace-qualified function in normal function-call style.
+    #[cfg(not(feature = "no_module"))]
     pub(crate) fn make_qualified_function_call(
         &self,
         scope: &mut Scope,
@@ -1203,7 +1225,7 @@ impl Engine {
         state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
-        namespace: &Namespace,
+        namespace: &crate::module::Namespace,
         fn_name: &str,
         args_expr: &[Expr],
         constants: &[Dynamic],

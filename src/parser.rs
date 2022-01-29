@@ -8,7 +8,6 @@ use crate::ast::{
 };
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::func::hashing::get_hasher;
-use crate::module::Namespace;
 use crate::tokenizer::{
     is_keyword_function, is_valid_function_name, is_valid_identifier, Token, TokenStream,
     TokenizerControl,
@@ -16,9 +15,8 @@ use crate::tokenizer::{
 use crate::types::dynamic::AccessMode;
 use crate::types::StringsInterner;
 use crate::{
-    calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Dynamic, Engine, ExclusiveRange,
-    Identifier, ImmutableString, InclusiveRange, LexError, ParseError, Position, Scope, Shared,
-    StaticVec, AST, INT, PERR,
+    calc_fn_hash, Dynamic, Engine, ExclusiveRange, Identifier, ImmutableString, InclusiveRange,
+    LexError, ParseError, Position, Scope, Shared, StaticVec, AST, INT, PERR,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -266,7 +264,9 @@ impl Expr {
     #[must_use]
     fn into_property(self, state: &mut ParseState) -> Self {
         match self {
-            Self::Variable(_, pos, x) if x.1.is_none() => {
+            #[cfg(not(feature = "no_module"))]
+            Self::Variable(_, _, ref x) if x.1.is_some() => self,
+            Self::Variable(_, pos, x) => {
                 let ident = x.2;
                 let getter = state.get_identifier(crate::engine::FN_GET, &ident);
                 let hash_get = calc_fn_hash(&getter, 1);
@@ -452,7 +452,7 @@ fn parse_fn_call(
     lib: &mut FnLib,
     id: Identifier,
     capture_parent_scope: bool,
-    namespace: Option<Namespace>,
+    #[cfg(not(feature = "no_module"))] namespace: Option<crate::module::Namespace>,
     settings: ParseSettings,
 ) -> ParseResult<Expr> {
     #[cfg(not(feature = "unchecked"))]
@@ -460,6 +460,7 @@ fn parse_fn_call(
 
     let (token, token_pos) = input.peek().expect(NEVER_ENDS);
 
+    #[cfg(not(feature = "no_module"))]
     let mut namespace = namespace;
     let mut args = StaticVec::new_const();
 
@@ -478,28 +479,29 @@ fn parse_fn_call(
         Token::RightParen => {
             eat_token(input, Token::RightParen);
 
+            #[cfg(not(feature = "no_module"))]
             let hash = if let Some(modules) = namespace.as_mut() {
-                #[cfg(not(feature = "no_module"))]
-                {
-                    let index = state.find_module(&modules[0].name);
+                let index = state.find_module(&modules[0].name);
 
-                    #[cfg(not(feature = "no_function"))]
-                    let relax = settings.is_function_scope;
-                    #[cfg(feature = "no_function")]
-                    let relax = false;
+                #[cfg(not(feature = "no_function"))]
+                let relax = settings.is_function_scope;
+                #[cfg(feature = "no_function")]
+                let relax = false;
 
-                    if !relax && settings.strict_var && index.is_none() {
-                        return Err(PERR::ModuleUndefined(modules[0].name.to_string())
-                            .into_err(modules[0].pos));
-                    }
-
-                    modules.set_index(index);
+                if !relax && settings.strict_var && index.is_none() {
+                    return Err(
+                        PERR::ModuleUndefined(modules[0].name.to_string()).into_err(modules[0].pos)
+                    );
                 }
 
-                calc_qualified_fn_hash(modules.iter().map(|m| m.name.as_str()), &id, 0)
+                modules.set_index(index);
+
+                crate::calc_qualified_fn_hash(modules.iter().map(|m| m.name.as_str()), &id, 0)
             } else {
                 calc_fn_hash(&id, 0)
             };
+            #[cfg(feature = "no_module")]
+            let hash = calc_fn_hash(&id, 0);
 
             let hashes = if is_valid_function_name(&id) {
                 hash.into()
@@ -512,6 +514,7 @@ fn parse_fn_call(
             return Ok(FnCallExpr {
                 name: state.get_identifier("", id),
                 capture_parent_scope,
+                #[cfg(not(feature = "no_module"))]
                 namespace,
                 hashes,
                 args,
@@ -537,28 +540,32 @@ fn parse_fn_call(
             (Token::RightParen, _) => {
                 eat_token(input, Token::RightParen);
 
+                #[cfg(not(feature = "no_module"))]
                 let hash = if let Some(modules) = namespace.as_mut() {
-                    #[cfg(not(feature = "no_module"))]
-                    {
-                        let index = state.find_module(&modules[0].name);
+                    let index = state.find_module(&modules[0].name);
 
-                        #[cfg(not(feature = "no_function"))]
-                        let relax = settings.is_function_scope;
-                        #[cfg(feature = "no_function")]
-                        let relax = false;
+                    #[cfg(not(feature = "no_function"))]
+                    let relax = settings.is_function_scope;
+                    #[cfg(feature = "no_function")]
+                    let relax = false;
 
-                        if !relax && settings.strict_var && index.is_none() {
-                            return Err(PERR::ModuleUndefined(modules[0].name.to_string())
-                                .into_err(modules[0].pos));
-                        }
-
-                        modules.set_index(index);
+                    if !relax && settings.strict_var && index.is_none() {
+                        return Err(PERR::ModuleUndefined(modules[0].name.to_string())
+                            .into_err(modules[0].pos));
                     }
 
-                    calc_qualified_fn_hash(modules.iter().map(|m| m.name.as_str()), &id, args.len())
+                    modules.set_index(index);
+
+                    crate::calc_qualified_fn_hash(
+                        modules.iter().map(|m| m.name.as_str()),
+                        &id,
+                        args.len(),
+                    )
                 } else {
                     calc_fn_hash(&id, args.len())
                 };
+                #[cfg(feature = "no_module")]
+                let hash = calc_fn_hash(&id, args.len());
 
                 let hashes = if is_valid_function_name(&id) {
                     hash.into()
@@ -571,6 +578,7 @@ fn parse_fn_call(
                 return Ok(FnCallExpr {
                     name: state.get_identifier("", id),
                     capture_parent_scope,
+                    #[cfg(not(feature = "no_module"))]
                     namespace,
                     hashes,
                     args,
@@ -1338,6 +1346,11 @@ fn parse_primary(
 
         // Identifier
         Token::Identifier(_) => {
+            #[cfg(not(feature = "no_module"))]
+            let none = None;
+            #[cfg(feature = "no_module")]
+            let none = ();
+
             let s = match input.next().expect(NEVER_ENDS) {
                 (Token::Identifier(s), _) => s,
                 token => unreachable!("Token::Identifier expected but gets {:?}", token),
@@ -1354,7 +1367,7 @@ fn parse_primary(
                     Expr::Variable(
                         None,
                         settings.pos,
-                        (None, None, state.get_identifier("", s)).into(),
+                        (None, none, state.get_identifier("", s)).into(),
                     )
                 }
                 // Namespace qualification
@@ -1368,7 +1381,7 @@ fn parse_primary(
                     Expr::Variable(
                         None,
                         settings.pos,
-                        (None, None, state.get_identifier("", s)).into(),
+                        (None, none, state.get_identifier("", s)).into(),
                     )
                 }
                 // Normal variable access
@@ -1389,7 +1402,7 @@ fn parse_primary(
                     Expr::Variable(
                         short_index,
                         settings.pos,
-                        (index, None, state.get_identifier("", s)).into(),
+                        (index, none, state.get_identifier("", s)).into(),
                     )
                 }
             }
@@ -1397,6 +1410,11 @@ fn parse_primary(
 
         // Reserved keyword or symbol
         Token::Reserved(_) => {
+            #[cfg(not(feature = "no_module"))]
+            let none = None;
+            #[cfg(feature = "no_module")]
+            let none = ();
+
             let s = match input.next().expect(NEVER_ENDS) {
                 (Token::Reserved(s), _) => s,
                 token => unreachable!("Token::Reserved expected but gets {:?}", token),
@@ -1407,14 +1425,14 @@ fn parse_primary(
                 Token::LeftParen | Token::Bang if is_keyword_function(&s) => Expr::Variable(
                     None,
                     settings.pos,
-                    (None, None, state.get_identifier("", s)).into(),
+                    (None, none, state.get_identifier("", s)).into(),
                 ),
                 // Access to `this` as a variable is OK within a function scope
                 #[cfg(not(feature = "no_function"))]
                 _ if &*s == KEYWORD_THIS && settings.is_function_scope => Expr::Variable(
                     None,
                     settings.pos,
-                    (None, None, state.get_identifier("", s)).into(),
+                    (None, none, state.get_identifier("", s)).into(),
                 ),
                 // Cannot access to `this` as a variable not in a function scope
                 _ if &*s == KEYWORD_THIS => {
@@ -1461,6 +1479,7 @@ fn parse_postfix(
 
         lhs = match (lhs, tail_token) {
             // Qualified function call with !
+            #[cfg(not(feature = "no_module"))]
             (Expr::Variable(_, _, x), Token::Bang) if x.1.is_some() => {
                 return if !match_token(input, Token::LeftParen).0 {
                     Err(LexError::UnexpectedInput(Token::Bang.syntax().to_string())
@@ -1486,17 +1505,37 @@ fn parse_postfix(
                     _ => (),
                 }
 
-                let (_, namespace, name) = *x;
+                let (_, _ns, name) = *x;
                 settings.pos = pos;
-                let ns = namespace.map(|(ns, _)| ns);
-                parse_fn_call(input, state, lib, name, true, ns, settings.level_up())?
+                #[cfg(not(feature = "no_module"))]
+                let _ns = _ns.map(|(ns, _)| ns);
+                parse_fn_call(
+                    input,
+                    state,
+                    lib,
+                    name,
+                    true,
+                    #[cfg(not(feature = "no_module"))]
+                    _ns,
+                    settings.level_up(),
+                )?
             }
             // Function call
             (Expr::Variable(_, pos, x), Token::LeftParen) => {
-                let (_, namespace, name) = *x;
-                let ns = namespace.map(|(ns, _)| ns);
+                let (_, _ns, name) = *x;
+                #[cfg(not(feature = "no_module"))]
+                let _ns = _ns.map(|(ns, _)| ns);
                 settings.pos = pos;
-                parse_fn_call(input, state, lib, name, false, ns, settings.level_up())?
+                parse_fn_call(
+                    input,
+                    state,
+                    lib,
+                    name,
+                    false,
+                    #[cfg(not(feature = "no_module"))]
+                    _ns,
+                    settings.level_up(),
+                )?
             }
             // module access
             #[cfg(not(feature = "no_module"))]
@@ -1508,7 +1547,7 @@ fn parse_postfix(
                 if let Some((ref mut namespace, _)) = namespace {
                     namespace.push(var_name_def);
                 } else {
-                    let mut ns = Namespace::new();
+                    let mut ns = crate::module::Namespace::new();
                     ns.push(var_name_def);
                     namespace = Some((ns, 42));
                 }
@@ -1553,6 +1592,7 @@ fn parse_postfix(
     }
 
     // Cache the hash key for namespace-qualified variables
+    #[cfg(not(feature = "no_module"))]
     let namespaced_variable = match lhs {
         Expr::Variable(_, _, ref mut x) if x.1.is_some() => Some(x.as_mut()),
         Expr::Index(ref mut x, _, _) | Expr::Dot(ref mut x, _, _) => match x.lhs {
@@ -1562,8 +1602,9 @@ fn parse_postfix(
         _ => None,
     };
 
+    #[cfg(not(feature = "no_module"))]
     if let Some((_, Some((namespace, hash)), name)) = namespaced_variable {
-        *hash = calc_qualified_var_hash(namespace.iter().map(|v| v.name.as_str()), name);
+        *hash = crate::calc_qualified_var_hash(namespace.iter().map(|v| v.name.as_str()), name);
 
         #[cfg(not(feature = "no_module"))]
         {
@@ -1841,9 +1882,12 @@ fn make_dot_expr(
             Ok(Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos))
         }
         // lhs.module::id - syntax error
+        #[cfg(not(feature = "no_module"))]
         (_, Expr::Variable(_, _, x)) => {
             Err(PERR::PropertyExpected.into_err(x.1.expect("`Some`").0[0].pos))
         }
+        #[cfg(feature = "no_module")]
+        (_, Expr::Variable(_, _, _)) => unreachable!("qualified property name"),
         // lhs.prop
         (lhs, prop @ Expr::Property(_, _)) => Ok(Expr::Dot(
             BinaryExpr { lhs, rhs: prop }.into(),
@@ -2157,7 +2201,19 @@ fn parse_custom_syntax(
                 let name = state.get_identifier("", name);
                 segments.push(name.clone().into());
                 tokens.push(state.get_identifier("", CUSTOM_SYNTAX_MARKER_IDENT));
-                inputs.push(Expr::Variable(None, pos, (None, None, name).into()));
+                inputs.push(Expr::Variable(
+                    None,
+                    pos,
+                    (
+                        None,
+                        #[cfg(not(feature = "no_module"))]
+                        None,
+                        #[cfg(feature = "no_module")]
+                        (),
+                        name,
+                    )
+                        .into(),
+                ));
             }
             CUSTOM_SYNTAX_MARKER_SYMBOL => {
                 let (symbol, pos) = parse_symbol(input)?;
@@ -3161,12 +3217,21 @@ fn make_curry_from_externals(
 
     args.push(fn_expr);
 
-    args.extend(
-        externals
-            .iter()
-            .cloned()
-            .map(|x| Expr::Variable(None, Position::NONE, (None, None, x).into())),
-    );
+    args.extend(externals.iter().cloned().map(|x| {
+        Expr::Variable(
+            None,
+            Position::NONE,
+            (
+                None,
+                #[cfg(not(feature = "no_module"))]
+                None,
+                #[cfg(feature = "no_module")]
+                (),
+                x,
+            )
+                .into(),
+        )
+    }));
 
     let expr = FnCallExpr {
         name: state.get_identifier("", crate::engine::KEYWORD_FN_PTR_CURRY),

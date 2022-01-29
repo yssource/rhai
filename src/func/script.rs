@@ -70,6 +70,7 @@ impl Engine {
         }
 
         let orig_scope_len = scope.len();
+        #[cfg(not(feature = "no_module"))]
         let orig_imports_len = global.num_imports();
 
         #[cfg(feature = "debugging")]
@@ -161,6 +162,7 @@ impl Engine {
             // Remove arguments only, leaving new variables in the scope
             scope.remove_range(orig_scope_len, args.len())
         }
+        #[cfg(not(feature = "no_module"))]
         global.truncate_imports(orig_imports_len);
 
         // Restore state
@@ -183,6 +185,8 @@ impl Engine {
         lib: &[&Module],
         hash_script: u64,
     ) -> bool {
+        let _global = global;
+
         let cache = state.fn_resolution_cache_mut();
 
         if let Some(result) = cache.get(&hash_script).map(|v| v.is_some()) {
@@ -192,9 +196,12 @@ impl Engine {
         // First check script-defined functions
         let result = lib.iter().any(|&m| m.contains_fn(hash_script))
             // Then check the global namespace and packages
-            || self.global_modules.iter().any(|m| m.contains_fn(hash_script))
+            || self.global_modules.iter().any(|m| m.contains_fn(hash_script));
+
+        #[cfg(not(feature = "no_module"))]
+        let result = result ||
             // Then check imported modules
-            || global.map_or(false, |m| m.contains_qualified_fn(hash_script))
+            _global.map_or(false, |m| m.contains_qualified_fn(hash_script))
             // Then check sub-modules
             || self.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash_script));
 

@@ -96,6 +96,7 @@ pub struct Engine {
     /// A collection of all modules loaded into the global namespace of the Engine.
     pub(crate) global_modules: StaticVec<Shared<Module>>,
     /// A collection of all sub-modules directly loaded into the Engine.
+    #[cfg(not(feature = "no_module"))]
     pub(crate) global_sub_modules: BTreeMap<Identifier, Shared<Module>>,
 
     /// A module resolution service.
@@ -151,11 +152,11 @@ impl fmt::Debug for Engine {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut f = f.debug_struct("Engine");
 
-        f.field("global_modules", &self.global_modules)
-            .field("global_sub_modules", &self.global_sub_modules);
+        f.field("global_modules", &self.global_modules);
 
         #[cfg(not(feature = "no_module"))]
-        f.field("module_resolver", &self.module_resolver.is_some());
+        f.field("global_sub_modules", &self.global_sub_modules)
+            .field("module_resolver", &self.module_resolver.is_some());
 
         f.field("type_names", &self.type_names)
             .field("disabled_symbols", &self.disabled_symbols)
@@ -260,6 +261,8 @@ impl Engine {
     pub fn new_raw() -> Self {
         let mut engine = Self {
             global_modules: StaticVec::new_const(),
+
+            #[cfg(not(feature = "no_module"))]
             global_sub_modules: BTreeMap::new(),
 
             #[cfg(not(feature = "no_module"))]

@@ -8,6 +8,8 @@ Bug fixes
 ---------
 
 * In `Scope::clone_visible`, constants are now properly cloned as constants.
+* Variables introduced inside `try` blocks are now properly cleaned up upon an exception.
+* Off-by-one error in character positions after a comment line is now fixed.
 
 Script-breaking changes
 -----------------------
@@ -21,21 +23,12 @@ New features
 * A new bin tool, `rhai-dbg` (aka _The Rhai Debugger_), is added to showcase the debugging interface.
 * A new package, `DebuggingPackage`, is added which contains the `stack_trace` function to get the current call stack anywhere in a script.
 
-
-Version 1.4.2
-=============
-
-Bug fixes
----------
-
-* Variables introduced inside `try` blocks are now properly cleaned up upon an exception.
-* Off-by-one error in character positions after a comment line is now fixed.
-
 Enhancements
 ------------
 
 * `rhai-repl` tool has a few more commands, such as `strict` to turn on/off _Strict Variables Mode_ and `optimize` to turn on/off script optimization.
 * Default features for dependencies (such as `ahash/std` and `num-traits/std`) are no longer required.
+* The `no_module` feature now eliminates large sections of code via feature gates.
 
 
 Version 1.4.1

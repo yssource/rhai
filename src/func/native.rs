@@ -215,7 +215,6 @@ impl<'a> NativeCallContext<'a> {
     ///
     /// Not available under `no_module`.
     #[cfg(feature = "internals")]
-    #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     #[must_use]
     pub const fn global_runtime_state(&self) -> Option<&GlobalRuntimeState> {

@@ -37,6 +37,7 @@ impl Engine {
 
         let orig_always_search_scope = state.always_search_scope;
         let orig_scope_len = scope.len();
+        #[cfg(not(feature = "no_module"))]
         let orig_imports_len = global.num_imports();
         let orig_fn_resolution_caches_len = state.fn_resolution_caches_len();
 
@@ -96,6 +97,7 @@ impl Engine {
         if restore_orig_state {
             scope.rewind(orig_scope_len);
             state.scope_level -= 1;
+            #[cfg(not(feature = "no_module"))]
             global.truncate_imports(orig_imports_len);
 
             // The impact of new local variables goes away at the end of a block
@@ -579,11 +581,20 @@ impl Engine {
                         .global_modules
                         .iter()
                         .find_map(|m| m.get_iter(iter_type))
-                        .or_else(|| global.get_iter(iter_type))
                         .or_else(|| {
-                            self.global_sub_modules
+                            #[cfg(not(feature = "no_module"))]
+                            return global.get_iter(iter_type);
+                            #[cfg(feature = "no_module")]
+                            return None;
+                        })
+                        .or_else(|| {
+                            #[cfg(not(feature = "no_module"))]
+                            return self
+                                .global_sub_modules
                                 .values()
-                                .find_map(|m| m.get_qualified_iter(iter_type))
+                                .find_map(|m| m.get_qualified_iter(iter_type));
+                            #[cfg(feature = "no_module")]
+                            return None;
                         });
 
                     if let Some(func) = func {

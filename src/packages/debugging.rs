@@ -72,7 +72,7 @@ mod debugging_functions {
                             Dynamic::from_map(map)
                         }
                         #[cfg(feature = "no_object")]
-                        call.into()
+                        display.into()
                     },
                 )
                 .collect()

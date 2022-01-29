@@ -270,6 +270,7 @@ pub use eval::{EvalState, GlobalRuntimeState};
 pub use func::call::{FnResolutionCache, FnResolutionCacheEntry};
 
 #[cfg(feature = "internals")]
+#[cfg(not(feature = "no_module"))]
 pub use module::Namespace;
 
 /// Alias to [`smallvec::SmallVec<[T; 3]>`](https://crates.io/crates/smallvec), which is a

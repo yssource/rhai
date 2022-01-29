@@ -164,9 +164,21 @@ fn has_native_fn_override(
 
     // First check the global namespace and packages, but skip modules that are standard because
     // they should never conflict with system functions.
-    engine.global_modules.iter().filter(|m| !m.standard).any(|m| m.contains_fn(hash))
-            // Then check sub-modules
-            || engine.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash))
+    let result = engine
+        .global_modules
+        .iter()
+        .filter(|m| !m.standard)
+        .any(|m| m.contains_fn(hash));
+
+    #[cfg(not(feature = "no_module"))]
+    // Then check sub-modules
+    let result = result
+        || engine
+            .global_sub_modules
+            .values()
+            .any(|m| m.contains_qualified_fn(hash));
+
+    result
 }
 
 /// Optimize a block of [statements][Stmt].
@@ -1113,7 +1125,9 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
         },
 
         // constant-name
-        Expr::Variable(_, pos, x) if x.1.is_none() && state.find_constant(&x.2).is_some() => {
+        #[cfg(not(feature = "no_module"))]
+        Expr::Variable(_, _, x) if x.1.is_some() => (),
+        Expr::Variable(_, pos, x) if state.find_constant(&x.2).is_some() => {
             // Replace constant with value
             *expr = Expr::from_dynamic(state.find_constant(&x.2).unwrap().clone(), *pos);
             state.set_dirty();
