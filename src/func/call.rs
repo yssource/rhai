@@ -241,31 +241,28 @@ impl Engine {
                                     source: m.id_raw().clone(),
                                 })
                             })
-                        })
+                        });
+
+                    #[cfg(not(feature = "no_module"))]
+                    let func = func
                         .or_else(|| {
-                            #[cfg(not(feature = "no_module"))]
-                            return _global.get_qualified_fn(hash).map(|(func, source)| {
+                            _global.get_qualified_fn(hash).map(|(func, source)| {
                                 FnResolutionCacheEntry {
                                     func: func.clone(),
                                     source: source
                                         .map_or_else(|| Identifier::new_const(), Into::into),
                                 }
-                            });
-                            #[cfg(feature = "no_module")]
-                            return None;
+                            })
                         })
                         .or_else(|| {
-                            #[cfg(not(feature = "no_module"))]
-                            return self.global_sub_modules.values().find_map(|m| {
+                            self.global_sub_modules.values().find_map(|m| {
                                 m.get_qualified_fn(hash).cloned().map(|func| {
                                     FnResolutionCacheEntry {
                                         func,
                                         source: m.id_raw().clone(),
                                     }
                                 })
-                            });
-                            #[cfg(feature = "no_module")]
-                            return None;
+                            })
                         });
 
                     match func {

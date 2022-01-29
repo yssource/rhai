@@ -4,6 +4,8 @@ Rhai Release Notes
 Version 1.5.0
 =============
 
+This version adds a debugging interface, which can be used to integrate a debugger.
+
 Bug fixes
 ---------
 

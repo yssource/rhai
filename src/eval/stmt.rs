@@ -580,22 +580,14 @@ impl Engine {
                     let func = self
                         .global_modules
                         .iter()
-                        .find_map(|m| m.get_iter(iter_type))
-                        .or_else(|| {
-                            #[cfg(not(feature = "no_module"))]
-                            return global.get_iter(iter_type);
-                            #[cfg(feature = "no_module")]
-                            return None;
-                        })
-                        .or_else(|| {
-                            #[cfg(not(feature = "no_module"))]
-                            return self
-                                .global_sub_modules
-                                .values()
-                                .find_map(|m| m.get_qualified_iter(iter_type));
-                            #[cfg(feature = "no_module")]
-                            return None;
-                        });
+                        .find_map(|m| m.get_iter(iter_type));
+
+                    #[cfg(not(feature = "no_module"))]
+                    let func = func.or_else(|| global.get_iter(iter_type)).or_else(|| {
+                        self.global_sub_modules
+                            .values()
+                            .find_map(|m| m.get_qualified_iter(iter_type))
+                    });
 
                     if let Some(func) = func {
                         // Add the loop variables
