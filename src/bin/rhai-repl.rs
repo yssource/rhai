@@ -328,8 +328,9 @@ fn main() {
 
             match rl.readline(prompt) {
                 // Line continuation
-                Ok(line) if line.ends_with("\\") => {
-                    input += &line[..line.len() - 1];
+                Ok(mut line) if line.ends_with("\\") => {
+                    line.pop();
+                    input += line.trim_end();
                     input.push('\n');
                 }
                 Ok(line) => {

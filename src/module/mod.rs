@@ -1434,7 +1434,7 @@ impl Module {
             self.functions.entry(k).or_insert_with(|| v.clone());
         }
         for (&k, v) in &other.type_iterators {
-            self.type_iterators.entry(k).or_insert(v.clone());
+            self.type_iterators.entry(k).or_insert_with(|| v.clone());
         }
         self.all_functions.clear();
         self.all_variables.clear();
