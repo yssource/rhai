@@ -295,6 +295,7 @@ fn main() {
         engine.set_module_resolver(resolver);
     }
 
+    // Register sample functions
     engine
         .register_fn("test", |x: INT, y: INT| format!("{} {}", x, y))
         .register_fn("test", |x: &mut INT, y: INT, z: &str| {

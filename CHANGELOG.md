@@ -12,6 +12,7 @@ Bug fixes
 * In `Scope::clone_visible`, constants are now properly cloned as constants.
 * Variables introduced inside `try` blocks are now properly cleaned up upon an exception.
 * Off-by-one error in character positions after a comment line is now fixed.
+* Globally-defined constants are now encapsulated correctly inside a loaded module and no longer spill across call boundaries.
 
 Script-breaking changes
 -----------------------

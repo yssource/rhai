@@ -4,7 +4,7 @@
 use super::call::FnCallArgs;
 use crate::ast::ScriptFnDef;
 use crate::eval::{EvalState, GlobalRuntimeState};
-use crate::{Dynamic, Engine, Module, Position, RhaiError, RhaiResult, Scope, StaticVec, ERR};
+use crate::{Dynamic, Engine, Module, Position, RhaiError, RhaiResult, Scope, ERR};
 use std::mem;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -41,13 +41,19 @@ impl Engine {
             err: RhaiError,
             pos: Position,
         ) -> RhaiResult {
+            let _fn_def = fn_def;
+
+            #[cfg(not(feature = "no_module"))]
+            let source = _fn_def
+                .environ
+                .as_ref()
+                .and_then(|environ| environ.lib.id().map(str::to_string));
+            #[cfg(feature = "no_module")]
+            let source = None;
+
             Err(ERR::ErrorInFunctionCall(
                 name,
-                fn_def
-                    .lib
-                    .as_ref()
-                    .and_then(|m| m.id().map(str::to_string))
-                    .unwrap_or_else(|| global.source.to_string()),
+                source.unwrap_or_else(|| global.source.to_string()),
                 err,
                 pos,
             )
@@ -98,28 +104,39 @@ impl Engine {
         );
 
         // Merge in encapsulated environment, if any
-        let mut lib_merged = StaticVec::with_capacity(lib.len() + 1);
         let orig_fn_resolution_caches_len = state.fn_resolution_caches_len();
 
-        let lib = if let Some(ref fn_lib) = fn_def.lib {
-            if fn_lib.is_empty() {
-                lib
-            } else {
-                state.push_fn_resolution_cache();
-                lib_merged.push(fn_lib.as_ref());
-                lib_merged.extend(lib.iter().cloned());
-                &lib_merged
-            }
-        } else {
-            lib
-        };
+        #[cfg(not(feature = "no_module"))]
+        let mut lib_merged = crate::StaticVec::with_capacity(lib.len() + 1);
 
         #[cfg(not(feature = "no_module"))]
-        if let Some(ref modules) = fn_def.global {
-            for (n, m) in modules.iter().cloned() {
+        let (lib, constants) = if let Some(crate::ast::EncapsulatedEnviron {
+            lib: ref fn_lib,
+            ref imports,
+            #[cfg(not(feature = "no_function"))]
+            ref constants,
+        }) = fn_def.environ
+        {
+            for (n, m) in imports.iter().cloned() {
                 global.push_import(n, m)
             }
-        }
+            (
+                if fn_lib.is_empty() {
+                    lib
+                } else {
+                    state.push_fn_resolution_cache();
+                    lib_merged.push(fn_lib.as_ref());
+                    lib_merged.extend(lib.iter().cloned());
+                    &lib_merged
+                },
+                #[cfg(not(feature = "no_function"))]
+                Some(mem::replace(&mut global.constants, constants.clone())),
+                #[cfg(feature = "no_function")]
+                None,
+            )
+        } else {
+            (lib, None)
+        };
 
         // Evaluate the function
         let result = self
@@ -164,6 +181,12 @@ impl Engine {
         }
         #[cfg(not(feature = "no_module"))]
         global.truncate_imports(orig_imports_len);
+
+        // Restore constants
+        #[cfg(not(feature = "no_function"))]
+        if let Some(constants) = constants {
+            global.constants = constants;
+        }
 
         // Restore state
         state.rewind_fn_resolution_caches(orig_fn_resolution_caches_len);

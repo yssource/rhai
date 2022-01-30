@@ -17,5 +17,8 @@ pub use debugger::CallStackFrame;
 pub use debugger::{BreakPoint, Debugger, DebuggerCommand, OnDebuggerCallback, OnDebuggingInit};
 pub use eval_context::EvalContext;
 pub use eval_state::EvalState;
+#[cfg(not(feature = "no_module"))]
+#[cfg(not(feature = "no_function"))]
+pub use global_state::GlobalConstants;
 pub use global_state::GlobalRuntimeState;
 pub use target::{calc_index, calc_offset_len, Target};

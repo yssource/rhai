@@ -3185,9 +3185,8 @@ fn parse_fn(
         access,
         params,
         body,
-        lib: None,
         #[cfg(not(feature = "no_module"))]
-        global: None,
+        environ: None,
         #[cfg(not(feature = "no_function"))]
         #[cfg(feature = "metadata")]
         comments: if comments.is_empty() {
@@ -3341,9 +3340,8 @@ fn parse_anon_fn(
         access: crate::FnAccess::Public,
         params,
         body: body.into(),
-        lib: None,
         #[cfg(not(feature = "no_module"))]
-        global: None,
+        environ: None,
         #[cfg(not(feature = "no_function"))]
         #[cfg(feature = "metadata")]
         comments: None,

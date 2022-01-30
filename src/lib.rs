@@ -260,6 +260,11 @@ pub use ast::{
 };
 
 #[cfg(feature = "internals")]
+#[cfg(not(feature = "no_module"))]
+#[cfg(not(feature = "no_function"))]
+pub use ast::EncapsulatedEnviron;
+
+#[cfg(feature = "internals")]
 #[cfg(not(feature = "no_float"))]
 pub use ast::FloatWrapper;
 

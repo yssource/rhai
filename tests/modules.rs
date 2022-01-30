@@ -514,3 +514,47 @@ fn test_module_file() -> Result<(), Box<EvalAltResult>> {
     Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
     Ok(())
 }
+
+#[cfg(not(feature = "no_function"))]
+#[test]
+fn test_module_environ() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    let ast = engine.compile(
+        r#"
+            const SECRET = 42;
+
+            fn foo(x) {
+                print(global::SECRET);
+                global::SECRET + x
+            }
+        "#,
+    )?;
+
+    let mut m = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
+
+    m.set_id("test");
+    m.build_index();
+
+    engine.register_static_module("test", m.into());
+
+    assert_eq!(
+        engine.eval::<String>(
+            r#"
+                const SECRET = "hello";
+
+                fn foo(x) {
+                    print(global::SECRET);
+                    global::SECRET + x
+                }
+
+                let t = test::foo(0);
+
+                foo(t)
+            "#
+        )?,
+        "hello42"
+    );
+
+    Ok(())
+}

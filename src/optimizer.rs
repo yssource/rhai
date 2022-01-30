@@ -1211,9 +1211,8 @@ pub fn optimize_into_ast(
                     access: fn_def.access,
                     body: crate::ast::StmtBlock::NONE,
                     params: fn_def.params.clone(),
-                    lib: None,
                     #[cfg(not(feature = "no_module"))]
-                    global: None,
+                    environ: None,
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(feature = "metadata")]
                     comments: None,

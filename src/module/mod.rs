@@ -1696,33 +1696,21 @@ impl Module {
         let mut module = Module::new();
 
         // Extra modules left become sub-modules
-        #[cfg(not(feature = "no_function"))]
-        let mut func_global = None;
+        let mut imports = StaticVec::new_const();
 
         if result.is_ok() {
             global
                 .scan_imports_raw()
                 .skip(orig_imports_len)
                 .for_each(|(k, m)| {
-                    #[cfg(not(feature = "no_function"))]
-                    if func_global.is_none() {
-                        func_global = Some(StaticVec::new());
-                    }
-                    #[cfg(not(feature = "no_function"))]
-                    func_global
-                        .as_mut()
-                        .expect("`Some`")
-                        .push((k.clone(), m.clone()));
-
+                    imports.push((k.clone(), m.clone()));
                     module.set_sub_module(k.clone(), m.clone());
                 });
         }
 
         // Restore global state
         #[cfg(not(feature = "no_function"))]
-        {
-            global.constants = orig_constants;
-        }
+        let constants = std::mem::replace(&mut global.constants, orig_constants);
         global.truncate_imports(orig_imports_len);
         global.source = orig_source;
 
@@ -1747,12 +1735,9 @@ impl Module {
             }
         }
 
-        #[cfg(not(feature = "no_function"))]
-        let func_global = func_global.map(|v| v.into_boxed_slice());
-
         // Non-private functions defined become module functions
         #[cfg(not(feature = "no_function"))]
-        if ast.has_functions() {
+        {
             ast.shared_lib()
                 .iter_fn()
                 .filter(|&f| match f.metadata.access {
@@ -1761,15 +1746,20 @@ impl Module {
                 })
                 .filter(|&f| f.func.is_script())
                 .for_each(|f| {
-                    // Encapsulate AST environment
                     let mut func = f
                         .func
                         .get_script_fn_def()
                         .expect("script-defined function")
                         .as_ref()
                         .clone();
-                    func.lib = Some(ast.shared_lib().clone());
-                    func.global = func_global.clone();
+
+                    // Encapsulate AST environment
+                    func.environ = Some(crate::ast::EncapsulatedEnviron {
+                        lib: ast.shared_lib().clone(),
+                        imports: imports.clone().into_boxed_slice(),
+                        constants: constants.clone(),
+                    });
+
                     module.set_script_fn(func);
                 });
         }

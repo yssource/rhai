@@ -646,12 +646,11 @@ impl Engine {
             };
 
             mem::swap(&mut global.source, &mut source);
+            let level = _level + 1;
 
             let result = if _is_method_call {
                 // Method call of script function - map first argument to `this`
                 let (first_arg, rest_args) = args.split_first_mut().unwrap();
-
-                let level = _level + 1;
 
                 let result = self.call_script_fn(
                     scope,
@@ -678,8 +677,6 @@ impl Engine {
                         .expect("`Some`")
                         .change_first_arg_to_copy(args);
                 }
-
-                let level = _level + 1;
 
                 let result = self.call_script_fn(
                     scope, global, state, lib, &mut None, func, args, pos, true, level,
