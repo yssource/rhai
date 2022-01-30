@@ -184,7 +184,7 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> RhaiResultOf<T> {
-        let global = &mut GlobalRuntimeState::new();
+        let global = &mut GlobalRuntimeState::new(self);
 
         let result = self.eval_ast_with_scope_raw(scope, global, ast, 0)?;
 

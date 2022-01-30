@@ -3,25 +3,23 @@
 use super::{EvalContext, EvalState, GlobalRuntimeState, Target};
 use crate::ast::{Expr, FnCallExpr, OpAssignment};
 use crate::engine::{KEYWORD_THIS, OP_CONCAT};
-use crate::module::Namespace;
 use crate::types::dynamic::AccessMode;
-use crate::{
-    Dynamic, Engine, Module, Position, RhaiResult, RhaiResultOf, Scope, Shared, StaticVec, ERR,
-};
+use crate::{Dynamic, Engine, Module, Position, RhaiResult, RhaiResultOf, Scope, StaticVec, ERR};
 use std::num::NonZeroUsize;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
 impl Engine {
     /// Search for a module within an imports stack.
+    #[cfg(not(feature = "no_module"))]
     #[inline]
     #[must_use]
     pub(crate) fn search_imports(
         &self,
         global: &GlobalRuntimeState,
         state: &mut EvalState,
-        namespace: &Namespace,
-    ) -> Option<Shared<Module>> {
+        namespace: &crate::module::Namespace,
+    ) -> Option<crate::Shared<Module>> {
         let root = &namespace[0].name;
 
         // Qualified - check if the root module is directly indexed
@@ -59,13 +57,16 @@ impl Engine {
             }
             Expr::Variable(None, _var_pos, v) => match v.as_ref() {
                 // Normal variable access
+                #[cfg(not(feature = "no_module"))]
                 (_, None, _) => self.search_scope_only(scope, global, state, lib, this_ptr, expr),
+                #[cfg(feature = "no_module")]
+                (_, (), _) => self.search_scope_only(scope, global, state, lib, this_ptr, expr),
 
                 // Qualified variable access
                 #[cfg(not(feature = "no_module"))]
                 (_, Some((namespace, hash_var)), var_name) => {
+                    // foo:bar::baz::VARIABLE
                     if let Some(module) = self.search_imports(global, state, namespace) {
-                        // foo:bar::baz::VARIABLE
                         return match module.get_qualified_var(*hash_var) {
                             Ok(target) => {
                                 let mut target = target.clone();
@@ -89,13 +90,13 @@ impl Engine {
                         };
                     }
 
+                    // global::VARIABLE
                     #[cfg(not(feature = "no_function"))]
                     if namespace.len() == 1 && namespace[0].name == crate::engine::KEYWORD_GLOBAL {
-                        // global::VARIABLE
-                        let global_constants = global.constants_mut();
-
-                        if let Some(mut guard) = global_constants {
-                            if let Some(value) = guard.get_mut(var_name) {
+                        if let Some(ref constants) = global.constants {
+                            if let Some(value) =
+                                crate::func::locked_write(constants).get_mut(var_name)
+                            {
                                 let mut target: Target = value.clone().into();
                                 // Module variables are constant
                                 target.set_access_mode(AccessMode::ReadOnly);
@@ -117,9 +118,6 @@ impl Engine {
 
                     Err(ERR::ErrorModuleNotFound(namespace.to_string(), namespace[0].pos).into())
                 }
-
-                #[cfg(feature = "no_module")]
-                (_, Some((_, _)), _) => unreachable!("qualified access under no_module"),
             },
             _ => unreachable!("Expr::Variable expected but gets {:?}", expr),
         }
@@ -211,6 +209,7 @@ impl Engine {
     ) -> RhaiResult {
         let FnCallExpr {
             name,
+            #[cfg(not(feature = "no_module"))]
             namespace,
             capture_parent_scope: capture,
             hashes,
@@ -219,29 +218,37 @@ impl Engine {
             ..
         } = expr;
 
+        #[cfg(not(feature = "no_module"))]
         if let Some(namespace) = namespace.as_ref() {
             // Qualified function call
             let hash = hashes.native;
 
-            self.make_qualified_function_call(
+            return self.make_qualified_function_call(
                 scope, global, state, lib, this_ptr, namespace, name, args, constants, hash, pos,
                 level,
-            )
-        } else {
-            // Normal function call
-            let (first_arg, args) = args.split_first().map_or_else(
-                || (None, args.as_ref()),
-                |(first, rest)| (Some(first), rest),
             );
-
-            self.make_function_call(
-                scope, global, state, lib, this_ptr, name, first_arg, args, constants, *hashes,
-                pos, *capture, level,
-            )
         }
+
+        // Normal function call
+        let (first_arg, args) = args.split_first().map_or_else(
+            || (None, args.as_ref()),
+            |(first, rest)| (Some(first), rest),
+        );
+
+        self.make_function_call(
+            scope, global, state, lib, this_ptr, name, first_arg, args, constants, *hashes, pos,
+            *capture, level,
+        )
     }
 
     /// Evaluate an expression.
+    //
+    // # Implementation Notes
+    //
+    // Do not use the `?` operator within the main body as it makes this function return early,
+    // possibly by-passing important cleanup tasks at the end.
+    //
+    // Errors that are not recoverable, such as system errors or safety errors, can use `?`.
     pub(crate) fn eval_expr(
         &self,
         scope: &mut Scope,
@@ -258,16 +265,29 @@ impl Engine {
         // Function calls should account for a relatively larger portion of expressions because
         // binary operators are also function calls.
         if let Expr::FnCall(x, pos) = expr {
+            #[cfg(feature = "debugging")]
+            let reset_debugger =
+                self.run_debugger_with_reset(scope, global, state, lib, this_ptr, expr, level)?;
+
             #[cfg(not(feature = "unchecked"))]
             self.inc_operations(&mut global.num_operations, expr.position())?;
 
-            return self.eval_fn_call_expr(scope, global, state, lib, this_ptr, x, *pos, level);
+            let result =
+                self.eval_fn_call_expr(scope, global, state, lib, this_ptr, x, *pos, level);
+
+            #[cfg(feature = "debugging")]
+            global.debugger.reset_status(reset_debugger);
+
+            return result;
         }
 
         // Then variable access.
         // We shouldn't do this for too many variants because, soon or later, the added comparisons
         // will cost more than the mis-predicted `match` branch.
         if let Expr::Variable(index, var_pos, x) = expr {
+            #[cfg(feature = "debugging")]
+            self.run_debugger(scope, global, state, lib, this_ptr, expr, level)?;
+
             #[cfg(not(feature = "unchecked"))]
             self.inc_operations(&mut global.num_operations, expr.position())?;
 
@@ -282,10 +302,14 @@ impl Engine {
             };
         }
 
+        #[cfg(feature = "debugging")]
+        let reset_debugger =
+            self.run_debugger_with_reset(scope, global, state, lib, this_ptr, expr, level)?;
+
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(&mut global.num_operations, expr.position())?;
 
-        match expr {
+        let result = match expr {
             // Constants
             Expr::DynamicConstant(x, _) => Ok(x.as_ref().clone()),
             Expr::IntegerConstant(x, _) => Ok((*x).into()),
@@ -299,47 +323,62 @@ impl Engine {
             // `... ${...} ...`
             Expr::InterpolatedString(x, pos) => {
                 let mut pos = *pos;
-                let mut result: Dynamic = self.const_empty_string().into();
+                let mut concat: Dynamic = self.const_empty_string().into();
+                let mut result = Ok(Dynamic::UNIT);
 
                 for expr in x.iter() {
-                    let item = self.eval_expr(scope, global, state, lib, this_ptr, expr, level)?;
+                    let item =
+                        match self.eval_expr(scope, global, state, lib, this_ptr, expr, level) {
+                            Ok(r) => r,
+                            err => {
+                                result = err;
+                                break;
+                            }
+                        };
 
-                    self.eval_op_assignment(
+                    if let Err(err) = self.eval_op_assignment(
                         global,
                         state,
                         lib,
                         Some(OpAssignment::new(OP_CONCAT)),
                         pos,
-                        &mut (&mut result).into(),
+                        &mut (&mut concat).into(),
                         ("", Position::NONE),
                         item,
-                    )
-                    .map_err(|err| err.fill_position(expr.position()))?;
+                    ) {
+                        result = Err(err.fill_position(expr.position()));
+                        break;
+                    }
 
                     pos = expr.position();
                 }
 
-                Ok(result)
+                result.map(|_| concat)
             }
 
             #[cfg(not(feature = "no_index"))]
             Expr::Array(x, _) => {
-                let mut arr = Dynamic::from_array(crate::Array::with_capacity(x.len()));
+                let mut arr = crate::Array::with_capacity(x.len());
+                let mut result = Ok(Dynamic::UNIT);
 
                 #[cfg(not(feature = "unchecked"))]
                 let mut sizes = (0, 0, 0);
 
                 for item_expr in x.iter() {
-                    let value = self
-                        .eval_expr(scope, global, state, lib, this_ptr, item_expr, level)?
-                        .flatten();
+                    let value = match self
+                        .eval_expr(scope, global, state, lib, this_ptr, item_expr, level)
+                    {
+                        Ok(r) => r.flatten(),
+                        err => {
+                            result = err;
+                            break;
+                        }
+                    };
 
                     #[cfg(not(feature = "unchecked"))]
                     let val_sizes = Self::calc_data_sizes(&value, true);
 
-                    arr.write_lock::<crate::Array>()
-                        .expect("`Array`")
-                        .push(value);
+                    arr.push(value);
 
                     #[cfg(not(feature = "unchecked"))]
                     if self.has_data_size_limit() {
@@ -352,29 +391,33 @@ impl Engine {
                     }
                 }
 
-                Ok(arr)
+                result.map(|_| arr.into())
             }
 
             #[cfg(not(feature = "no_object"))]
             Expr::Map(x, _) => {
-                let mut map = Dynamic::from_map(x.1.clone());
+                let mut map = x.1.clone();
+                let mut result = Ok(Dynamic::UNIT);
 
                 #[cfg(not(feature = "unchecked"))]
                 let mut sizes = (0, 0, 0);
 
                 for (crate::ast::Ident { name, .. }, value_expr) in x.0.iter() {
                     let key = name.as_str();
-                    let value = self
-                        .eval_expr(scope, global, state, lib, this_ptr, value_expr, level)?
-                        .flatten();
+                    let value = match self
+                        .eval_expr(scope, global, state, lib, this_ptr, value_expr, level)
+                    {
+                        Ok(r) => r.flatten(),
+                        err => {
+                            result = err;
+                            break;
+                        }
+                    };
 
                     #[cfg(not(feature = "unchecked"))]
                     let val_sizes = Self::calc_data_sizes(&value, true);
 
-                    *map.write_lock::<crate::Map>()
-                        .expect("`Map`")
-                        .get_mut(key)
-                        .unwrap() = value;
+                    *map.get_mut(key).unwrap() = value;
 
                     #[cfg(not(feature = "unchecked"))]
                     if self.has_data_size_limit() {
@@ -387,33 +430,53 @@ impl Engine {
                     }
                 }
 
-                Ok(map)
+                result.map(|_| map.into())
             }
 
             Expr::And(x, _) => {
-                Ok((self
-                    .eval_expr(scope, global, state, lib, this_ptr, &x.lhs, level)?
-                    .as_bool()
-                    .map_err(|typ| self.make_type_mismatch_err::<bool>(typ, x.lhs.position()))?
-                    && // Short-circuit using &&
-                self
-                    .eval_expr(scope, global, state, lib, this_ptr, &x.rhs, level)?
-                    .as_bool()
-                    .map_err(|typ| self.make_type_mismatch_err::<bool>(typ, x.rhs.position()))?)
-                .into())
+                let lhs = self
+                    .eval_expr(scope, global, state, lib, this_ptr, &x.lhs, level)
+                    .and_then(|v| {
+                        v.as_bool().map_err(|typ| {
+                            self.make_type_mismatch_err::<bool>(typ, x.lhs.position())
+                        })
+                    });
+
+                if let Ok(true) = lhs {
+                    self.eval_expr(scope, global, state, lib, this_ptr, &x.rhs, level)
+                        .and_then(|v| {
+                            v.as_bool()
+                                .map_err(|typ| {
+                                    self.make_type_mismatch_err::<bool>(typ, x.rhs.position())
+                                })
+                                .map(Into::into)
+                        })
+                } else {
+                    lhs.map(Into::into)
+                }
             }
 
             Expr::Or(x, _) => {
-                Ok((self
-                    .eval_expr(scope, global, state, lib, this_ptr, &x.lhs, level)?
-                    .as_bool()
-                    .map_err(|typ| self.make_type_mismatch_err::<bool>(typ, x.lhs.position()))?
-                    || // Short-circuit using ||
-                self
-                    .eval_expr(scope, global, state, lib, this_ptr, &x.rhs, level)?
-                    .as_bool()
-                    .map_err(|typ| self.make_type_mismatch_err::<bool>(typ, x.rhs.position()))?)
-                .into())
+                let lhs = self
+                    .eval_expr(scope, global, state, lib, this_ptr, &x.lhs, level)
+                    .and_then(|v| {
+                        v.as_bool().map_err(|typ| {
+                            self.make_type_mismatch_err::<bool>(typ, x.lhs.position())
+                        })
+                    });
+
+                if let Ok(false) = lhs {
+                    self.eval_expr(scope, global, state, lib, this_ptr, &x.rhs, level)
+                        .and_then(|v| {
+                            v.as_bool()
+                                .map_err(|typ| {
+                                    self.make_type_mismatch_err::<bool>(typ, x.rhs.position())
+                                })
+                                .map(Into::into)
+                        })
+                } else {
+                    lhs.map(Into::into)
+                }
             }
 
             Expr::Custom(custom, pos) => {
@@ -459,6 +522,11 @@ impl Engine {
             }
 
             _ => unreachable!("expression cannot be evaluated: {:?}", expr),
-        }
+        };
+
+        #[cfg(feature = "debugging")]
+        global.debugger.reset_status(reset_debugger);
+
+        return result;
     }
 }

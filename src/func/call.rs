@@ -10,8 +10,6 @@ use crate::engine::{
     KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
 use crate::eval::{EvalState, GlobalRuntimeState};
-use crate::module::Namespace;
-use crate::tokenizer::Token;
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnArgsVec, FnPtr,
     Identifier, ImmutableString, Module, Position, RhaiResult, RhaiResultOf, Scope, ERR,
@@ -150,18 +148,26 @@ impl Engine {
     #[must_use]
     fn gen_call_signature(
         &self,
-        namespace: Option<&Namespace>,
+        #[cfg(not(feature = "no_module"))] namespace: Option<&crate::module::Namespace>,
         fn_name: &str,
         args: &[&mut Dynamic],
     ) -> String {
-        format!(
-            "{}{}{} ({})",
+        #[cfg(not(feature = "no_module"))]
+        let (ns, sep) = (
             namespace.map_or_else(|| String::new(), |ns| ns.to_string()),
             if namespace.is_some() {
-                Token::DoubleColon.literal_syntax()
+                crate::tokenizer::Token::DoubleColon.literal_syntax()
             } else {
                 ""
             },
+        );
+        #[cfg(feature = "no_module")]
+        let (ns, sep) = ("", "");
+
+        format!(
+            "{}{}{} ({})",
+            ns,
+            sep,
             fn_name,
             args.iter()
                 .map(|a| if a.is::<ImmutableString>() {
@@ -194,6 +200,8 @@ impl Engine {
         allow_dynamic: bool,
         is_op_assignment: bool,
     ) -> Option<&'s FnResolutionCacheEntry> {
+        let _global = global;
+
         if hash_script == 0 {
             return None;
         }
@@ -233,9 +241,12 @@ impl Engine {
                                     source: m.id_raw().clone(),
                                 })
                             })
-                        })
+                        });
+
+                    #[cfg(not(feature = "no_module"))]
+                    let func = func
                         .or_else(|| {
-                            global.get_qualified_fn(hash).map(|(func, source)| {
+                            _global.get_qualified_fn(hash).map(|(func, source)| {
                                 FnResolutionCacheEntry {
                                     func: func.clone(),
                                     source: source
@@ -506,9 +517,16 @@ impl Engine {
             }
 
             // Raise error
-            _ => Err(
-                ERR::ErrorFunctionNotFound(self.gen_call_signature(None, name, args), pos).into(),
-            ),
+            _ => Err(ERR::ErrorFunctionNotFound(
+                self.gen_call_signature(
+                    #[cfg(not(feature = "no_module"))]
+                    None,
+                    name,
+                    args,
+                ),
+                pos,
+            )
+            .into()),
         }
     }
 
@@ -889,8 +907,12 @@ impl Engine {
     ) -> RhaiResultOf<(Dynamic, Position)> {
         Ok((
             if let Expr::Stack(slot, _) = arg_expr {
+                #[cfg(feature = "debugging")]
+                self.run_debugger(scope, global, state, lib, this_ptr, arg_expr, level)?;
                 constants[*slot].clone()
             } else if let Some(value) = arg_expr.get_literal_value() {
+                #[cfg(feature = "debugging")]
+                self.run_debugger(scope, global, state, lib, this_ptr, arg_expr, level)?;
                 value
             } else {
                 self.eval_expr(scope, global, state, lib, this_ptr, arg_expr, level)?
@@ -1133,9 +1155,12 @@ impl Engine {
             // convert to method-call style in order to leverage potential &mut first argument and
             // avoid cloning the value
             if curry.is_empty() && first_arg.map_or(false, |expr| expr.is_variable_access(false)) {
-                // func(x, ...) -> x.func(...)
                 let first_expr = first_arg.unwrap();
 
+                #[cfg(feature = "debugging")]
+                self.run_debugger(scope, global, state, lib, this_ptr, first_expr, level)?;
+
+                // func(x, ...) -> x.func(...)
                 a_expr.iter().try_for_each(|expr| {
                     self.get_arg_value(scope, global, state, lib, this_ptr, level, expr, constants)
                         .map(|(value, _)| arg_values.push(value.flatten()))
@@ -1189,6 +1214,7 @@ impl Engine {
     }
 
     /// Call a namespace-qualified function in normal function-call style.
+    #[cfg(not(feature = "no_module"))]
     pub(crate) fn make_qualified_function_call(
         &self,
         scope: &mut Scope,
@@ -1196,7 +1222,7 @@ impl Engine {
         state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
-        namespace: &Namespace,
+        namespace: &crate::module::Namespace,
         fn_name: &str,
         args_expr: &[Expr],
         constants: &[Dynamic],
@@ -1215,6 +1241,9 @@ impl Engine {
             // If so, convert to method-call style in order to leverage potential
             // &mut first argument and avoid cloning the value
             if !args_expr.is_empty() && args_expr[0].is_variable_access(true) {
+                #[cfg(feature = "debugging")]
+                self.run_debugger(scope, global, state, lib, this_ptr, &args_expr[0], level)?;
+
                 // func(x, ...) -> x.func(...)
                 arg_values.push(Dynamic::UNIT);
 

@@ -154,7 +154,8 @@ impl Engine {
         arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {
         let state = &mut EvalState::new();
-        let global = &mut GlobalRuntimeState::new();
+        let global = &mut GlobalRuntimeState::new(self);
+
         let statements = ast.statements();
 
         let orig_scope_len = scope.len();

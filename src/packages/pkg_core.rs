@@ -13,6 +13,7 @@ def_package! {
     /// * [`BasicStringPackage`][super::BasicStringPackage]
     /// * [`BasicIteratorPackage`][super::BasicIteratorPackage]
     /// * [`BasicFnPackage`][super::BasicFnPackage]
+    /// * [`DebuggingPackage`][super::DebuggingPackage]
     crate::CorePackage => |lib| {
         lib.standard = true;
 
@@ -21,5 +22,7 @@ def_package! {
         super::BasicStringPackage::init(lib);
         super::BasicIteratorPackage::init(lib);
         super::BasicFnPackage::init(lib);
+        #[cfg(feature = "debugging")]
+        super::DebuggingPackage::init(lib);
     }
 }

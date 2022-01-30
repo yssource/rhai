@@ -43,7 +43,7 @@ Standard features
 * Re-entrant scripting engine can be made `Send + Sync` (via the `sync` feature).
 * Compile once to [AST](https://rhai.rs/book/engine/compile.html) form for repeated evaluations.
 * Scripts are [optimized](https://rhai.rs/book/engine/optimize.html) (useful for template-based machine-generated scripts).
-* Easy custom API development via [plugins](https://rhai.rs/book/plugins/index.html) system powered by procedural macros.
+* Easy custom API development via [plugins](https://rhai.rs/book/plugins) system powered by procedural macros.
 * [Function overloading](https://rhai.rs/book/language/overload.html) and [operator overloading](https://rhai.rs/book/rust/operators.html).
 * Dynamic dispatch via [function pointers](https://rhai.rs/book/language/fn-ptr.html) with additional support for [currying](https://rhai.rs/book/language/fn-curry.html).
 * [Closures](https://rhai.rs/book/language/fn-closure.html) (anonymous functions) that can capture shared values.
@@ -51,6 +51,7 @@ Standard features
 * Organize code base with dynamically-loadable [modules](https://rhai.rs/book/language/modules.html), optionally [overriding the resolution process](https://rhai.rs/book/rust/modules/resolvers.html).
 * Serialization/deserialization support via [serde](https://crates.io/crates/serde) (requires the `serde` feature).
 * Support for [minimal builds](https://rhai.rs/book/start/builds/minimal.html) by excluding unneeded language [features](https://rhai.rs/book/start/features.html).
+* A [debugging](https://rhai.rs/book/engine/debugging) interface.
 
 
 Protected against attacks

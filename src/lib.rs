@@ -123,6 +123,7 @@ type UNSIGNED_INT = u64;
 type UNSIGNED_INT = u32;
 
 /// The system floating-point type. It is defined as [`f64`].
+///
 /// Not available under `no_float`.
 ///
 /// If the `f32_float` feature is enabled, this will be [`f32`] instead.
@@ -132,6 +133,7 @@ pub type FLOAT = f64;
 
 /// The system floating-point type.
 /// It is defined as [`f32`] since the `f32_float` feature is used.
+///
 /// Not available under `no_float`.
 ///
 /// If the `f32_float` feature is not used, this will be `f64` instead.
@@ -155,6 +157,15 @@ pub use tokenizer::Position;
 pub use types::{
     Dynamic, EvalAltResult, FnPtr, ImmutableString, LexError, ParseError, ParseErrorType, Scope,
 };
+
+/// _(debugging)_ Module containing types for debugging.
+/// Exported under the `debugging` feature only.
+#[cfg(feature = "debugging")]
+pub mod debugger {
+    #[cfg(not(feature = "no_function"))]
+    pub use super::eval::CallStackFrame;
+    pub use super::eval::{BreakPoint, Debugger, DebuggerCommand};
+}
 
 /// An identifier in Rhai. [`SmartString`](https://crates.io/crates/smartstring) is used because most
 /// identifiers are ASCII and short, fewer than 23 characters, so they can be stored inline.
@@ -188,16 +199,19 @@ pub use func::Func;
 pub use ast::ScriptFnMetadata;
 
 /// Variable-sized array of [`Dynamic`] values.
+///
 /// Not available under `no_index`.
 #[cfg(not(feature = "no_index"))]
 pub type Array = Vec<Dynamic>;
 
 /// Variable-sized array of [`u8`] values (byte array).
+///
 /// Not available under `no_index`.
 #[cfg(not(feature = "no_index"))]
 pub type Blob = Vec<u8>;
 
 /// A dictionary of [`Dynamic`] values with string keys.
+///
 /// Not available under `no_object`.
 ///
 /// [`SmartString`](https://crates.io/crates/smartstring) is used as the key type because most
@@ -240,8 +254,9 @@ pub use parser::ParseState;
 
 #[cfg(feature = "internals")]
 pub use ast::{
-    ASTNode, BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment,
-    OptionFlags, ScriptFnDef, Stmt, StmtBlock, AST_OPTION_FLAGS::*,
+    ASTNode, BinaryExpr, ConditionalStmtBlock, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident,
+    OpAssignment, OptionFlags, ScriptFnDef, Stmt, StmtBlock, SwitchCases, TryCatchBlock,
+    AST_OPTION_FLAGS::*,
 };
 
 #[cfg(feature = "internals")]
@@ -255,6 +270,7 @@ pub use eval::{EvalState, GlobalRuntimeState};
 pub use func::call::{FnResolutionCache, FnResolutionCacheEntry};
 
 #[cfg(feature = "internals")]
+#[cfg(not(feature = "no_module"))]
 pub use module::Namespace;
 
 /// Alias to [`smallvec::SmallVec<[T; 3]>`](https://crates.io/crates/smallvec), which is a

@@ -96,6 +96,7 @@ pub struct Engine {
     /// A collection of all modules loaded into the global namespace of the Engine.
     pub(crate) global_modules: StaticVec<Shared<Module>>,
     /// A collection of all sub-modules directly loaded into the Engine.
+    #[cfg(not(feature = "no_module"))]
     pub(crate) global_sub_modules: BTreeMap<Identifier, Shared<Module>>,
 
     /// A module resolution service.
@@ -115,17 +116,17 @@ pub struct Engine {
     /// Custom syntax.
     pub(crate) custom_syntax: BTreeMap<Identifier, Box<CustomSyntax>>,
     /// Callback closure for resolving variable access.
-    pub(crate) resolve_var: Option<OnVarCallback>,
+    pub(crate) resolve_var: Option<Box<OnVarCallback>>,
     /// Callback closure to remap tokens during parsing.
     pub(crate) token_mapper: Option<Box<OnParseTokenCallback>>,
 
     /// Callback closure for implementing the `print` command.
-    pub(crate) print: Option<OnPrintCallback>,
+    pub(crate) print: Option<Box<OnPrintCallback>>,
     /// Callback closure for implementing the `debug` command.
-    pub(crate) debug: Option<OnDebugCallback>,
+    pub(crate) debug: Option<Box<OnDebugCallback>>,
     /// Callback closure for progress reporting.
     #[cfg(not(feature = "unchecked"))]
-    pub(crate) progress: Option<crate::func::native::OnProgressCallback>,
+    pub(crate) progress: Option<Box<crate::func::native::OnProgressCallback>>,
 
     /// Optimize the [`AST`][crate::AST] after compilation.
     #[cfg(not(feature = "no_optimize"))]
@@ -137,6 +138,13 @@ pub struct Engine {
     /// Max limits.
     #[cfg(not(feature = "unchecked"))]
     pub(crate) limits: crate::api::limits::Limits,
+
+    /// Callback closure for debugging.
+    #[cfg(feature = "debugging")]
+    pub(crate) debugger: Option<(
+        Box<crate::eval::OnDebuggingInit>,
+        Box<crate::eval::OnDebuggerCallback>,
+    )>,
 }
 
 impl fmt::Debug for Engine {
@@ -144,11 +152,11 @@ impl fmt::Debug for Engine {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut f = f.debug_struct("Engine");
 
-        f.field("global_modules", &self.global_modules)
-            .field("global_sub_modules", &self.global_sub_modules);
+        f.field("global_modules", &self.global_modules);
 
         #[cfg(not(feature = "no_module"))]
-        f.field("module_resolver", &self.module_resolver.is_some());
+        f.field("global_sub_modules", &self.global_sub_modules)
+            .field("module_resolver", &self.module_resolver.is_some());
 
         f.field("type_names", &self.type_names)
             .field("disabled_symbols", &self.disabled_symbols)
@@ -226,7 +234,7 @@ impl Engine {
             engine.print = Some(Box::new(|s| println!("{}", s)));
             engine.debug = Some(Box::new(|s, source, pos| {
                 if let Some(source) = source {
-                    println!("{}{:?} | {}", source, pos, s);
+                    println!("{} @ {:?} | {}", source, pos, s);
                 } else if pos.is_none() {
                     println!("{}", s);
                 } else {
@@ -253,6 +261,8 @@ impl Engine {
     pub fn new_raw() -> Self {
         let mut engine = Self {
             global_modules: StaticVec::new_const(),
+
+            #[cfg(not(feature = "no_module"))]
             global_sub_modules: BTreeMap::new(),
 
             #[cfg(not(feature = "no_module"))]
@@ -280,6 +290,9 @@ impl Engine {
 
             #[cfg(not(feature = "unchecked"))]
             limits: crate::api::limits::Limits::new(),
+
+            #[cfg(feature = "debugging")]
+            debugger: None,
         };
 
         // Add the global namespace module

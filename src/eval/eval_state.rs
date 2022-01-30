@@ -7,16 +7,17 @@ use std::marker::PhantomData;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
-/// _(internals)_ A type that holds all the current states of the [`Engine`].
+/// _(internals)_ A type that holds all the current states of the [`Engine`][crate::Engine].
 /// Exported under the `internals` feature only.
 #[derive(Debug, Clone)]
 pub struct EvalState<'a> {
-    /// Force a [`Scope`] search by name.
+    /// Force a [`Scope`][crate::Scope] search by name.
     ///
-    /// Normally, access to variables are parsed with a relative offset into the [`Scope`] to avoid a lookup.
+    /// Normally, access to variables are parsed with a relative offset into the
+    /// [`Scope`][crate::Scope] to avoid a lookup.
     ///
-    /// In some situation, e.g. after running an `eval` statement, or after a custom syntax statement,
-    /// subsequent offsets may become mis-aligned.
+    /// In some situation, e.g. after running an `eval` statement, or after a custom syntax
+    /// statement, subsequent offsets may become mis-aligned.
     ///
     /// When that happens, this flag is turned on.
     pub always_search_scope: bool,

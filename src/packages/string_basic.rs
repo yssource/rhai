@@ -1,5 +1,3 @@
-#![allow(non_snake_case)]
-
 use crate::plugin::*;
 use crate::{def_package, FnPtr, INT};
 use std::fmt::{Binary, LowerHex, Octal};

@@ -1,5 +1,3 @@
-#![allow(non_snake_case)]
-
 use crate::plugin::*;
 use crate::{def_package, Dynamic, ExclusiveRange, InclusiveRange, RhaiResultOf, StaticVec, INT};
 #[cfg(feature = "no_std")]

@@ -124,7 +124,7 @@ impl ModuleResolver for ModuleResolversCollection {
         path: &str,
         pos: Position,
     ) -> RhaiResultOf<Shared<Module>> {
-        for resolver in self.0.iter() {
+        for resolver in &self.0 {
             match resolver.resolve(engine, source_path, path, pos) {
                 Ok(module) => return Ok(module),
                 Err(err) => match *err {

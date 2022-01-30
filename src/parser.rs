@@ -3,12 +3,11 @@
 use crate::api::custom_syntax::{markers::*, CustomSyntax};
 use crate::api::options::LanguageOptions;
 use crate::ast::{
-    BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment, ScriptFnDef, Stmt,
-    StmtBlock, AST_OPTION_FLAGS::*,
+    BinaryExpr, ConditionalStmtBlock, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident,
+    OpAssignment, ScriptFnDef, Stmt, SwitchCases, TryCatchBlock, AST_OPTION_FLAGS::*,
 };
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::func::hashing::get_hasher;
-use crate::module::Namespace;
 use crate::tokenizer::{
     is_keyword_function, is_valid_function_name, is_valid_identifier, Token, TokenStream,
     TokenizerControl,
@@ -16,9 +15,8 @@ use crate::tokenizer::{
 use crate::types::dynamic::AccessMode;
 use crate::types::StringsInterner;
 use crate::{
-    calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Dynamic, Engine, ExclusiveRange,
-    Identifier, ImmutableString, InclusiveRange, LexError, ParseError, Position, Scope, Shared,
-    StaticVec, AST, INT, PERR,
+    calc_fn_hash, Dynamic, Engine, ExclusiveRange, Identifier, ImmutableString, InclusiveRange,
+    LexError, ParseError, Position, Scope, Shared, StaticVec, AST, INT, PERR,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -63,7 +61,7 @@ pub struct ParseState<'e> {
     pub allow_capture: bool,
     /// Encapsulates a local stack with imported [module][crate::Module] names.
     #[cfg(not(feature = "no_module"))]
-    pub modules: StaticVec<Identifier>,
+    pub imports: StaticVec<Identifier>,
     /// Maximum levels of expression nesting.
     #[cfg(not(feature = "unchecked"))]
     pub max_expr_depth: Option<NonZeroUsize>,
@@ -94,7 +92,7 @@ impl<'e> ParseState<'e> {
             stack: StaticVec::new_const(),
             entry_stack_len: 0,
             #[cfg(not(feature = "no_module"))]
-            modules: StaticVec::new_const(),
+            imports: StaticVec::new_const(),
         }
     }
 
@@ -158,7 +156,7 @@ impl<'e> ParseState<'e> {
     #[inline]
     #[must_use]
     pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
-        self.modules
+        self.imports
             .iter()
             .rev()
             .enumerate()
@@ -266,18 +264,23 @@ impl Expr {
     #[must_use]
     fn into_property(self, state: &mut ParseState) -> Self {
         match self {
-            Self::Variable(_, pos, x) if x.1.is_none() => {
+            #[cfg(not(feature = "no_module"))]
+            Self::Variable(_, _, ref x) if x.1.is_some() => self,
+            Self::Variable(_, pos, x) => {
                 let ident = x.2;
                 let getter = state.get_identifier(crate::engine::FN_GET, &ident);
                 let hash_get = calc_fn_hash(&getter, 1);
                 let setter = state.get_identifier(crate::engine::FN_SET, &ident);
                 let hash_set = calc_fn_hash(&setter, 2);
 
-                Self::Property(Box::new((
-                    (getter, hash_get),
-                    (setter, hash_set),
-                    (state.get_interned_string("", &ident), pos),
-                )))
+                Self::Property(
+                    Box::new((
+                        (getter, hash_get),
+                        (setter, hash_set),
+                        state.get_interned_string("", &ident),
+                    )),
+                    pos,
+                )
             }
             _ => self,
         }
@@ -449,7 +452,7 @@ fn parse_fn_call(
     lib: &mut FnLib,
     id: Identifier,
     capture_parent_scope: bool,
-    namespace: Option<Namespace>,
+    #[cfg(not(feature = "no_module"))] namespace: Option<crate::module::Namespace>,
     settings: ParseSettings,
 ) -> ParseResult<Expr> {
     #[cfg(not(feature = "unchecked"))]
@@ -457,6 +460,7 @@ fn parse_fn_call(
 
     let (token, token_pos) = input.peek().expect(NEVER_ENDS);
 
+    #[cfg(not(feature = "no_module"))]
     let mut namespace = namespace;
     let mut args = StaticVec::new_const();
 
@@ -475,28 +479,29 @@ fn parse_fn_call(
         Token::RightParen => {
             eat_token(input, Token::RightParen);
 
+            #[cfg(not(feature = "no_module"))]
             let hash = if let Some(modules) = namespace.as_mut() {
-                #[cfg(not(feature = "no_module"))]
-                {
-                    let index = state.find_module(&modules[0].name);
+                let index = state.find_module(&modules[0].name);
 
-                    #[cfg(not(feature = "no_function"))]
-                    let relax = settings.is_function_scope;
-                    #[cfg(feature = "no_function")]
-                    let relax = false;
+                #[cfg(not(feature = "no_function"))]
+                let relax = settings.is_function_scope;
+                #[cfg(feature = "no_function")]
+                let relax = false;
 
-                    if !relax && settings.strict_var && index.is_none() {
-                        return Err(PERR::ModuleUndefined(modules[0].name.to_string())
-                            .into_err(modules[0].pos));
-                    }
-
-                    modules.set_index(index);
+                if !relax && settings.strict_var && index.is_none() {
+                    return Err(
+                        PERR::ModuleUndefined(modules[0].name.to_string()).into_err(modules[0].pos)
+                    );
                 }
 
-                calc_qualified_fn_hash(modules.iter().map(|m| m.name.as_str()), &id, 0)
+                modules.set_index(index);
+
+                crate::calc_qualified_fn_hash(modules.iter().map(|m| m.name.as_str()), &id, 0)
             } else {
                 calc_fn_hash(&id, 0)
             };
+            #[cfg(feature = "no_module")]
+            let hash = calc_fn_hash(&id, 0);
 
             let hashes = if is_valid_function_name(&id) {
                 hash.into()
@@ -509,6 +514,7 @@ fn parse_fn_call(
             return Ok(FnCallExpr {
                 name: state.get_identifier("", id),
                 capture_parent_scope,
+                #[cfg(not(feature = "no_module"))]
                 namespace,
                 hashes,
                 args,
@@ -534,28 +540,32 @@ fn parse_fn_call(
             (Token::RightParen, _) => {
                 eat_token(input, Token::RightParen);
 
+                #[cfg(not(feature = "no_module"))]
                 let hash = if let Some(modules) = namespace.as_mut() {
-                    #[cfg(not(feature = "no_module"))]
-                    {
-                        let index = state.find_module(&modules[0].name);
+                    let index = state.find_module(&modules[0].name);
 
-                        #[cfg(not(feature = "no_function"))]
-                        let relax = settings.is_function_scope;
-                        #[cfg(feature = "no_function")]
-                        let relax = false;
+                    #[cfg(not(feature = "no_function"))]
+                    let relax = settings.is_function_scope;
+                    #[cfg(feature = "no_function")]
+                    let relax = false;
 
-                        if !relax && settings.strict_var && index.is_none() {
-                            return Err(PERR::ModuleUndefined(modules[0].name.to_string())
-                                .into_err(modules[0].pos));
-                        }
-
-                        modules.set_index(index);
+                    if !relax && settings.strict_var && index.is_none() {
+                        return Err(PERR::ModuleUndefined(modules[0].name.to_string())
+                            .into_err(modules[0].pos));
                     }
 
-                    calc_qualified_fn_hash(modules.iter().map(|m| m.name.as_str()), &id, args.len())
+                    modules.set_index(index);
+
+                    crate::calc_qualified_fn_hash(
+                        modules.iter().map(|m| m.name.as_str()),
+                        &id,
+                        args.len(),
+                    )
                 } else {
                     calc_fn_hash(&id, args.len())
                 };
+                #[cfg(feature = "no_module")]
+                let hash = calc_fn_hash(&id, args.len());
 
                 let hashes = if is_valid_function_name(&id) {
                     hash.into()
@@ -568,6 +578,7 @@ fn parse_fn_call(
                 return Ok(FnCallExpr {
                     name: state.get_identifier("", id),
                     capture_parent_scope,
+                    #[cfg(not(feature = "no_module"))]
                     namespace,
                     hashes,
                     args,
@@ -985,8 +996,8 @@ fn parse_switch(
         }
     }
 
-    let mut table = BTreeMap::<u64, Box<(Option<Expr>, StmtBlock)>>::new();
-    let mut ranges = StaticVec::<(INT, INT, bool, Option<Expr>, StmtBlock)>::new();
+    let mut cases = BTreeMap::<u64, Box<ConditionalStmtBlock>>::new();
+    let mut ranges = StaticVec::<(INT, INT, bool, ConditionalStmtBlock)>::new();
     let mut def_pos = Position::NONE;
     let mut def_stmt = None;
 
@@ -1050,7 +1061,7 @@ fn parse_switch(
                 value.hash(hasher);
                 let hash = hasher.finish();
 
-                if table.contains_key(&hash) {
+                if cases.contains_key(&hash) {
                     return Err(PERR::DuplicatedSwitchCase.into_err(expr.position()));
                 }
                 (Some(hash), None)
@@ -1092,18 +1103,20 @@ fn parse_switch(
                             value.hash(hasher);
                             let hash = hasher.finish();
 
-                            table
-                                .entry(hash)
-                                .or_insert_with(|| (condition.clone(), stmt.into()).into());
+                            cases.entry(hash).or_insert_with(|| {
+                                let block: ConditionalStmtBlock = (condition, stmt).into();
+                                block.into()
+                            });
                         }
                         // Other range
-                        _ => ranges.push((range.0, range.1, range.2, condition, stmt.into())),
+                        _ => ranges.push((range.0, range.1, range.2, (condition, stmt).into())),
                     }
                 }
                 None
             }
             (Some(hash), None) => {
-                table.insert(hash, (condition, stmt.into()).into());
+                let block: ConditionalStmtBlock = (condition, stmt).into();
+                cases.insert(hash, block.into());
                 None
             }
             (None, None) => Some(stmt.into()),
@@ -1133,11 +1146,16 @@ fn parse_switch(
         }
     }
 
-    let def_stmt_block = def_stmt.unwrap_or_else(|| Stmt::Noop(Position::NONE).into());
+    let def_case = def_stmt.unwrap_or_else(|| Stmt::Noop(Position::NONE).into());
 
     Ok(Stmt::Switch(
         item,
-        (table, def_stmt_block, ranges).into(),
+        SwitchCases {
+            cases,
+            def_case,
+            ranges,
+        }
+        .into(),
         settings.pos,
     ))
 }
@@ -1328,6 +1346,11 @@ fn parse_primary(
 
         // Identifier
         Token::Identifier(_) => {
+            #[cfg(not(feature = "no_module"))]
+            let none = None;
+            #[cfg(feature = "no_module")]
+            let none = ();
+
             let s = match input.next().expect(NEVER_ENDS) {
                 (Token::Identifier(s), _) => s,
                 token => unreachable!("Token::Identifier expected but gets {:?}", token),
@@ -1344,7 +1367,7 @@ fn parse_primary(
                     Expr::Variable(
                         None,
                         settings.pos,
-                        (None, None, state.get_identifier("", s)).into(),
+                        (None, none, state.get_identifier("", s)).into(),
                     )
                 }
                 // Namespace qualification
@@ -1358,7 +1381,7 @@ fn parse_primary(
                     Expr::Variable(
                         None,
                         settings.pos,
-                        (None, None, state.get_identifier("", s)).into(),
+                        (None, none, state.get_identifier("", s)).into(),
                     )
                 }
                 // Normal variable access
@@ -1379,7 +1402,7 @@ fn parse_primary(
                     Expr::Variable(
                         short_index,
                         settings.pos,
-                        (index, None, state.get_identifier("", s)).into(),
+                        (index, none, state.get_identifier("", s)).into(),
                     )
                 }
             }
@@ -1387,6 +1410,11 @@ fn parse_primary(
 
         // Reserved keyword or symbol
         Token::Reserved(_) => {
+            #[cfg(not(feature = "no_module"))]
+            let none = None;
+            #[cfg(feature = "no_module")]
+            let none = ();
+
             let s = match input.next().expect(NEVER_ENDS) {
                 (Token::Reserved(s), _) => s,
                 token => unreachable!("Token::Reserved expected but gets {:?}", token),
@@ -1397,14 +1425,14 @@ fn parse_primary(
                 Token::LeftParen | Token::Bang if is_keyword_function(&s) => Expr::Variable(
                     None,
                     settings.pos,
-                    (None, None, state.get_identifier("", s)).into(),
+                    (None, none, state.get_identifier("", s)).into(),
                 ),
                 // Access to `this` as a variable is OK within a function scope
                 #[cfg(not(feature = "no_function"))]
                 _ if &*s == KEYWORD_THIS && settings.is_function_scope => Expr::Variable(
                     None,
                     settings.pos,
-                    (None, None, state.get_identifier("", s)).into(),
+                    (None, none, state.get_identifier("", s)).into(),
                 ),
                 // Cannot access to `this` as a variable not in a function scope
                 _ if &*s == KEYWORD_THIS => {
@@ -1451,6 +1479,7 @@ fn parse_postfix(
 
         lhs = match (lhs, tail_token) {
             // Qualified function call with !
+            #[cfg(not(feature = "no_module"))]
             (Expr::Variable(_, _, x), Token::Bang) if x.1.is_some() => {
                 return if !match_token(input, Token::LeftParen).0 {
                     Err(LexError::UnexpectedInput(Token::Bang.syntax().to_string())
@@ -1476,17 +1505,37 @@ fn parse_postfix(
                     _ => (),
                 }
 
-                let (_, namespace, name) = *x;
+                let (_, _ns, name) = *x;
                 settings.pos = pos;
-                let ns = namespace.map(|(ns, _)| ns);
-                parse_fn_call(input, state, lib, name, true, ns, settings.level_up())?
+                #[cfg(not(feature = "no_module"))]
+                let _ns = _ns.map(|(ns, _)| ns);
+                parse_fn_call(
+                    input,
+                    state,
+                    lib,
+                    name,
+                    true,
+                    #[cfg(not(feature = "no_module"))]
+                    _ns,
+                    settings.level_up(),
+                )?
             }
             // Function call
             (Expr::Variable(_, pos, x), Token::LeftParen) => {
-                let (_, namespace, name) = *x;
-                let ns = namespace.map(|(ns, _)| ns);
+                let (_, _ns, name) = *x;
+                #[cfg(not(feature = "no_module"))]
+                let _ns = _ns.map(|(ns, _)| ns);
                 settings.pos = pos;
-                parse_fn_call(input, state, lib, name, false, ns, settings.level_up())?
+                parse_fn_call(
+                    input,
+                    state,
+                    lib,
+                    name,
+                    false,
+                    #[cfg(not(feature = "no_module"))]
+                    _ns,
+                    settings.level_up(),
+                )?
             }
             // module access
             #[cfg(not(feature = "no_module"))]
@@ -1498,7 +1547,7 @@ fn parse_postfix(
                 if let Some((ref mut namespace, _)) = namespace {
                     namespace.push(var_name_def);
                 } else {
-                    let mut ns = Namespace::new();
+                    let mut ns = crate::module::Namespace::new();
                     ns.push(var_name_def);
                     namespace = Some((ns, 42));
                 }
@@ -1543,6 +1592,7 @@ fn parse_postfix(
     }
 
     // Cache the hash key for namespace-qualified variables
+    #[cfg(not(feature = "no_module"))]
     let namespaced_variable = match lhs {
         Expr::Variable(_, _, ref mut x) if x.1.is_some() => Some(x.as_mut()),
         Expr::Index(ref mut x, _, _) | Expr::Dot(ref mut x, _, _) => match x.lhs {
@@ -1552,8 +1602,9 @@ fn parse_postfix(
         _ => None,
     };
 
+    #[cfg(not(feature = "no_module"))]
     if let Some((_, Some((namespace, hash)), name)) = namespaced_variable {
-        *hash = calc_qualified_var_hash(namespace.iter().map(|v| v.name.as_str()), name);
+        *hash = crate::calc_qualified_var_hash(namespace.iter().map(|v| v.name.as_str()), name);
 
         #[cfg(not(feature = "no_module"))]
         {
@@ -1692,20 +1743,20 @@ fn make_assignment_stmt(
     fn check_lvalue(expr: &Expr, parent_is_dot: bool) -> Option<Position> {
         match expr {
             Expr::Index(x, term, _) | Expr::Dot(x, term, _) if parent_is_dot => match x.lhs {
-                Expr::Property(_) if !term => {
+                Expr::Property(_, _) if !term => {
                     check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _, _)))
                 }
-                Expr::Property(_) => None,
+                Expr::Property(_, _) => None,
                 // Anything other than a property after dotting (e.g. a method call) is not an l-value
                 ref e => Some(e.position()),
             },
             Expr::Index(x, term, _) | Expr::Dot(x, term, _) => match x.lhs {
-                Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
+                Expr::Property(_, _) => unreachable!("unexpected Expr::Property in indexing"),
                 _ if !term => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _, _))),
                 _ => None,
             },
-            Expr::Property(_) if parent_is_dot => None,
-            Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
+            Expr::Property(_, _) if parent_is_dot => None,
+            Expr::Property(_, _) => unreachable!("unexpected Expr::Property in indexing"),
             e if parent_is_dot => Some(e.position()),
             _ => None,
         }
@@ -1719,9 +1770,10 @@ fn make_assignment_stmt(
             Err(PERR::AssignmentToConstant("".into()).into_err(lhs.position()))
         }
         // var (non-indexed) = rhs
-        Expr::Variable(None, _, ref x) if x.0.is_none() => {
-            Ok(Stmt::Assignment((lhs, op_info, rhs).into(), op_pos))
-        }
+        Expr::Variable(None, _, ref x) if x.0.is_none() => Ok(Stmt::Assignment(
+            (op_info, (lhs, rhs).into()).into(),
+            op_pos,
+        )),
         // var (indexed) = rhs
         Expr::Variable(i, var_pos, ref x) => {
             let (index, _, name) = x.as_ref();
@@ -1730,7 +1782,10 @@ fn make_assignment_stmt(
                 |n| n.get() as usize,
             );
             match state.stack[state.stack.len() - index].1 {
-                AccessMode::ReadWrite => Ok(Stmt::Assignment((lhs, op_info, rhs).into(), op_pos)),
+                AccessMode::ReadWrite => Ok(Stmt::Assignment(
+                    (op_info, (lhs, rhs).into()).into(),
+                    op_pos,
+                )),
                 // Constant values cannot be assigned to
                 AccessMode::ReadOnly => {
                     Err(PERR::AssignmentToConstant(name.to_string()).into_err(var_pos))
@@ -1749,9 +1804,10 @@ fn make_assignment_stmt(
                 None => {
                     match x.lhs {
                         // var[???] = rhs, var.??? = rhs
-                        Expr::Variable(_, _, _) => {
-                            Ok(Stmt::Assignment((lhs, op_info, rhs).into(), op_pos))
-                        }
+                        Expr::Variable(_, _, _) => Ok(Stmt::Assignment(
+                            (op_info, (lhs, rhs).into()).into(),
+                            op_pos,
+                        )),
                         // expr[???] = rhs, expr.??? = rhs
                         ref expr => {
                             Err(PERR::AssignmentToInvalidLHS("".to_string())
@@ -1826,11 +1882,14 @@ fn make_dot_expr(
             Ok(Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos))
         }
         // lhs.module::id - syntax error
+        #[cfg(not(feature = "no_module"))]
         (_, Expr::Variable(_, _, x)) => {
             Err(PERR::PropertyExpected.into_err(x.1.expect("`Some`").0[0].pos))
         }
+        #[cfg(feature = "no_module")]
+        (_, Expr::Variable(_, _, _)) => unreachable!("qualified property name"),
         // lhs.prop
-        (lhs, prop @ Expr::Property(_)) => Ok(Expr::Dot(
+        (lhs, prop @ Expr::Property(_, _)) => Ok(Expr::Dot(
             BinaryExpr { lhs, rhs: prop }.into(),
             false,
             op_pos,
@@ -1844,7 +1903,7 @@ fn make_dot_expr(
             };
 
             match x.lhs {
-                Expr::Variable(_, _, _) | Expr::Property(_) => {
+                Expr::Variable(_, _, _) | Expr::Property(_, _) => {
                     let new_lhs = BinaryExpr {
                         lhs: x.lhs.into_property(state),
                         rhs: x.rhs,
@@ -2142,7 +2201,19 @@ fn parse_custom_syntax(
                 let name = state.get_identifier("", name);
                 segments.push(name.clone().into());
                 tokens.push(state.get_identifier("", CUSTOM_SYNTAX_MARKER_IDENT));
-                inputs.push(Expr::Variable(None, pos, (None, None, name).into()));
+                inputs.push(Expr::Variable(
+                    None,
+                    pos,
+                    (
+                        None,
+                        #[cfg(not(feature = "no_module"))]
+                        None,
+                        #[cfg(feature = "no_module")]
+                        (),
+                        name,
+                    )
+                        .into(),
+                ));
             }
             CUSTOM_SYNTAX_MARKER_SYMBOL => {
                 let (symbol, pos) = parse_symbol(input)?;
@@ -2520,7 +2591,7 @@ fn parse_let(
     state.stack.push((name, var_type));
 
     let export = if is_export {
-        AST_OPTION_PUBLIC
+        AST_OPTION_EXPORTED
     } else {
         AST_OPTION_NONE
     };
@@ -2564,7 +2635,7 @@ fn parse_import(
     // import expr as name ...
     let (name, pos) = parse_var_name(input)?;
     let name = state.get_identifier("", name);
-    state.modules.push(name.clone());
+    state.imports.push(name.clone());
 
     Ok(Stmt::Import(
         expr,
@@ -2603,48 +2674,27 @@ fn parse_export(
         _ => (),
     }
 
-    let mut exports = Vec::<(Ident, Ident)>::with_capacity(4);
+    let (id, id_pos) = parse_var_name(input)?;
 
-    loop {
-        let (id, id_pos) = parse_var_name(input)?;
+    let (alias, alias_pos) = if match_token(input, Token::As).0 {
+        let (name, pos) = parse_var_name(input)?;
+        (Some(name), pos)
+    } else {
+        (None, Position::NONE)
+    };
 
-        let (rename, rename_pos) = if match_token(input, Token::As).0 {
-            let (name, pos) = parse_var_name(input)?;
-            if exports.iter().any(|(_, alias)| alias.name == name.as_ref()) {
-                return Err(PERR::DuplicatedVariable(name.to_string()).into_err(pos));
-            }
-            (Some(name), pos)
-        } else {
-            (None, Position::NONE)
-        };
+    let export = (
+        Ident {
+            name: state.get_identifier("", id),
+            pos: id_pos,
+        },
+        Ident {
+            name: state.get_identifier("", alias.as_ref().map_or("", <_>::as_ref)),
+            pos: alias_pos,
+        },
+    );
 
-        exports.push((
-            Ident {
-                name: state.get_identifier("", id),
-                pos: id_pos,
-            },
-            Ident {
-                name: state.get_identifier("", rename.as_ref().map_or("", <_>::as_ref)),
-                pos: rename_pos,
-            },
-        ));
-
-        match input.peek().expect(NEVER_ENDS) {
-            (Token::Comma, _) => {
-                eat_token(input, Token::Comma);
-            }
-            (Token::Identifier(_), pos) => {
-                return Err(PERR::MissingToken(
-                    Token::Comma.into(),
-                    "to separate the list of exports".into(),
-                )
-                .into_err(*pos))
-            }
-            _ => break,
-        }
-    }
-
-    Ok(Stmt::Export(exports.into_boxed_slice(), settings.pos))
+    Ok(Stmt::Export(export.into(), settings.pos))
 }
 
 /// Parse a statement block.
@@ -2677,7 +2727,7 @@ fn parse_block(
     state.entry_stack_len = state.stack.len();
 
     #[cfg(not(feature = "no_module"))]
-    let prev_mods_len = state.modules.len();
+    let orig_imports_len = state.imports.len();
 
     loop {
         // Terminated?
@@ -2744,7 +2794,7 @@ fn parse_block(
     state.entry_stack_len = prev_entry_stack_len;
 
     #[cfg(not(feature = "no_module"))]
-    state.modules.truncate(prev_mods_len);
+    state.imports.truncate(orig_imports_len);
 
     Ok(Stmt::Block(statements.into_boxed_slice(), settings.pos))
 }
@@ -2925,7 +2975,7 @@ fn parse_stmt(
         }
         Token::Break if settings.default_options.allow_loop && settings.is_breakable => {
             let pos = eat_token(input, Token::Break);
-            Ok(Stmt::BreakLoop(AST_OPTION_BREAK_OUT, pos))
+            Ok(Stmt::BreakLoop(AST_OPTION_BREAK, pos))
         }
         Token::Continue | Token::Break if settings.default_options.allow_loop => {
             Err(PERR::LoopBreak.into_err(token_pos))
@@ -2937,7 +2987,7 @@ fn parse_stmt(
                 .map(|(token, pos)| {
                     let flags = match token {
                         Token::Return => AST_OPTION_NONE,
-                        Token::Throw => AST_OPTION_BREAK_OUT,
+                        Token::Throw => AST_OPTION_BREAK,
                         token => unreachable!(
                             "Token::Return or Token::Throw expected but gets {:?}",
                             token
@@ -2996,10 +3046,10 @@ fn parse_try_catch(
     let mut settings = settings;
     settings.pos = eat_token(input, Token::Try);
 
-    // try { body }
-    let body = parse_block(input, state, lib, settings.level_up())?;
+    // try { try_block }
+    let try_block = parse_block(input, state, lib, settings.level_up())?;
 
-    // try { body } catch
+    // try { try_block } catch
     let (matched, catch_pos) = match_token(input, Token::Catch);
 
     if !matched {
@@ -3009,8 +3059,8 @@ fn parse_try_catch(
         );
     }
 
-    // try { body } catch (
-    let err_var = if match_token(input, Token::LeftParen).0 {
+    // try { try_block } catch (
+    let catch_var = if match_token(input, Token::LeftParen).0 {
         let (name, pos) = parse_var_name(input)?;
         let (matched, err_pos) = match_token(input, Token::RightParen);
 
@@ -3029,16 +3079,21 @@ fn parse_try_catch(
         None
     };
 
-    // try { body } catch ( var ) { catch_block }
-    let catch_body = parse_block(input, state, lib, settings.level_up())?;
+    // try { try_block } catch ( var ) { catch_block }
+    let catch_block = parse_block(input, state, lib, settings.level_up())?;
 
-    if err_var.is_some() {
+    if catch_var.is_some() {
         // Remove the error variable from the stack
         state.stack.pop().unwrap();
     }
 
     Ok(Stmt::TryCatch(
-        (body.into(), err_var, catch_body.into()).into(),
+        TryCatchBlock {
+            try_block: try_block.into(),
+            catch_var,
+            catch_block: catch_block.into(),
+        }
+        .into(),
         settings.pos,
     ))
 }
@@ -3162,12 +3217,21 @@ fn make_curry_from_externals(
 
     args.push(fn_expr);
 
-    args.extend(
-        externals
-            .iter()
-            .cloned()
-            .map(|x| Expr::Variable(None, Position::NONE, (None, None, x).into())),
-    );
+    args.extend(externals.iter().cloned().map(|x| {
+        Expr::Variable(
+            None,
+            Position::NONE,
+            (
+                None,
+                #[cfg(not(feature = "no_module"))]
+                None,
+                #[cfg(feature = "no_module")]
+                (),
+                x,
+            )
+                .into(),
+        )
+    }));
 
     let expr = FnCallExpr {
         name: state.get_identifier("", crate::engine::KEYWORD_FN_PTR_CURRY),
@@ -3185,7 +3249,7 @@ fn make_curry_from_externals(
     let mut statements = StaticVec::with_capacity(externals.len() + 1);
     statements.extend(externals.into_iter().map(Stmt::Share));
     statements.push(Stmt::Expr(expr));
-    Expr::Stmt(StmtBlock::new(statements, pos).into())
+    Expr::Stmt(crate::ast::StmtBlock::new(statements, pos).into())
 }
 
 /// Parse an anonymous function definition.
@@ -3451,9 +3515,9 @@ impl Engine {
         {
             let mut m = crate::Module::new();
 
-            _lib.into_iter().for_each(|fn_def| {
+            for fn_def in _lib {
                 m.set_script_fn(fn_def);
-            });
+            }
 
             return Ok(AST::new(statements, m));
         }

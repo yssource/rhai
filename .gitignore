@@ -5,3 +5,4 @@ Cargo.lock
 benches/results
 before*
 after*
+.rhai-repl-history.txt

@@ -1,7 +1,8 @@
 #![cfg(not(feature = "no_std"))]
 #![cfg(not(target_family = "wasm"))]
 
-use crate::func::native::shared_write_lock;
+use crate::eval::GlobalRuntimeState;
+use crate::func::native::locked_write;
 use crate::{
     Engine, Identifier, Module, ModuleResolver, Position, RhaiResultOf, Scope, Shared, ERR,
 };
@@ -207,12 +208,12 @@ impl FileModuleResolver {
 
         let file_path = self.get_file_path(path.as_ref(), source_path);
 
-        shared_write_lock(&self.cache).contains_key(&file_path)
+        locked_write(&self.cache).contains_key(&file_path)
     }
     /// Empty the internal cache.
     #[inline]
     pub fn clear_cache(&mut self) -> &mut Self {
-        shared_write_lock(&self.cache).clear();
+        locked_write(&self.cache).clear();
         self
     }
     /// Remove the specified path from internal cache.
@@ -227,7 +228,7 @@ impl FileModuleResolver {
     ) -> Option<Shared<Module>> {
         let file_path = self.get_file_path(path.as_ref(), source_path.as_ref().map(<_>::as_ref));
 
-        shared_write_lock(&self.cache)
+        locked_write(&self.cache)
             .remove_entry(&file_path)
             .map(|(_, v)| v)
     }
@@ -252,24 +253,25 @@ impl FileModuleResolver {
         file_path.set_extension(self.extension.as_str()); // Force extension
         file_path
     }
-}
 
-impl ModuleResolver for FileModuleResolver {
-    fn resolve(
+    /// Resolve a module based on a path.
+    fn impl_resolve(
         &self,
         engine: &Engine,
-        source_path: Option<&str>,
+        global: Option<&mut GlobalRuntimeState>,
+        source: Option<&str>,
         path: &str,
         pos: Position,
-    ) -> RhaiResultOf<Shared<Module>> {
+    ) -> Result<Shared<Module>, Box<crate::EvalAltResult>> {
         // Load relative paths from source if there is no base path specified
-        let source_path =
-            source_path.and_then(|p| Path::new(p).parent().map(|p| p.to_string_lossy()));
+        let source_path = global
+            .as_ref()
+            .and_then(|g| g.source())
+            .or(source)
+            .and_then(|p| Path::new(p).parent().map(|p| p.to_string_lossy()));
 
-        // Construct the script file path
         let file_path = self.get_file_path(path, source_path.as_ref().map(|p| p.as_ref()));
 
-        // See if it is cached
         if self.is_cache_enabled() {
             #[cfg(not(feature = "sync"))]
             let c = self.cache.borrow();
@@ -281,7 +283,6 @@ impl ModuleResolver for FileModuleResolver {
             }
         }
 
-        // Load the script file and compile it
         let scope = Scope::new();
 
         let mut ast = engine
@@ -295,17 +296,42 @@ impl ModuleResolver for FileModuleResolver {
 
         ast.set_source(path);
 
-        // Make a module from the AST
-        let m: Shared<Module> = Module::eval_ast_as_new(scope, &ast, engine)
-            .map_err(|err| Box::new(ERR::ErrorInModule(path.to_string(), err, pos)))?
-            .into();
+        let m: Shared<Module> = if let Some(global) = global {
+            Module::eval_ast_as_new_raw(engine, scope, global, &ast)
+        } else {
+            Module::eval_ast_as_new(scope, &ast, engine)
+        }
+        .map_err(|err| Box::new(ERR::ErrorInModule(path.to_string(), err, pos)))?
+        .into();
 
-        // Put it into the cache
         if self.is_cache_enabled() {
-            shared_write_lock(&self.cache).insert(file_path, m.clone());
+            locked_write(&self.cache).insert(file_path, m.clone());
         }
 
         Ok(m)
+    }
+}
+
+impl ModuleResolver for FileModuleResolver {
+    fn resolve_raw(
+        &self,
+        engine: &Engine,
+        global: &mut GlobalRuntimeState,
+        path: &str,
+        pos: Position,
+    ) -> RhaiResultOf<Shared<Module>> {
+        self.impl_resolve(engine, Some(global), None, path, pos)
+    }
+
+    #[inline(always)]
+    fn resolve(
+        &self,
+        engine: &Engine,
+        source: Option<&str>,
+        path: &str,
+        pos: Position,
+    ) -> RhaiResultOf<Shared<Module>> {
+        self.impl_resolve(engine, None, source, path, pos)
     }
 
     /// Resolve an `AST` based on a path string.

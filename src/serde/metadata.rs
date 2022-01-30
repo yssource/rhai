@@ -16,6 +16,7 @@ enum FnType {
     Native,
 }
 
+#[cfg(not(feature = "no_module"))]
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum FnNamespace {
@@ -23,6 +24,7 @@ enum FnNamespace {
     Internal,
 }
 
+#[cfg(not(feature = "no_module"))]
 impl From<crate::FnNamespace> for FnNamespace {
     fn from(value: crate::FnNamespace) -> Self {
         match value {
@@ -62,6 +64,7 @@ struct FnParam<'a> {
 struct FnMetadata<'a> {
     pub base_hash: u64,
     pub full_hash: u64,
+    #[cfg(not(feature = "no_module"))]
     pub namespace: FnNamespace,
     pub access: FnAccess,
     pub name: String,
@@ -110,6 +113,7 @@ impl<'a> From<&'a FuncInfo> for FnMetadata<'a> {
         Self {
             base_hash,
             full_hash,
+            #[cfg(not(feature = "no_module"))]
             namespace: info.metadata.namespace.into(),
             access: info.metadata.access.into(),
             name: info.metadata.name.to_string(),
@@ -206,26 +210,35 @@ impl Engine {
         let _ast = ast;
         let mut global = ModuleMetadata::new();
 
-        self.global_sub_modules.iter().for_each(|(name, m)| {
+        #[cfg(not(feature = "no_module"))]
+        for (name, m) in &self.global_sub_modules {
             global.modules.insert(name, m.as_ref().into());
-        });
+        }
 
         self.global_modules
             .iter()
             .filter(|m| include_packages || !m.standard)
             .flat_map(|m| m.iter_fn())
             .for_each(|f| {
+                #[allow(unused_mut)]
                 let mut meta: FnMetadata = f.into();
-                meta.namespace = FnNamespace::Global;
+                #[cfg(not(feature = "no_module"))]
+                {
+                    meta.namespace = FnNamespace::Global;
+                }
                 global.functions.push(meta);
             });
 
         #[cfg(not(feature = "no_function"))]
-        _ast.shared_lib().iter_fn().for_each(|f| {
+        for f in _ast.shared_lib().iter_fn() {
+            #[allow(unused_mut)]
             let mut meta: FnMetadata = f.into();
-            meta.namespace = FnNamespace::Global;
+            #[cfg(not(feature = "no_module"))]
+            {
+                meta.namespace = FnNamespace::Global;
+            }
             global.functions.push(meta);
-        });
+        }
 
         global.functions.sort();
 

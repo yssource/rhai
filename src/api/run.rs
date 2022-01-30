@@ -44,8 +44,8 @@ impl Engine {
     /// Evaluate an [`AST`] with own scope, returning any error (if any).
     #[inline]
     pub fn run_ast_with_scope(&self, scope: &mut Scope, ast: &AST) -> RhaiResultOf<()> {
-        let global = &mut GlobalRuntimeState::new();
-        let mut state = EvalState::new();
+        let state = &mut EvalState::new();
+        let global = &mut GlobalRuntimeState::new(self);
         global.source = ast.source_raw().clone();
 
         #[cfg(not(feature = "no_module"))]
@@ -64,7 +64,7 @@ impl Engine {
             } else {
                 &lib
             };
-            self.eval_global_statements(scope, global, &mut state, statements, lib, 0)?;
+            self.eval_global_statements(scope, global, state, statements, lib, 0)?;
         }
         Ok(())
     }

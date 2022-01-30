@@ -1,3 +1,4 @@
+use crate::eval::GlobalRuntimeState;
 use crate::func::native::SendSync;
 use crate::{Engine, Module, Position, RhaiResultOf, Shared, AST};
 #[cfg(feature = "no_std")]
@@ -21,10 +22,25 @@ pub trait ModuleResolver: SendSync {
     fn resolve(
         &self,
         engine: &Engine,
-        source_path: Option<&str>,
+        source: Option<&str>,
         path: &str,
         pos: Position,
     ) -> RhaiResultOf<Shared<Module>>;
+
+    /// Resolve a module based on a path string, given a [`GlobalRuntimeState`].
+    ///
+    /// # WARNING - Low Level API
+    ///
+    /// This function is very low level.
+    fn resolve_raw(
+        &self,
+        engine: &Engine,
+        global: &mut GlobalRuntimeState,
+        path: &str,
+        pos: Position,
+    ) -> RhaiResultOf<Shared<Module>> {
+        self.resolve(engine, global.source(), path, pos)
+    }
 
     /// Resolve an `AST` based on a path string.
     ///
@@ -40,7 +56,7 @@ pub trait ModuleResolver: SendSync {
     fn resolve_ast(
         &self,
         engine: &Engine,
-        source_path: Option<&str>,
+        source: Option<&str>,
         path: &str,
         pos: Position,
     ) -> Option<RhaiResultOf<AST>> {

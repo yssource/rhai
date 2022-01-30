@@ -1,11 +1,10 @@
 //! Module defining external-loaded modules for Rhai.
 
-use crate::ast::{FnAccess, Ident};
+use crate::ast::FnAccess;
 use crate::func::{
     shared_take_or_clone, CallableFunction, FnCallArgs, IteratorFn, RegisterNativeFunction,
     SendSync,
 };
-use crate::tokenizer::Token;
 use crate::types::dynamic::Variant;
 use crate::{
     calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes, Dynamic, Identifier,
@@ -19,8 +18,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
     iter::{empty, once},
-    num::NonZeroUsize,
-    ops::{Add, AddAssign, Deref, DerefMut},
+    ops::{Add, AddAssign},
 };
 
 /// A type representing the namespace of a function.
@@ -29,6 +27,8 @@ pub enum FnNamespace {
     /// Expose to global namespace.
     Global,
     /// Module namespace only.
+    ///
+    /// Ignored under `no_module`.
     Internal,
 }
 
@@ -151,7 +151,7 @@ impl FuncInfo {
             ty => ty.into(),
         }
     }
-    /// Generate a signature of the function.
+    /// _(metadata)_ Generate a signature of the function.
     /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
     #[must_use]
@@ -244,9 +244,9 @@ pub struct Module {
     /// including those in sub-modules.
     all_functions: BTreeMap<u64, Shared<CallableFunction>>,
     /// Iterator functions, keyed by the type producing the iterator.
-    type_iterators: BTreeMap<TypeId, IteratorFn>,
+    type_iterators: BTreeMap<TypeId, Shared<IteratorFn>>,
     /// Flattened collection of iterator functions, including those in sub-modules.
-    all_type_iterators: BTreeMap<TypeId, IteratorFn>,
+    all_type_iterators: BTreeMap<TypeId, Shared<IteratorFn>>,
     /// Is the [`Module`] indexed?
     indexed: bool,
     /// Does the [`Module`] contain indexed functions that have been exposed to the global namespace?
@@ -462,7 +462,7 @@ impl Module {
         self.indexed
     }
 
-    /// Generate signatures for all the non-private functions in the [`Module`].
+    /// _(metadata)_ Generate signatures for all the non-private functions in the [`Module`].
     /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
     #[inline]
@@ -759,8 +759,7 @@ impl Module {
         self
     }
 
-    /// _(metadata)_ Update the metadata (parameter names/types, return type and doc-comments) of a
-    /// registered function.
+    /// _(metadata)_ Update the metadata (parameter names/types, return type and doc-comments) of a registered function.
     /// Exported under the `metadata` feature only.
     ///
     /// The [`u64`] hash is returned by the [`set_native_fn`][Module::set_native_fn] call.
@@ -1373,6 +1372,7 @@ impl Module {
     /// Get a namespace-qualified function.
     ///
     /// The [`u64`] hash is calculated by [`build_index`][Module::build_index].
+    #[cfg(not(feature = "no_module"))]
     #[inline]
     #[must_use]
     pub(crate) fn get_qualified_fn(&self, hash_qualified_fn: u64) -> Option<&CallableFunction> {
@@ -1402,9 +1402,9 @@ impl Module {
     /// Sub-modules are flattened onto the root [`Module`], with higher level overriding lower level.
     #[inline]
     pub fn combine_flatten(&mut self, other: Self) -> &mut Self {
-        other.modules.into_iter().for_each(|(_, m)| {
+        for (_, m) in other.modules.into_iter() {
             self.combine_flatten(shared_take_or_clone(m));
-        });
+        }
         self.variables.extend(other.variables.into_iter());
         self.functions.extend(other.functions.into_iter());
         self.type_iterators.extend(other.type_iterators.into_iter());
@@ -1420,22 +1420,22 @@ impl Module {
     /// Only items not existing in this [`Module`] are added.
     #[inline]
     pub fn fill_with(&mut self, other: &Self) -> &mut Self {
-        other.modules.iter().for_each(|(k, v)| {
+        for (k, v) in &other.modules {
             if !self.modules.contains_key(k) {
                 self.modules.insert(k.clone(), v.clone());
             }
-        });
-        other.variables.iter().for_each(|(k, v)| {
+        }
+        for (k, v) in &other.variables {
             if !self.variables.contains_key(k) {
                 self.variables.insert(k.clone(), v.clone());
             }
-        });
-        other.functions.iter().for_each(|(&k, v)| {
+        }
+        for (&k, v) in &other.functions {
             self.functions.entry(k).or_insert_with(|| v.clone());
-        });
-        other.type_iterators.iter().for_each(|(&k, &v)| {
-            self.type_iterators.entry(k).or_insert(v);
-        });
+        }
+        for (&k, v) in &other.type_iterators {
+            self.type_iterators.entry(k).or_insert_with(|| v.clone());
+        }
         self.all_functions.clear();
         self.all_variables.clear();
         self.all_type_iterators.clear();
@@ -1456,12 +1456,11 @@ impl Module {
         other: &Self,
         _filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool + Copy,
     ) -> &mut Self {
-        #[cfg(not(feature = "no_function"))]
-        other.modules.iter().for_each(|(k, v)| {
+        for (k, v) in &other.modules {
             let mut m = Self::new();
             m.merge_filtered(v, _filter);
             self.set_sub_module(k.clone(), m);
-        });
+        }
         #[cfg(feature = "no_function")]
         self.modules
             .extend(other.modules.iter().map(|(k, v)| (k.clone(), v.clone())));
@@ -1484,7 +1483,8 @@ impl Module {
                 .map(|(&k, v)| (k, v.clone())),
         );
 
-        self.type_iterators.extend(other.type_iterators.iter());
+        self.type_iterators
+            .extend(other.type_iterators.iter().map(|(&k, v)| (k, v.clone())));
         self.all_functions.clear();
         self.all_variables.clear();
         self.all_type_iterators.clear();
@@ -1658,56 +1658,94 @@ impl Module {
     /// # }
     /// ```
     #[cfg(not(feature = "no_module"))]
+    #[inline(always)]
     pub fn eval_ast_as_new(
         scope: crate::Scope,
         ast: &crate::AST,
         engine: &crate::Engine,
     ) -> RhaiResultOf<Self> {
+        let global = &mut crate::eval::GlobalRuntimeState::new(engine);
+
+        Self::eval_ast_as_new_raw(engine, scope, global, ast)
+    }
+    /// Create a new [`Module`] by evaluating an [`AST`][crate::AST].
+    ///
+    /// The entire [`AST`][crate::AST] is encapsulated into each function, allowing functions
+    /// to cross-call each other.  Functions in the global namespace, plus all functions
+    /// defined in the [`Module`], are _merged_ into a _unified_ namespace before each call.
+    /// Therefore, all functions will be found.
+    #[cfg(not(feature = "no_module"))]
+    pub(crate) fn eval_ast_as_new_raw(
+        engine: &crate::Engine,
+        scope: crate::Scope,
+        global: &mut crate::eval::GlobalRuntimeState,
+        ast: &crate::AST,
+    ) -> RhaiResultOf<Self> {
         let mut scope = scope;
-        let mut global = crate::eval::GlobalRuntimeState::new();
-        let orig_mods_len = global.num_imports();
+
+        // Save global state
+        let orig_imports_len = global.num_imports();
+        let orig_source = global.source.clone();
+        #[cfg(not(feature = "no_function"))]
+        let orig_constants = std::mem::take(&mut global.constants);
 
         // Run the script
-        engine.eval_ast_with_scope_raw(&mut scope, &mut global, &ast, 0)?;
+        let result = engine.eval_ast_with_scope_raw(&mut scope, global, &ast, 0);
 
         // Create new module
-        let mut module =
-            scope
-                .into_iter()
-                .fold(Module::new(), |mut module, (_, value, mut aliases)| {
-                    // Variables with an alias left in the scope become module variables
-                    match aliases.len() {
-                        0 => (),
-                        1 => {
-                            let alias = aliases.pop().unwrap();
-                            module.set_var(alias, value);
-                        }
-                        _ => {
-                            let last_alias = aliases.pop().unwrap();
-                            aliases.into_iter().for_each(|alias| {
-                                module.set_var(alias, value.clone());
-                            });
-                            // Avoid cloning the last value
-                            module.set_var(last_alias, value);
-                        }
-                    }
-                    module
-                });
+        let mut module = Module::new();
 
-        // Extra modules left in the scope become sub-modules
+        // Extra modules left become sub-modules
         #[cfg(not(feature = "no_function"))]
         let mut func_global = None;
 
-        global.into_iter().skip(orig_mods_len).for_each(|kv| {
-            #[cfg(not(feature = "no_function"))]
-            if func_global.is_none() {
-                func_global = Some(StaticVec::new());
-            }
-            #[cfg(not(feature = "no_function"))]
-            func_global.as_mut().expect("`Some`").push(kv.clone());
+        if result.is_ok() {
+            global
+                .scan_imports_raw()
+                .skip(orig_imports_len)
+                .for_each(|(k, m)| {
+                    #[cfg(not(feature = "no_function"))]
+                    if func_global.is_none() {
+                        func_global = Some(StaticVec::new());
+                    }
+                    #[cfg(not(feature = "no_function"))]
+                    func_global
+                        .as_mut()
+                        .expect("`Some`")
+                        .push((k.clone(), m.clone()));
 
-            module.set_sub_module(kv.0, kv.1);
-        });
+                    module.set_sub_module(k.clone(), m.clone());
+                });
+        }
+
+        // Restore global state
+        #[cfg(not(feature = "no_function"))]
+        {
+            global.constants = orig_constants;
+        }
+        global.truncate_imports(orig_imports_len);
+        global.source = orig_source;
+
+        result?;
+
+        // Variables with an alias left in the scope become module variables
+        for (_, value, mut aliases) in scope {
+            match aliases.len() {
+                0 => (),
+                1 => {
+                    let alias = aliases.pop().unwrap();
+                    module.set_var(alias, value);
+                }
+                _ => {
+                    let last_alias = aliases.pop().unwrap();
+                    for alias in aliases {
+                        module.set_var(alias, value.clone());
+                    }
+                    // Avoid cloning the last value
+                    module.set_var(last_alias, value);
+                }
+            }
+        }
 
         #[cfg(not(feature = "no_function"))]
         let func_global = func_global.map(|v| v.into_boxed_slice());
@@ -1765,33 +1803,33 @@ impl Module {
             path: &mut Vec<&'a str>,
             variables: &mut BTreeMap<u64, Dynamic>,
             functions: &mut BTreeMap<u64, Shared<CallableFunction>>,
-            type_iterators: &mut BTreeMap<TypeId, IteratorFn>,
+            type_iterators: &mut BTreeMap<TypeId, Shared<IteratorFn>>,
         ) -> bool {
             let mut contains_indexed_global_functions = false;
 
-            module.modules.iter().for_each(|(name, m)| {
+            for (name, m) in &module.modules {
                 // Index all the sub-modules first.
                 path.push(name);
                 if index_module(m, path, variables, functions, type_iterators) {
                     contains_indexed_global_functions = true;
                 }
                 path.pop();
-            });
+            }
 
             // Index all variables
-            module.variables.iter().for_each(|(var_name, value)| {
+            for (var_name, value) in &module.variables {
                 let hash_var = crate::calc_qualified_var_hash(path.iter().copied(), var_name);
                 variables.insert(hash_var, value.clone());
-            });
+            }
 
             // Index type iterators
-            module.type_iterators.iter().for_each(|(&type_id, func)| {
-                type_iterators.insert(type_id, *func);
+            for (&type_id, func) in &module.type_iterators {
+                type_iterators.insert(type_id, func.clone());
                 contains_indexed_global_functions = true;
-            });
+            }
 
             // Index all Rust functions
-            module.functions.iter().for_each(|(&hash, f)| {
+            for (&hash, f) in &module.functions {
                 match f.metadata.namespace {
                     FnNamespace::Global => {
                         // Flatten all functions with global namespace
@@ -1802,7 +1840,7 @@ impl Module {
                 }
                 match f.metadata.access {
                     FnAccess::Public => (),
-                    FnAccess::Private => return, // Do not index private functions
+                    FnAccess::Private => continue, // Do not index private functions
                 }
 
                 if !f.func.is_script() {
@@ -1820,7 +1858,7 @@ impl Module {
                     );
                     functions.insert(hash_qualified_script, f.func.clone());
                 }
-            });
+            }
 
             contains_indexed_global_functions
         }
@@ -1865,10 +1903,33 @@ impl Module {
     }
 
     /// Set a type iterator into the [`Module`].
+    #[cfg(not(feature = "sync"))]
     #[inline]
-    pub fn set_iter(&mut self, type_id: TypeId, func: IteratorFn) -> &mut Self {
+    pub fn set_iter(
+        &mut self,
+        type_id: TypeId,
+        func: impl Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + 'static,
+    ) -> &mut Self {
+        let func = Shared::new(func);
         if self.indexed {
-            self.all_type_iterators.insert(type_id, func);
+            self.all_type_iterators.insert(type_id, func.clone());
+            self.contains_indexed_global_functions = true;
+        }
+        self.type_iterators.insert(type_id, func);
+        self
+    }
+
+    /// Set a type iterator into the [`Module`].
+    #[cfg(feature = "sync")]
+    #[inline]
+    pub fn set_iter(
+        &mut self,
+        type_id: TypeId,
+        func: impl Fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>> + SendSync + 'static,
+    ) -> &mut Self {
+        let func = Shared::new(func);
+        if self.indexed {
+            self.all_type_iterators.insert(type_id, func.clone());
             self.contains_indexed_global_functions = true;
         }
         self.type_iterators.insert(type_id, func);
@@ -1900,126 +1961,29 @@ impl Module {
     }
 
     /// Get the specified type iterator.
+    #[cfg(not(feature = "no_module"))]
     #[inline]
     #[must_use]
-    pub(crate) fn get_qualified_iter(&self, id: TypeId) -> Option<IteratorFn> {
-        self.all_type_iterators.get(&id).cloned()
+    pub(crate) fn get_qualified_iter(&self, id: TypeId) -> Option<&IteratorFn> {
+        self.all_type_iterators.get(&id).map(|f| f.as_ref())
     }
 
     /// Get the specified type iterator.
     #[inline]
     #[must_use]
-    pub(crate) fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
-        self.type_iterators.get(&id).cloned()
+    pub(crate) fn get_iter(&self, id: TypeId) -> Option<&IteratorFn> {
+        self.type_iterators.get(&id).map(|f| f.as_ref())
     }
 }
 
-/// _(internals)_ A chain of [module][Module] names to namespace-qualify a variable or function
-/// call. Exported under the `internals` feature only.
-///
-/// A [`u64`] offset to the current [stack of imported modules][crate::GlobalRuntimeState] is
-/// cached for quick search purposes.
-///
-/// A [`StaticVec`] is used because the vast majority of namespace-qualified access contains only
-/// one level, and it is wasteful to always allocate a [`Vec`] with one element.
-#[derive(Clone, Eq, PartialEq, Default, Hash)]
-pub struct Namespace {
-    index: Option<NonZeroUsize>,
-    path: StaticVec<Ident>,
-}
-
-impl fmt::Debug for Namespace {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(index) = self.index {
-            write!(f, "{} -> ", index)?;
-        }
-
-        f.write_str(
-            &self
-                .path
-                .iter()
-                .map(|Ident { name, .. }| name.as_str())
-                .collect::<StaticVec<_>>()
-                .join(Token::DoubleColon.literal_syntax()),
-        )
-    }
-}
-
-impl fmt::Display for Namespace {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(
-            &self
-                .path
-                .iter()
-                .map(|Ident { name, .. }| name.as_str())
-                .collect::<StaticVec<_>>()
-                .join(Token::DoubleColon.literal_syntax()),
-        )
-    }
-}
-
-impl Deref for Namespace {
-    type Target = StaticVec<Ident>;
-
-    #[inline(always)]
-    fn deref(&self) -> &Self::Target {
-        &self.path
-    }
-}
-
-impl DerefMut for Namespace {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.path
-    }
-}
-
-impl From<Vec<Ident>> for Namespace {
-    #[inline(always)]
-    fn from(mut path: Vec<Ident>) -> Self {
-        path.shrink_to_fit();
-        Self {
-            index: None,
-            path: path.into(),
-        }
-    }
-}
-
-impl From<StaticVec<Ident>> for Namespace {
-    #[inline(always)]
-    fn from(mut path: StaticVec<Ident>) -> Self {
-        path.shrink_to_fit();
-        Self { index: None, path }
-    }
-}
-
-impl Namespace {
-    /// Create a new [`Namespace`].
-    #[inline(always)]
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            index: None,
-            path: StaticVec::new_const(),
-        }
-    }
-    /// Get the [`Scope`][crate::Scope] index offset.
-    #[inline(always)]
-    #[must_use]
-    pub(crate) const fn index(&self) -> Option<NonZeroUsize> {
-        self.index
-    }
-    /// Set the [`Scope`][crate::Scope] index offset.
-    #[cfg(not(feature = "no_module"))]
-    #[inline(always)]
-    pub(crate) fn set_index(&mut self, index: Option<NonZeroUsize>) {
-        self.index = index
-    }
-}
-
-#[cfg(not(feature = "no_module"))]
-pub use resolvers::ModuleResolver;
+mod namespace;
 
 /// Module containing all built-in [module resolvers][ModuleResolver].
 #[cfg(not(feature = "no_module"))]
 pub mod resolvers;
+
+#[cfg(not(feature = "no_module"))]
+pub use namespace::Namespace;
+
+#[cfg(not(feature = "no_module"))]
+pub use resolvers::ModuleResolver;

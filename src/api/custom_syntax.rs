@@ -72,7 +72,9 @@ impl Expression<'_> {
     #[must_use]
     pub fn get_string_value(&self) -> Option<&str> {
         match self.0 {
-            Expr::Variable(_, _, x) if x.1.is_none() => Some(x.2.as_str()),
+            #[cfg(not(feature = "no_module"))]
+            Expr::Variable(_, _, x) if x.1.is_some() => None,
+            Expr::Variable(_, _, x) => Some(x.2.as_str()),
             Expr::StringConstant(x, _) => Some(x.as_str()),
             _ => None,
         }

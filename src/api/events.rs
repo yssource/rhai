@@ -12,8 +12,7 @@ impl Engine {
     ///
     /// The callback function signature takes the following form:
     ///
-    /// > `Fn(name: &str, index: usize, context: &EvalContext)`  
-    /// > `   -> Result<Option<Dynamic>, Box<EvalAltResult>> + 'static`
+    /// > `Fn(name: &str, index: usize, context: &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>`
     ///
     /// where:
     /// * `index`: an offset from the bottom of the current [`Scope`][crate::Scope] that the
@@ -64,7 +63,7 @@ impl Engine {
         self.resolve_var = Some(Box::new(callback));
         self
     }
-    /// _(internals)_ Provide a callback that will be invoked during parsing to remap certain tokens.
+    /// _(internals)_ Register a callback that will be invoked during parsing to remap certain tokens.
     /// Exported under the `internals` feature only.
     ///
     /// # Callback Function Signature
@@ -259,6 +258,25 @@ impl Engine {
         callback: impl Fn(&str, Option<&str>, Position) + SendSync + 'static,
     ) -> &mut Self {
         self.debug = Some(Box::new(callback));
+        self
+    }
+    /// _(debugging)_ Register callbacks for debugging.
+    /// Exported under the `debugging` feature only.
+    #[cfg(feature = "debugging")]
+    #[inline(always)]
+    pub fn on_debugger(
+        &mut self,
+        init: impl Fn() -> Dynamic + SendSync + 'static,
+        callback: impl Fn(
+                &mut EvalContext,
+                crate::ast::ASTNode,
+                Option<&str>,
+                Position,
+            ) -> RhaiResultOf<crate::eval::DebuggerCommand>
+            + SendSync
+            + 'static,
+    ) -> &mut Self {
+        self.debugger = Some((Box::new(init), Box::new(callback)));
         self
     }
 }

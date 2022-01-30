@@ -1,5 +1,4 @@
 #![cfg(not(feature = "no_index"))]
-#![allow(non_snake_case)]
 
 use crate::eval::{calc_index, calc_offset_len};
 use crate::plugin::*;

@@ -70,13 +70,32 @@ impl Engine {
         }
 
         let orig_scope_len = scope.len();
-        let orig_mods_len = global.num_imports();
+        #[cfg(not(feature = "no_module"))]
+        let orig_imports_len = global.num_imports();
+
+        #[cfg(feature = "debugging")]
+        #[cfg(not(feature = "no_function"))]
+        let orig_call_stack_len = global.debugger.call_stack().len();
 
         // Put arguments into scope as variables
         scope.extend(fn_def.params.iter().cloned().zip(args.into_iter().map(|v| {
             // Actually consume the arguments instead of cloning them
             mem::take(*v)
         })));
+
+        // Push a new call stack frame
+        #[cfg(feature = "debugging")]
+        #[cfg(not(feature = "no_function"))]
+        global.debugger.push_call_stack_frame(
+            fn_def.name.clone(),
+            scope
+                .iter()
+                .skip(orig_scope_len)
+                .map(|(_, _, v)| v.clone())
+                .collect(),
+            global.source.clone(),
+            pos,
+        );
 
         // Merge in encapsulated environment, if any
         let mut lib_merged = StaticVec::with_capacity(lib.len() + 1);
@@ -97,10 +116,9 @@ impl Engine {
 
         #[cfg(not(feature = "no_module"))]
         if let Some(ref modules) = fn_def.global {
-            modules
-                .iter()
-                .cloned()
-                .for_each(|(n, m)| global.push_import(n, m));
+            for (n, m) in modules.iter().cloned() {
+                global.push_import(n, m)
+            }
         }
 
         // Evaluate the function
@@ -144,10 +162,16 @@ impl Engine {
             // Remove arguments only, leaving new variables in the scope
             scope.remove_range(orig_scope_len, args.len())
         }
-        global.truncate_imports(orig_mods_len);
+        #[cfg(not(feature = "no_module"))]
+        global.truncate_imports(orig_imports_len);
 
         // Restore state
         state.rewind_fn_resolution_caches(orig_fn_resolution_caches_len);
+
+        // Pop the call stack
+        #[cfg(feature = "debugging")]
+        #[cfg(not(feature = "no_function"))]
+        global.debugger.rewind_call_stack(orig_call_stack_len);
 
         result
     }
@@ -161,6 +185,8 @@ impl Engine {
         lib: &[&Module],
         hash_script: u64,
     ) -> bool {
+        let _global = global;
+
         let cache = state.fn_resolution_cache_mut();
 
         if let Some(result) = cache.get(&hash_script).map(|v| v.is_some()) {
@@ -170,9 +196,12 @@ impl Engine {
         // First check script-defined functions
         let result = lib.iter().any(|&m| m.contains_fn(hash_script))
             // Then check the global namespace and packages
-            || self.global_modules.iter().any(|m| m.contains_fn(hash_script))
+            || self.global_modules.iter().any(|m| m.contains_fn(hash_script));
+
+        #[cfg(not(feature = "no_module"))]
+        let result = result ||
             // Then check imported modules
-            || global.map_or(false, |m| m.contains_qualified_fn(hash_script))
+            _global.map_or(false, |m| m.contains_qualified_fn(hash_script))
             // Then check sub-modules
             || self.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash_script));
 

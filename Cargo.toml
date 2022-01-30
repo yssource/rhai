@@ -22,6 +22,15 @@ num-traits = { version = "0.2", default-features = false }
 smartstring = { version = "0.2.8", default-features = false }
 rhai_codegen = { version = "1.2", path = "codegen", default-features = false }
 
+no-std-compat = { version = "0.4", default-features = false, features = ["alloc"], optional = true }
+libm = { version = "0.2", default-features = false, optional = true }
+core-error = { version = "0.0", default-features = false, features = ["alloc"], optional = true }
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"], optional = true }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"], optional = true }
+unicode-xid = { version = "0.2", default-features = false, optional = true }
+rust_decimal = { version = "1.16", default-features = false, features = ["maths"], optional = true }
+rustyline = { version = "9", optional = true }
+
 [dev-dependencies]
 serde_bytes = "0.11"
 
@@ -44,6 +53,7 @@ no_module = []                  # no modules
 internals = []                  # expose internal data structures
 unicode-xid-ident = ["unicode-xid"] # allow Unicode Standard Annex #31 for identifiers.
 metadata = ["serde", "serde_json", "rhai_codegen/metadata", "smartstring/serde"] # enable exporting functions metadata
+debugging = ["internals"]       # enable debugging
 
 no_std = ["no-std-compat", "num-traits/libm", "core-error", "libm", "ahash/compile-time-rng"]
 
@@ -51,54 +61,25 @@ no_std = ["no-std-compat", "num-traits/libm", "core-error", "libm", "ahash/compi
 wasm-bindgen = ["instant/wasm-bindgen"]
 stdweb = ["instant/stdweb"]
 
+[[bin]]
+name = "rhai-repl"
+required-features = ["rustyline"]
+
+[[bin]]
+name = "rhai-run"
+
+[[bin]]
+name = "rhai-dbg"
+required-features = ["debugging"]
+
 [profile.release]
 lto = "fat"
 codegen-units = 1
 #opt-level = "z"     # optimize for size
 #panic = 'abort'     # remove stack backtrace for no-std
 
-[dependencies.no-std-compat]
-version = "0.4"
-default-features = false
-features = ["alloc"]
-optional = true
-
-[dependencies.libm]
-version = "0.2"
-default-features = false
-optional = true
-
-[dependencies.core-error]
-version = "0.0"
-default-features = false
-features = ["alloc"]
-optional = true
-
-[dependencies.serde]
-version = "1.0"
-default-features = false
-features = ["derive", "alloc"]
-optional = true
-
-[dependencies.serde_json]
-version = "1.0"
-default-features = false
-features = ["alloc"]
-optional = true
-
-[dependencies.unicode-xid]
-version = "0.2"
-default-features = false
-optional = true
-
-[dependencies.rust_decimal]
-version = "1.16"
-default-features = false
-features = ["maths"]
-optional = true
-
 [target.'cfg(target_family = "wasm")'.dependencies]
 instant = { version = "0.1.10" } # WASM implementation of std::time::Instant
 
 [package.metadata.docs.rs]
-features = ["metadata", "serde", "internals", "decimal"] # compiling for no-std
+features = ["metadata", "serde", "internals", "decimal", "debugging"]

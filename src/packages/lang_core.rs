@@ -92,13 +92,14 @@ fn collect_fn_metadata(
     // Create a metadata record for a function.
     fn make_metadata(
         dict: &BTreeSet<Identifier>,
-        namespace: Option<Identifier>,
+        #[cfg(not(feature = "no_module"))] namespace: Option<Identifier>,
         func: &ScriptFnDef,
     ) -> Map {
         const DICT: &str = "key exists";
 
         let mut map = Map::new();
 
+        #[cfg(not(feature = "no_module"))]
         if let Some(ns) = namespace {
             map.insert(dict.get("namespace").expect(DICT).clone(), ns.into());
         }
@@ -133,6 +134,7 @@ fn collect_fn_metadata(
 
     // Intern strings
     let dict: BTreeSet<Identifier> = [
+        #[cfg(not(feature = "no_module"))]
         "namespace",
         "name",
         "access",
@@ -150,21 +152,52 @@ fn collect_fn_metadata(
     ctx.iter_namespaces()
         .flat_map(Module::iter_script_fn)
         .filter(|(s, a, n, p, f)| filter(*s, *a, n, *p, f))
-        .for_each(|(_, _, _, _, f)| list.push(make_metadata(&dict, None, f).into()));
+        .for_each(|(_, _, _, _, f)| {
+            list.push(
+                make_metadata(
+                    &dict,
+                    #[cfg(not(feature = "no_module"))]
+                    None,
+                    f,
+                )
+                .into(),
+            )
+        });
 
     ctx.engine()
         .global_modules
         .iter()
         .flat_map(|m| m.iter_script_fn())
         .filter(|(ns, a, n, p, f)| filter(*ns, *a, n, *p, f))
-        .for_each(|(_, _, _, _, f)| list.push(make_metadata(&dict, None, f).into()));
+        .for_each(|(_, _, _, _, f)| {
+            list.push(
+                make_metadata(
+                    &dict,
+                    #[cfg(not(feature = "no_module"))]
+                    None,
+                    f,
+                )
+                .into(),
+            )
+        });
 
+    #[cfg(not(feature = "no_module"))]
     ctx.engine()
         .global_sub_modules
         .values()
         .flat_map(|m| m.iter_script_fn())
         .filter(|(ns, a, n, p, f)| filter(*ns, *a, n, *p, f))
-        .for_each(|(_, _, _, _, f)| list.push(make_metadata(&dict, None, f).into()));
+        .for_each(|(_, _, _, _, f)| {
+            list.push(
+                make_metadata(
+                    &dict,
+                    #[cfg(not(feature = "no_module"))]
+                    None,
+                    f,
+                )
+                .into(),
+            )
+        });
 
     #[cfg(not(feature = "no_module"))]
     {
@@ -189,7 +222,7 @@ fn collect_fn_metadata(
                 .for_each(|(_, _, _, _, f)| {
                     list.push(make_metadata(dict, Some(namespace.clone()), f).into())
                 });
-            module.iter_sub_modules().for_each(|(ns, m)| {
+            for (ns, m) in module.iter_sub_modules() {
                 let ns = format!(
                     "{}{}{}",
                     namespace,
@@ -197,11 +230,12 @@ fn collect_fn_metadata(
                     ns
                 );
                 scan_module(list, dict, ns.into(), m.as_ref(), filter)
-            });
+            }
         }
 
-        ctx.iter_imports_raw()
-            .for_each(|(ns, m)| scan_module(&mut list, &dict, ns.clone(), m.as_ref(), filter));
+        for (ns, m) in ctx.iter_imports_raw() {
+            scan_module(&mut list, &dict, ns.clone(), m.as_ref(), filter)
+        }
     }
 
     list

@@ -22,7 +22,7 @@ pub use hashing::{
     combine_hashes, get_hasher,
 };
 pub use native::{
-    shared_make_mut, shared_take, shared_take_or_clone, shared_try_take, shared_write_lock, FnAny,
+    locked_write, shared_make_mut, shared_take, shared_take_or_clone, shared_try_take, FnAny,
     FnPlugin, IteratorFn, Locked, NativeCallContext, SendSync, Shared,
 };
 pub use plugin::PluginFunction;

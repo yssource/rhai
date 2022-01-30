@@ -317,11 +317,10 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
             foo = calc(foo);
             hello = `hello, ${foo} worlds!`;
 
-            export
-                x as abc,
-                x as xxx,
-                foo,
-                hello;
+            export x as abc;
+            export x as xxx;
+            export foo;
+            export hello;
         "#,
     )?;
 

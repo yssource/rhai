@@ -17,7 +17,7 @@ pub enum CallableFunction {
     /// and the rest passed by value.
     Method(Shared<FnAny>),
     /// An iterator function.
-    Iterator(IteratorFn),
+    Iterator(Shared<IteratorFn>),
     /// A plugin function,
     Plugin(Shared<FnPlugin>),
     /// A script-defined function.
@@ -177,9 +177,9 @@ impl CallableFunction {
     /// Get a reference to an iterator function.
     #[inline]
     #[must_use]
-    pub fn get_iter_fn(&self) -> Option<IteratorFn> {
+    pub fn get_iter_fn(&self) -> Option<&IteratorFn> {
         match self {
-            Self::Iterator(f) => Some(*f),
+            Self::Iterator(f) => Some(f.as_ref()),
             Self::Pure(_) | Self::Method(_) | Self::Plugin(_) => None,
 
             #[cfg(not(feature = "no_function"))]
@@ -215,13 +215,6 @@ impl CallableFunction {
     #[must_use]
     pub fn from_plugin(func: impl PluginFunction + 'static + SendSync) -> Self {
         Self::Plugin((Box::new(func) as Box<FnPlugin>).into())
-    }
-}
-
-impl From<IteratorFn> for CallableFunction {
-    #[inline(always)]
-    fn from(func: IteratorFn) -> Self {
-        Self::Iterator(func)
     }
 }
 

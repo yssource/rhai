@@ -13,7 +13,7 @@ pub use flags::{FnAccess, OptionFlags, AST_OPTION_FLAGS};
 pub use ident::Ident;
 #[cfg(not(feature = "no_function"))]
 pub use script_fn::{ScriptFnDef, ScriptFnMetadata};
-pub use stmt::{OpAssignment, Stmt, StmtBlock};
+pub use stmt::{ConditionalStmtBlock, OpAssignment, Stmt, StmtBlock, SwitchCases, TryCatchBlock};
 
 #[cfg(not(feature = "no_float"))]
 pub use expr::FloatWrapper;

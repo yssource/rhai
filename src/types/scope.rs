@@ -534,8 +534,12 @@ impl Scope<'_> {
             Self::new(),
             |mut entries, (index, (name, alias))| {
                 if !entries.names.iter().any(|(key, _)| key == name) {
+                    let orig_value = &self.values[len - 1 - index];
+                    let mut value = orig_value.clone();
+                    value.set_access_mode(orig_value.access_mode());
+
                     entries.names.push((name.clone(), alias.clone()));
-                    entries.values.push(self.values[len - 1 - index].clone());
+                    entries.values.push(value);
                 }
                 entries
             },
@@ -607,9 +611,9 @@ impl Scope<'_> {
 impl<K: Into<Identifier>> Extend<(K, Dynamic)> for Scope<'_> {
     #[inline]
     fn extend<T: IntoIterator<Item = (K, Dynamic)>>(&mut self, iter: T) {
-        iter.into_iter().for_each(|(name, value)| {
+        for (name, value) in iter {
             self.push_dynamic_value(name, AccessMode::ReadWrite, value);
-        });
+        }
     }
 }
 
@@ -625,7 +629,7 @@ impl<K: Into<Identifier>> FromIterator<(K, Dynamic)> for Scope<'_> {
 impl<K: Into<Identifier>> Extend<(K, bool, Dynamic)> for Scope<'_> {
     #[inline]
     fn extend<T: IntoIterator<Item = (K, bool, Dynamic)>>(&mut self, iter: T) {
-        iter.into_iter().for_each(|(name, is_constant, value)| {
+        for (name, is_constant, value) in iter {
             self.push_dynamic_value(
                 name,
                 if is_constant {
@@ -635,7 +639,7 @@ impl<K: Into<Identifier>> Extend<(K, bool, Dynamic)> for Scope<'_> {
                 },
                 value,
             );
-        });
+        }
     }
 }
 

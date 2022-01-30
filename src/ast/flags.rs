@@ -13,8 +13,12 @@ pub enum FnAccess {
     Private,
 }
 
-/// A type that holds a configuration option with bit-flags.
-/// Exported under the `internals` feature only.
+/// A type that holds a configuration option with bit-flags. Exported under the `internals` feature
+/// only.
+///
+/// Functionality-wise, this type is a naive and simplistic implementation of
+/// [`bit_flags`](https://crates.io/crates/bitflags).  It is re-implemented to avoid pulling in yet
+/// one more dependency.
 #[derive(PartialEq, Eq, Copy, Clone, Hash, Default)]
 pub struct OptionFlags(u8);
 
@@ -120,19 +124,20 @@ pub mod AST_OPTION_FLAGS {
     /// _(internals)_ The [`AST`][crate::AST] node is constant.
     /// Exported under the `internals` feature only.
     pub const AST_OPTION_CONSTANT: OptionFlags = OptionFlags(0b0000_0001);
-    /// _(internals)_ The [`AST`][crate::AST] node is public.
+    /// _(internals)_ The [`AST`][crate::AST] node is exported to the outside (i.e. public).
     /// Exported under the `internals` feature only.
-    pub const AST_OPTION_PUBLIC: OptionFlags = OptionFlags(0b0000_0010);
-    /// _(internals)_ The [`AST`][crate::AST] node is in negated mode.
+    pub const AST_OPTION_EXPORTED: OptionFlags = OptionFlags(0b0000_0010);
+    /// _(internals)_ The [`AST`][crate::AST] node is in negated mode
+    /// (meaning whatever information is the opposite).
     /// Exported under the `internals` feature only.
     pub const AST_OPTION_NEGATED: OptionFlags = OptionFlags(0b0000_0100);
     /// _(internals)_ The [`AST`][crate::AST] node breaks out of normal control flow.
     /// Exported under the `internals` feature only.
-    pub const AST_OPTION_BREAK_OUT: OptionFlags = OptionFlags(0b0000_1000);
+    pub const AST_OPTION_BREAK: OptionFlags = OptionFlags(0b0000_1000);
     /// _(internals)_ Mask of all options.
     /// Exported under the `internals` feature only.
     pub(crate) const AST_OPTION_ALL: OptionFlags = OptionFlags(
-        AST_OPTION_CONSTANT.0 | AST_OPTION_PUBLIC.0 | AST_OPTION_NEGATED.0 | AST_OPTION_BREAK_OUT.0,
+        AST_OPTION_CONSTANT.0 | AST_OPTION_EXPORTED.0 | AST_OPTION_NEGATED.0 | AST_OPTION_BREAK.0,
     );
 
     impl std::fmt::Debug for OptionFlags {
@@ -158,9 +163,9 @@ pub mod AST_OPTION_FLAGS {
 
             f.write_str("(")?;
             write_option(self, f, num_flags, AST_OPTION_CONSTANT, "Constant")?;
-            write_option(self, f, num_flags, AST_OPTION_PUBLIC, "Public")?;
+            write_option(self, f, num_flags, AST_OPTION_EXPORTED, "Exported")?;
             write_option(self, f, num_flags, AST_OPTION_NEGATED, "Negated")?;
-            write_option(self, f, num_flags, AST_OPTION_BREAK_OUT, "Break")?;
+            write_option(self, f, num_flags, AST_OPTION_BREAK, "Break")?;
             f.write_str(")")?;
 
             Ok(())
