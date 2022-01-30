@@ -80,7 +80,6 @@ impl Engine {
         let orig_imports_len = global.num_imports();
 
         #[cfg(feature = "debugging")]
-        #[cfg(not(feature = "no_function"))]
         let orig_call_stack_len = global.debugger.call_stack().len();
 
         // Put arguments into scope as variables
@@ -91,7 +90,6 @@ impl Engine {
 
         // Push a new call stack frame
         #[cfg(feature = "debugging")]
-        #[cfg(not(feature = "no_function"))]
         global.debugger.push_call_stack_frame(
             fn_def.name.clone(),
             scope
@@ -113,7 +111,6 @@ impl Engine {
         let (lib, constants) = if let Some(crate::ast::EncapsulatedEnviron {
             lib: ref fn_lib,
             ref imports,
-            #[cfg(not(feature = "no_function"))]
             ref constants,
         }) = fn_def.environ
         {
@@ -129,10 +126,7 @@ impl Engine {
                     lib_merged.extend(lib.iter().cloned());
                     &lib_merged
                 },
-                #[cfg(not(feature = "no_function"))]
                 Some(mem::replace(&mut global.constants, constants.clone())),
-                #[cfg(feature = "no_function")]
-                None,
             )
         } else {
             (lib, None)
@@ -183,7 +177,7 @@ impl Engine {
         global.truncate_imports(orig_imports_len);
 
         // Restore constants
-        #[cfg(not(feature = "no_function"))]
+        #[cfg(not(feature = "no_module"))]
         if let Some(constants) = constants {
             global.constants = constants;
         }
@@ -193,7 +187,6 @@ impl Engine {
 
         // Pop the call stack
         #[cfg(feature = "debugging")]
-        #[cfg(not(feature = "no_function"))]
         global.debugger.rewind_call_stack(orig_call_stack_len);
 
         result
