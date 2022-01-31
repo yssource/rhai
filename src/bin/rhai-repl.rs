@@ -44,9 +44,13 @@ fn print_error(input: &str, mut err: EvalAltResult) {
 /// Print help text.
 fn print_help() {
     println!("help       => print this help");
-    println!("keys       => print list of key bindings");
     println!("quit, exit => quit");
+    println!("keys       => print list of key bindings");
     println!("history    => print lines history");
+    println!("!!         => repeat the last history line");
+    println!("!<#>       => repeat a particular history line");
+    println!("!<text>    => repeat the last history line starting with some text");
+    println!("!?<text>   => repeat the last history line containing some text");
     println!("scope      => print all variables in the scope");
     println!("strict     => toggle on/off Strict Variables Mode");
     #[cfg(not(feature = "no_optimize"))]
@@ -311,6 +315,10 @@ fn main() {
 
     // REPL loop
     let mut input = String::new();
+    let mut replacement = None;
+    let mut replacement_index = 0;
+    let mut history_offset = 1;
+
     let mut main_ast = AST::empty();
     let mut ast_u = AST::empty();
     let mut ast = AST::empty();
@@ -318,35 +326,53 @@ fn main() {
     print_help();
 
     'main_loop: loop {
-        input.clear();
-
-        loop {
-            let prompt = if input.is_empty() {
-                "rhai-repl> "
+        if let Some(replace) = replacement.take() {
+            input = replace;
+            if rl.add_history_entry(input.clone()) {
+                history_offset += 1;
+            }
+            if input.contains('\n') {
+                println!("[{}] ~~~~", replacement_index);
+                println!("{}", input);
+                println!("~~~~");
             } else {
-                "         > "
-            };
+                println!("[{}] {}", replacement_index, input);
+            }
+            replacement_index = 0;
+        } else {
+            input.clear();
 
-            match rl.readline(prompt) {
-                // Line continuation
-                Ok(mut line) if line.ends_with("\\") => {
-                    line.pop();
-                    input += line.trim_end();
-                    input.push('\n');
-                }
-                Ok(line) => {
-                    input += line.trim_end();
-                    if !input.is_empty() {
-                        rl.add_history_entry(input.clone());
+            loop {
+                let prompt = if input.is_empty() {
+                    "rhai-repl> "
+                } else {
+                    "         > "
+                };
+
+                match rl.readline(prompt) {
+                    // Line continuation
+                    Ok(mut line) if line.ends_with("\\") => {
+                        line.pop();
+                        input += line.trim_end();
+                        input.push('\n');
                     }
-                    break;
-                }
+                    Ok(line) => {
+                        input += line.trim_end();
+                        if !input.is_empty() && !input.starts_with('!') && input.trim() != "history"
+                        {
+                            if rl.add_history_entry(input.clone()) {
+                                history_offset += 1;
+                            }
+                        }
+                        break;
+                    }
 
-                Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => break 'main_loop,
+                    Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => break 'main_loop,
 
-                Err(err) => {
-                    eprintln!("Error: {:?}", err);
-                    break 'main_loop;
+                    Err(err) => {
+                        eprintln!("Error: {:?}", err);
+                        break 'main_loop;
+                    }
                 }
             }
         }
@@ -371,10 +397,10 @@ fn main() {
             "history" => {
                 for (i, h) in rl.history().iter().enumerate() {
                     match &h.split('\n').collect::<Vec<_>>()[..] {
-                        [line] => println!("[{}] {}", i + 1, line),
+                        [line] => println!("[{}] {}", history_offset + i, line),
                         lines => {
                             for (x, line) in lines.iter().enumerate() {
-                                let number = format!("[{}]", i + 1);
+                                let number = format!("[{}]", history_offset + i);
                                 if x == 0 {
                                     println!("{} {}", number, line.trim_end());
                                 } else {
@@ -445,6 +471,57 @@ fn main() {
                         .gen_fn_metadata_with_ast_to_json(&main_ast, true)
                         .unwrap()
                 );
+                continue;
+            }
+            "!!" => {
+                if let Some(line) = rl.history().last() {
+                    replacement = Some(line.clone());
+                    replacement_index = history_offset + rl.history().len() - 1;
+                } else {
+                    eprintln!("No lines history!");
+                }
+                continue;
+            }
+            _ if script.starts_with("!?") => {
+                let text = script[2..].trim();
+                if let Some((n, line)) = rl
+                    .history()
+                    .iter()
+                    .rev()
+                    .enumerate()
+                    .find(|&(_, h)| h.contains(text))
+                {
+                    replacement = Some(line.clone());
+                    replacement_index = history_offset + (rl.history().len() - 1 - n);
+                } else {
+                    eprintln!("History line not found: {}", text);
+                }
+                continue;
+            }
+            _ if script.starts_with('!') => {
+                if let Ok(num) = script[1..].parse::<usize>() {
+                    if num >= history_offset {
+                        if let Some(line) = rl.history().get(num - history_offset) {
+                            replacement = Some(line.clone());
+                            replacement_index = num;
+                            continue;
+                        }
+                    }
+                } else {
+                    let prefix = script[1..].trim();
+                    if let Some((n, line)) = rl
+                        .history()
+                        .iter()
+                        .rev()
+                        .enumerate()
+                        .find(|&(_, h)| h.trim_start().starts_with(prefix))
+                    {
+                        replacement = Some(line.clone());
+                        replacement_index = history_offset + (rl.history().len() - 1 - n);
+                        continue;
+                    }
+                }
+                eprintln!("History line not found: {}", &script[1..]);
                 continue;
             }
             _ => (),

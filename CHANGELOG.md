@@ -29,9 +29,32 @@ New features
 Enhancements
 ------------
 
-* `rhai-repl` tool has a few more commands, such as `strict` to turn on/off _Strict Variables Mode_ and `optimize` to turn on/off script optimization.
 * Default features for dependencies (such as `ahash/std` and `num-traits/std`) are no longer required.
 * The `no_module` feature now eliminates large sections of code via feature gates.
+* Debug display of `AST` is improved.
+
+REPL tool changes
+-----------------
+
+The REPL bin tool, `rhai-rpl`, has been enhanced.
+
+### Build changes
+
+* The `rustyline` feature is now required in order to build `rhai-repl`.
+* Therefore, `rhai-repl` is no longer automatically built when using a simple `cargo build` with default features.
+
+### Line editor
+
+* `rhai-repl` now uses [`rustyline`](https://crates.io/crates/rustyline) as a line editor with history.
+* Shift-Enter can now be used to enter multiple lines without having to attach the `\` continuation character the end of each line.
+
+### New commands
+
+* `strict` to turn on/off _Strict Variables Mode_.
+* `optimize` to turn on/off script optimization.
+* `history` to print lines history.
+* `!!`, `!`_num_ and `!`_text_ to recall a history line.
+* `keys` to print all key bindings.
 
 
 Version 1.4.1
