@@ -256,7 +256,7 @@ pub use parser::ParseState;
 pub use ast::{
     ASTNode, BinaryExpr, ConditionalStmtBlock, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident,
     OpAssignment, OptionFlags, ScriptFnDef, Stmt, StmtBlock, SwitchCases, TryCatchBlock,
-    AST_OPTION_FLAGS::*,
+    AST_OPTION_FLAGS,
 };
 
 #[cfg(feature = "internals")]

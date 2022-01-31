@@ -52,11 +52,11 @@ pub struct ParseState<'e> {
     pub entry_stack_len: usize,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
     #[cfg(not(feature = "no_closure"))]
-    pub external_vars: BTreeMap<Identifier, Position>,
+    pub external_vars: Vec<crate::ast::Ident>,
     /// An indicator that disables variable capturing into externals one single time
     /// up until the nearest consumed Identifier token.
     /// If set to false the next call to [`access_var`][ParseState::access_var] will not capture the variable.
-    /// All consequent calls to [`access_var`][ParseState::access_var] will not be affected
+    /// All consequent calls to [`access_var`][ParseState::access_var] will not be affected.
     #[cfg(not(feature = "no_closure"))]
     pub allow_capture: bool,
     /// Encapsulates a local stack with imported [module][crate::Module] names.
@@ -85,7 +85,7 @@ impl<'e> ParseState<'e> {
             #[cfg(not(feature = "no_function"))]
             max_function_expr_depth: NonZeroUsize::new(engine.max_function_expr_depth()),
             #[cfg(not(feature = "no_closure"))]
-            external_vars: BTreeMap::new(),
+            external_vars: Vec::new(),
             #[cfg(not(feature = "no_closure"))]
             allow_capture: true,
             interned_strings: StringsInterner::new(),
@@ -128,8 +128,11 @@ impl<'e> ParseState<'e> {
 
         #[cfg(not(feature = "no_closure"))]
         if self.allow_capture {
-            if index.is_none() && !self.external_vars.contains_key(name) {
-                self.external_vars.insert(name.into(), _pos);
+            if index.is_none() && !self.external_vars.iter().any(|v| v.name == name) {
+                self.external_vars.push(crate::ast::Ident {
+                    name: name.into(),
+                    pos: _pos,
+                });
             }
         } else {
             self.allow_capture = true
@@ -1258,12 +1261,14 @@ fn parse_primary(
 
             #[cfg(not(feature = "no_closure"))]
             new_state.external_vars.iter().try_for_each(
-                |(captured_var, &pos)| -> ParseResult<_> {
-                    let index = state.access_var(captured_var, pos);
+                |crate::ast::Ident { name, pos }| -> ParseResult<_> {
+                    let index = state.access_var(name, *pos);
 
-                    if !settings.is_closure && settings.strict_var && index.is_none() {
+                    if settings.strict_var && !settings.is_closure && index.is_none() {
                         // If the parent scope is not inside another capturing closure
-                        Err(PERR::VariableUndefined(captured_var.to_string()).into_err(pos))
+                        // then we can conclude that the captured variable doesn't exist.
+                        // Under Strict Variables mode, this is not allowed.
+                        Err(PERR::VariableUndefined(name.to_string()).into_err(*pos))
                     } else {
                         Ok(())
                     }
@@ -3311,19 +3316,20 @@ fn parse_anon_fn(
     // External variables may need to be processed in a consistent order,
     // so extract them into a list.
     #[cfg(not(feature = "no_closure"))]
-    let externals: StaticVec<Identifier> = state
-        .external_vars
-        .iter()
-        .map(|(name, _)| name.clone())
-        .collect();
+    let (mut params, externals) = {
+        let externals: StaticVec<Identifier> = state
+            .external_vars
+            .iter()
+            .map(|crate::ast::Ident { name, .. }| name.clone())
+            .collect();
 
-    #[cfg(not(feature = "no_closure"))]
-    let mut params = StaticVec::with_capacity(params_list.len() + externals.len());
+        let mut params = StaticVec::with_capacity(params_list.len() + externals.len());
+        params.extend(externals.iter().cloned());
+
+        (params, externals)
+    };
     #[cfg(feature = "no_closure")]
     let mut params = StaticVec::with_capacity(params_list.len());
-
-    #[cfg(not(feature = "no_closure"))]
-    params.extend(externals.iter().cloned());
 
     params.append(&mut params_list);
 

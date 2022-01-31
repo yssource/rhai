@@ -165,7 +165,7 @@ impl FnCallHashes {
 
 /// _(internals)_ A function call.
 /// Exported under the `internals` feature only.
-#[derive(Debug, Clone, Default, Hash)]
+#[derive(Clone, Default, Hash)]
 pub struct FnCallExpr {
     /// Namespace of the function, if any.
     ///
@@ -191,6 +191,24 @@ pub struct FnCallExpr {
     pub constants: StaticVec<Dynamic>,
     /// Does this function call capture the parent scope?
     pub capture_parent_scope: bool,
+}
+
+impl fmt::Debug for FnCallExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut ff = f.debug_struct("FnCallExpr");
+        #[cfg(not(feature = "no_module"))]
+        self.namespace.as_ref().map(|ns| ff.field("namespace", ns));
+        ff.field("name", &self.name)
+            .field("hash", &self.hashes)
+            .field("arg_exprs", &self.args);
+        if !self.constants.is_empty() {
+            ff.field("constant_args", &self.constants);
+        }
+        if self.capture_parent_scope {
+            ff.field("capture_parent_scope", &self.capture_parent_scope);
+        }
+        ff.finish()
+    }
 }
 
 impl FnCallExpr {
@@ -459,26 +477,12 @@ impl fmt::Debug for Expr {
                 f.write_str(")")
             }
             Self::Property(x, _) => write!(f, "Property({})", x.2),
-            Self::Stack(x, _) => write!(f, "StackSlot({})", x),
+            Self::Stack(x, _) => write!(f, "ConstantArg#{}", x),
             Self::Stmt(x) => {
                 f.write_str("ExprStmtBlock")?;
                 f.debug_list().entries(x.iter()).finish()
             }
-            Self::FnCall(x, _) => {
-                let mut ff = f.debug_struct("FnCall");
-                #[cfg(not(feature = "no_module"))]
-                x.namespace.as_ref().map(|ns| ff.field("namespace", ns));
-                ff.field("name", &x.name)
-                    .field("hash", &x.hashes)
-                    .field("args", &x.args);
-                if !x.constants.is_empty() {
-                    ff.field("constants", &x.constants);
-                }
-                if x.capture_parent_scope {
-                    ff.field("capture_parent_scope", &x.capture_parent_scope);
-                }
-                ff.finish()
-            }
+            Self::FnCall(x, _) => fmt::Debug::fmt(x, f),
             Self::Index(x, term, pos) => {
                 display_pos = *pos;
 

@@ -149,7 +149,7 @@ impl fmt::Display for EvalAltResult {
                 "" => f.write_str("Malformed dot expression"),
                 s => f.write_str(s),
             }?,
-            Self::ErrorIndexingType(s, _) => write!(f, "Indexer not registered for {}", s)?,
+            Self::ErrorIndexingType(s, _) => write!(f, "Indexer not registered: {}", s)?,
             Self::ErrorUnboundThis(_) => f.write_str("'this' is not bound")?,
             Self::ErrorFor(_) => f.write_str("For loop expects a type that is iterable")?,
             Self::ErrorTooManyOperations(_) => f.write_str("Too many operations")?,
@@ -166,7 +166,7 @@ impl fmt::Display for EvalAltResult {
             }
             Self::ErrorRuntime(d, _) => write!(f, "Runtime error: {}", d)?,
 
-            Self::ErrorAssignmentToConstant(s, _) => write!(f, "Cannot modify constant {}", s)?,
+            Self::ErrorAssignmentToConstant(s, _) => write!(f, "Cannot modify constant: {}", s)?,
             Self::ErrorMismatchOutputType(s, r, _) => match (r.as_str(), s.as_str()) {
                 ("", s) => write!(f, "Output type is incorrect, expecting {}", s),
                 (r, "") => write!(f, "Output type is incorrect: {}", r),
