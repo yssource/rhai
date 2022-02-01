@@ -269,6 +269,7 @@ impl Engine {
         init: impl Fn() -> Dynamic + SendSync + 'static,
         callback: impl Fn(
                 &mut EvalContext,
+                crate::eval::DebuggerEvent,
                 crate::ast::ASTNode,
                 Option<&str>,
                 Position,

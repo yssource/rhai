@@ -50,7 +50,7 @@ fn test_debugger_state() -> Result<(), Box<EvalAltResult>> {
             state.insert("foo".into(), false.into());
             Dynamic::from_map(state)
         },
-        |context, _, _, _| {
+        |context, _, _, _, _| {
             // Get global runtime state
             let global = context.global_runtime_state_mut();
 

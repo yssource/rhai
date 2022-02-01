@@ -1,4 +1,4 @@
-use rhai::debugger::DebuggerCommand;
+use rhai::debugger::{BreakPoint, DebuggerCommand, DebuggerEvent};
 use rhai::{Dynamic, Engine, EvalAltResult, ImmutableString, Position, Scope};
 
 use std::{
@@ -33,6 +33,32 @@ fn print_source(lines: &[String], pos: Position, offset: usize) {
         if let Some(pos) = pos.position() {
             println!("{0:>1$}", "^", line_no.len() + pos + offset);
         }
+    }
+}
+
+fn print_current_source(
+    context: &mut rhai::EvalContext,
+    source: Option<&str>,
+    pos: Position,
+    lines: &Vec<String>,
+) {
+    let current_source = &mut *context
+        .global_runtime_state_mut()
+        .debugger
+        .state_mut()
+        .write_lock::<ImmutableString>()
+        .unwrap();
+    let src = source.unwrap_or("");
+    if src != current_source {
+        println!(">>> Source => {}", source.unwrap_or("main script"));
+        *current_source = src.into();
+    }
+    if !src.is_empty() {
+        // Print just a line number for imported modules
+        println!("{} @ {:?}", src, pos);
+    } else {
+        // Print the current source line
+        print_source(lines, pos, 0);
     }
 }
 
@@ -71,36 +97,38 @@ fn print_error(input: &str, mut err: EvalAltResult) {
 
 /// Print debug help.
 fn print_debug_help() {
-    println!("help                  => print this help");
-    println!("quit, exit, kill      => quit");
-    println!("scope                 => print the scope");
-    println!("print                 => print all variables de-duplicated");
-    println!("print <variable>      => print the current value of a variable");
+    println!("help, h                => print this help");
+    println!("quit, q, exit, kill    => quit");
+    println!("scope                  => print the scope");
+    println!("print, p               => print all variables de-duplicated");
+    println!("print/p <variable>     => print the current value of a variable");
     #[cfg(not(feature = "no_module"))]
-    println!("imports               => print all imported modules");
-    println!("node                  => print the current AST node");
-    println!("backtrace             => print the current call-stack");
-    println!("breakpoints           => print all break-points");
-    println!("enable <bp#>          => enable a break-point");
-    println!("disable <bp#>         => disable a break-point");
-    println!("delete <bp#>          => delete a break-point");
-    println!("clear                 => delete all break-points");
+    println!("imports                => print all imported modules");
+    println!("node                   => print the current AST node");
+    println!("list, l                => print the current source line");
+    println!("backtrace, bt          => print the current call-stack");
+    println!("info break, i b        => print all break-points");
+    println!("enable/en <bp#>        => enable a break-point");
+    println!("disable/dis <bp#>      => disable a break-point");
+    println!("delete, d              => delete all break-points");
+    println!("delete/d <bp#>         => delete a break-point");
     #[cfg(not(feature = "no_position"))]
-    println!("break                 => set a new break-point at the current position");
+    println!("break, b               => set a new break-point at the current position");
     #[cfg(not(feature = "no_position"))]
-    println!("break <line#>         => set a new break-point at a line number");
+    println!("break/b <line#>        => set a new break-point at a line number");
     #[cfg(not(feature = "no_object"))]
-    println!("break .<prop>         => set a new break-point for a property access");
-    println!("break <func>          => set a new break-point for a function call");
+    println!("break/b .<prop>        => set a new break-point for a property access");
+    println!("break/b <func>         => set a new break-point for a function call");
     println!(
-        "break <func> <#args>  => set a new break-point for a function call with #args arguments"
+        "break/b <func> <#args> => set a new break-point for a function call with #args arguments"
     );
-    println!("throw [message]       => throw an exception (message optional)");
-    println!("run                   => restart the script evaluation from beginning");
-    println!("step                  => go to the next expression, diving into functions");
-    println!("over                  => go to the next expression, skipping oer functions");
-    println!("next                  => go to the next statement, skipping over functions");
-    println!("continue              => continue normal execution");
+    println!("throw [message]        => throw an exception (message optional)");
+    println!("run, r                 => restart the script evaluation from beginning");
+    println!("step, s                => go to the next expression, diving into functions");
+    println!("over                   => go to the next expression, skipping oer functions");
+    println!("next, n, <Enter>       => go to the next statement, skipping over functions");
+    println!("finish, f              => continue until the end of the current function call");
+    println!("continue, c            => continue normal execution");
     println!();
 }
 
@@ -224,31 +252,33 @@ fn main() {
         // Store the current source in the debugger state
         || "".into(),
         // Main debugging interface
-        move |context, node, source, pos| {
-            {
-                let current_source = &mut *context
-                    .global_runtime_state_mut()
-                    .debugger
-                    .state_mut()
-                    .write_lock::<ImmutableString>()
-                    .unwrap();
-
-                let src = source.unwrap_or("");
-
-                // Check source
-                if src != current_source {
-                    println!(">>> Source => {}", source.unwrap_or("main script"));
-                    *current_source = src.into();
+        move |context, event, node, source, pos| {
+            match event {
+                DebuggerEvent::Step => (),
+                DebuggerEvent::BreakPoint(n) => {
+                    match context.global_runtime_state().debugger.break_points()[n] {
+                        #[cfg(not(feature = "no_position"))]
+                        BreakPoint::AtPosition { .. } => (),
+                        BreakPoint::AtFunctionName { ref name, .. }
+                        | BreakPoint::AtFunctionCall { ref name, .. } => {
+                            println!("! Call to function {}.", name)
+                        }
+                        #[cfg(not(feature = "no_object"))]
+                        BreakPoint::AtProperty { ref name, .. } => {
+                            println!("! Property {} accessed.", name)
+                        }
+                    }
                 }
-
-                if !src.is_empty() {
-                    // Print just a line number for imported modules
-                    println!("{} @ {:?}", src, pos);
-                } else {
-                    // Print the current source line
-                    print_source(&lines, pos, 0);
+                DebuggerEvent::FunctionExitWithValue(r) => {
+                    println!("! Return from function call = {}", r)
+                }
+                DebuggerEvent::FunctionExitWithError(err) => {
+                    println!("! Return from function call with error: {}", err)
                 }
             }
+
+            // Print current source line
+            print_current_source(context, source, pos, &lines);
 
             // Read stdin for commands
             let mut input = String::new();
@@ -267,8 +297,8 @@ fn main() {
                         .collect::<Vec<_>>()
                         .as_slice()
                     {
-                        ["help", ..] => print_debug_help(),
-                        ["exit", ..] | ["quit", ..] | ["kill", ..] => {
+                        ["help" | "h", ..] => print_debug_help(),
+                        ["exit" | "quit" | "q" | "kill", ..] => {
                             println!("Script terminated. Bye!");
                             exit(0);
                         }
@@ -276,12 +306,14 @@ fn main() {
                             println!("{:?} {}@{:?}", node, source.unwrap_or_default(), pos);
                             println!();
                         }
-                        ["continue", ..] => break Ok(DebuggerCommand::Continue),
-                        [] | ["step", ..] => break Ok(DebuggerCommand::StepInto),
+                        ["list" | "l", ..] => print_current_source(context, source, pos, &lines),
+                        ["continue" | "c", ..] => break Ok(DebuggerCommand::Continue),
+                        ["finish" | "f", ..] => break Ok(DebuggerCommand::FunctionExit),
+                        [] | ["step" | "s", ..] => break Ok(DebuggerCommand::StepInto),
                         ["over", ..] => break Ok(DebuggerCommand::StepOver),
-                        ["next", ..] => break Ok(DebuggerCommand::Next),
+                        ["next" | "n", ..] => break Ok(DebuggerCommand::Next),
                         ["scope", ..] => print_scope(context.scope(), false),
-                        ["print", var_name, ..] => {
+                        ["print" | "p", var_name, ..] => {
                             if let Some(value) = context.scope().get_value::<Dynamic>(var_name) {
                                 if value.is::<()>() {
                                     println!("=> ()");
@@ -292,7 +324,7 @@ fn main() {
                                 eprintln!("Variable not found: {}", var_name);
                             }
                         }
-                        ["print", ..] => print_scope(context.scope(), true),
+                        ["print" | "p"] => print_scope(context.scope(), true),
                         #[cfg(not(feature = "no_module"))]
                         ["imports", ..] => {
                             for (i, (name, module)) in context
@@ -311,7 +343,7 @@ fn main() {
                             println!();
                         }
                         #[cfg(not(feature = "no_function"))]
-                        ["backtrace", ..] => {
+                        ["backtrace" | "bt", ..] => {
                             for frame in context
                                 .global_runtime_state()
                                 .debugger
@@ -322,15 +354,7 @@ fn main() {
                                 println!("{}", frame)
                             }
                         }
-                        ["clear", ..] => {
-                            context
-                                .global_runtime_state_mut()
-                                .debugger
-                                .break_points_mut()
-                                .clear();
-                            println!("All break-points cleared.");
-                        }
-                        ["breakpoints", ..] => Iterator::for_each(
+                        ["info", "break", ..] | ["i", "b", ..] => Iterator::for_each(
                             context
                                 .global_runtime_state()
                                 .debugger
@@ -347,7 +371,7 @@ fn main() {
                                 _ => println!("[{}] {}", i + 1, bp),
                             },
                         ),
-                        ["enable", n, ..] => {
+                        ["enable" | "en", n, ..] => {
                             if let Ok(n) = n.parse::<usize>() {
                                 let range = 1..=context
                                     .global_runtime_state_mut()
@@ -370,7 +394,7 @@ fn main() {
                                 eprintln!("Invalid break-point: '{}'", n);
                             }
                         }
-                        ["disable", n, ..] => {
+                        ["disable" | "dis", n, ..] => {
                             if let Ok(n) = n.parse::<usize>() {
                                 let range = 1..=context
                                     .global_runtime_state_mut()
@@ -393,7 +417,7 @@ fn main() {
                                 eprintln!("Invalid break-point: '{}'", n);
                             }
                         }
-                        ["delete", n, ..] => {
+                        ["delete" | "d", n, ..] => {
                             if let Ok(n) = n.parse::<usize>() {
                                 let range = 1..=context
                                     .global_runtime_state_mut()
@@ -414,7 +438,15 @@ fn main() {
                                 eprintln!("Invalid break-point: '{}'", n);
                             }
                         }
-                        ["break", fn_name, args, ..] => {
+                        ["delete" | "d", ..] => {
+                            context
+                                .global_runtime_state_mut()
+                                .debugger
+                                .break_points_mut()
+                                .clear();
+                            println!("All break-points deleted.");
+                        }
+                        ["break" | "b", fn_name, args, ..] => {
                             if let Ok(args) = args.parse::<usize>() {
                                 let bp = rhai::debugger::BreakPoint::AtFunctionCall {
                                     name: fn_name.trim().into(),
@@ -433,7 +465,7 @@ fn main() {
                         }
                         // Property name
                         #[cfg(not(feature = "no_object"))]
-                        ["break", param] if param.starts_with('.') && param.len() > 1 => {
+                        ["break" | "b", param] if param.starts_with('.') && param.len() > 1 => {
                             let bp = rhai::debugger::BreakPoint::AtProperty {
                                 name: param[1..].into(),
                                 enabled: true,
@@ -447,7 +479,7 @@ fn main() {
                         }
                         // Numeric parameter
                         #[cfg(not(feature = "no_position"))]
-                        ["break", param] if param.parse::<usize>().is_ok() => {
+                        ["break" | "b", param] if param.parse::<usize>().is_ok() => {
                             let n = param.parse::<usize>().unwrap();
                             let range = if source.is_none() {
                                 1..=lines.len()
@@ -472,7 +504,7 @@ fn main() {
                             }
                         }
                         // Function name parameter
-                        ["break", param] => {
+                        ["break" | "b", param] => {
                             let bp = rhai::debugger::BreakPoint::AtFunctionName {
                                 name: param.trim().into(),
                                 enabled: true,
@@ -485,7 +517,7 @@ fn main() {
                                 .push(bp);
                         }
                         #[cfg(not(feature = "no_position"))]
-                        ["break", ..] => {
+                        ["break" | "b"] => {
                             let bp = rhai::debugger::BreakPoint::AtPosition {
                                 source: source.unwrap_or("").into(),
                                 pos,
@@ -505,7 +537,7 @@ fn main() {
                             let msg = input.trim().splitn(2, ' ').skip(1).next().unwrap_or("");
                             break Err(EvalAltResult::ErrorRuntime(msg.trim().into(), pos).into());
                         }
-                        ["run", ..] => {
+                        ["run" | "r", ..] => {
                             println!("Restarting script...");
                             break Err(EvalAltResult::ErrorTerminated(Dynamic::UNIT, pos).into());
                         }

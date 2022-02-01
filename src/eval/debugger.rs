@@ -3,7 +3,7 @@
 
 use super::{EvalContext, EvalState, GlobalRuntimeState};
 use crate::ast::{ASTNode, Expr, Stmt};
-use crate::{Dynamic, Engine, Identifier, Module, Position, RhaiResultOf, Scope};
+use crate::{Dynamic, Engine, EvalAltResult, Identifier, Module, Position, RhaiResultOf, Scope};
 use std::fmt;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -17,11 +17,22 @@ pub type OnDebuggingInit = dyn Fn() -> Dynamic + Send + Sync;
 
 /// Callback function for debugging.
 #[cfg(not(feature = "sync"))]
-pub type OnDebuggerCallback =
-    dyn Fn(&mut EvalContext, ASTNode, Option<&str>, Position) -> RhaiResultOf<DebuggerCommand>;
+pub type OnDebuggerCallback = dyn Fn(
+    &mut EvalContext,
+    DebuggerEvent,
+    ASTNode,
+    Option<&str>,
+    Position,
+) -> RhaiResultOf<DebuggerCommand>;
 /// Callback function for debugging.
 #[cfg(feature = "sync")]
-pub type OnDebuggerCallback = dyn Fn(&mut EvalContext, ASTNode, Option<&str>, Position) -> RhaiResultOf<DebuggerCommand>
+pub type OnDebuggerCallback = dyn Fn(
+        &mut EvalContext,
+        DebuggerEvent,
+        ASTNode,
+        Option<&str>,
+        Position,
+    ) -> RhaiResultOf<DebuggerCommand>
     + Send
     + Sync;
 
@@ -36,6 +47,30 @@ pub enum DebuggerCommand {
     StepOver,
     // Run to the next statement, skipping over functions.
     Next,
+    // Run to the end of the current function call.
+    FunctionExit,
+}
+
+/// The debugger status.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum DebuggerStatus {
+    // Stop at the next statement or expression.
+    Next(bool, bool),
+    // Run to the end of the current function call.
+    FunctionExit(usize),
+}
+
+/// A event that triggers the debugger.
+#[derive(Debug, Clone, Copy)]
+pub enum DebuggerEvent<'a> {
+    // Break on next step.
+    Step,
+    // Break on break-point.
+    BreakPoint(usize),
+    // Return from a function with a value.
+    FunctionExitWithValue(&'a Dynamic),
+    // Return from a function with a value.
+    FunctionExitWithError(&'a EvalAltResult),
 }
 
 /// A break-point for debugging.
@@ -198,7 +233,7 @@ impl fmt::Display for CallStackFrame {
 #[derive(Debug, Clone, Hash)]
 pub struct Debugger {
     /// The current status command.
-    status: DebuggerCommand,
+    status: DebuggerStatus,
     /// The current state.
     state: Dynamic,
     /// The current set of break-points.
@@ -215,9 +250,9 @@ impl Debugger {
     pub fn new(engine: &Engine) -> Self {
         Self {
             status: if engine.debugger.is_some() {
-                DebuggerCommand::StepInto
+                DebuggerStatus::Next(true, true)
             } else {
-                DebuggerCommand::Continue
+                DebuggerStatus::Next(false, false)
             },
             state: if let Some((ref init, _)) = engine.debugger {
                 init()
@@ -280,31 +315,26 @@ impl Debugger {
     /// Get the current status of this [`Debugger`].
     #[inline(always)]
     #[must_use]
-    pub fn status(&self) -> DebuggerCommand {
+    pub(crate) fn status(&self) -> DebuggerStatus {
         self.status
-    }
-    /// Get a mutable reference to the current status of this [`Debugger`].
-    #[inline(always)]
-    #[must_use]
-    pub fn status_mut(&mut self) -> &mut DebuggerCommand {
-        &mut self.status
     }
     /// Set the status of this [`Debugger`].
     #[inline(always)]
-    pub fn reset_status(&mut self, status: Option<DebuggerCommand>) {
+    pub(crate) fn reset_status(&mut self, status: Option<DebuggerStatus>) {
         if let Some(cmd) = status {
             self.status = cmd;
         }
     }
-    /// Does a particular [`AST` Node][ASTNode] trigger a break-point?
+    /// Returns the first break-point triggered by a particular [`AST` Node][ASTNode].
     #[must_use]
-    pub fn is_break_point(&self, src: &str, node: ASTNode) -> bool {
+    pub fn is_break_point(&self, src: &str, node: ASTNode) -> Option<usize> {
         let _src = src;
 
         self.break_points()
             .iter()
-            .filter(|&bp| bp.is_enabled())
-            .any(|bp| match bp {
+            .enumerate()
+            .filter(|&(_, bp)| bp.is_enabled())
+            .find(|&(_, bp)| match bp {
                 #[cfg(not(feature = "no_position"))]
                 BreakPoint::AtPosition { pos, .. } if pos.is_none() => false,
                 #[cfg(not(feature = "no_position"))]
@@ -333,6 +363,7 @@ impl Debugger {
                     _ => false,
                 },
             })
+            .map(|(i, _)| i)
     }
     /// Get a slice of all [`BreakPoint`]'s.
     #[inline(always)]
@@ -371,13 +402,8 @@ impl Engine {
     }
     /// Run the debugger callback.
     ///
-    /// Returns `true` if the debugger needs to be reactivated at the end of the block, statement or
+    /// Returns `Some` if the debugger needs to be reactivated at the end of the block, statement or
     /// function call.
-    ///
-    /// # Note
-    ///
-    /// When the debugger callback return [`DebuggerCommand::StepOver`], the debugger if temporarily
-    /// disabled and `true` is returned.
     ///
     /// It is up to the [`Engine`] to reactivate the debugger.
     #[inline]
@@ -391,61 +417,94 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         node: impl Into<ASTNode<'a>>,
         level: usize,
-    ) -> RhaiResultOf<Option<DebuggerCommand>> {
-        if let Some((_, ref on_debugger)) = self.debugger {
-            let node = node.into();
+    ) -> RhaiResultOf<Option<DebuggerStatus>> {
+        let node = node.into();
 
-            // Skip transitive nodes
-            match node {
-                ASTNode::Expr(Expr::Stmt(_)) | ASTNode::Stmt(Stmt::Expr(_)) => return Ok(None),
-                _ => (),
-            }
+        // Skip transitive nodes
+        match node {
+            ASTNode::Expr(Expr::Stmt(_)) | ASTNode::Stmt(Stmt::Expr(_)) => return Ok(None),
+            _ => (),
+        }
 
-            let stop = match global.debugger.status {
-                DebuggerCommand::Continue => false,
-                DebuggerCommand::Next => matches!(node, ASTNode::Stmt(_)),
-                DebuggerCommand::StepInto | DebuggerCommand::StepOver => true,
-            };
+        let stop = match global.debugger.status {
+            DebuggerStatus::Next(false, false) => false,
+            DebuggerStatus::Next(true, false) => matches!(node, ASTNode::Stmt(_)),
+            DebuggerStatus::Next(false, true) => matches!(node, ASTNode::Expr(_)),
+            DebuggerStatus::Next(true, true) => true,
+            DebuggerStatus::FunctionExit(_) => false,
+        };
 
-            if !stop && !global.debugger.is_break_point(&global.source, node) {
+        let event = if stop {
+            DebuggerEvent::Step
+        } else {
+            if let Some(bp) = global.debugger.is_break_point(&global.source, node) {
+                DebuggerEvent::BreakPoint(bp)
+            } else {
                 return Ok(None);
             }
+        };
 
-            let source = global.source.clone();
-            let source = if source.is_empty() {
-                None
-            } else {
-                Some(source.as_str())
-            };
+        self.run_debugger_raw(scope, global, state, lib, this_ptr, node, event, level)
+    }
+    /// Run the debugger callback unconditionally.
+    ///
+    /// Returns `Some` if the debugger needs to be reactivated at the end of the block, statement or
+    /// function call.
+    ///
+    /// It is up to the [`Engine`] to reactivate the debugger.
+    #[inline]
+    #[must_use]
+    pub(crate) fn run_debugger_raw<'a>(
+        &self,
+        scope: &mut Scope,
+        global: &mut GlobalRuntimeState,
+        state: &mut EvalState,
+        lib: &[&Module],
+        this_ptr: &mut Option<&mut Dynamic>,
+        node: ASTNode<'a>,
+        event: DebuggerEvent,
+        level: usize,
+    ) -> Result<Option<DebuggerStatus>, Box<crate::EvalAltResult>> {
+        let source = global.source.clone();
+        let source = if source.is_empty() {
+            None
+        } else {
+            Some(source.as_str())
+        };
 
-            let mut context = crate::EvalContext {
-                engine: self,
-                scope,
-                global,
-                state,
-                lib,
-                this_ptr,
-                level,
-            };
+        let mut context = crate::EvalContext {
+            engine: self,
+            scope,
+            global,
+            state,
+            lib,
+            this_ptr,
+            level,
+        };
 
-            let command = on_debugger(&mut context, node, source, node.position())?;
+        if let Some((_, ref on_debugger)) = self.debugger {
+            let command = on_debugger(&mut context, event, node, source, node.position())?;
 
             match command {
                 DebuggerCommand::Continue => {
-                    global.debugger.status = DebuggerCommand::Continue;
+                    global.debugger.status = DebuggerStatus::Next(false, false);
                     Ok(None)
                 }
                 DebuggerCommand::Next => {
-                    global.debugger.status = DebuggerCommand::Continue;
-                    Ok(Some(DebuggerCommand::Next))
-                }
-                DebuggerCommand::StepInto => {
-                    global.debugger.status = DebuggerCommand::StepInto;
-                    Ok(None)
+                    global.debugger.status = DebuggerStatus::Next(false, false);
+                    Ok(Some(DebuggerStatus::Next(true, false)))
                 }
                 DebuggerCommand::StepOver => {
-                    global.debugger.status = DebuggerCommand::Continue;
-                    Ok(Some(DebuggerCommand::StepOver))
+                    global.debugger.status = DebuggerStatus::Next(false, false);
+                    Ok(Some(DebuggerStatus::Next(true, true)))
+                }
+                DebuggerCommand::StepInto => {
+                    global.debugger.status = DebuggerStatus::Next(true, true);
+                    Ok(None)
+                }
+                DebuggerCommand::FunctionExit => {
+                    global.debugger.status = DebuggerStatus::FunctionExit(context.call_level());
+                    Ok(None)
                 }
             }
         } else {

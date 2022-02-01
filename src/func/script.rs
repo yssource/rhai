@@ -65,14 +65,14 @@ impl Engine {
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(&mut global.num_operations, pos)?;
 
-        if fn_def.body.is_empty() {
-            return Ok(Dynamic::UNIT);
-        }
-
         // Check for stack overflow
         #[cfg(not(feature = "unchecked"))]
         if level > self.max_call_levels() {
             return Err(ERR::ErrorStackOverflow(pos).into());
+        }
+
+        if fn_def.body.is_empty() {
+            return Ok(Dynamic::UNIT);
         }
 
         let orig_scope_len = scope.len();
@@ -133,7 +133,7 @@ impl Engine {
         };
 
         // Evaluate the function
-        let result = self
+        let mut result = self
             .eval_stmt_block(
                 scope,
                 global,
@@ -166,6 +166,31 @@ impl Engine {
                 _ => make_error(fn_def.name.to_string(), fn_def, global, err, pos),
             });
 
+        #[cfg(feature = "debugging")]
+        {
+            if self.debugger.is_some() {
+                match global.debugger.status() {
+                    crate::eval::DebuggerStatus::FunctionExit(n) if n >= level => {
+                        let node = crate::ast::Stmt::Noop(pos);
+                        let node = (&node).into();
+                        let event = match result {
+                            Ok(ref r) => crate::eval::DebuggerEvent::FunctionExitWithValue(r),
+                            Err(ref err) => crate::eval::DebuggerEvent::FunctionExitWithError(err),
+                        };
+                        if let Err(err) = self.run_debugger_raw(
+                            scope, global, state, lib, this_ptr, node, event, level,
+                        ) {
+                            result = Err(err);
+                        }
+                    }
+                    _ => (),
+                }
+            }
+
+            // Pop the call stack
+            global.debugger.rewind_call_stack(orig_call_stack_len);
+        }
+
         // Remove all local variables and imported modules
         if rewind_scope {
             scope.rewind(orig_scope_len);
@@ -184,10 +209,6 @@ impl Engine {
 
         // Restore state
         state.rewind_fn_resolution_caches(orig_fn_resolution_caches_len);
-
-        // Pop the call stack
-        #[cfg(feature = "debugging")]
-        global.debugger.rewind_call_stack(orig_call_stack_len);
 
         result
     }
