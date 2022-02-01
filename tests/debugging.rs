@@ -41,7 +41,7 @@ fn test_debugging() -> Result<(), Box<EvalAltResult>> {
 fn test_debugger_state() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
-    engine.on_debugger(
+    engine.register_debugger(
         || {
             // Say, use an object map for the debugger state
             let mut state = Map::new();

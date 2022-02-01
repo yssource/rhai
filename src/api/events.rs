@@ -264,7 +264,7 @@ impl Engine {
     /// Exported under the `debugging` feature only.
     #[cfg(feature = "debugging")]
     #[inline(always)]
-    pub fn on_debugger(
+    pub fn register_debugger(
         &mut self,
         init: impl Fn() -> Dynamic + SendSync + 'static,
         callback: impl Fn(
