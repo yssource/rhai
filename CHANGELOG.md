@@ -24,7 +24,7 @@ New features
 
 * A debugging interface is added.
 * A new bin tool, `rhai-dbg` (aka _The Rhai Debugger_), is added to showcase the debugging interface.
-* A new package, `DebuggingPackage`, is added which contains the `stack_trace` function to get the current call stack anywhere in a script.
+* A new package, `DebuggingPackage`, is added which contains the `back_trace` function to get the current call stack anywhere in a script.
 
 Enhancements
 ------------
@@ -32,6 +32,7 @@ Enhancements
 * Default features for dependencies (such as `ahash/std` and `num-traits/std`) are no longer required.
 * The `no_module` feature now eliminates large sections of code via feature gates.
 * Debug display of `AST` is improved.
+* `NativeCallContext::call_level()` is added to give the current nesting level of function calls.
 
 REPL tool changes
 -----------------

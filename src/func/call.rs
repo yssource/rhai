@@ -328,6 +328,8 @@ impl Engine {
         result.as_ref().map(Box::as_ref)
     }
 
+    /// # Main Entry-Point
+    ///
     /// Call a native Rust function registered with the [`Engine`].
     ///
     /// # WARNING
@@ -347,6 +349,7 @@ impl Engine {
         is_ref_mut: bool,
         is_op_assign: bool,
         pos: Position,
+        level: usize,
     ) -> RhaiResultOf<(Dynamic, bool)> {
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(&mut global.num_operations, pos)?;
@@ -365,39 +368,85 @@ impl Engine {
             is_op_assign,
         );
 
-        if let Some(FnResolutionCacheEntry { func, source }) = func {
-            assert!(func.is_native());
+        if func.is_some() {
+            let is_method = func.map(|f| f.func.is_method()).unwrap_or(false);
 
-            // Calling pure function but the first argument is a reference?
-            let mut backup: Option<ArgBackup> = None;
-            if is_ref_mut && func.is_pure() && !args.is_empty() {
-                // Clone the first argument
-                backup = Some(ArgBackup::new());
-                backup
-                    .as_mut()
-                    .expect("`Some`")
-                    .change_first_arg_to_copy(args);
-            }
+            // Push a new call stack frame
+            #[cfg(feature = "debugging")]
+            let orig_call_stack_len = global.debugger.call_stack().len();
 
-            // Run external function
-            let source = match (source.as_str(), parent_source.as_str()) {
-                ("", "") => None,
-                ("", s) | (s, _) => Some(s),
-            };
+            let mut result = if let Some(FnResolutionCacheEntry { func, source }) = func {
+                assert!(func.is_native());
 
-            let context = (self, name, source, &*global, lib, pos).into();
+                // Calling pure function but the first argument is a reference?
+                let mut backup: Option<ArgBackup> = None;
+                if is_ref_mut && func.is_pure() && !args.is_empty() {
+                    // Clone the first argument
+                    backup = Some(ArgBackup::new());
+                    backup
+                        .as_mut()
+                        .expect("`Some`")
+                        .change_first_arg_to_copy(args);
+                }
 
-            let result = if func.is_plugin_fn() {
-                func.get_plugin_fn()
-                    .expect("plugin function")
-                    .call(context, args)
+                let source = match (source.as_str(), parent_source.as_str()) {
+                    ("", "") => None,
+                    ("", s) | (s, _) => Some(s),
+                };
+
+                #[cfg(feature = "debugging")]
+                if self.debugger.is_some() {
+                    global.debugger.push_call_stack_frame(
+                        name,
+                        args.iter().map(|v| (*v).clone()).collect(),
+                        source.unwrap_or(""),
+                        pos,
+                    );
+                }
+
+                // Run external function
+                let context = (self, name, source, &*global, lib, pos, level).into();
+
+                let result = if func.is_plugin_fn() {
+                    func.get_plugin_fn()
+                        .expect("plugin function")
+                        .call(context, args)
+                } else {
+                    func.get_native_fn().expect("native function")(context, args)
+                };
+
+                // Restore the original reference
+                if let Some(bk) = backup {
+                    bk.restore_first_arg(args)
+                }
+
+                result
             } else {
-                func.get_native_fn().expect("native function")(context, args)
+                unreachable!("`Some`");
             };
 
-            // Restore the original reference
-            if let Some(bk) = backup {
-                bk.restore_first_arg(args)
+            #[cfg(feature = "debugging")]
+            if self.debugger.is_some() {
+                match global.debugger.status() {
+                    crate::eval::DebuggerStatus::FunctionExit(n) if n >= level => {
+                        let scope = &mut &mut Scope::new();
+                        let node = crate::ast::Stmt::Noop(pos);
+                        let node = (&node).into();
+                        let event = match result {
+                            Ok(ref r) => crate::eval::DebuggerEvent::FunctionExitWithValue(r),
+                            Err(ref err) => crate::eval::DebuggerEvent::FunctionExitWithError(err),
+                        };
+                        if let Err(err) = self.run_debugger_raw(
+                            scope, global, state, lib, &mut None, node, event, level,
+                        ) {
+                            result = Err(err);
+                        }
+                    }
+                    _ => (),
+                }
+
+                // Pop the call stack
+                global.debugger.rewind_call_stack(orig_call_stack_len);
             }
 
             // Check the return value (including data sizes)
@@ -443,7 +492,7 @@ impl Engine {
                         (Dynamic::UNIT, false)
                     }
                 }
-                _ => (result, func.is_method()),
+                _ => (result, is_method),
             });
         }
 
@@ -530,6 +579,8 @@ impl Engine {
         }
     }
 
+    /// # Main Entry-Point
+    ///
     /// Perform an actual function call, native Rust or scripted, taking care of special functions.
     ///
     /// # WARNING
@@ -562,7 +613,6 @@ impl Engine {
         ensure_no_data_race(fn_name, args, is_ref_mut)?;
 
         let _scope = scope;
-        let _level = level;
         let _is_method_call = is_method_call;
 
         // These may be redirected from method style calls.
@@ -612,6 +662,8 @@ impl Engine {
             _ => (),
         }
 
+        let level = level + 1;
+
         // Script-defined function call?
         #[cfg(not(feature = "no_function"))]
         if let Some(FnResolutionCacheEntry { func, mut source }) = self
@@ -646,7 +698,6 @@ impl Engine {
             };
 
             mem::swap(&mut global.source, &mut source);
-            let level = _level + 1;
 
             let result = if _is_method_call {
                 // Method call of script function - map first argument to `this`
@@ -699,7 +750,7 @@ impl Engine {
         // Native function call
         let hash = hashes.native;
         self.call_native_fn(
-            global, state, lib, fn_name, hash, args, is_ref_mut, false, pos,
+            global, state, lib, fn_name, hash, args, is_ref_mut, false, pos, level,
         )
     }
 
@@ -1318,6 +1369,8 @@ impl Engine {
             }
         }
 
+        let level = level + 1;
+
         match func {
             #[cfg(not(feature = "no_function"))]
             Some(f) if f.is_script() => {
@@ -1331,8 +1384,6 @@ impl Engine {
                     let mut source = module.id_raw().clone();
                     mem::swap(&mut global.source, &mut source);
 
-                    let level = level + 1;
-
                     let result = self.call_script_fn(
                         new_scope, global, state, lib, &mut None, fn_def, &mut args, pos, true,
                         level,
@@ -1345,7 +1396,7 @@ impl Engine {
             }
 
             Some(f) if f.is_plugin_fn() => {
-                let context = (self, fn_name, module.id(), &*global, lib, pos).into();
+                let context = (self, fn_name, module.id(), &*global, lib, pos, level).into();
                 let result = f
                     .get_plugin_fn()
                     .expect("plugin function")
@@ -1356,7 +1407,7 @@ impl Engine {
 
             Some(f) if f.is_native() => {
                 let func = f.get_native_fn().expect("native function");
-                let context = (self, fn_name, module.id(), &*global, lib, pos).into();
+                let context = (self, fn_name, module.id(), &*global, lib, pos, level).into();
                 let result = func(context, &mut args);
                 self.check_return_value(result, pos)
             }

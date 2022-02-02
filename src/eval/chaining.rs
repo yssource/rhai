@@ -220,6 +220,7 @@ impl Engine {
                             Ok(ref mut obj_ptr) => {
                                 self.eval_op_assignment(
                                     global, state, lib, op_info, op_pos, obj_ptr, root, new_val,
+                                    level,
                                 )
                                 .map_err(|err| err.fill_position(new_pos))?;
                                 #[cfg(not(feature = "unchecked"))]
@@ -314,6 +315,7 @@ impl Engine {
                             )?;
                             self.eval_op_assignment(
                                 global, state, lib, op_info, op_pos, val_target, root, new_val,
+                                level,
                             )
                             .map_err(|err| err.fill_position(new_pos))?;
                         }
@@ -380,6 +382,7 @@ impl Engine {
                                 &mut (&mut orig_val).into(),
                                 root,
                                 new_val,
+                                level,
                             )
                             .map_err(|err| err.fill_position(new_pos))?;
 

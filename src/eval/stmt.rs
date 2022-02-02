@@ -120,6 +120,7 @@ impl Engine {
         target: &mut Target,
         root: (&str, Position),
         new_val: Dynamic,
+        level: usize,
     ) -> RhaiResultOf<()> {
         if target.is_read_only() {
             // Assignment to constant variable
@@ -154,7 +155,7 @@ impl Engine {
             let args = &mut [lhs_ptr_inner, &mut new_val];
 
             match self.call_native_fn(
-                global, state, lib, op_assign, hash, args, true, true, op_pos,
+                global, state, lib, op_assign, hash, args, true, true, op_pos, level,
             ) {
                 Ok(_) => {
                     #[cfg(not(feature = "unchecked"))]
@@ -164,7 +165,7 @@ impl Engine {
                 {
                     // Expand to `var = var op rhs`
                     let (value, _) = self.call_native_fn(
-                        global, state, lib, op, hash_op, args, true, false, op_pos,
+                        global, state, lib, op, hash_op, args, true, false, op_pos, level,
                     )?;
 
                     #[cfg(not(feature = "unchecked"))]
@@ -266,6 +267,7 @@ impl Engine {
                             &mut lhs_ptr,
                             (var_name, pos),
                             rhs_val,
+                            level,
                         )
                         .map_err(|err| err.fill_position(rhs.position()))
                         .map(|_| Dynamic::UNIT)

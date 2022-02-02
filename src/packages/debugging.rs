@@ -27,15 +27,23 @@ def_package! {
 
 #[export_module]
 mod debugging_functions {
+    /// Get an array of object maps containing the function calls stack.
+    ///
+    /// If there is no debugging interface registered, an empty array is returned.
+    ///
+    /// An array of strings is returned under `no_object`.
     #[cfg(not(feature = "no_function"))]
     #[cfg(not(feature = "no_index"))]
-    pub fn stack_trace(ctx: NativeCallContext) -> Array {
+    pub fn back_trace(ctx: NativeCallContext) -> Array {
         if let Some(global) = ctx.global_runtime_state() {
             global
                 .debugger
                 .call_stack()
                 .iter()
                 .rev()
+                .filter(|crate::debugger::CallStackFrame { fn_name, args, .. }| {
+                    fn_name != "back_trace" || !args.is_empty()
+                })
                 .map(
                     |frame @ crate::debugger::CallStackFrame {
                          fn_name: _fn_name,

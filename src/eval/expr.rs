@@ -353,6 +353,7 @@ impl Engine {
                         &mut (&mut concat).into(),
                         ("", Position::NONE),
                         item,
+                        level,
                     ) {
                         result = Err(err.fill_position(expr.position()));
                         break;

@@ -10,6 +10,8 @@ use std::mem;
 use std::prelude::v1::*;
 
 impl Engine {
+    /// # Main Entry-Point
+    ///
     /// Call a script-defined function.
     ///
     /// If `rewind_scope` is `false`, arguments are removed from the scope but new variables are not.
@@ -90,16 +92,18 @@ impl Engine {
 
         // Push a new call stack frame
         #[cfg(feature = "debugging")]
-        global.debugger.push_call_stack_frame(
-            fn_def.name.clone(),
-            scope
-                .iter()
-                .skip(orig_scope_len)
-                .map(|(_, _, v)| v.clone())
-                .collect(),
-            global.source.clone(),
-            pos,
-        );
+        if self.debugger.is_some() {
+            global.debugger.push_call_stack_frame(
+                fn_def.name.clone(),
+                scope
+                    .iter()
+                    .skip(orig_scope_len)
+                    .map(|(_, _, v)| v.clone())
+                    .collect(),
+                global.source.clone(),
+                pos,
+            );
+        }
 
         // Merge in encapsulated environment, if any
         let orig_fn_resolution_caches_len = state.fn_resolution_caches_len();
@@ -167,26 +171,24 @@ impl Engine {
             });
 
         #[cfg(feature = "debugging")]
-        {
-            if self.debugger.is_some() {
-                match global.debugger.status() {
-                    crate::eval::DebuggerStatus::FunctionExit(n) if n >= level => {
-                        let node = crate::ast::Stmt::Noop(pos);
-                        let node = (&node).into();
-                        let event = match result {
-                            Ok(ref r) => crate::eval::DebuggerEvent::FunctionExitWithValue(r),
-                            Err(ref err) => crate::eval::DebuggerEvent::FunctionExitWithError(err),
-                        };
-                        if let Err(err) = self.run_debugger_raw(
-                            scope, global, state, lib, this_ptr, node, event, level,
-                        ) {
-                            result = Err(err);
-                        }
+        if self.debugger.is_some() {
+            match global.debugger.status() {
+                crate::eval::DebuggerStatus::FunctionExit(n) if n >= level => {
+                    let node = crate::ast::Stmt::Noop(pos);
+                    let node = (&node).into();
+                    let event = match result {
+                        Ok(ref r) => crate::eval::DebuggerEvent::FunctionExitWithValue(r),
+                        Err(ref err) => crate::eval::DebuggerEvent::FunctionExitWithError(err),
+                    };
+                    if let Err(err) = self
+                        .run_debugger_raw(scope, global, state, lib, this_ptr, node, event, level)
+                    {
+                        result = Err(err);
                     }
-                    _ => (),
                 }
+                _ => (),
             }
-
+            
             // Pop the call stack
             global.debugger.rewind_call_stack(orig_call_stack_len);
         }

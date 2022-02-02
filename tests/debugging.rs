@@ -18,7 +18,7 @@ fn test_debugging() -> Result<(), Box<EvalAltResult>> {
             "
                 fn foo(x) {
                     if x >= 5 {
-                        stack_trace()
+                        back_trace()
                     } else {
                         foo(x+1)
                     }
@@ -30,7 +30,7 @@ fn test_debugging() -> Result<(), Box<EvalAltResult>> {
 
         assert_eq!(r.len(), 6);
 
-        assert_eq!(engine.eval::<INT>("len(stack_trace())")?, 0);
+        assert_eq!(engine.eval::<INT>("len(back_trace())")?, 0);
     }
 
     Ok(())

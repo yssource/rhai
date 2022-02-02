@@ -270,10 +270,30 @@ fn main() {
                     }
                 }
                 DebuggerEvent::FunctionExitWithValue(r) => {
-                    println!("! Return from function call = {}", r)
+                    println!(
+                        "! Return from function call '{}' => {}",
+                        context
+                            .global_runtime_state()
+                            .debugger
+                            .call_stack()
+                            .last()
+                            .unwrap()
+                            .fn_name,
+                        r
+                    )
                 }
                 DebuggerEvent::FunctionExitWithError(err) => {
-                    println!("! Return from function call with error: {}", err)
+                    println!(
+                        "! Return from function call '{}' with error: {}",
+                        context
+                            .global_runtime_state()
+                            .debugger
+                            .call_stack()
+                            .last()
+                            .unwrap()
+                            .fn_name,
+                        err
+                    )
                 }
             }
 
