@@ -56,7 +56,7 @@ pub enum DebuggerCommand {
 pub enum DebuggerStatus {
     // Stop at the next statement or expression.
     Next(bool, bool),
-    // Run to the end of the current function call.
+    // Run to the end of the current level of function call.
     FunctionExit(usize),
 }
 
@@ -193,7 +193,6 @@ impl BreakPoint {
 }
 
 /// A function call.
-#[cfg(not(feature = "no_function"))]
 #[derive(Debug, Clone, Hash)]
 pub struct CallStackFrame {
     /// Function name.
@@ -206,7 +205,6 @@ pub struct CallStackFrame {
     pub pos: Position,
 }
 
-#[cfg(not(feature = "no_function"))]
 impl fmt::Display for CallStackFrame {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut fp = f.debug_tuple(&self.fn_name);
@@ -239,7 +237,6 @@ pub struct Debugger {
     /// The current set of break-points.
     break_points: Vec<BreakPoint>,
     /// The current function call stack.
-    #[cfg(not(feature = "no_function"))]
     call_stack: Vec<CallStackFrame>,
 }
 
@@ -260,7 +257,6 @@ impl Debugger {
                 Dynamic::UNIT
             },
             break_points: Vec::new(),
-            #[cfg(not(feature = "no_function"))]
             call_stack: Vec::new(),
         }
     }
@@ -277,26 +273,17 @@ impl Debugger {
         &mut self.state
     }
     /// Get the current call stack.
-    ///
-    /// Not available under `no_function`.
-    #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     #[must_use]
     pub fn call_stack(&self) -> &[CallStackFrame] {
         &self.call_stack
     }
     /// Rewind the function call stack to a particular depth.
-    ///
-    /// Not available under `no_function`.
-    #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub(crate) fn rewind_call_stack(&mut self, len: usize) {
         self.call_stack.truncate(len);
     }
     /// Add a new frame to the function call stack.
-    ///
-    /// Not available under `no_function`.
-    #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub(crate) fn push_call_stack_frame(
         &mut self,
