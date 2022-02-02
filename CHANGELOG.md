@@ -576,7 +576,7 @@ Breaking changes
 New features
 ------------
 
-* Line continuation (via `\`) and multi-line literal strings (wrapped with <code>\`</code>) support are added.
+* Line continuation (via `\`) and multi-line literal strings (wrapped with `` ` ``) support are added.
 * Rhai scripts can now start with a shebang `#!` which is ignored.
 
 Enhancements

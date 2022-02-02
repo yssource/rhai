@@ -321,6 +321,7 @@ impl<'a> NativeCallContext<'a> {
 
         self.engine()
             .exec_fn_call(
+                None,
                 &mut global,
                 &mut state,
                 self.lib,
@@ -330,7 +331,6 @@ impl<'a> NativeCallContext<'a> {
                 is_ref_mut,
                 is_method_call,
                 Position::NONE,
-                None,
                 self.level + 1,
             )
             .map(|(r, _)| r)

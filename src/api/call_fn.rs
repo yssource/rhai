@@ -190,8 +190,8 @@ impl Engine {
             &mut this_ptr,
             fn_def,
             &mut args,
-            Position::NONE,
             rewind_scope,
+            Position::NONE,
             0,
         );
 

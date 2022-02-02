@@ -153,6 +153,7 @@ impl Engine {
 
             let hash = hash_op_assign;
             let args = &mut [lhs_ptr_inner, &mut new_val];
+            let level = level + 1;
 
             match self.call_native_fn(
                 global, state, lib, op_assign, hash, args, true, true, op_pos, level,

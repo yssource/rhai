@@ -31,8 +31,8 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         fn_def: &ScriptFnDef,
         args: &mut FnCallArgs,
-        pos: Position,
         rewind_scope: bool,
+        pos: Position,
         level: usize,
     ) -> RhaiResult {
         #[inline(never)]
@@ -73,6 +73,11 @@ impl Engine {
             return Err(ERR::ErrorStackOverflow(pos).into());
         }
 
+        #[cfg(feature = "debugging")]
+        if self.debugger.is_none() && fn_def.body.is_empty() {
+            return Ok(Dynamic::UNIT);
+        }
+        #[cfg(not(feature = "debugging"))]
         if fn_def.body.is_empty() {
             return Ok(Dynamic::UNIT);
         }
@@ -136,6 +141,13 @@ impl Engine {
             (lib, None)
         };
 
+        #[cfg(feature = "debugging")]
+        if self.debugger.is_some() {
+            println!("Level = {}", level);
+            let node = crate::ast::Stmt::Noop(fn_def.body.position());
+            self.run_debugger(scope, global, state, lib, this_ptr, &node, level)?;
+        }
+
         // Evaluate the function
         let mut _result = self
             .eval_stmt_block(
@@ -172,7 +184,7 @@ impl Engine {
 
         #[cfg(feature = "debugging")]
         if self.debugger.is_some() {
-            match global.debugger.status() {
+            match global.debugger.status {
                 crate::eval::DebuggerStatus::FunctionExit(n) if n >= level => {
                     let node = crate::ast::Stmt::Noop(pos);
                     let node = (&node).into();

@@ -236,8 +236,8 @@ impl Engine {
         );
 
         self.make_function_call(
-            scope, global, state, lib, this_ptr, name, first_arg, args, constants, *hashes, pos,
-            *capture, level,
+            scope, global, state, lib, this_ptr, name, first_arg, args, constants, *hashes,
+            *capture, pos, level,
         )
     }
 

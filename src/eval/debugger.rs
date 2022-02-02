@@ -51,6 +51,13 @@ pub enum DebuggerCommand {
     FunctionExit,
 }
 
+impl Default for DebuggerCommand {
+    #[inline(always)]
+    fn default() -> Self {
+        Self::Continue
+    }
+}
+
 /// The debugger status.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum DebuggerStatus {
@@ -58,6 +65,19 @@ pub enum DebuggerStatus {
     Next(bool, bool),
     // Run to the end of the current level of function call.
     FunctionExit(usize),
+}
+
+impl Default for DebuggerStatus {
+    #[inline(always)]
+    fn default() -> Self {
+        Self::CONTINUE
+    }
+}
+
+impl DebuggerStatus {
+    pub const CONTINUE: Self = Self::Next(false, false);
+    pub const STEP: Self = Self::Next(true, true);
+    pub const NEXT: Self = Self::Next(true, false);
 }
 
 /// A event that triggers the debugger.
@@ -231,7 +251,7 @@ impl fmt::Display for CallStackFrame {
 #[derive(Debug, Clone, Hash)]
 pub struct Debugger {
     /// The current status command.
-    status: DebuggerStatus,
+    pub(crate) status: DebuggerStatus,
     /// The current state.
     state: Dynamic,
     /// The current set of break-points.
@@ -247,9 +267,9 @@ impl Debugger {
     pub fn new(engine: &Engine) -> Self {
         Self {
             status: if engine.debugger.is_some() {
-                DebuggerStatus::Next(true, true)
+                DebuggerStatus::STEP
             } else {
-                DebuggerStatus::Next(false, false)
+                DebuggerStatus::CONTINUE
             },
             state: if let Some((ref init, _)) = engine.debugger {
                 init()
@@ -298,12 +318,6 @@ impl Debugger {
             source: source.into(),
             pos,
         });
-    }
-    /// Get the current status of this [`Debugger`].
-    #[inline(always)]
-    #[must_use]
-    pub(crate) fn status(&self) -> DebuggerStatus {
-        self.status
     }
     /// Set the status of this [`Debugger`].
     #[inline(always)]
@@ -476,19 +490,19 @@ impl Engine {
 
             match command {
                 DebuggerCommand::Continue => {
-                    global.debugger.status = DebuggerStatus::Next(false, false);
+                    global.debugger.status = DebuggerStatus::CONTINUE;
                     Ok(None)
                 }
                 DebuggerCommand::Next => {
-                    global.debugger.status = DebuggerStatus::Next(false, false);
-                    Ok(Some(DebuggerStatus::Next(true, false)))
+                    global.debugger.status = DebuggerStatus::CONTINUE;
+                    Ok(Some(DebuggerStatus::NEXT))
                 }
                 DebuggerCommand::StepOver => {
-                    global.debugger.status = DebuggerStatus::Next(false, false);
-                    Ok(Some(DebuggerStatus::Next(true, true)))
+                    global.debugger.status = DebuggerStatus::CONTINUE;
+                    Ok(Some(DebuggerStatus::STEP))
                 }
                 DebuggerCommand::StepInto => {
-                    global.debugger.status = DebuggerStatus::Next(true, true);
+                    global.debugger.status = DebuggerStatus::STEP;
                     Ok(None)
                 }
                 DebuggerCommand::FunctionExit => {
@@ -499,6 +513,7 @@ impl Engine {
                         | ASTNode::Stmt(Stmt::Expr(Expr::FnCall(_, _))) => context.call_level() + 1,
                         _ => context.call_level(),
                     };
+                    println!("Set FunctionExit to {}", level);
                     global.debugger.status = DebuggerStatus::FunctionExit(level);
                     Ok(None)
                 }
