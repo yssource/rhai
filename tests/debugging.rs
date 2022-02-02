@@ -9,7 +9,12 @@ use rhai::Map;
 
 #[test]
 fn test_debugging() -> Result<(), Box<EvalAltResult>> {
-    let engine = Engine::new();
+    let mut engine = Engine::new();
+
+    engine.register_debugger(
+        || Dynamic::UNIT,
+        |_, _, _, _, _| Ok(rhai::debugger::DebuggerCommand::Continue),
+    );
 
     #[cfg(not(feature = "no_function"))]
     #[cfg(not(feature = "no_index"))]

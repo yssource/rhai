@@ -137,7 +137,7 @@ impl Engine {
         };
 
         // Evaluate the function
-        let mut result = self
+        let mut _result = self
             .eval_stmt_block(
                 scope,
                 global,
@@ -176,19 +176,19 @@ impl Engine {
                 crate::eval::DebuggerStatus::FunctionExit(n) if n >= level => {
                     let node = crate::ast::Stmt::Noop(pos);
                     let node = (&node).into();
-                    let event = match result {
+                    let event = match _result {
                         Ok(ref r) => crate::eval::DebuggerEvent::FunctionExitWithValue(r),
                         Err(ref err) => crate::eval::DebuggerEvent::FunctionExitWithError(err),
                     };
                     if let Err(err) = self
                         .run_debugger_raw(scope, global, state, lib, this_ptr, node, event, level)
                     {
-                        result = Err(err);
+                        _result = Err(err);
                     }
                 }
                 _ => (),
             }
-            
+
             // Pop the call stack
             global.debugger.rewind_call_stack(orig_call_stack_len);
         }
@@ -212,7 +212,7 @@ impl Engine {
         // Restore state
         state.rewind_fn_resolution_caches(orig_fn_resolution_caches_len);
 
-        result
+        _result
     }
 
     // Does a script-defined function exist?

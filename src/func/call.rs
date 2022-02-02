@@ -375,7 +375,7 @@ impl Engine {
             #[cfg(feature = "debugging")]
             let orig_call_stack_len = global.debugger.call_stack().len();
 
-            let mut result = if let Some(FnResolutionCacheEntry { func, source }) = func {
+            let mut _result = if let Some(FnResolutionCacheEntry { func, source }) = func {
                 assert!(func.is_native());
 
                 // Calling pure function but the first argument is a reference?
@@ -432,14 +432,14 @@ impl Engine {
                         let scope = &mut &mut Scope::new();
                         let node = crate::ast::Stmt::Noop(pos);
                         let node = (&node).into();
-                        let event = match result {
+                        let event = match _result {
                             Ok(ref r) => crate::eval::DebuggerEvent::FunctionExitWithValue(r),
                             Err(ref err) => crate::eval::DebuggerEvent::FunctionExitWithError(err),
                         };
                         if let Err(err) = self.run_debugger_raw(
                             scope, global, state, lib, &mut None, node, event, level,
                         ) {
-                            result = Err(err);
+                            _result = Err(err);
                         }
                     }
                     _ => (),
@@ -450,7 +450,7 @@ impl Engine {
             }
 
             // Check the return value (including data sizes)
-            let result = self.check_return_value(result, pos)?;
+            let result = self.check_return_value(_result, pos)?;
 
             // Check the data size of any `&mut` object, which may be changed.
             #[cfg(not(feature = "unchecked"))]
