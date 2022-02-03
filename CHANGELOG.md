@@ -17,7 +17,7 @@ Bug fixes
 Script-breaking changes
 -----------------------
 
-* For consistency, the `export` statement no longer exports multiple variables.
+* For consistency with the `import` statement, the `export` statement no longer exports multiple variables.
 
 New features
 ------------
@@ -33,6 +33,7 @@ Enhancements
 * The `no_module` feature now eliminates large sections of code via feature gates.
 * Debug display of `AST` is improved.
 * `NativeCallContext::call_level()` is added to give the current nesting level of function calls.
+* A new feature, `bin-features`, pulls in all the required features for `bin` tools.
 
 REPL tool changes
 -----------------
