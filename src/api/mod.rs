@@ -1,5 +1,7 @@
 //! Module defining the public API of the Rhai engine.
 
+pub mod type_names;
+
 pub mod eval;
 
 pub mod run;

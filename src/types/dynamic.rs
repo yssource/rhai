@@ -16,11 +16,11 @@ use std::{
 
 #[cfg(not(feature = "no_std"))]
 #[cfg(not(target_family = "wasm"))]
-use std::time::Instant;
+pub use std::time::Instant;
 
 #[cfg(not(feature = "no_std"))]
 #[cfg(target_family = "wasm")]
-use instant::Instant;
+pub use instant::Instant;
 
 /// The message: data type was checked
 const CHECKED: &str = "data type was checked";
@@ -541,74 +541,6 @@ impl Hash for Dynamic {
             Union::TimeStamp(_, _, _) => unimplemented!("{} cannot be hashed", self.type_name()),
         }
     }
-}
-
-/// Map the name of a standard type into a friendly form.
-#[inline]
-#[must_use]
-pub(crate) fn map_std_type_name(name: &str, shorthands: bool) -> &str {
-    let name = name.trim();
-
-    if name.starts_with("rhai::") {
-        return map_std_type_name(&name[6..], shorthands);
-    }
-
-    if name == type_name::<String>() {
-        return if shorthands { "string" } else { "String" };
-    }
-    if name == type_name::<ImmutableString>() {
-        return if shorthands {
-            "string"
-        } else {
-            "ImmutableString"
-        };
-    }
-    if name == type_name::<&str>() {
-        return if shorthands { "string" } else { "&str" };
-    }
-    #[cfg(feature = "decimal")]
-    if name == type_name::<rust_decimal::Decimal>() {
-        return if shorthands { "decimal" } else { "Decimal" };
-    }
-    if name == type_name::<FnPtr>() {
-        return if shorthands { "Fn" } else { "FnPtr" };
-    }
-    #[cfg(not(feature = "no_index"))]
-    if name == type_name::<crate::Array>() {
-        return if shorthands { "array" } else { "Array" };
-    }
-    #[cfg(not(feature = "no_index"))]
-    if name == type_name::<crate::Blob>() {
-        return if shorthands { "blob" } else { "Blob" };
-    }
-    #[cfg(not(feature = "no_object"))]
-    if name == type_name::<crate::Map>() {
-        return if shorthands { "map" } else { "Map" };
-    }
-    #[cfg(not(feature = "no_std"))]
-    if name == type_name::<Instant>() {
-        return if shorthands { "timestamp" } else { "Instant" };
-    }
-    if name == type_name::<ExclusiveRange>() || name == "ExclusiveRange" {
-        return if shorthands {
-            "range"
-        } else if cfg!(feature = "only_i32") {
-            "Range<i32>"
-        } else {
-            "Range<i64>"
-        };
-    }
-    if name == type_name::<InclusiveRange>() || name == "InclusiveRange" {
-        return if shorthands {
-            "range="
-        } else if cfg!(feature = "only_i32") {
-            "RangeInclusive<i32>"
-        } else {
-            "RangeInclusive<i64>"
-        };
-    }
-
-    name
 }
 
 impl fmt::Display for Dynamic {

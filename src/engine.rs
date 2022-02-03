@@ -4,15 +4,14 @@ use crate::api::custom_syntax::CustomSyntax;
 use crate::func::native::{OnDebugCallback, OnParseTokenCallback, OnPrintCallback, OnVarCallback};
 use crate::packages::{Package, StandardPackage};
 use crate::tokenizer::Token;
-use crate::types::dynamic::{map_std_type_name, Union};
+use crate::types::dynamic::{ Union};
 use crate::{
-    Dynamic, Identifier, ImmutableString, Module, Position, RhaiError, RhaiResult, Shared,
-    StaticVec, ERR,
+    Dynamic, Identifier, ImmutableString, Module, Position,  RhaiResult, Shared,
+    StaticVec, 
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
-    any::type_name,
     collections::{BTreeMap, BTreeSet},
     fmt,
     num::NonZeroU8,
@@ -336,60 +335,5 @@ impl Engine {
         }
 
         result
-    }
-
-    /// Pretty-print a type name.
-    ///
-    /// If a type is registered via [`register_type_with_name`][Engine::register_type_with_name],
-    /// the type name provided for the registration will be used.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the type name is `&mut`.
-    #[inline]
-    #[must_use]
-    pub fn map_type_name<'a>(&'a self, name: &'a str) -> &'a str {
-        self.type_names
-            .get(name)
-            .map(|s| s.as_str())
-            .unwrap_or_else(|| map_std_type_name(name, true))
-    }
-
-    /// Format a type name.
-    ///
-    /// If a type is registered via [`register_type_with_name`][Engine::register_type_with_name],
-    /// the type name provided for the registration will be used.
-    #[cfg(feature = "metadata")]
-    #[inline]
-    #[must_use]
-    pub(crate) fn format_type_name<'a>(&'a self, name: &'a str) -> std::borrow::Cow<'a, str> {
-        if name.starts_with("&mut ") {
-            let x = &name[5..];
-            let r = self.format_type_name(x);
-            return if x != r {
-                format!("&mut {}", r).into()
-            } else {
-                name.into()
-            };
-        }
-
-        self.type_names
-            .get(name)
-            .map(|s| s.as_str())
-            .unwrap_or_else(|| match name {
-                "INT" => return type_name::<crate::INT>(),
-                #[cfg(not(feature = "no_float"))]
-                "FLOAT" => return type_name::<crate::FLOAT>(),
-                _ => map_std_type_name(name, false),
-            })
-            .into()
-    }
-
-    /// Make a `Box<`[`EvalAltResult<ErrorMismatchDataType>`][ERR::ErrorMismatchDataType]`>`.
-    #[inline]
-    #[must_use]
-    pub(crate) fn make_type_mismatch_err<T>(&self, typ: &str, pos: Position) -> RhaiError {
-        ERR::ErrorMismatchDataType(self.map_type_name(type_name::<T>()).into(), typ.into(), pos)
-            .into()
     }
 }

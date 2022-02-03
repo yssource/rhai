@@ -13,6 +13,7 @@ Bug fixes
 * Variables introduced inside `try` blocks are now properly cleaned up upon an exception.
 * Off-by-one error in character positions after a comment line is now fixed.
 * Globally-defined constants are now encapsulated correctly inside a loaded module and no longer spill across call boundaries.
+* Type names display is fixed.
 
 Script-breaking changes
 -----------------------
