@@ -956,35 +956,24 @@ impl Engine {
         Ok((
             if let Expr::Stack(slot, _) = arg_expr {
                 #[cfg(feature = "debugging")]
-                if self.debugger.is_some() {
-                    self.run_debugger(scope, global, state, lib, this_ptr, arg_expr, level)?;
-                }
+                self.run_debugger(scope, global, state, lib, this_ptr, arg_expr, level)?;
                 constants[*slot].clone()
             } else if let Some(value) = arg_expr.get_literal_value() {
                 #[cfg(feature = "debugging")]
-                if self.debugger.is_some() {
-                    self.run_debugger(scope, global, state, lib, this_ptr, arg_expr, level)?;
-                }
+                self.run_debugger(scope, global, state, lib, this_ptr, arg_expr, level)?;
                 value
             } else {
                 // Do not match function exit for arguments
                 #[cfg(feature = "debugging")]
-                let reset_debugger = match global.debugger.status {
-                    crate::eval::DebuggerStatus::FunctionExit(_) => {
-                        Some(std::mem::take(&mut global.debugger.status))
-                    }
-                    _ => None,
-                };
+                let reset_debugger = global.debugger.clear_status_if(|status| {
+                    matches!(status, crate::eval::DebuggerStatus::FunctionExit(_))
+                });
 
                 let result = self.eval_expr(scope, global, state, lib, this_ptr, arg_expr, level);
 
-                // Restore function exit if status is not active
+                // Restore function exit status
                 #[cfg(feature = "debugging")]
-                if self.debugger.is_some()
-                    && global.debugger.status == crate::eval::DebuggerStatus::CONTINUE
-                {
-                    global.debugger.reset_status(reset_debugger);
-                }
+                global.debugger.reset_status(reset_debugger);
 
                 result?
             },
@@ -1229,9 +1218,7 @@ impl Engine {
                 let first_expr = first_arg.unwrap();
 
                 #[cfg(feature = "debugging")]
-                if self.debugger.is_some() {
-                    self.run_debugger(scope, global, state, lib, this_ptr, first_expr, level)?;
-                }
+                self.run_debugger(scope, global, state, lib, this_ptr, first_expr, level)?;
 
                 // func(x, ...) -> x.func(...)
                 a_expr.iter().try_for_each(|expr| {
@@ -1315,10 +1302,7 @@ impl Engine {
             // &mut first argument and avoid cloning the value
             if !args_expr.is_empty() && args_expr[0].is_variable_access(true) {
                 #[cfg(feature = "debugging")]
-                if self.debugger.is_some() {
-                    let node = &args_expr[0];
-                    self.run_debugger(scope, global, state, lib, this_ptr, node, level)?;
-                }
+                self.run_debugger(scope, global, state, lib, this_ptr, &args_expr[0], level)?;
 
                 // func(x, ...) -> x.func(...)
                 arg_values.push(Dynamic::UNIT);

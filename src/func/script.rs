@@ -142,8 +142,7 @@ impl Engine {
         };
 
         #[cfg(feature = "debugging")]
-        if self.debugger.is_some() {
-            println!("Level = {}", level);
+        {
             let node = crate::ast::Stmt::Noop(fn_def.body.position());
             self.run_debugger(scope, global, state, lib, this_ptr, &node, level)?;
         }

@@ -4,9 +4,9 @@
 use super::{EvalContext, EvalState, GlobalRuntimeState};
 use crate::ast::{ASTNode, Expr, Stmt};
 use crate::{Dynamic, Engine, EvalAltResult, Identifier, Module, Position, RhaiResultOf, Scope};
-use std::fmt;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
+use std::{fmt, mem};
 
 /// Callback function to initialize the debugger.
 #[cfg(not(feature = "sync"))]
@@ -319,11 +319,25 @@ impl Debugger {
             pos,
         });
     }
-    /// Set the status of this [`Debugger`].
+    /// Change the current status to [`CONTINUE`][DebuggerStatus::CONTINUE] and return the previous status.
+    pub(crate) fn clear_status_if(
+        &mut self,
+        filter: impl Fn(&DebuggerStatus) -> bool,
+    ) -> Option<DebuggerStatus> {
+        if filter(&self.status) {
+            Some(mem::replace(&mut self.status, DebuggerStatus::CONTINUE))
+        } else {
+            None
+        }
+    }
+    /// Override the status of this [`Debugger`] if it is [`Some`] the current status is
+    /// [`CONTINUE`][DebuggerStatus::CONTINUE].
     #[inline(always)]
     pub(crate) fn reset_status(&mut self, status: Option<DebuggerStatus>) {
-        if let Some(cmd) = status {
-            self.status = cmd;
+        if self.status == DebuggerStatus::CONTINUE {
+            if let Some(cmd) = status {
+                self.status = cmd;
+            }
         }
     }
     /// Returns the first break-point triggered by a particular [`AST` Node][ASTNode].
@@ -383,7 +397,7 @@ impl Debugger {
 }
 
 impl Engine {
-    /// Run the debugger callback.
+    /// Run the debugger callback if there is a debugging interface registered.
     #[inline(always)]
     pub(crate) fn run_debugger<'a>(
         &self,
@@ -395,13 +409,39 @@ impl Engine {
         node: impl Into<ASTNode<'a>>,
         level: usize,
     ) -> RhaiResultOf<()> {
-        if let Some(cmd) =
-            self.run_debugger_with_reset(scope, global, state, lib, this_ptr, node, level)?
-        {
-            global.debugger.status = cmd;
+        if self.debugger.is_some() {
+            if let Some(cmd) =
+                self.run_debugger_with_reset_raw(scope, global, state, lib, this_ptr, node, level)?
+            {
+                global.debugger.status = cmd;
+            }
         }
 
         Ok(())
+    }
+    /// Run the debugger callback if there is a debugging interface registered.
+    ///
+    /// Returns `Some` if the debugger needs to be reactivated at the end of the block, statement or
+    /// function call.
+    ///
+    /// It is up to the [`Engine`] to reactivate the debugger.
+    #[inline(always)]
+    #[must_use]
+    pub(crate) fn run_debugger_with_reset<'a>(
+        &self,
+        scope: &mut Scope,
+        global: &mut GlobalRuntimeState,
+        state: &mut EvalState,
+        lib: &[&Module],
+        this_ptr: &mut Option<&mut Dynamic>,
+        node: impl Into<ASTNode<'a>>,
+        level: usize,
+    ) -> RhaiResultOf<Option<DebuggerStatus>> {
+        if self.debugger.is_some() {
+            self.run_debugger_with_reset_raw(scope, global, state, lib, this_ptr, node, level)
+        } else {
+            Ok(None)
+        }
     }
     /// Run the debugger callback.
     ///
@@ -411,7 +451,7 @@ impl Engine {
     /// It is up to the [`Engine`] to reactivate the debugger.
     #[inline]
     #[must_use]
-    pub(crate) fn run_debugger_with_reset<'a>(
+    pub(crate) fn run_debugger_with_reset_raw<'a>(
         &self,
         scope: &mut Scope,
         global: &mut GlobalRuntimeState,
@@ -513,7 +553,6 @@ impl Engine {
                         | ASTNode::Stmt(Stmt::Expr(Expr::FnCall(_, _))) => context.call_level() + 1,
                         _ => context.call_level(),
                     };
-                    println!("Set FunctionExit to {}", level);
                     global.debugger.status = DebuggerStatus::FunctionExit(level);
                     Ok(None)
                 }

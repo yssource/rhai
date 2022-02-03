@@ -156,9 +156,7 @@ impl Engine {
                         if !_terminate_chaining =>
                     {
                         #[cfg(feature = "debugging")]
-                        if self.debugger.is_some() {
-                            self.run_debugger(scope, global, state, lib, this_ptr, _parent, level)?;
-                        }
+                        self.run_debugger(scope, global, state, lib, this_ptr, _parent, level)?;
 
                         let mut idx_val_for_setter = idx_val.clone();
                         let idx_pos = x.lhs.position();
@@ -206,9 +204,7 @@ impl Engine {
                     // xxx[rhs] op= new_val
                     _ if new_val.is_some() => {
                         #[cfg(feature = "debugging")]
-                        if self.debugger.is_some() {
-                            self.run_debugger(scope, global, state, lib, this_ptr, _parent, level)?;
-                        }
+                        self.run_debugger(scope, global, state, lib, this_ptr, _parent, level)?;
 
                         let ((new_val, new_pos), (op_info, op_pos)) = new_val.expect("`Some`");
                         let mut idx_val_for_setter = idx_val.clone();
@@ -254,9 +250,7 @@ impl Engine {
                     // xxx[rhs]
                     _ => {
                         #[cfg(feature = "debugging")]
-                        if self.debugger.is_some() {
-                            self.run_debugger(scope, global, state, lib, this_ptr, _parent, level)?;
-                        }
+                        self.run_debugger(scope, global, state, lib, this_ptr, _parent, level)?;
 
                         self.get_indexed_mut(
                             global, state, lib, target, idx_val, pos, false, true, level,
@@ -275,13 +269,9 @@ impl Engine {
                         let call_args = &mut idx_val.into_fn_call_args();
 
                         #[cfg(feature = "debugging")]
-                        let reset_debugger = if self.debugger.is_some() {
-                            self.run_debugger_with_reset(
-                                scope, global, state, lib, this_ptr, rhs, level,
-                            )?
-                        } else {
-                            None
-                        };
+                        let reset_debugger = self.run_debugger_with_reset(
+                            scope, global, state, lib, this_ptr, rhs, level,
+                        )?;
 
                         let result = self.make_method_call(
                             global, state, lib, name, *hashes, target, call_args, *pos, level,
@@ -303,9 +293,7 @@ impl Engine {
                     // {xxx:map}.id op= ???
                     Expr::Property(x, pos) if target.is::<crate::Map>() && new_val.is_some() => {
                         #[cfg(feature = "debugging")]
-                        if self.debugger.is_some() {
-                            self.run_debugger(scope, global, state, lib, this_ptr, rhs, level)?;
-                        }
+                        self.run_debugger(scope, global, state, lib, this_ptr, rhs, level)?;
 
                         let index = x.2.clone().into();
                         let ((new_val, new_pos), (op_info, op_pos)) = new_val.expect("`Some`");
@@ -326,9 +314,7 @@ impl Engine {
                     // {xxx:map}.id
                     Expr::Property(x, pos) if target.is::<crate::Map>() => {
                         #[cfg(feature = "debugging")]
-                        if self.debugger.is_some() {
-                            self.run_debugger(scope, global, state, lib, this_ptr, rhs, level)?;
-                        }
+                        self.run_debugger(scope, global, state, lib, this_ptr, rhs, level)?;
 
                         let index = x.2.clone().into();
                         let val = self.get_indexed_mut(
@@ -339,9 +325,7 @@ impl Engine {
                     // xxx.id op= ???
                     Expr::Property(x, pos) if new_val.is_some() => {
                         #[cfg(feature = "debugging")]
-                        if self.debugger.is_some() {
-                            self.run_debugger(scope, global, state, lib, this_ptr, rhs, level)?;
-                        }
+                        self.run_debugger(scope, global, state, lib, this_ptr, rhs, level)?;
 
                         let ((getter, hash_get), (setter, hash_set), name) = x.as_ref();
                         let ((mut new_val, new_pos), (op_info, op_pos)) = new_val.expect("`Some`");
@@ -421,9 +405,7 @@ impl Engine {
                     // xxx.id
                     Expr::Property(x, pos) => {
                         #[cfg(feature = "debugging")]
-                        if self.debugger.is_some() {
-                            self.run_debugger(scope, global, state, lib, this_ptr, rhs, level)?;
-                        }
+                        self.run_debugger(scope, global, state, lib, this_ptr, rhs, level)?;
 
                         let ((getter, hash_get), _, name) = x.as_ref();
                         let hash = crate::ast::FnCallHashes::from_native(*hash_get);
@@ -463,11 +445,9 @@ impl Engine {
                         let val_target = &mut match x.lhs {
                             Expr::Property(ref p, pos) => {
                                 #[cfg(feature = "debugging")]
-                                if self.debugger.is_some() {
-                                    self.run_debugger(
-                                        scope, global, state, lib, this_ptr, _node, level,
-                                    )?;
-                                }
+                                self.run_debugger(
+                                    scope, global, state, lib, this_ptr, _node, level,
+                                )?;
 
                                 let index = p.2.clone().into();
                                 self.get_indexed_mut(
@@ -480,13 +460,9 @@ impl Engine {
                                 let call_args = &mut idx_val.into_fn_call_args();
 
                                 #[cfg(feature = "debugging")]
-                                let reset_debugger = if self.debugger.is_some() {
-                                    self.run_debugger_with_reset(
-                                        scope, global, state, lib, this_ptr, _node, level,
-                                    )?
-                                } else {
-                                    None
-                                };
+                                let reset_debugger = self.run_debugger_with_reset(
+                                    scope, global, state, lib, this_ptr, _node, level,
+                                )?;
 
                                 let result = self.make_method_call(
                                     global, state, lib, name, *hashes, target, call_args, pos,
@@ -521,11 +497,9 @@ impl Engine {
                             // xxx.prop[expr] | xxx.prop.expr
                             Expr::Property(ref p, pos) => {
                                 #[cfg(feature = "debugging")]
-                                if self.debugger.is_some() {
-                                    self.run_debugger(
-                                        scope, global, state, lib, this_ptr, _node, level,
-                                    )?;
-                                }
+                                self.run_debugger(
+                                    scope, global, state, lib, this_ptr, _node, level,
+                                )?;
 
                                 let ((getter, hash_get), (setter, hash_set), name) = p.as_ref();
                                 let rhs_chain = rhs.into();
@@ -626,13 +600,9 @@ impl Engine {
                                 let args = &mut idx_val.into_fn_call_args();
 
                                 #[cfg(feature = "debugging")]
-                                let reset_debugger = if self.debugger.is_some() {
-                                    self.run_debugger_with_reset(
-                                        scope, global, state, lib, this_ptr, _node, level,
-                                    )?
-                                } else {
-                                    None
-                                };
+                                let reset_debugger = self.run_debugger_with_reset(
+                                    scope, global, state, lib, this_ptr, _node, level,
+                                )?;
 
                                 let result = self.make_method_call(
                                     global, state, lib, name, *hashes, target, args, pos, level,
@@ -697,9 +667,7 @@ impl Engine {
             // id.??? or id[???]
             Expr::Variable(_, var_pos, x) => {
                 #[cfg(feature = "debugging")]
-                if self.debugger.is_some() {
-                    self.run_debugger(scope, global, state, lib, this_ptr, lhs, level)?;
-                }
+                self.run_debugger(scope, global, state, lib, this_ptr, lhs, level)?;
 
                 #[cfg(not(feature = "unchecked"))]
                 self.inc_operations(&mut global.num_operations, *var_pos)?;

@@ -204,11 +204,8 @@ impl Engine {
         level: usize,
     ) -> RhaiResult {
         #[cfg(feature = "debugging")]
-        let reset_debugger = if self.debugger.is_some() {
-            self.run_debugger_with_reset(scope, global, state, lib, this_ptr, stmt, level)?
-        } else {
-            None
-        };
+        let reset_debugger =
+            self.run_debugger_with_reset(scope, global, state, lib, this_ptr, stmt, level)?;
 
         // Coded this way for better branch prediction.
         // Popular branches are lifted out of the `match` statement into their own branches.
