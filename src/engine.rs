@@ -4,10 +4,9 @@ use crate::api::custom_syntax::CustomSyntax;
 use crate::func::native::{OnDebugCallback, OnParseTokenCallback, OnPrintCallback, OnVarCallback};
 use crate::packages::{Package, StandardPackage};
 use crate::tokenizer::Token;
-use crate::types::dynamic::{ Union};
+use crate::types::dynamic::Union;
 use crate::{
-    Dynamic, Identifier, ImmutableString, Module, Position,  RhaiResult, Shared,
-    StaticVec, 
+    Dynamic, Identifier, ImmutableString, Module, Position, RhaiResult, Shared, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;

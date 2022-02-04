@@ -16,7 +16,7 @@ use crate::types::dynamic::AccessMode;
 use crate::types::StringsInterner;
 use crate::{
     calc_fn_hash, Dynamic, Engine, ExclusiveRange, Identifier, ImmutableString, InclusiveRange,
-    LexError, ParseError, Position, Scope, Shared, StaticVec, Variant, AST, INT, PERR,
+    LexError, ParseError, Position, Scope, Shared, StaticVec, AST, INT, PERR,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
