@@ -802,9 +802,14 @@ impl Engine {
             // Empty return
             Stmt::Return(_, None, pos) => Err(ERR::Return(Dynamic::UNIT, *pos).into()),
 
+            // Let/const statement - shadowing disallowed
+            Stmt::Var(_, x, _, pos) if !self.allow_shadowing() && scope.contains(&x.name) => {
+                Err(ERR::ErrorVariableExists(x.name.to_string(), *pos).into())
+            }
             // Let/const statement
             Stmt::Var(expr, x, options, _) => {
                 let var_name = &x.name;
+
                 let entry_type = if options.contains(AST_OPTION_CONSTANT) {
                     AccessMode::ReadOnly
                 } else {

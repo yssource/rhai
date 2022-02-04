@@ -167,6 +167,10 @@ pub enum ParseErrorType {
     /// Assignment to an inappropriate LHS (left-hand-side) expression.
     /// Wrapped value is the error message (if any).
     AssignmentToInvalidLHS(String),
+    /// A variable is already defined.
+    ///
+    /// Only appears when variables shadowing is disabled.
+    VariableExists(String),
     /// A variable is not found.
     ///
     /// Only appears when strict variables mode is enabled.
@@ -241,6 +245,7 @@ impl fmt::Display for ParseErrorType {
             Self::DuplicatedSwitchCase => f.write_str("Duplicated switch case"),
             Self::DuplicatedVariable(s) => write!(f, "Duplicated variable name: {}", s),
 
+            Self::VariableExists(s) => write!(f, "Variable already defined: {}", s),
             Self::VariableUndefined(s) => write!(f, "Undefined variable: {}", s),
             Self::ModuleUndefined(s) => write!(f, "Undefined module: {}", s),
 

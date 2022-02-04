@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult};
+use rhai::{Engine, EvalAltResult, Scope, INT};
 
 #[test]
 fn test_options_allow() -> Result<(), Box<EvalAltResult>> {
@@ -30,6 +30,20 @@ fn test_options_allow() -> Result<(), Box<EvalAltResult>> {
     engine.set_allow_looping(false);
 
     assert!(engine.compile("while x > y { foo(z); }").is_err());
+
+    engine.compile("let x = 42; let x = 123;")?;
+
+    engine.set_allow_shadowing(false);
+
+    assert!(engine.compile("let x = 42; let x = 123;").is_err());
+    assert!(engine.compile("const x = 42; let x = 123;").is_err());
+    assert!(engine.compile("let x = 42; const x = 123;").is_err());
+    assert!(engine.compile("const x = 42; const x = 123;").is_err());
+
+    let mut scope = Scope::new();
+    scope.push("x", 42 as INT);
+
+    assert!(engine.run_with_scope(&mut scope, "let x = 42;").is_err());
 
     Ok(())
 }

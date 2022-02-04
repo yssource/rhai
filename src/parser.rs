@@ -16,7 +16,7 @@ use crate::types::dynamic::AccessMode;
 use crate::types::StringsInterner;
 use crate::{
     calc_fn_hash, Dynamic, Engine, ExclusiveRange, Identifier, ImmutableString, InclusiveRange,
-    LexError, ParseError, Position, Scope, Shared, StaticVec, AST, INT, PERR,
+    LexError, ParseError, Position, Scope, Shared, StaticVec, Variant, AST, INT, PERR,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -2591,6 +2591,12 @@ fn parse_let(
     // let name ...
     let (name, pos) = parse_var_name(input)?;
 
+    if !settings.default_options.allow_shadowing
+        && state.stack.iter().any(|(v, _)| v == name.as_ref())
+    {
+        return Err(PERR::VariableExists(name.to_string()).into_err(pos));
+    }
+
     let name = state.get_identifier("", name);
     let var_def = Ident {
         name: name.clone(),
@@ -2973,25 +2979,25 @@ fn parse_stmt(
 
         Token::If => parse_if(input, state, lib, settings.level_up()),
         Token::Switch => parse_switch(input, state, lib, settings.level_up()),
-        Token::While | Token::Loop if settings.default_options.allow_loop => {
+        Token::While | Token::Loop if settings.default_options.allow_looping => {
             parse_while_loop(input, state, lib, settings.level_up())
         }
-        Token::Do if settings.default_options.allow_loop => {
+        Token::Do if settings.default_options.allow_looping => {
             parse_do(input, state, lib, settings.level_up())
         }
-        Token::For if settings.default_options.allow_loop => {
+        Token::For if settings.default_options.allow_looping => {
             parse_for(input, state, lib, settings.level_up())
         }
 
-        Token::Continue if settings.default_options.allow_loop && settings.is_breakable => {
+        Token::Continue if settings.default_options.allow_looping && settings.is_breakable => {
             let pos = eat_token(input, Token::Continue);
             Ok(Stmt::BreakLoop(AST_OPTION_NONE, pos))
         }
-        Token::Break if settings.default_options.allow_loop && settings.is_breakable => {
+        Token::Break if settings.default_options.allow_looping && settings.is_breakable => {
             let pos = eat_token(input, Token::Break);
             Ok(Stmt::BreakLoop(AST_OPTION_BREAK, pos))
         }
-        Token::Continue | Token::Break if settings.default_options.allow_loop => {
+        Token::Continue | Token::Break if settings.default_options.allow_looping => {
             Err(PERR::LoopBreak.into_err(token_pos))
         }
 
