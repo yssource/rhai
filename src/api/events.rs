@@ -15,12 +15,12 @@ impl Engine {
     /// > `Fn(name: &str, index: usize, context: &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>`
     ///
     /// where:
+    /// * `name`: name of the variable.
     /// * `index`: an offset from the bottom of the current [`Scope`][crate::Scope] that the
     ///   variable is supposed to reside. Offsets start from 1, with 1 meaning the last variable in
     ///   the current [`Scope`][crate::Scope].  Essentially the correct variable is at position
     ///   `scope.len() - index`. If `index` is zero, then there is no pre-calculated offset position
     ///   and a search through the current [`Scope`][crate::Scope] must be performed.
-    ///
     /// * `context`: the current [evaluation context][`EvalContext`].
     ///
     /// ## Return value
@@ -61,6 +61,67 @@ impl Engine {
             + 'static,
     ) -> &mut Self {
         self.resolve_var = Some(Box::new(callback));
+        self
+    }
+    /// Provide a callback that will be invoked before the definition of each variable .
+    ///
+    /// # Callback Function Signature
+    ///
+    /// The callback function signature takes the following form:
+    ///
+    /// > `Fn(name: &str, is_const: bool, block_level: usize, will_shadow: bool, context: &EvalContext) -> Result<bool, Box<EvalAltResult>>`
+    ///
+    /// where:
+    /// * `name`: name of the variable to be defined.
+    /// * `is_const`: `true` if the statement is `const`, otherwise it is `let`.
+    /// * `block_level`: the current nesting level of statement blocks, with zero being the global level
+    /// * `will_shadow`: will the variable _shadow_ an existing variable?
+    /// * `context`: the current [evaluation context][`EvalContext`].
+    ///
+    /// ## Return value
+    ///
+    /// * `Ok(true)`: continue with normal variable definition.
+    /// * `Ok(false)`: deny the variable definition with an [runtime error][EvalAltResult::ErrorRuntime].
+    ///
+    /// ## Raising errors
+    ///
+    /// Return `Err(...)` if there is an error.
+    ///
+    /// # Example
+    ///
+    /// ```should_panic
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// use rhai::Engine;
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Register a variable definition filter.
+    /// engine.on_def_var(|name, is_const, _, _, _| {
+    ///     // Disallow defining MYSTIC_NUMBER as a constant
+    ///     if name == "MYSTIC_NUMBER" && is_const {
+    ///         Ok(false)
+    ///     } else {
+    ///         Ok(true)
+    ///     }
+    /// });
+    ///
+    /// // The following runs fine:
+    /// engine.eval::<i64>("let MYSTIC_NUMBER = 42;")?;
+    ///
+    /// // The following will cause an error:
+    /// engine.eval::<i64>("const MYSTIC_NUMBER = 42;")?;
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[inline(always)]
+    pub fn on_def_var(
+        &mut self,
+        callback: impl Fn(&str, bool, usize, bool, &EvalContext) -> RhaiResultOf<bool>
+            + SendSync
+            + 'static,
+    ) -> &mut Self {
+        self.def_var_filter = Some(Box::new(callback));
         self
     }
     /// _(internals)_ Register a callback that will be invoked during parsing to remap certain tokens.

@@ -1,6 +1,6 @@
 //! Module defining functions for evaluating a statement.
 
-use super::{EvalState, GlobalRuntimeState, Target};
+use super::{EvalContext, EvalState, GlobalRuntimeState, Target};
 use crate::ast::{
     BinaryExpr, Expr, Ident, OpAssignment, Stmt, SwitchCases, TryCatchBlock, AST_OPTION_FLAGS::*,
 };
@@ -240,7 +240,7 @@ impl Engine {
 
                 if let Ok(rhs_val) = rhs_result {
                     let search_result =
-                        self.search_namespace(scope, global, state, lib, this_ptr, lhs);
+                        self.search_namespace(scope, global, state, lib, this_ptr, lhs, level);
 
                     if let Ok(search_val) = search_result {
                         let (mut lhs_ptr, pos) = search_val;
@@ -807,7 +807,7 @@ impl Engine {
                 Err(ERR::ErrorVariableExists(x.name.to_string(), *pos).into())
             }
             // Let/const statement
-            Stmt::Var(expr, x, options, _) => {
+            Stmt::Var(expr, x, options, pos) => {
                 let var_name = &x.name;
 
                 let entry_type = if options.contains(AST_OPTION_CONSTANT) {
@@ -817,48 +817,79 @@ impl Engine {
                 };
                 let export = options.contains(AST_OPTION_EXPORTED);
 
-                let value_result = self
-                    .eval_expr(scope, global, state, lib, this_ptr, expr, level)
-                    .map(Dynamic::flatten);
-
-                if let Ok(value) = value_result {
-                    let _alias = if !rewind_scope {
-                        #[cfg(not(feature = "no_function"))]
-                        #[cfg(not(feature = "no_module"))]
-                        if state.scope_level == 0
-                            && entry_type == AccessMode::ReadOnly
-                            && lib.iter().any(|&m| !m.is_empty())
-                        {
-                            if global.constants.is_none() {
-                                global.constants = Some(crate::Shared::new(crate::Locked::new(
-                                    std::collections::BTreeMap::new(),
-                                )));
-                            }
-                            crate::func::locked_write(global.constants.as_ref().unwrap())
-                                .insert(var_name.clone(), value.clone());
-                        }
-
-                        if export {
-                            Some(var_name)
-                        } else {
-                            None
-                        }
-                    } else if export {
-                        unreachable!("exported variable not on global level");
-                    } else {
-                        None
+                let result = if let Some(ref filter) = self.def_var_filter {
+                    let shadowing = scope.contains(var_name);
+                    let scope_level = state.scope_level;
+                    let is_const = entry_type == AccessMode::ReadOnly;
+                    let context = EvalContext {
+                        engine: self,
+                        scope,
+                        global,
+                        state,
+                        lib,
+                        this_ptr,
+                        level: level,
                     };
 
-                    scope.push_dynamic_value(var_name.clone(), entry_type, value);
-
-                    #[cfg(not(feature = "no_module"))]
-                    if let Some(alias) = _alias {
-                        scope.add_entry_alias(scope.len() - 1, alias.clone());
+                    match filter(var_name, is_const, scope_level, shadowing, &context) {
+                        Ok(true) => None,
+                        Ok(false) => Some(Err(ERR::ErrorRuntime(
+                            format!("Variable cannot be defined: {}", var_name).into(),
+                            *pos,
+                        )
+                        .into())),
+                        err @ Err(_) => Some(err),
                     }
-
-                    Ok(Dynamic::UNIT)
                 } else {
-                    value_result
+                    None
+                };
+
+                if let Some(result) = result {
+                    result.map(|_| Dynamic::UNIT)
+                } else {
+                    let value_result = self
+                        .eval_expr(scope, global, state, lib, this_ptr, expr, level)
+                        .map(Dynamic::flatten);
+
+                    if let Ok(value) = value_result {
+                        let _alias = if !rewind_scope {
+                            #[cfg(not(feature = "no_function"))]
+                            #[cfg(not(feature = "no_module"))]
+                            if state.scope_level == 0
+                                && entry_type == AccessMode::ReadOnly
+                                && lib.iter().any(|&m| !m.is_empty())
+                            {
+                                if global.constants.is_none() {
+                                    global.constants = Some(crate::Shared::new(
+                                        crate::Locked::new(std::collections::BTreeMap::new()),
+                                    ));
+                                }
+                                crate::func::locked_write(global.constants.as_ref().unwrap())
+                                    .insert(var_name.clone(), value.clone());
+                            }
+
+                            if export {
+                                Some(var_name)
+                            } else {
+                                None
+                            }
+                        } else if export {
+                            unreachable!("exported variable not on global level");
+                        } else {
+                            None
+                        };
+
+                        scope.push_dynamic_value(var_name.clone(), entry_type, value);
+
+                        #[cfg(not(feature = "no_module"))]
+                        if let Some(alias) = _alias {
+                            scope.add_entry_alias(scope.len() - 1, alias.clone());
+                        }
+
+                        Ok(Dynamic::UNIT)
+                    } else {
+                        value_result
+                    }
                 }
             }
 

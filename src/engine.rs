@@ -1,7 +1,9 @@
 //! Main module defining the script evaluation [`Engine`].
 
 use crate::api::custom_syntax::CustomSyntax;
-use crate::func::native::{OnDebugCallback, OnParseTokenCallback, OnPrintCallback, OnVarCallback};
+use crate::func::native::{
+    OnDebugCallback, OnDefVarCallback, OnParseTokenCallback, OnPrintCallback, OnVarCallback,
+};
 use crate::packages::{Package, StandardPackage};
 use crate::tokenizer::Token;
 use crate::types::dynamic::Union;
@@ -113,6 +115,8 @@ pub struct Engine {
     pub(crate) custom_keywords: BTreeMap<Identifier, Option<Precedence>>,
     /// Custom syntax.
     pub(crate) custom_syntax: BTreeMap<Identifier, Box<CustomSyntax>>,
+    /// Callback closure for filtering variable definition.
+    pub(crate) def_var_filter: Option<Box<OnDefVarCallback>>,
     /// Callback closure for resolving variable access.
     pub(crate) resolve_var: Option<Box<OnVarCallback>>,
     /// Callback closure to remap tokens during parsing.
@@ -160,6 +164,7 @@ impl fmt::Debug for Engine {
             .field("disabled_symbols", &self.disabled_symbols)
             .field("custom_keywords", &self.custom_keywords)
             .field("custom_syntax", &(!self.custom_syntax.is_empty()))
+            .field("def_var_filter", &self.def_var_filter.is_some())
             .field("resolve_var", &self.resolve_var.is_some())
             .field("token_mapper", &self.token_mapper.is_some())
             .field("print", &self.print.is_some())
@@ -272,6 +277,7 @@ impl Engine {
             custom_keywords: BTreeMap::new(),
             custom_syntax: BTreeMap::new(),
 
+            def_var_filter: None,
             resolve_var: None,
             token_mapper: None,
 

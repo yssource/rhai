@@ -120,3 +120,26 @@ fn test_var_resolver() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_var_def_filter() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    engine.on_def_var(|name, scope_level, _, _| match (name, scope_level) {
+        ("x", 0 | 1) => Ok(false),
+        _ => Ok(true),
+    });
+
+    assert_eq!(
+        engine.eval::<INT>("let y = 42; let y = 123; let z = y + 1; z")?,
+        124
+    );
+
+    assert!(engine.run("let x = 42;").is_err());
+    assert!(engine.run("const x = 42;").is_err());
+    assert!(engine.run("let y = 42; { let x = y + 1; }").is_err());
+    assert!(engine.run("let y = 42; { let x = y + 1; }").is_err());
+    engine.run("let y = 42; { let z = y + 1; { let x = z + 1; } }")?;
+
+    Ok(())
+}

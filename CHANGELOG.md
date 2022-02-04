@@ -27,6 +27,7 @@ New features
 * A new bin tool, `rhai-dbg` (aka _The Rhai Debugger_), is added to showcase the debugging interface.
 * A new package, `DebuggingPackage`, is added which contains the `back_trace` function to get the current call stack anywhere in a script.
 * `Engine::set_allow_shadowing` is added to allow/disallow variables _shadowing_, with new errors `EvalAltResult::ErrorVariableExists` and `ParseErrorType::VariableExists`.
+* `Engine::on_def_var` allows registering a closure which can decide whether a variable definition is allow to continue, or should fail with an error.
 
 Enhancements
 ------------
