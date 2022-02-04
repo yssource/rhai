@@ -125,7 +125,7 @@ fn test_var_resolver() -> Result<(), Box<EvalAltResult>> {
 fn test_var_def_filter() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
-    engine.on_def_var(|name, scope_level, _, _| match (name, scope_level) {
+    engine.on_def_var(|name, _, scope_level, _, _| match (name, scope_level) {
         ("x", 0 | 1) => Ok(false),
         _ => Ok(true),
     });
