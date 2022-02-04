@@ -1,6 +1,5 @@
 use crate::{
-    Engine, ExclusiveRange, FnPtr, ImmutableString, InclusiveRange, Instant, Position, RhaiError,
-    ERR,
+    Engine, ExclusiveRange, FnPtr, ImmutableString, InclusiveRange, Position, RhaiError, ERR,
 };
 use std::any::type_name;
 #[cfg(feature = "no_std")]
@@ -45,7 +44,7 @@ fn map_std_type_name(name: &str, shorthands: bool) -> &str {
         return if shorthands { "map" } else { "Map" };
     }
     #[cfg(not(feature = "no_std"))]
-    if name == type_name::<Instant>() || name == "Instant" {
+    if name == type_name::<crate::Instant>() || name == "Instant" {
         return if shorthands { "timestamp" } else { "Instant" };
     }
     if name == type_name::<ExclusiveRange>() || name == "ExclusiveRange" {
