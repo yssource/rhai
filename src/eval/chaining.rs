@@ -146,7 +146,7 @@ impl Engine {
         match chain_type {
             #[cfg(not(feature = "no_index"))]
             ChainType::Indexing => {
-                let pos = rhs.position();
+                let pos = rhs.start_position();
                 let root_pos = idx_val.position();
                 let idx_val = idx_val.into_index_value().expect("`ChainType::Index`");
 
@@ -159,7 +159,7 @@ impl Engine {
                         self.run_debugger(scope, global, state, lib, this_ptr, _parent, level)?;
 
                         let mut idx_val_for_setter = idx_val.clone();
-                        let idx_pos = x.lhs.position();
+                        let idx_pos = x.lhs.start_position();
                         let rhs_chain = rhs.into();
 
                         let (try_setter, result) = {
@@ -629,7 +629,7 @@ impl Engine {
                         }
                     }
                     // Syntax error
-                    _ => Err(ERR::ErrorDotExpr("".into(), rhs.position()).into()),
+                    _ => Err(ERR::ErrorDotExpr("".into(), rhs.start_position()).into()),
                 }
             }
         }
@@ -691,7 +691,7 @@ impl Engine {
             expr => {
                 let value = self.eval_expr(scope, global, state, lib, this_ptr, expr, level)?;
                 let obj_ptr = &mut value.into();
-                let root = ("", expr.position());
+                let root = ("", expr.start_position());
                 self.eval_dot_index_chain_helper(
                     global, state, lib, this_ptr, obj_ptr, root, expr, rhs, term, idx_values,
                     chain_type, level, new_val,
@@ -804,7 +804,10 @@ impl Engine {
                     _ if _parent_chain_type == ChainType::Indexing => self
                         .eval_expr(scope, global, state, lib, this_ptr, lhs, level)
                         .map(|v| {
-                            super::ChainArgument::from_index_value(v.flatten(), lhs.position())
+                            super::ChainArgument::from_index_value(
+                                v.flatten(),
+                                lhs.start_position(),
+                            )
                         })?,
                     expr => unreachable!("unknown chained expression: {:?}", expr),
                 };
@@ -828,7 +831,7 @@ impl Engine {
             _ if _parent_chain_type == ChainType::Indexing => idx_values.push(
                 self.eval_expr(scope, global, state, lib, this_ptr, expr, level)
                     .map(|v| {
-                        super::ChainArgument::from_index_value(v.flatten(), expr.position())
+                        super::ChainArgument::from_index_value(v.flatten(), expr.start_position())
                     })?,
             ),
             _ => unreachable!("unknown chained expression: {:?}", expr),

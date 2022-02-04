@@ -182,22 +182,24 @@ impl Engine {
             });
 
         #[cfg(feature = "debugging")]
-        if self.debugger.is_some() {
-            match global.debugger.status {
-                crate::eval::DebuggerStatus::FunctionExit(n) if n >= level => {
-                    let node = crate::ast::Stmt::Noop(pos);
-                    let node = (&node).into();
-                    let event = match _result {
-                        Ok(ref r) => crate::eval::DebuggerEvent::FunctionExitWithValue(r),
-                        Err(ref err) => crate::eval::DebuggerEvent::FunctionExitWithError(err),
-                    };
-                    if let Err(err) = self
-                        .run_debugger_raw(scope, global, state, lib, this_ptr, node, event, level)
-                    {
-                        _result = Err(err);
-                    }
+        {
+            let trigger = match global.debugger.status {
+                crate::eval::DebuggerStatus::FunctionExit(n) => n >= level,
+                crate::eval::DebuggerStatus::Next(_, true) => true,
+                _ => false,
+            };
+            if trigger {
+                let node = crate::ast::Stmt::Noop(fn_def.body.end_position().or_else(pos));
+                let node = (&node).into();
+                let event = match _result {
+                    Ok(ref r) => crate::eval::DebuggerEvent::FunctionExitWithValue(r),
+                    Err(ref err) => crate::eval::DebuggerEvent::FunctionExitWithError(err),
+                };
+                match self.run_debugger_raw(scope, global, state, lib, this_ptr, node, event, level)
+                {
+                    Ok(_) => (),
+                    Err(err) => _result = Err(err),
                 }
-                _ => (),
             }
 
             // Pop the call stack

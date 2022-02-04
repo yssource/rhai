@@ -267,7 +267,7 @@ impl Engine {
                             rhs_val,
                             level,
                         )
-                        .map_err(|err| err.fill_position(rhs.position()))
+                        .map_err(|err| err.fill_position(rhs.start_position()))
                         .map(|_| Dynamic::UNIT)
                     } else {
                         search_result.map(|_| Dynamic::UNIT)
@@ -283,7 +283,7 @@ impl Engine {
                     .map(Dynamic::flatten);
 
                 if let Ok(rhs_val) = rhs_result {
-                    let _new_val = Some(((rhs_val, rhs.position()), (*op_info, *op_pos)));
+                    let _new_val = Some(((rhs_val, rhs.start_position()), (*op_info, *op_pos)));
 
                     // Must be either `var[index] op= val` or `var.prop op= val`
                     match lhs {
@@ -686,7 +686,7 @@ impl Engine {
 
                         loop_result
                     } else {
-                        Err(ERR::ErrorFor(expr.position()).into())
+                        Err(ERR::ErrorFor(expr.start_position()).into())
                     }
                 } else {
                     iter_result
@@ -869,9 +869,10 @@ impl Engine {
                 let path_result = self
                     .eval_expr(scope, global, state, lib, this_ptr, &expr, level)
                     .and_then(|v| {
+                        let typ = v.type_name();
                         v.try_cast::<crate::ImmutableString>().ok_or_else(|| {
                             self.make_type_mismatch_err::<crate::ImmutableString>(
-                                "",
+                                typ,
                                 expr.position(),
                             )
                         })
@@ -880,7 +881,7 @@ impl Engine {
                 if let Ok(path) = path_result {
                     use crate::ModuleResolver;
 
-                    let path_pos = expr.position();
+                    let path_pos = expr.start_position();
 
                     let resolver = global.embedded_module_resolver.clone();
 

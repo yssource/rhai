@@ -148,7 +148,7 @@ impl Engine {
                     Err(ERR::ErrorUnboundThis(*pos).into())
                 }
             }
-            _ if state.always_search_scope => (0, expr.position()),
+            _ if state.always_search_scope => (0, expr.start_position()),
             Expr::Variable(Some(i), pos, _) => (i.get() as usize, *pos),
             Expr::Variable(None, pos, v) => (v.0.map(NonZeroUsize::get).unwrap_or(0), *pos),
             _ => unreachable!("Expr::Variable expected but gets {:?}", expr),
@@ -347,11 +347,11 @@ impl Engine {
                         item,
                         level,
                     ) {
-                        result = Err(err.fill_position(expr.position()));
+                        result = Err(err.fill_position(expr.start_position()));
                         break;
                     }
 
-                    pos = expr.position();
+                    pos = expr.start_position();
                 }
 
                 result.map(|_| concat)
@@ -504,7 +504,7 @@ impl Engine {
 
                 let result = (custom_def.func)(&mut context, &expressions);
 
-                self.check_return_value(result, expr.position())
+                self.check_return_value(result, expr.start_position())
             }
 
             Expr::Stmt(x) if x.is_empty() => Ok(Dynamic::UNIT),

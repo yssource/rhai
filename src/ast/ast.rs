@@ -91,7 +91,7 @@ impl AST {
     ) -> Self {
         Self {
             source: Identifier::new_const(),
-            body: StmtBlock::new(statements, Position::NONE),
+            body: StmtBlock::new(statements, Position::NONE, Position::NONE),
             #[cfg(not(feature = "no_function"))]
             lib: functions.into(),
             #[cfg(not(feature = "no_module"))]

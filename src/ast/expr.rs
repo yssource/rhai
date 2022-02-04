@@ -191,6 +191,8 @@ pub struct FnCallExpr {
     pub constants: StaticVec<Dynamic>,
     /// Does this function call capture the parent scope?
     pub capture_parent_scope: bool,
+    /// [Position] of the function name.
+    pub pos: Position,
 }
 
 impl fmt::Debug for FnCallExpr {
@@ -207,6 +209,7 @@ impl fmt::Debug for FnCallExpr {
         if self.capture_parent_scope {
             ff.field("capture_parent_scope", &self.capture_parent_scope);
         }
+        ff.field("pos", &self.pos);
         ff.finish()
     }
 }
@@ -437,7 +440,7 @@ impl Default for Expr {
 
 impl fmt::Debug for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut display_pos = self.position();
+        let mut display_pos = self.start_position();
 
         match self {
             Self::DynamicConstant(value, _) => write!(f, "{:?}", value),
@@ -629,6 +632,7 @@ impl Expr {
                     args: once(Self::Stack(0, pos)).collect(),
                     constants: once(f.fn_name().into()).collect(),
                     capture_parent_scope: false,
+                    pos,
                 }
                 .into(),
                 pos,
@@ -685,15 +689,30 @@ impl Expr {
             | Self::Map(_, pos)
             | Self::Variable(_, pos, _)
             | Self::Stack(_, pos)
-            | Self::FnCall(_, pos)
+            | Self::And(_, pos)
+            | Self::Or(_, pos)
             | Self::Index(_, _, pos)
+            | Self::Dot(_, _, pos)
             | Self::Custom(_, pos)
             | Self::InterpolatedString(_, pos)
             | Self::Property(_, pos) => *pos,
 
-            Self::Stmt(x) => x.position(),
+            Self::FnCall(x, _) => x.pos,
 
-            Self::And(x, _) | Self::Or(x, _) | Self::Dot(x, _, _) => x.lhs.position(),
+            Self::Stmt(x) => x.position(),
+        }
+    }
+    /// Get the starting [position][Position] of the expression.
+    /// For a binary expression, this will be the left-most LHS instead of the operator.
+    #[inline]
+    #[must_use]
+    pub const fn start_position(&self) -> Position {
+        match self {
+            Self::And(x, _) | Self::Or(x, _) | Self::Index(x, _, _) | Self::Dot(x, _, _) => {
+                x.lhs.start_position()
+            }
+            Self::FnCall(_, pos) => *pos,
+            _ => self.position(),
         }
     }
     /// Override the [position][Position] of the expression.
@@ -722,7 +741,7 @@ impl Expr {
             | Self::InterpolatedString(_, pos)
             | Self::Property(_, pos) => *pos = new_pos,
 
-            Self::Stmt(x) => x.set_position(new_pos),
+            Self::Stmt(x) => x.set_position(new_pos, Position::NONE),
         }
 
         self

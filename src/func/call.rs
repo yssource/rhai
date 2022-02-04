@@ -426,23 +426,26 @@ impl Engine {
             };
 
             #[cfg(feature = "debugging")]
-            if self.debugger.is_some() {
-                match global.debugger.status {
-                    crate::eval::DebuggerStatus::FunctionExit(n) if n >= level => {
-                        let scope = &mut &mut Scope::new();
-                        let node = crate::ast::Stmt::Noop(pos);
-                        let node = (&node).into();
-                        let event = match _result {
-                            Ok(ref r) => crate::eval::DebuggerEvent::FunctionExitWithValue(r),
-                            Err(ref err) => crate::eval::DebuggerEvent::FunctionExitWithError(err),
-                        };
-                        if let Err(err) = self.run_debugger_raw(
-                            scope, global, state, lib, &mut None, node, event, level,
-                        ) {
-                            _result = Err(err);
-                        }
+            {
+                let trigger = match global.debugger.status {
+                    crate::eval::DebuggerStatus::FunctionExit(n) => n >= level,
+                    crate::eval::DebuggerStatus::Next(_, true) => true,
+                    _ => false,
+                };
+                if trigger {
+                    let scope = &mut &mut Scope::new();
+                    let node = crate::ast::Stmt::Noop(pos);
+                    let node = (&node).into();
+                    let event = match _result {
+                        Ok(ref r) => crate::eval::DebuggerEvent::FunctionExitWithValue(r),
+                        Err(ref err) => crate::eval::DebuggerEvent::FunctionExitWithError(err),
+                    };
+                    match self
+                        .run_debugger_raw(scope, global, state, lib, &mut None, node, event, level)
+                    {
+                        Ok(_) => (),
+                        Err(err) => _result = Err(err),
                     }
-                    _ => (),
                 }
 
                 // Pop the call stack
@@ -977,7 +980,7 @@ impl Engine {
 
                 result?
             },
-            arg_expr.position(),
+            arg_expr.start_position(),
         ))
     }
 
@@ -1378,24 +1381,17 @@ impl Engine {
             #[cfg(not(feature = "no_function"))]
             Some(f) if f.is_script() => {
                 let fn_def = f.get_script_fn_def().expect("script-defined function");
+                let new_scope = &mut Scope::new();
+                let mut source = module.id_raw().clone();
+                mem::swap(&mut global.source, &mut source);
 
-                if fn_def.body.is_empty() {
-                    Ok(Dynamic::UNIT)
-                } else {
-                    let new_scope = &mut Scope::new();
+                let result = self.call_script_fn(
+                    new_scope, global, state, lib, &mut None, fn_def, &mut args, true, pos, level,
+                );
 
-                    let mut source = module.id_raw().clone();
-                    mem::swap(&mut global.source, &mut source);
+                global.source = source;
 
-                    let result = self.call_script_fn(
-                        new_scope, global, state, lib, &mut None, fn_def, &mut args, true, pos,
-                        level,
-                    );
-
-                    global.source = source;
-
-                    result
-                }
+                result
             }
 
             Some(f) if f.is_plugin_fn() => {

@@ -35,6 +35,9 @@ Enhancements
 * Debug display of `AST` is improved.
 * `NativeCallContext::call_level()` is added to give the current nesting level of function calls.
 * A new feature, `bin-features`, pulls in all the required features for `bin` tools.
+* `AST` position display is improved:
+  * `Expr::start_position` is added to give the beginning of the expression (not the operator's position).
+  * `StmtBlock` and `Stmt::Block` now keep the position of the closing `}` as well.
 
 REPL tool changes
 -----------------

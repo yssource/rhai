@@ -134,7 +134,7 @@ pub struct TryCatchBlock {
 /// _(internals)_ A scoped block of statements.
 /// Exported under the `internals` feature only.
 #[derive(Clone, Hash, Default)]
-pub struct StmtBlock(StaticVec<Stmt>, Position);
+pub struct StmtBlock(StaticVec<Stmt>, (Position, Position));
 
 impl StmtBlock {
     /// A [`StmtBlock`] that does not exist.
@@ -142,16 +142,20 @@ impl StmtBlock {
 
     /// Create a new [`StmtBlock`].
     #[must_use]
-    pub fn new(statements: impl IntoIterator<Item = Stmt>, pos: Position) -> Self {
+    pub fn new(
+        statements: impl IntoIterator<Item = Stmt>,
+        start_pos: Position,
+        end_pos: Position,
+    ) -> Self {
         let mut statements: StaticVec<_> = statements.into_iter().collect();
         statements.shrink_to_fit();
-        Self(statements, pos)
+        Self(statements, (start_pos, end_pos))
     }
     /// Create an empty [`StmtBlock`].
     #[inline(always)]
     #[must_use]
     pub const fn empty(pos: Position) -> Self {
-        Self(StaticVec::new_const(), pos)
+        Self(StaticVec::new_const(), (pos, pos))
     }
     /// Is this statements block empty?
     #[inline(always)]
@@ -183,16 +187,42 @@ impl StmtBlock {
     pub fn iter(&self) -> impl Iterator<Item = &Stmt> {
         self.0.iter()
     }
-    /// Get the position (location of the beginning `{`) of this statements block.
+    /// Get the start position (location of the beginning `{`) of this statements block.
     #[inline(always)]
     #[must_use]
     pub const fn position(&self) -> Position {
+        (self.1).0
+    }
+    /// Get the end position (location of the ending `}`) of this statements block.
+    #[inline(always)]
+    #[must_use]
+    pub const fn end_position(&self) -> Position {
+        (self.1).1
+    }
+    /// Get the positions (locations of the beginning `{` and ending `}`) of this statements block.
+    #[inline(always)]
+    #[must_use]
+    pub const fn positions(&self) -> (Position, Position) {
         self.1
     }
-    /// Set the position (location of the beginning `{`) of this statements block.
+    /// Get the positions (locations of the beginning `{` and ending `}`) of this statements block
+    /// or a default.
     #[inline(always)]
-    pub fn set_position(&mut self, pos: Position) {
-        self.1 = pos;
+    #[must_use]
+    pub const fn positions_or_else(
+        &self,
+        def_start_pos: Position,
+        def_end_pos: Position,
+    ) -> (Position, Position) {
+        (
+            (self.1).0.or_else(def_start_pos),
+            (self.1).1.or_else(def_end_pos),
+        )
+    }
+    /// Set the positions of this statements block.
+    #[inline(always)]
+    pub fn set_position(&mut self, start_pos: Position, end_pos: Position) {
+        self.1 = (start_pos, end_pos);
     }
 }
 
@@ -230,7 +260,12 @@ impl fmt::Debug for StmtBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Block")?;
         fmt::Debug::fmt(&self.0, f)?;
-        self.1.debug_print(f)
+        (self.1).0.debug_print(f)?;
+        #[cfg(not(feature = "no_position"))]
+        if !(self.1).1.is_none() {
+            write!(f, "-{:?}", (self.1).1)?;
+        }
+        Ok(())
     }
 }
 
@@ -239,10 +274,10 @@ impl From<Stmt> for StmtBlock {
     fn from(stmt: Stmt) -> Self {
         match stmt {
             Stmt::Block(mut block, pos) => Self(block.iter_mut().map(mem::take).collect(), pos),
-            Stmt::Noop(pos) => Self(StaticVec::new_const(), pos),
+            Stmt::Noop(pos) => Self(StaticVec::new_const(), (pos, pos)),
             _ => {
                 let pos = stmt.position();
-                Self(vec![stmt].into(), pos)
+                Self(vec![stmt].into(), (pos, Position::NONE))
             }
         }
     }
@@ -309,7 +344,7 @@ pub enum Stmt {
     ///        function call forming one statement.
     FnCall(Box<FnCallExpr>, Position),
     /// `{` stmt`;` ... `}`
-    Block(Box<[Stmt]>, Position),
+    Block(Box<[Stmt]>, (Position, Position)),
     /// `try` `{` stmt; ... `}` `catch` `(` var `)` `{` stmt; ... `}`
     TryCatch(Box<TryCatchBlock>, Position),
     /// [expression][Expr]
@@ -377,7 +412,7 @@ impl Stmt {
         match self {
             Self::Noop(pos)
             | Self::BreakLoop(_, pos)
-            | Self::Block(_, pos)
+            | Self::Block(_, (pos, _))
             | Self::Assignment(_, pos)
             | Self::FnCall(_, pos)
             | Self::If(_, _, pos)
@@ -389,7 +424,7 @@ impl Stmt {
             | Self::Var(_, _, _, pos)
             | Self::TryCatch(_, pos) => *pos,
 
-            Self::Expr(x) => x.position(),
+            Self::Expr(x) => x.start_position(),
 
             #[cfg(not(feature = "no_module"))]
             Self::Import(_, _, pos) => *pos,
@@ -405,7 +440,7 @@ impl Stmt {
         match self {
             Self::Noop(pos)
             | Self::BreakLoop(_, pos)
-            | Self::Block(_, pos)
+            | Self::Block(_, (pos, _))
             | Self::Assignment(_, pos)
             | Self::FnCall(_, pos)
             | Self::If(_, _, pos)
