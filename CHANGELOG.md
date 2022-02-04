@@ -12,25 +12,57 @@ Bug fixes
 * In `Scope::clone_visible`, constants are now properly cloned as constants.
 * Variables introduced inside `try` blocks are now properly cleaned up upon an exception.
 * Off-by-one error in character positions after a comment line is now fixed.
+* Globally-defined constants are now encapsulated correctly inside a loaded module and no longer spill across call boundaries.
+* Type names display is fixed.
 
 Script-breaking changes
 -----------------------
 
-* For consistency, the `export` statement no longer exports multiple variables.
+* For consistency with the `import` statement, the `export` statement no longer exports multiple variables.
 
 New features
 ------------
 
 * A debugging interface is added.
 * A new bin tool, `rhai-dbg` (aka _The Rhai Debugger_), is added to showcase the debugging interface.
-* A new package, `DebuggingPackage`, is added which contains the `stack_trace` function to get the current call stack anywhere in a script.
+* A new package, `DebuggingPackage`, is added which contains the `back_trace` function to get the current call stack anywhere in a script.
+* `Engine::set_allow_shadowing` is added to allow/disallow variables _shadowing_, with new errors `EvalAltResult::ErrorVariableExists` and `ParseErrorType::VariableExists`.
+* `Engine::on_def_var` allows registering a closure which can decide whether a variable definition is allow to continue, or should fail with an error.
 
 Enhancements
 ------------
 
-* `rhai-repl` tool has a few more commands, such as `strict` to turn on/off _Strict Variables Mode_ and `optimize` to turn on/off script optimization.
 * Default features for dependencies (such as `ahash/std` and `num-traits/std`) are no longer required.
 * The `no_module` feature now eliminates large sections of code via feature gates.
+* Debug display of `AST` is improved.
+* `NativeCallContext::call_level()` is added to give the current nesting level of function calls.
+* A new feature, `bin-features`, pulls in all the required features for `bin` tools.
+* `AST` position display is improved:
+  * `Expr::start_position` is added to give the beginning of the expression (not the operator's position).
+  * `StmtBlock` and `Stmt::Block` now keep the position of the closing `}` as well.
+
+REPL tool changes
+-----------------
+
+The REPL bin tool, `rhai-rpl`, has been enhanced.
+
+### Build changes
+
+* The `rustyline` feature is now required in order to build `rhai-repl`.
+* Therefore, `rhai-repl` is no longer automatically built when using a simple `cargo build` with default features.
+
+### Line editor
+
+* `rhai-repl` now uses [`rustyline`](https://crates.io/crates/rustyline) as a line editor with history.
+* Shift-Enter can now be used to enter multiple lines without having to attach the `\` continuation character the end of each line.
+
+### New commands
+
+* `strict` to turn on/off _Strict Variables Mode_.
+* `optimize` to turn on/off script optimization.
+* `history` to print lines history.
+* `!!`, `!`_num_ and `!`_text_ to recall a history line.
+* `keys` to print all key bindings.
 
 
 Version 1.4.1
@@ -551,7 +583,7 @@ Breaking changes
 New features
 ------------
 
-* Line continuation (via `\`) and multi-line literal strings (wrapped with <code>\`</code>) support are added.
+* Line continuation (via `\`) and multi-line literal strings (wrapped with `` ` ``) support are added.
 * Rhai scripts can now start with a shebang `#!` which is ignored.
 
 Enhancements

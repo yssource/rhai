@@ -154,6 +154,8 @@ pub use eval::EvalContext;
 pub use func::{NativeCallContext, RegisterNativeFunction};
 pub use module::{FnNamespace, Module};
 pub use tokenizer::Position;
+#[cfg(not(feature = "no_std"))]
+pub use types::Instant;
 pub use types::{
     Dynamic, EvalAltResult, FnPtr, ImmutableString, LexError, ParseError, ParseErrorType, Scope,
 };
@@ -164,7 +166,7 @@ pub use types::{
 pub mod debugger {
     #[cfg(not(feature = "no_function"))]
     pub use super::eval::CallStackFrame;
-    pub use super::eval::{BreakPoint, Debugger, DebuggerCommand};
+    pub use super::eval::{BreakPoint, Debugger, DebuggerCommand, DebuggerEvent};
 }
 
 /// An identifier in Rhai. [`SmartString`](https://crates.io/crates/smartstring) is used because most
@@ -256,8 +258,13 @@ pub use parser::ParseState;
 pub use ast::{
     ASTNode, BinaryExpr, ConditionalStmtBlock, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident,
     OpAssignment, OptionFlags, ScriptFnDef, Stmt, StmtBlock, SwitchCases, TryCatchBlock,
-    AST_OPTION_FLAGS::*,
+    AST_OPTION_FLAGS,
 };
+
+#[cfg(feature = "internals")]
+#[cfg(not(feature = "no_module"))]
+#[cfg(not(feature = "no_function"))]
+pub use ast::EncapsulatedEnviron;
 
 #[cfg(feature = "internals")]
 #[cfg(not(feature = "no_float"))]

@@ -1,18 +1,18 @@
 //! Main module defining the script evaluation [`Engine`].
 
 use crate::api::custom_syntax::CustomSyntax;
-use crate::func::native::{OnDebugCallback, OnParseTokenCallback, OnPrintCallback, OnVarCallback};
+use crate::func::native::{
+    OnDebugCallback, OnDefVarCallback, OnParseTokenCallback, OnPrintCallback, OnVarCallback,
+};
 use crate::packages::{Package, StandardPackage};
 use crate::tokenizer::Token;
-use crate::types::dynamic::{map_std_type_name, Union};
+use crate::types::dynamic::Union;
 use crate::{
-    Dynamic, Identifier, ImmutableString, Module, Position, RhaiError, RhaiResult, Shared,
-    StaticVec, ERR,
+    Dynamic, Identifier, ImmutableString, Module, Position, RhaiResult, Shared, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
-    any::type_name,
     collections::{BTreeMap, BTreeSet},
     fmt,
     num::NonZeroU8,
@@ -115,6 +115,8 @@ pub struct Engine {
     pub(crate) custom_keywords: BTreeMap<Identifier, Option<Precedence>>,
     /// Custom syntax.
     pub(crate) custom_syntax: BTreeMap<Identifier, Box<CustomSyntax>>,
+    /// Callback closure for filtering variable definition.
+    pub(crate) def_var_filter: Option<Box<OnDefVarCallback>>,
     /// Callback closure for resolving variable access.
     pub(crate) resolve_var: Option<Box<OnVarCallback>>,
     /// Callback closure to remap tokens during parsing.
@@ -162,6 +164,7 @@ impl fmt::Debug for Engine {
             .field("disabled_symbols", &self.disabled_symbols)
             .field("custom_keywords", &self.custom_keywords)
             .field("custom_syntax", &(!self.custom_syntax.is_empty()))
+            .field("def_var_filter", &self.def_var_filter.is_some())
             .field("resolve_var", &self.resolve_var.is_some())
             .field("token_mapper", &self.token_mapper.is_some())
             .field("print", &self.print.is_some())
@@ -274,6 +277,7 @@ impl Engine {
             custom_keywords: BTreeMap::new(),
             custom_syntax: BTreeMap::new(),
 
+            def_var_filter: None,
             resolve_var: None,
             token_mapper: None,
 
@@ -336,60 +340,5 @@ impl Engine {
         }
 
         result
-    }
-
-    /// Pretty-print a type name.
-    ///
-    /// If a type is registered via [`register_type_with_name`][Engine::register_type_with_name],
-    /// the type name provided for the registration will be used.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the type name is `&mut`.
-    #[inline]
-    #[must_use]
-    pub fn map_type_name<'a>(&'a self, name: &'a str) -> &'a str {
-        self.type_names
-            .get(name)
-            .map(|s| s.as_str())
-            .unwrap_or_else(|| map_std_type_name(name, true))
-    }
-
-    /// Format a type name.
-    ///
-    /// If a type is registered via [`register_type_with_name`][Engine::register_type_with_name],
-    /// the type name provided for the registration will be used.
-    #[cfg(feature = "metadata")]
-    #[inline]
-    #[must_use]
-    pub(crate) fn format_type_name<'a>(&'a self, name: &'a str) -> std::borrow::Cow<'a, str> {
-        if name.starts_with("&mut ") {
-            let x = &name[5..];
-            let r = self.format_type_name(x);
-            return if x != r {
-                format!("&mut {}", r).into()
-            } else {
-                name.into()
-            };
-        }
-
-        self.type_names
-            .get(name)
-            .map(|s| s.as_str())
-            .unwrap_or_else(|| match name {
-                "INT" => return type_name::<crate::INT>(),
-                #[cfg(not(feature = "no_float"))]
-                "FLOAT" => return type_name::<crate::FLOAT>(),
-                _ => map_std_type_name(name, false),
-            })
-            .into()
-    }
-
-    /// Make a `Box<`[`EvalAltResult<ErrorMismatchDataType>`][ERR::ErrorMismatchDataType]`>`.
-    #[inline]
-    #[must_use]
-    pub(crate) fn make_type_mismatch_err<T>(&self, typ: &str, pos: Position) -> RhaiError {
-        ERR::ErrorMismatchDataType(self.map_type_name(type_name::<T>()).into(), typ.into(), pos)
-            .into()
     }
 }

@@ -52,11 +52,11 @@ pub struct ParseState<'e> {
     pub entry_stack_len: usize,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
     #[cfg(not(feature = "no_closure"))]
-    pub external_vars: BTreeMap<Identifier, Position>,
+    pub external_vars: Vec<crate::ast::Ident>,
     /// An indicator that disables variable capturing into externals one single time
     /// up until the nearest consumed Identifier token.
     /// If set to false the next call to [`access_var`][ParseState::access_var] will not capture the variable.
-    /// All consequent calls to [`access_var`][ParseState::access_var] will not be affected
+    /// All consequent calls to [`access_var`][ParseState::access_var] will not be affected.
     #[cfg(not(feature = "no_closure"))]
     pub allow_capture: bool,
     /// Encapsulates a local stack with imported [module][crate::Module] names.
@@ -85,7 +85,7 @@ impl<'e> ParseState<'e> {
             #[cfg(not(feature = "no_function"))]
             max_function_expr_depth: NonZeroUsize::new(engine.max_function_expr_depth()),
             #[cfg(not(feature = "no_closure"))]
-            external_vars: BTreeMap::new(),
+            external_vars: Vec::new(),
             #[cfg(not(feature = "no_closure"))]
             allow_capture: true,
             interned_strings: StringsInterner::new(),
@@ -128,8 +128,11 @@ impl<'e> ParseState<'e> {
 
         #[cfg(not(feature = "no_closure"))]
         if self.allow_capture {
-            if index.is_none() && !self.external_vars.contains_key(name) {
-                self.external_vars.insert(name.into(), _pos);
+            if index.is_none() && !self.external_vars.iter().any(|v| v.name == name) {
+                self.external_vars.push(crate::ast::Ident {
+                    name: name.into(),
+                    pos: _pos,
+                });
             }
         } else {
             self.allow_capture = true
@@ -303,7 +306,7 @@ impl Expr {
 
         Err(
             PERR::MismatchedType("a boolean expression".to_string(), type_name.to_string())
-                .into_err(self.position()),
+                .into_err(self.start_position()),
         )
     }
     /// Raise an error if the expression can never yield an iterable value.
@@ -323,7 +326,7 @@ impl Expr {
 
         Err(
             PERR::MismatchedType("an iterable value".to_string(), type_name.to_string())
-                .into_err(self.position()),
+                .into_err(self.start_position()),
         )
     }
 }
@@ -518,6 +521,7 @@ fn parse_fn_call(
                 namespace,
                 hashes,
                 args,
+                pos: settings.pos,
                 ..Default::default()
             }
             .into_fn_call_expr(settings.pos));
@@ -582,6 +586,7 @@ fn parse_fn_call(
                     namespace,
                     hashes,
                     args,
+                    pos: settings.pos,
                     ..Default::default()
                 }
                 .into_fn_call_expr(settings.pos));
@@ -649,7 +654,7 @@ fn parse_index_chain(
                 return Err(PERR::MalformedIndexExpr(
                     "Only arrays, object maps and strings can be indexed".into(),
                 )
-                .into_err(lhs.position()))
+                .into_err(lhs.start_position()))
             }
 
             Expr::CharConstant(_, _)
@@ -660,7 +665,7 @@ fn parse_index_chain(
                 return Err(PERR::MalformedIndexExpr(
                     "Only arrays, object maps and strings can be indexed".into(),
                 )
-                .into_err(lhs.position()))
+                .into_err(lhs.start_position()))
             }
 
             _ => (),
@@ -674,7 +679,7 @@ fn parse_index_chain(
                 return Err(PERR::MalformedIndexExpr(
                     "Array or string expects numeric index, not a string".into(),
                 )
-                .into_err(idx_expr.position()))
+                .into_err(idx_expr.start_position()))
             }
 
             #[cfg(not(feature = "no_float"))]
@@ -682,7 +687,7 @@ fn parse_index_chain(
                 return Err(PERR::MalformedIndexExpr(
                     "Only arrays, object maps and strings can be indexed".into(),
                 )
-                .into_err(lhs.position()))
+                .into_err(lhs.start_position()))
             }
 
             Expr::CharConstant(_, _)
@@ -693,7 +698,7 @@ fn parse_index_chain(
                 return Err(PERR::MalformedIndexExpr(
                     "Only arrays, object maps and strings can be indexed".into(),
                 )
-                .into_err(lhs.position()))
+                .into_err(lhs.start_position()))
             }
 
             _ => (),
@@ -705,35 +710,35 @@ fn parse_index_chain(
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a float".into(),
             )
-            .into_err(x.position()))
+            .into_err(x.start_position()))
         }
         // lhs[char]
         x @ Expr::CharConstant(_, _) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a character".into(),
             )
-            .into_err(x.position()))
+            .into_err(x.start_position()))
         }
         // lhs[()]
         x @ Expr::Unit(_) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not ()".into(),
             )
-            .into_err(x.position()))
+            .into_err(x.start_position()))
         }
         // lhs[??? && ???], lhs[??? || ???]
         x @ Expr::And(_, _) | x @ Expr::Or(_, _) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a boolean".into(),
             )
-            .into_err(x.position()))
+            .into_err(x.start_position()))
         }
         // lhs[true], lhs[false]
         x @ Expr::BoolConstant(_, _) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a boolean".into(),
             )
-            .into_err(x.position()))
+            .into_err(x.start_position()))
         }
         // All other expressions
         _ => (),
@@ -1045,7 +1050,7 @@ fn parse_switch(
 
         let (hash, range) = if let Some(expr) = expr {
             let value = expr.get_literal_value().ok_or_else(|| {
-                PERR::ExprExpected("a literal".to_string()).into_err(expr.position())
+                PERR::ExprExpected("a literal".to_string()).into_err(expr.start_position())
             })?;
 
             let guard = value.read_lock::<ExclusiveRange>();
@@ -1055,14 +1060,14 @@ fn parse_switch(
             } else if let Some(range) = value.read_lock::<InclusiveRange>() {
                 (None, Some((*range.start(), *range.end(), true)))
             } else if value.is::<INT>() && !ranges.is_empty() {
-                return Err(PERR::WrongSwitchIntegerCase.into_err(expr.position()));
+                return Err(PERR::WrongSwitchIntegerCase.into_err(expr.start_position()));
             } else {
                 let hasher = &mut get_hasher();
                 value.hash(hasher);
                 let hash = hasher.finish();
 
                 if cases.contains_key(&hash) {
-                    return Err(PERR::DuplicatedSwitchCase.into_err(expr.position()));
+                    return Err(PERR::DuplicatedSwitchCase.into_err(expr.start_position()));
                 }
                 (Some(hash), None)
             }
@@ -1258,12 +1263,14 @@ fn parse_primary(
 
             #[cfg(not(feature = "no_closure"))]
             new_state.external_vars.iter().try_for_each(
-                |(captured_var, &pos)| -> ParseResult<_> {
-                    let index = state.access_var(captured_var, pos);
+                |crate::ast::Ident { name, pos }| -> ParseResult<_> {
+                    let index = state.access_var(name, *pos);
 
-                    if !settings.is_closure && settings.strict_var && index.is_none() {
+                    if settings.strict_var && !settings.is_closure && index.is_none() {
                         // If the parent scope is not inside another capturing closure
-                        Err(PERR::VariableUndefined(captured_var.to_string()).into_err(pos))
+                        // then we can conclude that the captured variable doesn't exist.
+                        // Under Strict Variables mode, this is not allowed.
+                        Err(PERR::VariableUndefined(name.to_string()).into_err(*pos))
                     } else {
                         Ok(())
                     }
@@ -1677,6 +1684,7 @@ fn parse_unary(
                         name: state.get_identifier("", "-"),
                         hashes: FnCallHashes::from_native(calc_fn_hash("-", 1)),
                         args,
+                        pos,
                         ..Default::default()
                     }
                     .into_fn_call_expr(pos))
@@ -1703,6 +1711,7 @@ fn parse_unary(
                         name: state.get_identifier("", "+"),
                         hashes: FnCallHashes::from_native(calc_fn_hash("+", 1)),
                         args,
+                        pos,
                         ..Default::default()
                     }
                     .into_fn_call_expr(pos))
@@ -1720,6 +1729,7 @@ fn parse_unary(
                 name: state.get_identifier("", "!"),
                 hashes: FnCallHashes::from_native(calc_fn_hash("!", 1)),
                 args,
+                pos,
                 ..Default::default()
             }
             .into_fn_call_expr(pos))
@@ -1748,7 +1758,7 @@ fn make_assignment_stmt(
                 }
                 Expr::Property(_, _) => None,
                 // Anything other than a property after dotting (e.g. a method call) is not an l-value
-                ref e => Some(e.position()),
+                ref e => Some(e.start_position()),
             },
             Expr::Index(x, term, _) | Expr::Dot(x, term, _) => match x.lhs {
                 Expr::Property(_, _) => unreachable!("unexpected Expr::Property in indexing"),
@@ -1757,7 +1767,7 @@ fn make_assignment_stmt(
             },
             Expr::Property(_, _) if parent_is_dot => None,
             Expr::Property(_, _) => unreachable!("unexpected Expr::Property in indexing"),
-            e if parent_is_dot => Some(e.position()),
+            e if parent_is_dot => Some(e.start_position()),
             _ => None,
         }
     }
@@ -1767,7 +1777,7 @@ fn make_assignment_stmt(
     match lhs {
         // const_expr = rhs
         ref expr if expr.is_constant() => {
-            Err(PERR::AssignmentToConstant("".into()).into_err(lhs.position()))
+            Err(PERR::AssignmentToConstant("".into()).into_err(lhs.start_position()))
         }
         // var (non-indexed) = rhs
         Expr::Variable(None, _, ref x) if x.0.is_none() => Ok(Stmt::Assignment(
@@ -1809,10 +1819,8 @@ fn make_assignment_stmt(
                             op_pos,
                         )),
                         // expr[???] = rhs, expr.??? = rhs
-                        ref expr => {
-                            Err(PERR::AssignmentToInvalidLHS("".to_string())
-                                .into_err(expr.position()))
-                        }
+                        ref expr => Err(PERR::AssignmentToInvalidLHS("".to_string())
+                            .into_err(expr.start_position())),
                     }
                 }
                 Some(err_pos) => {
@@ -1827,7 +1835,7 @@ fn make_assignment_stmt(
         )
         .into_err(op_pos)),
         // expr = rhs
-        _ => Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(lhs.position())),
+        _ => Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(lhs.start_position())),
     }
 }
 
@@ -1978,7 +1986,7 @@ fn make_dot_expr(
             Ok(Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos))
         }
         // lhs.rhs
-        (_, rhs) => Err(PERR::PropertyExpected.into_err(rhs.position())),
+        (_, rhs) => Err(PERR::PropertyExpected.into_err(rhs.start_position())),
     }
 }
 
@@ -2060,6 +2068,7 @@ fn parse_binary_op(
         let op_base = FnCallExpr {
             name: state.get_identifier("", op),
             hashes: FnCallHashes::from_native(hash),
+            pos,
             ..Default::default()
         };
 
@@ -2077,7 +2086,10 @@ fn parse_binary_op(
             | Token::LessThan
             | Token::LessThanEqualsTo
             | Token::GreaterThan
-            | Token::GreaterThanEqualsTo => FnCallExpr { args, ..op_base }.into_fn_call_expr(pos),
+            | Token::GreaterThanEqualsTo => {
+                let pos = args[0].start_position();
+                FnCallExpr { args, ..op_base }.into_fn_call_expr(pos)
+            }
 
             Token::Or => {
                 let rhs = args.pop().unwrap();
@@ -2106,6 +2118,7 @@ fn parse_binary_op(
             Token::In => {
                 // Swap the arguments
                 let current_lhs = args.remove(0);
+                let pos = current_lhs.start_position();
                 args.push(current_lhs);
                 args.shrink_to_fit();
 
@@ -2127,6 +2140,7 @@ fn parse_binary_op(
                     .map_or(false, Option::is_some) =>
             {
                 let hash = calc_fn_hash(&s, 2);
+                let pos = args[0].start_position();
 
                 FnCallExpr {
                     hashes: if is_valid_function_name(&s) {
@@ -2140,7 +2154,10 @@ fn parse_binary_op(
                 .into_fn_call_expr(pos)
             }
 
-            _ => FnCallExpr { args, ..op_base }.into_fn_call_expr(pos),
+            _ => {
+                let pos = args[0].start_position();
+                FnCallExpr { args, ..op_base }.into_fn_call_expr(pos)
+            }
         };
     }
 }
@@ -2574,6 +2591,12 @@ fn parse_let(
     // let name ...
     let (name, pos) = parse_var_name(input)?;
 
+    if !settings.default_options.allow_shadowing
+        && state.stack.iter().any(|(v, _)| v == name.as_ref())
+    {
+        return Err(PERR::VariableExists(name.to_string()).into_err(pos));
+    }
+
     let name = state.get_identifier("", name);
     let var_def = Ident {
         name: name.clone(),
@@ -2729,13 +2752,10 @@ fn parse_block(
     #[cfg(not(feature = "no_module"))]
     let orig_imports_len = state.imports.len();
 
-    loop {
+    let end_pos = loop {
         // Terminated?
         match input.peek().expect(NEVER_ENDS) {
-            (Token::RightBrace, _) => {
-                eat_token(input, Token::RightBrace);
-                break;
-            }
+            (Token::RightBrace, _) => break eat_token(input, Token::RightBrace),
             (Token::EOF, pos) => {
                 return Err(PERR::MissingToken(
                     Token::RightBrace.into(),
@@ -2762,10 +2782,7 @@ fn parse_block(
 
         match input.peek().expect(NEVER_ENDS) {
             // { ... stmt }
-            (Token::RightBrace, _) => {
-                eat_token(input, Token::RightBrace);
-                break;
-            }
+            (Token::RightBrace, _) => break eat_token(input, Token::RightBrace),
             // { ... stmt;
             (Token::SemiColon, _) if need_semicolon => {
                 eat_token(input, Token::SemiColon);
@@ -2788,7 +2805,7 @@ fn parse_block(
                 .into_err(*pos));
             }
         }
-    }
+    };
 
     state.stack.truncate(state.entry_stack_len);
     state.entry_stack_len = prev_entry_stack_len;
@@ -2796,7 +2813,10 @@ fn parse_block(
     #[cfg(not(feature = "no_module"))]
     state.imports.truncate(orig_imports_len);
 
-    Ok(Stmt::Block(statements.into_boxed_slice(), settings.pos))
+    Ok(Stmt::Block(
+        statements.into_boxed_slice(),
+        (settings.pos, end_pos),
+    ))
 }
 
 /// Parse an expression as a statement.
@@ -2959,25 +2979,25 @@ fn parse_stmt(
 
         Token::If => parse_if(input, state, lib, settings.level_up()),
         Token::Switch => parse_switch(input, state, lib, settings.level_up()),
-        Token::While | Token::Loop if settings.default_options.allow_loop => {
+        Token::While | Token::Loop if settings.default_options.allow_looping => {
             parse_while_loop(input, state, lib, settings.level_up())
         }
-        Token::Do if settings.default_options.allow_loop => {
+        Token::Do if settings.default_options.allow_looping => {
             parse_do(input, state, lib, settings.level_up())
         }
-        Token::For if settings.default_options.allow_loop => {
+        Token::For if settings.default_options.allow_looping => {
             parse_for(input, state, lib, settings.level_up())
         }
 
-        Token::Continue if settings.default_options.allow_loop && settings.is_breakable => {
+        Token::Continue if settings.default_options.allow_looping && settings.is_breakable => {
             let pos = eat_token(input, Token::Continue);
             Ok(Stmt::BreakLoop(AST_OPTION_NONE, pos))
         }
-        Token::Break if settings.default_options.allow_loop && settings.is_breakable => {
+        Token::Break if settings.default_options.allow_looping && settings.is_breakable => {
             let pos = eat_token(input, Token::Break);
             Ok(Stmt::BreakLoop(AST_OPTION_BREAK, pos))
         }
-        Token::Continue | Token::Break if settings.default_options.allow_loop => {
+        Token::Continue | Token::Break if settings.default_options.allow_looping => {
             Err(PERR::LoopBreak.into_err(token_pos))
         }
 
@@ -3185,9 +3205,8 @@ fn parse_fn(
         access,
         params,
         body,
-        lib: None,
         #[cfg(not(feature = "no_module"))]
-        global: None,
+        environ: None,
         #[cfg(not(feature = "no_function"))]
         #[cfg(feature = "metadata")]
         comments: if comments.is_empty() {
@@ -3240,6 +3259,7 @@ fn make_curry_from_externals(
             num_externals + 1,
         )),
         args,
+        pos,
         ..Default::default()
     }
     .into_fn_call_expr(pos);
@@ -3249,7 +3269,7 @@ fn make_curry_from_externals(
     let mut statements = StaticVec::with_capacity(externals.len() + 1);
     statements.extend(externals.into_iter().map(Stmt::Share));
     statements.push(Stmt::Expr(expr));
-    Expr::Stmt(crate::ast::StmtBlock::new(statements, pos).into())
+    Expr::Stmt(crate::ast::StmtBlock::new(statements, pos, Position::NONE).into())
 }
 
 /// Parse an anonymous function definition.
@@ -3312,19 +3332,20 @@ fn parse_anon_fn(
     // External variables may need to be processed in a consistent order,
     // so extract them into a list.
     #[cfg(not(feature = "no_closure"))]
-    let externals: StaticVec<Identifier> = state
-        .external_vars
-        .iter()
-        .map(|(name, _)| name.clone())
-        .collect();
+    let (mut params, externals) = {
+        let externals: StaticVec<Identifier> = state
+            .external_vars
+            .iter()
+            .map(|crate::ast::Ident { name, .. }| name.clone())
+            .collect();
 
-    #[cfg(not(feature = "no_closure"))]
-    let mut params = StaticVec::with_capacity(params_list.len() + externals.len());
+        let mut params = StaticVec::with_capacity(params_list.len() + externals.len());
+        params.extend(externals.iter().cloned());
+
+        (params, externals)
+    };
     #[cfg(feature = "no_closure")]
     let mut params = StaticVec::with_capacity(params_list.len());
-
-    #[cfg(not(feature = "no_closure"))]
-    params.extend(externals.iter().cloned());
 
     params.append(&mut params_list);
 
@@ -3341,9 +3362,8 @@ fn parse_anon_fn(
         access: crate::FnAccess::Public,
         params,
         body: body.into(),
-        lib: None,
         #[cfg(not(feature = "no_module"))]
-        global: None,
+        environ: None,
         #[cfg(not(feature = "no_function"))]
         #[cfg(feature = "metadata")]
         comments: None,

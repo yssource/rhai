@@ -50,17 +50,22 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &Expr,
+        level: usize,
     ) -> RhaiResultOf<(Target<'s>, Position)> {
         match expr {
             Expr::Variable(Some(_), _, _) => {
-                self.search_scope_only(scope, global, state, lib, this_ptr, expr)
+                self.search_scope_only(scope, global, state, lib, this_ptr, expr, level)
             }
             Expr::Variable(None, _var_pos, v) => match v.as_ref() {
                 // Normal variable access
                 #[cfg(not(feature = "no_module"))]
-                (_, None, _) => self.search_scope_only(scope, global, state, lib, this_ptr, expr),
+                (_, None, _) => {
+                    self.search_scope_only(scope, global, state, lib, this_ptr, expr, level)
+                }
                 #[cfg(feature = "no_module")]
-                (_, (), _) => self.search_scope_only(scope, global, state, lib, this_ptr, expr),
+                (_, (), _) => {
+                    self.search_scope_only(scope, global, state, lib, this_ptr, expr, level)
+                }
 
                 // Qualified variable access
                 #[cfg(not(feature = "no_module"))]
@@ -136,6 +141,7 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &Expr,
+        level: usize,
     ) -> RhaiResultOf<(Target<'s>, Position)> {
         // Make sure that the pointer indirection is taken only when absolutely necessary.
 
@@ -148,7 +154,7 @@ impl Engine {
                     Err(ERR::ErrorUnboundThis(*pos).into())
                 }
             }
-            _ if state.always_search_scope => (0, expr.position()),
+            _ if state.always_search_scope => (0, expr.start_position()),
             Expr::Variable(Some(i), pos, _) => (i.get() as usize, *pos),
             Expr::Variable(None, pos, v) => (v.0.map(NonZeroUsize::get).unwrap_or(0), *pos),
             _ => unreachable!("Expr::Variable expected but gets {:?}", expr),
@@ -163,7 +169,7 @@ impl Engine {
                 state,
                 lib,
                 this_ptr,
-                level: 0,
+                level,
             };
             match resolve_var(
                 expr.get_variable_name(true).expect("`Expr::Variable`"),
@@ -236,8 +242,8 @@ impl Engine {
         );
 
         self.make_function_call(
-            scope, global, state, lib, this_ptr, name, first_arg, args, constants, *hashes, pos,
-            *capture, level,
+            scope, global, state, lib, this_ptr, name, first_arg, args, constants, *hashes,
+            *capture, pos, level,
         )
     }
 
@@ -297,7 +303,7 @@ impl Engine {
                     .cloned()
                     .ok_or_else(|| ERR::ErrorUnboundThis(*var_pos).into())
             } else {
-                self.search_namespace(scope, global, state, lib, this_ptr, expr)
+                self.search_namespace(scope, global, state, lib, this_ptr, expr, level)
                     .map(|(val, _)| val.take_or_clone())
             };
         }
@@ -345,12 +351,13 @@ impl Engine {
                         &mut (&mut concat).into(),
                         ("", Position::NONE),
                         item,
+                        level,
                     ) {
-                        result = Err(err.fill_position(expr.position()));
+                        result = Err(err.fill_position(expr.start_position()));
                         break;
                     }
 
-                    pos = expr.position();
+                    pos = expr.start_position();
                 }
 
                 result.map(|_| concat)
@@ -503,7 +510,7 @@ impl Engine {
 
                 let result = (custom_def.func)(&mut context, &expressions);
 
-                self.check_return_value(result, expr.position())
+                self.check_return_value(result, expr.start_position())
             }
 
             Expr::Stmt(x) if x.is_empty() => Ok(Dynamic::UNIT),

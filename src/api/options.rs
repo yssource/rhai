@@ -17,9 +17,11 @@ pub struct LanguageOptions {
     #[cfg(not(feature = "no_function"))]
     pub allow_anonymous_fn: bool,
     /// Is looping allowed?
-    pub allow_loop: bool,
+    pub allow_looping: bool,
     /// Strict variables mode?
     pub strict_var: bool,
+    /// Is variables shadowing allowed?
+    pub allow_shadowing: bool,
 }
 
 impl LanguageOptions {
@@ -32,8 +34,9 @@ impl LanguageOptions {
             allow_stmt_expr: true,
             #[cfg(not(feature = "no_function"))]
             allow_anonymous_fn: true,
-            allow_loop: true,
+            allow_looping: true,
             strict_var: false,
+            allow_shadowing: true,
         }
     }
 }
@@ -94,12 +97,12 @@ impl Engine {
     /// Is looping allowed?
     #[inline(always)]
     pub fn allow_looping(&self) -> bool {
-        self.options.allow_loop
+        self.options.allow_looping
     }
     /// Set whether looping is allowed.
     #[inline(always)]
     pub fn set_allow_looping(&mut self, enable: bool) {
-        self.options.allow_loop = enable;
+        self.options.allow_looping = enable;
     }
     /// Is strict variables mode enabled?
     #[inline(always)]
@@ -110,5 +113,15 @@ impl Engine {
     #[inline(always)]
     pub fn set_strict_variables(&mut self, enable: bool) {
         self.options.strict_var = enable;
+    }
+    /// Is variables shadowing allowed?
+    #[inline(always)]
+    pub fn allow_shadowing(&self) -> bool {
+        self.options.allow_shadowing
+    }
+    /// Set whether variables shadowing is allowed.
+    #[inline(always)]
+    pub fn set_allow_shadowing(&mut self, enable: bool) {
+        self.options.allow_shadowing = enable;
     }
 }

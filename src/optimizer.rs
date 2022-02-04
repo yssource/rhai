@@ -147,6 +147,7 @@ impl<'a> OptimizerState<'a> {
                 false,
                 false,
                 Position::NONE,
+                0,
             )
             .ok()
             .map(|(v, _)| v)
@@ -462,13 +463,16 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
         Stmt::If(condition, x, _) if x.0.is_empty() && x.1.is_empty() => {
             state.set_dirty();
 
-            let pos = condition.position();
+            let pos = condition.start_position();
             let mut expr = mem::take(condition);
             optimize_expr(&mut expr, state, false);
 
             *stmt = if preserve_result {
                 // -> { expr, Noop }
-                Stmt::Block([Stmt::Expr(expr), Stmt::Noop(pos)].into(), pos)
+                Stmt::Block(
+                    [Stmt::Expr(expr), Stmt::Noop(pos)].into(),
+                    (pos, Position::NONE),
+                )
             } else {
                 // -> expr
                 Stmt::Expr(expr)
@@ -486,7 +490,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                 match optimize_stmt_block(mem::take(&mut *x.1), state, preserve_result, true, false)
                 {
                     statements if statements.is_empty() => Stmt::Noop(x.1.position()),
-                    statements => Stmt::Block(statements.into_boxed_slice(), x.1.position()),
+                    statements => Stmt::Block(statements.into_boxed_slice(), x.1.positions()),
                 }
         }
         // if true { if_block } else { else_block } -> if_block
@@ -496,7 +500,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                 match optimize_stmt_block(mem::take(&mut *x.0), state, preserve_result, true, false)
                 {
                     statements if statements.is_empty() => Stmt::Noop(x.0.position()),
-                    statements => Stmt::Block(statements.into_boxed_slice(), x.0.position()),
+                    statements => Stmt::Block(statements.into_boxed_slice(), x.0.positions()),
                 }
         }
         // if expr { if_block } else { else_block }
@@ -530,11 +534,11 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                             mem::take(&mut block.statements),
                             Stmt::Block(
                                 def_stmt.into_boxed_slice(),
-                                x.def_case.position().or_else(*pos),
+                                x.def_case.positions_or_else(*pos, Position::NONE),
                             )
                             .into(),
                         )),
-                        match_expr.position(),
+                        match_expr.start_position(),
                     );
                 } else {
                     // Promote the matched case
@@ -545,7 +549,8 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                         true,
                         false,
                     );
-                    *stmt = Stmt::Block(statements.into_boxed_slice(), block.statements.position());
+                    *stmt =
+                        Stmt::Block(statements.into_boxed_slice(), block.statements.positions());
                 }
 
                 state.set_dirty();
@@ -585,11 +590,11 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                                     mem::take(&mut block.statements),
                                     Stmt::Block(
                                         def_stmt.into_boxed_slice(),
-                                        x.def_case.position().or_else(*pos),
+                                        x.def_case.positions_or_else(*pos, Position::NONE),
                                     )
                                     .into(),
                                 )),
-                                match_expr.position(),
+                                match_expr.start_position(),
                             );
                         } else {
                             // Promote the matched case
@@ -598,7 +603,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                                 optimize_stmt_block(statements, state, true, true, false);
                             *stmt = Stmt::Block(
                                 statements.into_boxed_slice(),
-                                block.statements.position(),
+                                block.statements.positions(),
                             );
                         }
 
@@ -646,7 +651,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                 optimize_stmt_block(mem::take(&mut x.def_case), state, true, true, false);
             *stmt = Stmt::Block(
                 def_stmt.into_boxed_slice(),
-                x.def_case.position().or_else(*pos),
+                x.def_case.positions_or_else(*pos, Position::NONE),
             );
         }
         // switch
@@ -703,7 +708,8 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                             if preserve_result {
                                 statements.push(Stmt::Noop(pos))
                             }
-                            *stmt = Stmt::Block(statements.into_boxed_slice(), pos);
+                            *stmt =
+                                Stmt::Block(statements.into_boxed_slice(), (pos, Position::NONE));
                         } else {
                             *stmt = Stmt::Noop(pos);
                         };
@@ -720,7 +726,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
             *stmt = Stmt::Block(
                 optimize_stmt_block(mem::take(&mut **body), state, false, true, false)
                     .into_boxed_slice(),
-                body.position(),
+                body.positions(),
             );
         }
         // do { block } while|until expr
@@ -748,7 +754,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
             match block.as_mut_slice() {
                 [] => {
                     state.set_dirty();
-                    *stmt = Stmt::Noop(*pos);
+                    *stmt = Stmt::Noop(pos.0);
                 }
                 // Only one statement which is not block-dependent - promote
                 [s] if !s.is_block_dependent() => {
@@ -765,7 +771,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
             *stmt = Stmt::Block(
                 optimize_stmt_block(mem::take(&mut *x.try_block), state, false, true, false)
                     .into_boxed_slice(),
-                x.try_block.position(),
+                x.try_block.positions(),
             );
         }
         // try { try_block } catch ( var ) { catch_block }
@@ -1072,7 +1078,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                 if let Some(value) = arg.get_literal_value() {
                     state.set_dirty();
                     constants.push(value);
-                    *arg = Expr::Stack(constants.len()-1, arg.position());
+                    *arg = Expr::Stack(constants.len()-1, arg.start_position());
                 }
             });
         }
@@ -1120,7 +1126,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
             if let Some(value) = arg.get_literal_value() {
                 state.set_dirty();
                 x.constants.push(value);
-                *arg = Expr::Stack(x.constants.len()-1, arg.position());
+                *arg = Expr::Stack(x.constants.len()-1, arg.start_position());
             }
         },
 
@@ -1211,9 +1217,8 @@ pub fn optimize_into_ast(
                     access: fn_def.access,
                     body: crate::ast::StmtBlock::NONE,
                     params: fn_def.params.clone(),
-                    lib: None,
                     #[cfg(not(feature = "no_module"))]
-                    global: None,
+                    environ: None,
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(feature = "metadata")]
                     comments: None,

@@ -1,10 +1,11 @@
 //! Module defining the AST (abstract syntax tree).
 
-use super::{Expr, FnAccess, Stmt, StmtBlock, AST_OPTION_FLAGS};
+use super::{Expr, FnAccess, Stmt, StmtBlock, AST_OPTION_FLAGS::*};
 use crate::{Dynamic, FnNamespace, Identifier, Position, StaticVec};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
+    fmt,
     hash::Hash,
     ops::{Add, AddAssign},
 };
@@ -14,7 +15,7 @@ use std::{
 /// # Thread Safety
 ///
 /// Currently, [`AST`] is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AST {
     /// Source of the [`AST`].
     /// No source if string is empty.
@@ -23,7 +24,7 @@ pub struct AST {
     body: StmtBlock,
     /// Script-defined functions.
     #[cfg(not(feature = "no_function"))]
-    functions: crate::Shared<crate::Module>,
+    lib: crate::Shared<crate::Module>,
     /// Embedded module resolver, if any.
     #[cfg(not(feature = "no_module"))]
     resolver: Option<crate::Shared<crate::module::resolvers::StaticModuleResolver>>,
@@ -33,6 +34,31 @@ impl Default for AST {
     #[inline(always)]
     fn default() -> Self {
         Self::empty()
+    }
+}
+
+impl fmt::Debug for AST {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut fp = f.debug_struct("AST");
+
+        if !self.source.is_empty() {
+            fp.field("source: ", &self.source);
+        }
+        #[cfg(not(feature = "no_module"))]
+        if let Some(ref resolver) = self.resolver {
+            fp.field("resolver: ", resolver);
+        }
+
+        fp.field("body", &self.body.as_slice());
+
+        #[cfg(not(feature = "no_function"))]
+        if !self.lib.is_empty() {
+            for (_, _, _, _, ref fn_def) in self.lib.iter_script_fn() {
+                let sig = fn_def.to_string();
+                fp.field(&sig, &fn_def.body.as_slice());
+            }
+        }
+        fp.finish()
     }
 }
 
@@ -47,9 +73,9 @@ impl AST {
     ) -> Self {
         Self {
             source: Identifier::new_const(),
-            body: StmtBlock::new(statements, Position::NONE),
+            body: StmtBlock::new(statements, Position::NONE, Position::NONE),
             #[cfg(not(feature = "no_function"))]
-            functions: functions.into(),
+            lib: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
         }
@@ -65,9 +91,9 @@ impl AST {
     ) -> Self {
         Self {
             source: Identifier::new_const(),
-            body: StmtBlock::new(statements, Position::NONE),
+            body: StmtBlock::new(statements, Position::NONE, Position::NONE),
             #[cfg(not(feature = "no_function"))]
-            functions: functions.into(),
+            lib: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
         }
@@ -115,7 +141,7 @@ impl AST {
             source: Identifier::new_const(),
             body: StmtBlock::NONE,
             #[cfg(not(feature = "no_function"))]
-            functions: crate::Module::new().into(),
+            lib: crate::Module::new().into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
         }
@@ -140,7 +166,7 @@ impl AST {
     pub fn set_source(&mut self, source: impl Into<Identifier>) -> &mut Self {
         let source = source.into();
         #[cfg(not(feature = "no_function"))]
-        crate::Shared::get_mut(&mut self.functions)
+        crate::Shared::get_mut(&mut self.lib)
             .as_mut()
             .map(|m| m.set_id(source.clone()));
         self.source = source;
@@ -181,7 +207,7 @@ impl AST {
     #[inline(always)]
     #[must_use]
     pub fn has_functions(&self) -> bool {
-        !self.functions.is_empty()
+        !self.lib.is_empty()
     }
     /// Get the internal shared [`Module`][crate::Module] containing all script-defined functions.
     #[cfg(not(feature = "internals"))]
@@ -189,7 +215,7 @@ impl AST {
     #[inline(always)]
     #[must_use]
     pub(crate) fn shared_lib(&self) -> &crate::Shared<crate::Module> {
-        &self.functions
+        &self.lib
     }
     /// _(internals)_ Get the internal shared [`Module`][crate::Module] containing all script-defined functions.
     /// Exported under the `internals` feature only.
@@ -200,7 +226,7 @@ impl AST {
     #[inline(always)]
     #[must_use]
     pub fn shared_lib(&self) -> &crate::Shared<crate::Module> {
-        &self.functions
+        &self.lib
     }
     /// Get the embedded [module resolver][`ModuleResolver`].
     #[cfg(not(feature = "internals"))]
@@ -260,12 +286,12 @@ impl AST {
         &self,
         filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> Self {
-        let mut functions = crate::Module::new();
-        functions.merge_filtered(&self.functions, &filter);
+        let mut lib = crate::Module::new();
+        lib.merge_filtered(&self.lib, &filter);
         Self {
             source: self.source.clone(),
             body: StmtBlock::NONE,
-            functions: functions.into(),
+            lib: lib.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: self.resolver.clone(),
         }
@@ -279,7 +305,7 @@ impl AST {
             source: self.source.clone(),
             body: self.body.clone(),
             #[cfg(not(feature = "no_function"))]
-            functions: crate::Module::new().into(),
+            lib: crate::Module::new().into(),
             #[cfg(not(feature = "no_module"))]
             resolver: self.resolver.clone(),
         }
@@ -472,24 +498,24 @@ impl AST {
         };
 
         #[cfg(not(feature = "no_function"))]
-        let functions = {
-            let mut functions = self.functions.as_ref().clone();
-            functions.merge_filtered(&other.functions, &_filter);
-            functions
+        let lib = {
+            let mut lib = self.lib.as_ref().clone();
+            lib.merge_filtered(&other.lib, &_filter);
+            lib
         };
 
         if !other.source.is_empty() {
             Self::new_with_source(
                 merged,
                 #[cfg(not(feature = "no_function"))]
-                functions,
+                lib,
                 other.source.clone(),
             )
         } else {
             Self::new(
                 merged,
                 #[cfg(not(feature = "no_function"))]
-                functions,
+                lib,
             )
         }
     }
@@ -562,9 +588,9 @@ impl AST {
         self.body.extend(other.body.into_iter());
 
         #[cfg(not(feature = "no_function"))]
-        if !other.functions.is_empty() {
-            crate::func::native::shared_make_mut(&mut self.functions)
-                .merge_filtered(&other.functions, &_filter);
+        if !other.lib.is_empty() {
+            crate::func::native::shared_make_mut(&mut self.lib)
+                .merge_filtered(&other.lib, &_filter);
         }
         self
     }
@@ -599,20 +625,32 @@ impl AST {
         &mut self,
         filter: impl Fn(FnNamespace, FnAccess, &str, usize) -> bool,
     ) -> &mut Self {
-        if !self.functions.is_empty() {
-            crate::func::native::shared_make_mut(&mut self.functions)
-                .retain_script_functions(filter);
+        if !self.lib.is_empty() {
+            crate::func::native::shared_make_mut(&mut self.lib).retain_script_functions(filter);
         }
         self
+    }
+    /// _(internals)_ Iterate through all function definitions.
+    /// Exported under the `internals` feature only.
+    ///
+    /// Not available under `no_function`.
+    #[cfg(feature = "internals")]
+    #[cfg(not(feature = "no_function"))]
+    #[inline]
+    pub fn iter_fn_def(&self) -> impl Iterator<Item = &super::ScriptFnDef> {
+        self.lib
+            .iter_script_fn()
+            .map(|(_, _, _, _, fn_def)| fn_def.as_ref())
     }
     /// Iterate through all function definitions.
     ///
     /// Not available under `no_function`.
+    #[cfg(not(feature = "internals"))]
     #[cfg(not(feature = "no_function"))]
     #[allow(dead_code)]
     #[inline]
     pub(crate) fn iter_fn_def(&self) -> impl Iterator<Item = &super::ScriptFnDef> {
-        self.functions
+        self.lib
             .iter_script_fn()
             .map(|(_, _, _, _, fn_def)| fn_def.as_ref())
     }
@@ -622,7 +660,7 @@ impl AST {
     #[cfg(not(feature = "no_function"))]
     #[inline]
     pub fn iter_functions<'a>(&'a self) -> impl Iterator<Item = super::ScriptFnMetadata> + 'a {
-        self.functions
+        self.lib
             .iter_script_fn()
             .map(|(_, _, _, _, fn_def)| fn_def.as_ref().into())
     }
@@ -632,7 +670,7 @@ impl AST {
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn clear_functions(&mut self) -> &mut Self {
-        self.functions = crate::Module::new().into();
+        self.lib = crate::Module::new().into();
         self
     }
     /// Clear all statements in the [`AST`], leaving only function definitions.
@@ -707,16 +745,11 @@ impl AST {
     ) -> impl Iterator<Item = (&str, bool, Dynamic)> {
         self.statements().iter().filter_map(move |stmt| match stmt {
             Stmt::Var(expr, name, options, _)
-                if options.contains(AST_OPTION_FLAGS::AST_OPTION_CONSTANT) && include_constants
-                    || !options.contains(AST_OPTION_FLAGS::AST_OPTION_CONSTANT)
-                        && include_variables =>
+                if options.contains(AST_OPTION_CONSTANT) && include_constants
+                    || !options.contains(AST_OPTION_CONSTANT) && include_variables =>
             {
                 if let Some(value) = expr.get_literal_value() {
-                    Some((
-                        name.as_str(),
-                        options.contains(AST_OPTION_FLAGS::AST_OPTION_CONSTANT),
-                        value,
-                    ))
+                    Some((name.as_str(), options.contains(AST_OPTION_CONSTANT), value))
                 } else {
                     None
                 }
@@ -871,6 +904,6 @@ impl AST {
     #[inline(always)]
     #[must_use]
     pub fn lib(&self) -> &crate::Module {
-        &self.functions
+        &self.lib
     }
 }

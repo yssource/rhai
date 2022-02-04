@@ -5,6 +5,12 @@ use crate::{Engine, Identifier};
 use std::prelude::v1::*;
 use std::{fmt, marker::PhantomData};
 
+/// Collection of globally-defined constants.
+#[cfg(not(feature = "no_module"))]
+#[cfg(not(feature = "no_function"))]
+pub type GlobalConstants =
+    crate::Shared<crate::Locked<std::collections::BTreeMap<Identifier, crate::Dynamic>>>;
+
 /// _(internals)_ Global runtime states.
 /// Exported under the `internals` feature only.
 //
@@ -44,9 +50,7 @@ pub struct GlobalRuntimeState<'a> {
     /// Interior mutability is needed because it is shared in order to aid in cloning.
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
-    pub(crate) constants: Option<
-        crate::Shared<crate::Locked<std::collections::BTreeMap<Identifier, crate::Dynamic>>>,
-    >,
+    pub(crate) constants: Option<GlobalConstants>,
     /// Debugging interface.
     #[cfg(feature = "debugging")]
     pub debugger: super::Debugger,

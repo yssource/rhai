@@ -70,6 +70,8 @@ pub struct NativeCallContext<'a> {
     lib: &'a [&'a Module],
     /// [Position] of the function call.
     pos: Position,
+    /// The current nesting level of function calls.
+    level: usize,
 }
 
 impl<'a, M: AsRef<[&'a Module]> + ?Sized, S: AsRef<str> + 'a + ?Sized>
@@ -80,6 +82,7 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized, S: AsRef<str> + 'a + ?Sized>
         &'a GlobalRuntimeState<'a>,
         &'a M,
         Position,
+        usize,
     )> for NativeCallContext<'a>
 {
     #[inline(always)]
@@ -91,6 +94,7 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized, S: AsRef<str> + 'a + ?Sized>
             &'a GlobalRuntimeState,
             &'a M,
             Position,
+            usize,
         ),
     ) -> Self {
         Self {
@@ -100,6 +104,7 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized, S: AsRef<str> + 'a + ?Sized>
             global: Some(value.3),
             lib: value.4.as_ref(),
             pos: value.5,
+            level: value.6,
         }
     }
 }
@@ -116,6 +121,7 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized, S: AsRef<str> + 'a + ?Sized>
             global: None,
             lib: value.2.as_ref(),
             pos: Position::NONE,
+            level: 0,
         }
     }
 }
@@ -141,6 +147,7 @@ impl<'a> NativeCallContext<'a> {
             global: None,
             lib,
             pos: Position::NONE,
+            level: 0,
         }
     }
     /// _(internals)_ Create a new [`NativeCallContext`].
@@ -158,6 +165,7 @@ impl<'a> NativeCallContext<'a> {
         global: &'a GlobalRuntimeState,
         lib: &'a [&Module],
         pos: Position,
+        level: usize,
     ) -> Self {
         Self {
             engine,
@@ -166,6 +174,7 @@ impl<'a> NativeCallContext<'a> {
             global: Some(global),
             lib,
             pos,
+            level,
         }
     }
     /// The current [`Engine`].
@@ -185,6 +194,12 @@ impl<'a> NativeCallContext<'a> {
     #[must_use]
     pub const fn position(&self) -> Position {
         self.pos
+    }
+    /// Current nesting level of function calls.
+    #[inline(always)]
+    #[must_use]
+    pub const fn call_level(&self) -> usize {
+        self.level
     }
     /// The current source.
     #[inline(always)]
@@ -306,6 +321,7 @@ impl<'a> NativeCallContext<'a> {
 
         self.engine()
             .exec_fn_call(
+                None,
                 &mut global,
                 &mut state,
                 self.lib,
@@ -315,8 +331,7 @@ impl<'a> NativeCallContext<'a> {
                 is_ref_mut,
                 is_method_call,
                 Position::NONE,
-                None,
-                0,
+                self.level + 1,
             )
             .map(|(r, _)| r)
     }
@@ -429,3 +444,11 @@ pub type OnVarCallback = dyn Fn(&str, usize, &EvalContext) -> RhaiResultOf<Optio
 #[cfg(feature = "sync")]
 pub type OnVarCallback =
     dyn Fn(&str, usize, &EvalContext) -> RhaiResultOf<Option<Dynamic>> + Send + Sync;
+
+/// Callback function for variable definition.
+#[cfg(not(feature = "sync"))]
+pub type OnDefVarCallback = dyn Fn(&str, bool, usize, bool, &EvalContext) -> RhaiResultOf<bool>;
+/// Callback function for variable definition.
+#[cfg(feature = "sync")]
+pub type OnDefVarCallback =
+    dyn Fn(&str, bool, usize, bool, &EvalContext) -> RhaiResultOf<bool> + Send + Sync;

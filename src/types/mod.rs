@@ -9,6 +9,8 @@ pub mod parse_error;
 pub mod scope;
 
 pub use dynamic::Dynamic;
+#[cfg(not(feature = "no_std"))]
+pub use dynamic::Instant;
 pub use error::EvalAltResult;
 pub use fn_ptr::FnPtr;
 pub use immutable_string::ImmutableString;

@@ -9,7 +9,12 @@ use rhai::Map;
 
 #[test]
 fn test_debugging() -> Result<(), Box<EvalAltResult>> {
-    let engine = Engine::new();
+    let mut engine = Engine::new();
+
+    engine.register_debugger(
+        || Dynamic::UNIT,
+        |_, _, _, _, _| Ok(rhai::debugger::DebuggerCommand::Continue),
+    );
 
     #[cfg(not(feature = "no_function"))]
     #[cfg(not(feature = "no_index"))]
@@ -18,7 +23,7 @@ fn test_debugging() -> Result<(), Box<EvalAltResult>> {
             "
                 fn foo(x) {
                     if x >= 5 {
-                        stack_trace()
+                        back_trace()
                     } else {
                         foo(x+1)
                     }
@@ -30,7 +35,7 @@ fn test_debugging() -> Result<(), Box<EvalAltResult>> {
 
         assert_eq!(r.len(), 6);
 
-        assert_eq!(engine.eval::<INT>("len(stack_trace())")?, 0);
+        assert_eq!(engine.eval::<INT>("len(back_trace())")?, 0);
     }
 
     Ok(())
@@ -41,7 +46,7 @@ fn test_debugging() -> Result<(), Box<EvalAltResult>> {
 fn test_debugger_state() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
-    engine.on_debugger(
+    engine.register_debugger(
         || {
             // Say, use an object map for the debugger state
             let mut state = Map::new();
@@ -50,7 +55,7 @@ fn test_debugger_state() -> Result<(), Box<EvalAltResult>> {
             state.insert("foo".into(), false.into());
             Dynamic::from_map(state)
         },
-        |context, _, _, _| {
+        |context, _, _, _, _| {
             // Get global runtime state
             let global = context.global_runtime_state_mut();
 

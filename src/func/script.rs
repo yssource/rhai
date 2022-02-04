@@ -4,12 +4,14 @@
 use super::call::FnCallArgs;
 use crate::ast::ScriptFnDef;
 use crate::eval::{EvalState, GlobalRuntimeState};
-use crate::{Dynamic, Engine, Module, Position, RhaiError, RhaiResult, Scope, StaticVec, ERR};
+use crate::{Dynamic, Engine, Module, Position, RhaiError, RhaiResult, Scope, ERR};
 use std::mem;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
 impl Engine {
+    /// # Main Entry-Point
+    ///
     /// Call a script-defined function.
     ///
     /// If `rewind_scope` is `false`, arguments are removed from the scope but new variables are not.
@@ -29,8 +31,8 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         fn_def: &ScriptFnDef,
         args: &mut FnCallArgs,
-        pos: Position,
         rewind_scope: bool,
+        pos: Position,
         level: usize,
     ) -> RhaiResult {
         #[inline(never)]
@@ -41,13 +43,19 @@ impl Engine {
             err: RhaiError,
             pos: Position,
         ) -> RhaiResult {
+            let _fn_def = fn_def;
+
+            #[cfg(not(feature = "no_module"))]
+            let source = _fn_def
+                .environ
+                .as_ref()
+                .and_then(|environ| environ.lib.id().map(str::to_string));
+            #[cfg(feature = "no_module")]
+            let source = None;
+
             Err(ERR::ErrorInFunctionCall(
                 name,
-                fn_def
-                    .lib
-                    .as_ref()
-                    .and_then(|m| m.id().map(str::to_string))
-                    .unwrap_or_else(|| global.source.to_string()),
+                source.unwrap_or_else(|| global.source.to_string()),
                 err,
                 pos,
             )
@@ -59,14 +67,19 @@ impl Engine {
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(&mut global.num_operations, pos)?;
 
-        if fn_def.body.is_empty() {
-            return Ok(Dynamic::UNIT);
-        }
-
         // Check for stack overflow
         #[cfg(not(feature = "unchecked"))]
         if level > self.max_call_levels() {
             return Err(ERR::ErrorStackOverflow(pos).into());
+        }
+
+        #[cfg(feature = "debugging")]
+        if self.debugger.is_none() && fn_def.body.is_empty() {
+            return Ok(Dynamic::UNIT);
+        }
+        #[cfg(not(feature = "debugging"))]
+        if fn_def.body.is_empty() {
+            return Ok(Dynamic::UNIT);
         }
 
         let orig_scope_len = scope.len();
@@ -74,7 +87,6 @@ impl Engine {
         let orig_imports_len = global.num_imports();
 
         #[cfg(feature = "debugging")]
-        #[cfg(not(feature = "no_function"))]
         let orig_call_stack_len = global.debugger.call_stack().len();
 
         // Put arguments into scope as variables
@@ -85,44 +97,58 @@ impl Engine {
 
         // Push a new call stack frame
         #[cfg(feature = "debugging")]
-        #[cfg(not(feature = "no_function"))]
-        global.debugger.push_call_stack_frame(
-            fn_def.name.clone(),
-            scope
-                .iter()
-                .skip(orig_scope_len)
-                .map(|(_, _, v)| v.clone())
-                .collect(),
-            global.source.clone(),
-            pos,
-        );
+        if self.debugger.is_some() {
+            global.debugger.push_call_stack_frame(
+                fn_def.name.clone(),
+                scope
+                    .iter()
+                    .skip(orig_scope_len)
+                    .map(|(_, _, v)| v.clone())
+                    .collect(),
+                global.source.clone(),
+                pos,
+            );
+        }
 
         // Merge in encapsulated environment, if any
-        let mut lib_merged = StaticVec::with_capacity(lib.len() + 1);
         let orig_fn_resolution_caches_len = state.fn_resolution_caches_len();
 
-        let lib = if let Some(ref fn_lib) = fn_def.lib {
-            if fn_lib.is_empty() {
-                lib
-            } else {
-                state.push_fn_resolution_cache();
-                lib_merged.push(fn_lib.as_ref());
-                lib_merged.extend(lib.iter().cloned());
-                &lib_merged
-            }
-        } else {
-            lib
-        };
+        #[cfg(not(feature = "no_module"))]
+        let mut lib_merged = crate::StaticVec::with_capacity(lib.len() + 1);
 
         #[cfg(not(feature = "no_module"))]
-        if let Some(ref modules) = fn_def.global {
-            for (n, m) in modules.iter().cloned() {
+        let (lib, constants) = if let Some(crate::ast::EncapsulatedEnviron {
+            lib: ref fn_lib,
+            ref imports,
+            ref constants,
+        }) = fn_def.environ
+        {
+            for (n, m) in imports.iter().cloned() {
                 global.push_import(n, m)
             }
+            (
+                if fn_lib.is_empty() {
+                    lib
+                } else {
+                    state.push_fn_resolution_cache();
+                    lib_merged.push(fn_lib.as_ref());
+                    lib_merged.extend(lib.iter().cloned());
+                    &lib_merged
+                },
+                Some(mem::replace(&mut global.constants, constants.clone())),
+            )
+        } else {
+            (lib, None)
+        };
+
+        #[cfg(feature = "debugging")]
+        {
+            let node = crate::ast::Stmt::Noop(fn_def.body.position());
+            self.run_debugger(scope, global, state, lib, this_ptr, &node, level)?;
         }
 
         // Evaluate the function
-        let result = self
+        let mut _result = self
             .eval_stmt_block(
                 scope,
                 global,
@@ -155,6 +181,31 @@ impl Engine {
                 _ => make_error(fn_def.name.to_string(), fn_def, global, err, pos),
             });
 
+        #[cfg(feature = "debugging")]
+        {
+            let trigger = match global.debugger.status {
+                crate::eval::DebuggerStatus::FunctionExit(n) => n >= level,
+                crate::eval::DebuggerStatus::Next(_, true) => true,
+                _ => false,
+            };
+            if trigger {
+                let node = crate::ast::Stmt::Noop(fn_def.body.end_position().or_else(pos));
+                let node = (&node).into();
+                let event = match _result {
+                    Ok(ref r) => crate::eval::DebuggerEvent::FunctionExitWithValue(r),
+                    Err(ref err) => crate::eval::DebuggerEvent::FunctionExitWithError(err),
+                };
+                match self.run_debugger_raw(scope, global, state, lib, this_ptr, node, event, level)
+                {
+                    Ok(_) => (),
+                    Err(err) => _result = Err(err),
+                }
+            }
+
+            // Pop the call stack
+            global.debugger.rewind_call_stack(orig_call_stack_len);
+        }
+
         // Remove all local variables and imported modules
         if rewind_scope {
             scope.rewind(orig_scope_len);
@@ -165,15 +216,16 @@ impl Engine {
         #[cfg(not(feature = "no_module"))]
         global.truncate_imports(orig_imports_len);
 
+        // Restore constants
+        #[cfg(not(feature = "no_module"))]
+        if let Some(constants) = constants {
+            global.constants = constants;
+        }
+
         // Restore state
         state.rewind_fn_resolution_caches(orig_fn_resolution_caches_len);
 
-        // Pop the call stack
-        #[cfg(feature = "debugging")]
-        #[cfg(not(feature = "no_function"))]
-        global.debugger.rewind_call_stack(orig_call_stack_len);
-
-        result
+        _result
     }
 
     // Does a script-defined function exist?

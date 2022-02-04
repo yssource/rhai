@@ -55,11 +55,15 @@ unicode-xid-ident = ["unicode-xid"] # allow Unicode Standard Annex #31 for ident
 metadata = ["serde", "serde_json", "rhai_codegen/metadata", "smartstring/serde"] # enable exporting functions metadata
 debugging = ["internals"]       # enable debugging
 
+# compiling for no-std
 no_std = ["no-std-compat", "num-traits/libm", "core-error", "libm", "ahash/compile-time-rng"]
 
 # compiling for WASM
 wasm-bindgen = ["instant/wasm-bindgen"]
 stdweb = ["instant/stdweb"]
+
+# compiling bin tools
+bin-features = ["decimal", "metadata", "serde", "debugging", "rustyline"]
 
 [[bin]]
 name = "rhai-repl"

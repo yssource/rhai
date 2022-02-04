@@ -146,7 +146,7 @@ impl Engine {
         match chain_type {
             #[cfg(not(feature = "no_index"))]
             ChainType::Indexing => {
-                let pos = rhs.position();
+                let pos = rhs.start_position();
                 let root_pos = idx_val.position();
                 let idx_val = idx_val.into_index_value().expect("`ChainType::Index`");
 
@@ -159,7 +159,7 @@ impl Engine {
                         self.run_debugger(scope, global, state, lib, this_ptr, _parent, level)?;
 
                         let mut idx_val_for_setter = idx_val.clone();
-                        let idx_pos = x.lhs.position();
+                        let idx_pos = x.lhs.start_position();
                         let rhs_chain = rhs.into();
 
                         let (try_setter, result) = {
@@ -189,8 +189,8 @@ impl Engine {
                             let fn_name = crate::engine::FN_IDX_SET;
 
                             if let Err(err) = self.exec_fn_call(
-                                global, state, lib, fn_name, hash_set, args, is_ref_mut, true,
-                                root_pos, None, level,
+                                None, global, state, lib, fn_name, hash_set, args, is_ref_mut,
+                                true, root_pos, level,
                             ) {
                                 // Just ignore if there is no index setter
                                 if !matches!(*err, ERR::ErrorFunctionNotFound(_, _)) {
@@ -216,6 +216,7 @@ impl Engine {
                             Ok(ref mut obj_ptr) => {
                                 self.eval_op_assignment(
                                     global, state, lib, op_info, op_pos, obj_ptr, root, new_val,
+                                    level,
                                 )
                                 .map_err(|err| err.fill_position(new_pos))?;
                                 #[cfg(not(feature = "unchecked"))]
@@ -239,8 +240,8 @@ impl Engine {
                             let fn_name = crate::engine::FN_IDX_SET;
 
                             self.exec_fn_call(
-                                global, state, lib, fn_name, hash_set, args, is_ref_mut, true,
-                                root_pos, None, level,
+                                None, global, state, lib, fn_name, hash_set, args, is_ref_mut,
+                                true, root_pos, level,
                             )?;
                         }
 
@@ -302,6 +303,7 @@ impl Engine {
                             )?;
                             self.eval_op_assignment(
                                 global, state, lib, op_info, op_pos, val_target, root, new_val,
+                                level,
                             )
                             .map_err(|err| err.fill_position(new_pos))?;
                         }
@@ -333,8 +335,8 @@ impl Engine {
                             let args = &mut [target.as_mut()];
                             let (mut orig_val, _) = self
                                 .exec_fn_call(
-                                    global, state, lib, getter, hash, args, is_ref_mut, true, *pos,
-                                    None, level,
+                                    None, global, state, lib, getter, hash, args, is_ref_mut, true,
+                                    *pos, level,
                                 )
                                 .or_else(|err| match *err {
                                     // Try an indexer if property does not exist
@@ -364,6 +366,7 @@ impl Engine {
                                 &mut (&mut orig_val).into(),
                                 root,
                                 new_val,
+                                level,
                             )
                             .map_err(|err| err.fill_position(new_pos))?;
 
@@ -373,7 +376,7 @@ impl Engine {
                         let hash = crate::ast::FnCallHashes::from_native(*hash_set);
                         let args = &mut [target.as_mut(), &mut new_val];
                         self.exec_fn_call(
-                            global, state, lib, setter, hash, args, is_ref_mut, true, *pos, None,
+                            None, global, state, lib, setter, hash, args, is_ref_mut, true, *pos,
                             level,
                         )
                         .or_else(|err| match *err {
@@ -386,8 +389,8 @@ impl Engine {
                                 let pos = Position::NONE;
 
                                 self.exec_fn_call(
-                                    global, state, lib, fn_name, hash_set, args, is_ref_mut, true,
-                                    pos, None, level,
+                                    None, global, state, lib, fn_name, hash_set, args, is_ref_mut,
+                                    true, pos, level,
                                 )
                                 .map_err(
                                     |idx_err| match *idx_err {
@@ -408,7 +411,7 @@ impl Engine {
                         let hash = crate::ast::FnCallHashes::from_native(*hash_get);
                         let args = &mut [target.as_mut()];
                         self.exec_fn_call(
-                            global, state, lib, getter, hash, args, is_ref_mut, true, *pos, None,
+                            None, global, state, lib, getter, hash, args, is_ref_mut, true, *pos,
                             level,
                         )
                         .map_or_else(
@@ -508,8 +511,8 @@ impl Engine {
                                 // Assume getters are always pure
                                 let (mut val, _) = self
                                     .exec_fn_call(
-                                        global, state, lib, getter, hash_get, args, is_ref_mut,
-                                        true, pos, None, level,
+                                        None, global, state, lib, getter, hash_get, args,
+                                        is_ref_mut, true, pos, level,
                                     )
                                     .or_else(|err| match *err {
                                         // Try an indexer if property does not exist
@@ -556,8 +559,8 @@ impl Engine {
                                     let mut arg_values = [target.as_mut(), val];
                                     let args = &mut arg_values;
                                     self.exec_fn_call(
-                                        global, state, lib, setter, hash_set, args, is_ref_mut,
-                                        true, pos, None, level,
+                                        None, global, state, lib, setter, hash_set, args,
+                                        is_ref_mut, true, pos, level,
                                     )
                                     .or_else(
                                         |err| match *err {
@@ -571,8 +574,8 @@ impl Engine {
                                                         global.hash_idx_set(),
                                                     );
                                                 self.exec_fn_call(
-                                                    global, state, lib, fn_name, hash_set, args,
-                                                    is_ref_mut, true, pos, None, level,
+                                                    None, global, state, lib, fn_name, hash_set,
+                                                    args, is_ref_mut, true, pos, level,
                                                 )
                                                 .or_else(|idx_err| match *idx_err {
                                                     ERR::ErrorIndexingType(_, _) => {
@@ -626,7 +629,7 @@ impl Engine {
                         }
                     }
                     // Syntax error
-                    _ => Err(ERR::ErrorDotExpr("".into(), rhs.position()).into()),
+                    _ => Err(ERR::ErrorDotExpr("".into(), rhs.start_position()).into()),
                 }
             }
         }
@@ -670,7 +673,7 @@ impl Engine {
                 self.inc_operations(&mut global.num_operations, *var_pos)?;
 
                 let (mut target, _) =
-                    self.search_namespace(scope, global, state, lib, this_ptr, lhs)?;
+                    self.search_namespace(scope, global, state, lib, this_ptr, lhs, level)?;
 
                 let obj_ptr = &mut target;
                 let root = (x.2.as_str(), *var_pos);
@@ -688,7 +691,7 @@ impl Engine {
             expr => {
                 let value = self.eval_expr(scope, global, state, lib, this_ptr, expr, level)?;
                 let obj_ptr = &mut value.into();
-                let root = ("", expr.position());
+                let root = ("", expr.start_position());
                 self.eval_dot_index_chain_helper(
                     global, state, lib, this_ptr, obj_ptr, root, expr, rhs, term, idx_values,
                     chain_type, level, new_val,
@@ -732,7 +735,7 @@ impl Engine {
                     (crate::FnArgsVec::with_capacity(args.len()), Position::NONE),
                     |(mut values, mut pos), expr| -> RhaiResultOf<_> {
                         let (value, arg_pos) = self.get_arg_value(
-                            scope, global, state, lib, this_ptr, level, expr, constants,
+                            scope, global, state, lib, this_ptr, expr, constants, level,
                         )?;
                         if values.is_empty() {
                             pos = arg_pos;
@@ -778,7 +781,7 @@ impl Engine {
                             (crate::FnArgsVec::with_capacity(args.len()), Position::NONE),
                             |(mut values, mut pos), expr| -> RhaiResultOf<_> {
                                 let (value, arg_pos) = self.get_arg_value(
-                                    scope, global, state, lib, this_ptr, level, expr, constants,
+                                    scope, global, state, lib, this_ptr, expr, constants, level,
                                 )?;
                                 if values.is_empty() {
                                     pos = arg_pos
@@ -801,7 +804,10 @@ impl Engine {
                     _ if _parent_chain_type == ChainType::Indexing => self
                         .eval_expr(scope, global, state, lib, this_ptr, lhs, level)
                         .map(|v| {
-                            super::ChainArgument::from_index_value(v.flatten(), lhs.position())
+                            super::ChainArgument::from_index_value(
+                                v.flatten(),
+                                lhs.start_position(),
+                            )
                         })?,
                     expr => unreachable!("unknown chained expression: {:?}", expr),
                 };
@@ -825,7 +831,7 @@ impl Engine {
             _ if _parent_chain_type == ChainType::Indexing => idx_values.push(
                 self.eval_expr(scope, global, state, lib, this_ptr, expr, level)
                     .map(|v| {
-                        super::ChainArgument::from_index_value(v.flatten(), expr.position())
+                        super::ChainArgument::from_index_value(v.flatten(), expr.start_position())
                     })?,
             ),
             _ => unreachable!("unknown chained expression: {:?}", expr),
@@ -1044,7 +1050,7 @@ impl Engine {
                 let pos = Position::NONE;
 
                 self.exec_fn_call(
-                    global, state, lib, fn_name, hash_get, args, true, true, pos, None, level,
+                    None, global, state, lib, fn_name, hash_get, args, true, true, pos, level,
                 )
                 .map(|(v, _)| v.into())
             }

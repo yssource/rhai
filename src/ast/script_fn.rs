@@ -2,10 +2,30 @@
 #![cfg(not(feature = "no_function"))]
 
 use super::{FnAccess, StmtBlock};
-use crate::{Identifier, Module, Shared, StaticVec};
+use crate::{Identifier, StaticVec};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{fmt, hash::Hash};
+
+/// _(internals)_ Encapsulated AST environment.
+/// Exported under the `internals` feature only.
+///
+/// 1) other functions defined within the same AST
+/// 2) the stack of imported [modules][crate::Module]
+/// 3) global constants
+///
+/// Not available under `no_module` or `no_function`.
+#[cfg(not(feature = "no_module"))]
+#[cfg(not(feature = "no_function"))]
+#[derive(Debug, Clone)]
+pub struct EncapsulatedEnviron {
+    /// Functions defined within the same [`AST`][crate::AST].
+    pub lib: crate::Shared<crate::Module>,
+    /// Imported [modules][crate::Module].
+    pub imports: Box<[(Identifier, crate::Shared<crate::Module>)]>,
+    /// Globally-defined constants.
+    pub constants: Option<crate::eval::GlobalConstants>,
+}
 
 /// _(internals)_ A type containing information on a script-defined function.
 /// Exported under the `internals` feature only.
@@ -13,13 +33,12 @@ use std::{fmt, hash::Hash};
 pub struct ScriptFnDef {
     /// Function body.
     pub body: StmtBlock,
-    /// Encapsulated running environment, if any.
-    pub lib: Option<Shared<Module>>,
-    /// Encapsulated stack of imported modules, if any.
+    /// Encapsulated AST environment, if any.
     ///
-    /// Not available under `no_module`.
+    /// Not available under `no_module` or `no_function`.
     #[cfg(not(feature = "no_module"))]
-    pub global: Option<Box<[(Identifier, Shared<Module>)]>>,
+    #[cfg(not(feature = "no_function"))]
+    pub environ: Option<EncapsulatedEnviron>,
     /// Function name.
     pub name: Identifier,
     /// Function access mode.

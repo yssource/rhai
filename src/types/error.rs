@@ -30,6 +30,8 @@ pub enum EvalAltResult {
     /// Syntax error.
     ErrorParsing(ParseErrorType, Position),
 
+    /// Shadowing of an existing variable disallowed. Wrapped value is the variable name.
+    ErrorVariableExists(String, Position),
     /// Usage of an unknown variable. Wrapped value is the variable name.
     ErrorVariableNotFound(String, Position),
     /// Call to an unknown function. Wrapped value is the function signature.
@@ -139,8 +141,9 @@ impl fmt::Display for EvalAltResult {
             }
             Self::ErrorInModule(s, err, _) => write!(f, "Error in module {}: {}", s, err)?,
 
-            Self::ErrorFunctionNotFound(s, _) => write!(f, "Function not found: {}", s)?,
+            Self::ErrorVariableExists(s, _) => write!(f, "Variable is already defined: {}", s)?,
             Self::ErrorVariableNotFound(s, _) => write!(f, "Variable not found: {}", s)?,
+            Self::ErrorFunctionNotFound(s, _) => write!(f, "Function not found: {}", s)?,
             Self::ErrorModuleNotFound(s, _) => write!(f, "Module not found: {}", s)?,
             Self::ErrorDataRace(s, _) => {
                 write!(f, "Data race detected when accessing variable: {}", s)?
@@ -149,7 +152,7 @@ impl fmt::Display for EvalAltResult {
                 "" => f.write_str("Malformed dot expression"),
                 s => f.write_str(s),
             }?,
-            Self::ErrorIndexingType(s, _) => write!(f, "Indexer not registered for {}", s)?,
+            Self::ErrorIndexingType(s, _) => write!(f, "Indexer not registered: {}", s)?,
             Self::ErrorUnboundThis(_) => f.write_str("'this' is not bound")?,
             Self::ErrorFor(_) => f.write_str("For loop expects a type that is iterable")?,
             Self::ErrorTooManyOperations(_) => f.write_str("Too many operations")?,
@@ -166,7 +169,7 @@ impl fmt::Display for EvalAltResult {
             }
             Self::ErrorRuntime(d, _) => write!(f, "Runtime error: {}", d)?,
 
-            Self::ErrorAssignmentToConstant(s, _) => write!(f, "Cannot modify constant {}", s)?,
+            Self::ErrorAssignmentToConstant(s, _) => write!(f, "Cannot modify constant: {}", s)?,
             Self::ErrorMismatchOutputType(s, r, _) => match (r.as_str(), s.as_str()) {
                 ("", s) => write!(f, "Output type is incorrect, expecting {}", s),
                 (r, "") => write!(f, "Output type is incorrect: {}", r),
@@ -274,6 +277,7 @@ impl EvalAltResult {
             | Self::ErrorBitFieldBounds(_, _, _)
             | Self::ErrorIndexingType(_, _)
             | Self::ErrorFor(_)
+            | Self::ErrorVariableExists(_, _)
             | Self::ErrorVariableNotFound(_, _)
             | Self::ErrorModuleNotFound(_, _)
             | Self::ErrorDataRace(_, _)
@@ -364,7 +368,8 @@ impl EvalAltResult {
             Self::ErrorIndexingType(t, _) => {
                 map.insert("type".into(), t.into());
             }
-            Self::ErrorVariableNotFound(v, _)
+            Self::ErrorVariableExists(v, _)
+            | Self::ErrorVariableNotFound(v, _)
             | Self::ErrorDataRace(v, _)
             | Self::ErrorAssignmentToConstant(v, _) => {
                 map.insert("variable".into(), v.into());
@@ -415,6 +420,7 @@ impl EvalAltResult {
             | Self::ErrorBitFieldBounds(_, _, pos)
             | Self::ErrorIndexingType(_, pos)
             | Self::ErrorFor(pos)
+            | Self::ErrorVariableExists(_, pos)
             | Self::ErrorVariableNotFound(_, pos)
             | Self::ErrorModuleNotFound(_, pos)
             | Self::ErrorDataRace(_, pos)
@@ -463,6 +469,7 @@ impl EvalAltResult {
             | Self::ErrorBitFieldBounds(_, _, pos)
             | Self::ErrorIndexingType(_, pos)
             | Self::ErrorFor(pos)
+            | Self::ErrorVariableExists(_, pos)
             | Self::ErrorVariableNotFound(_, pos)
             | Self::ErrorModuleNotFound(_, pos)
             | Self::ErrorDataRace(_, pos)
