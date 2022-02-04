@@ -673,7 +673,7 @@ impl Engine {
                 self.inc_operations(&mut global.num_operations, *var_pos)?;
 
                 let (mut target, _) =
-                    self.search_namespace(scope, global, state, lib, this_ptr, lhs)?;
+                    self.search_namespace(scope, global, state, lib, this_ptr, lhs, level)?;
 
                 let obj_ptr = &mut target;
                 let root = (x.2.as_str(), *var_pos);

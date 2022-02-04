@@ -1230,7 +1230,7 @@ impl Engine {
                 })?;
 
                 let (mut target, _pos) =
-                    self.search_namespace(scope, global, state, lib, this_ptr, first_expr)?;
+                    self.search_namespace(scope, global, state, lib, this_ptr, first_expr, level)?;
 
                 if target.as_ref().is_read_only() {
                     target = target.into_owned();
@@ -1316,8 +1316,9 @@ impl Engine {
                 })?;
 
                 // Get target reference to first argument
+                let first_arg = &args_expr[0];
                 let (target, _pos) =
-                    self.search_scope_only(scope, global, state, lib, this_ptr, &args_expr[0])?;
+                    self.search_scope_only(scope, global, state, lib, this_ptr, first_arg, level)?;
 
                 #[cfg(not(feature = "unchecked"))]
                 self.inc_operations(&mut global.num_operations, _pos)?;

@@ -50,15 +50,18 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &Expr,
+        level: usize,
     ) -> RhaiResultOf<(Target<'s>, Position)> {
         match expr {
             Expr::Variable(Some(_), _, _) => {
-                self.search_scope_only(scope, global, state, lib, this_ptr, expr)
+                self.search_scope_only(scope, global, state, lib, this_ptr, expr, level)
             }
             Expr::Variable(None, _var_pos, v) => match v.as_ref() {
                 // Normal variable access
                 #[cfg(not(feature = "no_module"))]
-                (_, None, _) => self.search_scope_only(scope, global, state, lib, this_ptr, expr),
+                (_, None, _) => {
+                    self.search_scope_only(scope, global, state, lib, this_ptr, expr, level)
+                }
                 #[cfg(feature = "no_module")]
                 (_, (), _) => self.search_scope_only(scope, global, state, lib, this_ptr, expr),
 
@@ -136,6 +139,7 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &Expr,
+        level: usize,
     ) -> RhaiResultOf<(Target<'s>, Position)> {
         // Make sure that the pointer indirection is taken only when absolutely necessary.
 
@@ -163,7 +167,7 @@ impl Engine {
                 state,
                 lib,
                 this_ptr,
-                level: 0,
+                level,
             };
             match resolve_var(
                 expr.get_variable_name(true).expect("`Expr::Variable`"),
@@ -297,7 +301,7 @@ impl Engine {
                     .cloned()
                     .ok_or_else(|| ERR::ErrorUnboundThis(*var_pos).into())
             } else {
-                self.search_namespace(scope, global, state, lib, this_ptr, expr)
+                self.search_namespace(scope, global, state, lib, this_ptr, expr, level)
                     .map(|(val, _)| val.take_or_clone())
             };
         }
