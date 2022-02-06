@@ -3,16 +3,15 @@
 use crate::ast::Expr;
 use crate::func::native::SendSync;
 use crate::parser::ParseResult;
-use crate::r#unsafe::unsafe_try_cast;
 use crate::tokenizer::{is_valid_identifier, Token};
 use crate::types::dynamic::Variant;
 use crate::{
     Engine, EvalContext, Identifier, ImmutableString, LexError, Position, RhaiResult, Shared,
-    StaticVec, INT,
+    StaticVec, reify,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-use std::{any::TypeId, ops::Deref};
+use std::ops::Deref;
 
 /// Collection of special markers for custom syntax definition.
 pub mod markers {
@@ -94,46 +93,23 @@ impl Expression<'_> {
     #[must_use]
     pub fn get_literal_value<T: Variant>(&self) -> Option<T> {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
+        match self.0 {
+            Expr::IntegerConstant(x, _) => reify!(x, |x: T| Some(x), || None),
 
-        if TypeId::of::<T>() == TypeId::of::<INT>() {
-            return match self.0 {
-                Expr::IntegerConstant(x, _) => unsafe_try_cast(*x),
-                _ => None,
-            };
+            #[cfg(not(feature = "no_float"))]
+            Expr::FloatConstant(x, _) => reify!(x, |x: T| Some(x), || None),
+
+            Expr::CharConstant(x, _) => reify!(x, |x: T| Some(x), || None),
+            Expr::StringConstant(x, _) => reify!(x.clone(), |x: T| Some(x), || None),
+            Expr::Variable(_, _, x) => {
+                let x = Into::<ImmutableString>::into(&x.2);
+                reify!(x, |x: T| Some(x), || None)
+            }
+            Expr::BoolConstant(x, _) => reify!(x, |x: T| Some(x), || None),
+            Expr::Unit(_) => reify!((), |x: T| Some(x), || None),
+
+            _ => None,
         }
-        #[cfg(not(feature = "no_float"))]
-        if TypeId::of::<T>() == TypeId::of::<crate::FLOAT>() {
-            return match self.0 {
-                Expr::FloatConstant(x, _) => unsafe_try_cast(*x),
-                _ => None,
-            };
-        }
-        if TypeId::of::<T>() == TypeId::of::<char>() {
-            return match self.0 {
-                Expr::CharConstant(x, _) => unsafe_try_cast(*x),
-                _ => None,
-            };
-        }
-        if TypeId::of::<T>() == TypeId::of::<ImmutableString>() {
-            return match self.0 {
-                Expr::StringConstant(x, _) => unsafe_try_cast(x.clone()),
-                Expr::Variable(_, _, x) => unsafe_try_cast(Into::<ImmutableString>::into(&x.2)),
-                _ => None,
-            };
-        }
-        if TypeId::of::<T>() == TypeId::of::<bool>() {
-            return match self.0 {
-                Expr::BoolConstant(x, _) => unsafe_try_cast(*x),
-                _ => None,
-            };
-        }
-        if TypeId::of::<T>() == TypeId::of::<()>() {
-            return match self.0 {
-                Expr::Unit(_) => unsafe_try_cast(()),
-                _ => None,
-            };
-        }
-        None
     }
 }
 
