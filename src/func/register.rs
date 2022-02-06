@@ -7,7 +7,7 @@ use super::callable_function::CallableFunction;
 use super::native::{FnAny, SendSync};
 use crate::tokenizer::Position;
 use crate::types::dynamic::{DynamicWriteLock, Variant};
-use crate::{Dynamic, NativeCallContext, RhaiResultOf, ERR, reify};
+use crate::{reify, Dynamic, NativeCallContext, RhaiResultOf, ERR};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{any::TypeId, mem};
@@ -45,7 +45,8 @@ pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
         // If T is `&str`, data must be `ImmutableString`, so map directly to it
         data.flatten_in_place();
         let ref_str = data.as_str_ref().expect("&str");
-        let ref_t = reify!(ref_str, |ref_t: &T| ref_t, || unreachable!());
+        //let ref_t = reify!(&ref_str, |ref_t: &T| ref_t, || unreachable!());
+        let ref_t = unsafe { mem::transmute::<_, &T>(&ref_str) };
         ref_t.clone()
     } else if TypeId::of::<T>() == TypeId::of::<String>() {
         // If T is `String`, data must be `ImmutableString`, so map directly to it

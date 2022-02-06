@@ -6,12 +6,12 @@ use crate::parser::ParseResult;
 use crate::tokenizer::{is_valid_identifier, Token};
 use crate::types::dynamic::Variant;
 use crate::{
-    Engine, EvalContext, Identifier, ImmutableString, LexError, Position, RhaiResult, Shared,
-    StaticVec, reify,
+    reify, Engine, EvalContext, Identifier, ImmutableString, LexError, Position, RhaiResult,
+    Shared, StaticVec,
 };
+use std::ops::Deref;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-use std::ops::Deref;
 
 /// Collection of special markers for custom syntax definition.
 pub mod markers {
@@ -94,18 +94,18 @@ impl Expression<'_> {
     pub fn get_literal_value<T: Variant>(&self) -> Option<T> {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
         match self.0 {
-            Expr::IntegerConstant(x, _) => reify!(x, |x: T| Some(x), || None),
+            Expr::IntegerConstant(x, _) => reify!(*x, |x: T| Some(x), || None),
 
             #[cfg(not(feature = "no_float"))]
-            Expr::FloatConstant(x, _) => reify!(x, |x: T| Some(x), || None),
+            Expr::FloatConstant(x, _) => reify!(*x, |x: T| Some(x), || None),
 
-            Expr::CharConstant(x, _) => reify!(x, |x: T| Some(x), || None),
+            Expr::CharConstant(x, _) => reify!(*x, |x: T| Some(x), || None),
             Expr::StringConstant(x, _) => reify!(x.clone(), |x: T| Some(x), || None),
             Expr::Variable(_, _, x) => {
-                let x = Into::<ImmutableString>::into(&x.2);
+                let x: ImmutableString = x.2.clone().into();
                 reify!(x, |x: T| Some(x), || None)
             }
-            Expr::BoolConstant(x, _) => reify!(x, |x: T| Some(x), || None),
+            Expr::BoolConstant(x, _) => reify!(*x, |x: T| Some(x), || None),
             Expr::Unit(_) => reify!((), |x: T| Some(x), || None),
 
             _ => None,

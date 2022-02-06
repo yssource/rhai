@@ -68,8 +68,6 @@ extern crate no_std_compat as std;
 use std::prelude::v1::*;
 
 // Internal modules
-mod reify;
-
 mod api;
 mod ast;
 mod engine;
@@ -79,6 +77,7 @@ mod module;
 mod optimizer;
 pub mod packages;
 mod parser;
+mod reify;
 mod tests;
 mod tokenizer;
 mod types;

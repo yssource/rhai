@@ -1,7 +1,7 @@
 //! Helper module which defines the [`Any`] trait to to allow dynamic value handling.
 
 use crate::func::native::SendSync;
-use crate::{ExclusiveRange, FnPtr, ImmutableString, InclusiveRange, INT, reify};
+use crate::{reify, reify_dynamic, ExclusiveRange, FnPtr, ImmutableString, InclusiveRange, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -1182,10 +1182,10 @@ impl Dynamic {
         reify!(value, |v: bool| return v.into());
         reify!(value, |v: char| return v.into());
         reify!(value, |v: ImmutableString| return v.into());
+        reify!(value, |v: String| return v.into());
         reify!(value, |v: &str| return v.into());
         reify!(value, |v: ()| return v.into());
 
-        reify!(value, |v: String| return v.into());
         #[cfg(not(feature = "no_index"))]
         reify!(value, |v: crate::Array| return v.into());
         #[cfg(not(feature = "no_index"))]
@@ -1200,7 +1200,8 @@ impl Dynamic {
         #[cfg(not(feature = "no_std"))]
         reify!(value, |v: Instant| return v.into());
         #[cfg(not(feature = "no_closure"))]
-        reify!(value, |v: crate::Shared<crate::Locked<Dynamic>>| return v.into());
+        reify!(value, |v: crate::Shared<crate::Locked<Dynamic>>| return v
+            .into());
 
         Self(Union::Variant(
             Box::new(Box::new(value)),
@@ -1269,20 +1270,20 @@ impl Dynamic {
             return self.flatten().try_cast::<T>();
         }
 
-        reify!(self, |v: T| return Some(v));
+        reify_dynamic!(self, |v: T| return Some(v));
 
         match self.0 {
             Union::Int(v, ..) => reify!(v, |v: T| Some(v), || None),
             #[cfg(not(feature = "no_float"))]
-            Union::Float(v, ..) => reify!(v, |v: T| Some(v), || None),
+            Union::Float(v, ..) => reify!(*v, |v: T| Some(v), || None),
             #[cfg(feature = "decimal")]
-            Union::Decimal(v, ..) => reify!(v, |v: T| Some(v), || None),
+            Union::Decimal(v, ..) => reify!(*v, |v: T| Some(v), || None),
             Union::Bool(v, ..) => reify!(v, |v: T| Some(v), || None),
             Union::Str(v, ..) => {
                 reify!(v, |v: T| Some(v), || {
                     reify!(v.to_string(), |v: T| Some(v), || None)
                 })
-            },
+            }
             Union::Char(v, ..) => reify!(v, |v: T| Some(v), || None),
             #[cfg(not(feature = "no_index"))]
             Union::Array(v, ..) => reify!(v, |v: Box<T>| Some(*v), || None),
@@ -1293,7 +1294,7 @@ impl Dynamic {
             Union::FnPtr(v, ..) => reify!(v, |v: Box<T>| Some(*v), || None),
             #[cfg(not(feature = "no_std"))]
             Union::TimeStamp(v, ..) => reify!(v, |v: Box<T>| Some(*v), || None),
-            Union::Unit(v, ..) => reify!(v, |v: T| Some(v), || None),
+            Union::Unit(_, ..) => reify!((), |v: T| Some(v), || None),
             Union::Variant(v, _, _) => (*v).as_boxed_any().downcast().ok().map(|x| *x),
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(_, _, _) => unreachable!("Union::Shared case should be already handled"),
@@ -1335,13 +1336,8 @@ impl Dynamic {
         #[cfg(feature = "no_closure")]
         let self_type_name = self.type_name();
 
-        self.try_cast::<T>().unwrap_or_else(|| {
-            panic!(
-                "cannot cast {} value and to {}",
-                self_type_name,
-                type_name::<T>()
-            )
-        })
+        self.try_cast::<T>()
+            .unwrap_or_else(|| panic!("cannot cast {} to {}", self_type_name, type_name::<T>()))
     }
     /// Clone the [`Dynamic`] value and convert it into a specific type.
     ///
