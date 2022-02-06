@@ -1758,7 +1758,7 @@ fn make_assignment_stmt(
                 }
                 Expr::Property(_, _) => None,
                 // Anything other than a property after dotting (e.g. a method call) is not an l-value
-                ref e => Some(e.start_position()),
+                ref e => Some(e.position()),
             },
             Expr::Index(x, term, _) | Expr::Dot(x, term, _) => match x.lhs {
                 Expr::Property(_, _) => unreachable!("unexpected Expr::Property in indexing"),
@@ -1767,7 +1767,7 @@ fn make_assignment_stmt(
             },
             Expr::Property(_, _) if parent_is_dot => None,
             Expr::Property(_, _) => unreachable!("unexpected Expr::Property in indexing"),
-            e if parent_is_dot => Some(e.start_position()),
+            e if parent_is_dot => Some(e.position()),
             _ => None,
         }
     }
@@ -1819,8 +1819,10 @@ fn make_assignment_stmt(
                             op_pos,
                         )),
                         // expr[???] = rhs, expr.??? = rhs
-                        ref expr => Err(PERR::AssignmentToInvalidLHS("".to_string())
-                            .into_err(expr.start_position())),
+                        ref expr => {
+                            Err(PERR::AssignmentToInvalidLHS("".to_string())
+                                .into_err(expr.position()))
+                        }
                     }
                 }
                 Some(err_pos) => {
@@ -1835,7 +1837,7 @@ fn make_assignment_stmt(
         )
         .into_err(op_pos)),
         // expr = rhs
-        _ => Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(lhs.start_position())),
+        _ => Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(lhs.position())),
     }
 }
 
