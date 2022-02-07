@@ -30,7 +30,6 @@ impl Engine {
             &mut stream.peekable(),
             &mut state,
             scope,
-            #[cfg(not(feature = "no_optimize"))]
             self.optimization_level,
         )?;
 

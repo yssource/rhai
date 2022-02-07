@@ -10,7 +10,7 @@ use std::prelude::v1::*;
 impl Engine {
     /// Recursively calculate the sizes of a value.
     ///
-    /// Sizes returned are `(`[`Array`][crate::Array], [`Map`][crate::Map] and `String)`.
+    /// Sizes returned are `(` [`Array`][crate::Array], [`Map`][crate::Map] and [`String`] `)`.
     ///
     /// # Panics
     ///

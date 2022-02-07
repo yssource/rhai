@@ -233,6 +233,10 @@ pub mod serde;
 #[cfg(not(feature = "no_optimize"))]
 pub use optimizer::OptimizationLevel;
 
+/// Placeholder for the optimization level.
+#[cfg(feature = "no_optimize")]
+pub type OptimizationLevel = ();
+
 // Expose internal data structures.
 
 #[cfg(feature = "internals")]

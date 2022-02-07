@@ -12,7 +12,8 @@ use crate::engine::{
 use crate::eval::{EvalState, GlobalRuntimeState};
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnArgsVec, FnPtr,
-    Identifier, ImmutableString, Module, Position, RhaiResult, RhaiResultOf, Scope, ERR,
+    Identifier, ImmutableString, Module, OptimizationLevel, Position, RhaiResult, RhaiResultOf,
+    Scope, ERR,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -1450,7 +1451,9 @@ impl Engine {
             &Scope::new(),
             &[script],
             #[cfg(not(feature = "no_optimize"))]
-            crate::OptimizationLevel::None,
+            OptimizationLevel::None,
+            #[cfg(feature = "no_optimize")]
+            OptimizationLevel::default(),
         )?;
 
         // If new functions are defined within the eval string, it is an error

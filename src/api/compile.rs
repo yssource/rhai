@@ -1,7 +1,7 @@
 //! Module that defines the public compilation API of [`Engine`].
 
 use crate::parser::{ParseResult, ParseState};
-use crate::{Engine, Scope, AST};
+use crate::{Engine, OptimizationLevel, Scope, AST};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -196,12 +196,7 @@ impl Engine {
         scope: &Scope,
         scripts: impl AsRef<[S]>,
     ) -> ParseResult<AST> {
-        self.compile_with_scope_and_optimization_level(
-            scope,
-            scripts,
-            #[cfg(not(feature = "no_optimize"))]
-            self.optimization_level,
-        )
+        self.compile_with_scope_and_optimization_level(scope, scripts, self.optimization_level)
     }
     /// Join a list of strings and compile into an [`AST`] using own scope at a specific optimization level.
     ///
@@ -215,7 +210,7 @@ impl Engine {
         &self,
         scope: &Scope,
         scripts: impl AsRef<[S]>,
-        #[cfg(not(feature = "no_optimize"))] optimization_level: crate::OptimizationLevel,
+        optimization_level: OptimizationLevel,
     ) -> ParseResult<AST> {
         let (stream, tokenizer_control) = self.lex_raw(
             scripts.as_ref(),
@@ -226,7 +221,6 @@ impl Engine {
             &mut stream.peekable(),
             &mut state,
             scope,
-            #[cfg(not(feature = "no_optimize"))]
             optimization_level,
         )
     }
@@ -298,13 +292,7 @@ impl Engine {
 
         let mut peekable = stream.peekable();
         let mut state = ParseState::new(self, tokenizer_control);
-        self.parse_global_expr(
-            &mut peekable,
-            &mut state,
-            scope,
-            #[cfg(not(feature = "no_optimize"))]
-            self.optimization_level,
-        )
+        self.parse_global_expr(&mut peekable, &mut state, scope, self.optimization_level)
     }
     /// Parse a JSON string into an [object map][crate::Map].
     /// This is a light-weight alternative to using, say,
@@ -400,7 +388,9 @@ impl Engine {
                 &mut state,
                 &scope,
                 #[cfg(not(feature = "no_optimize"))]
-                crate::OptimizationLevel::None,
+                OptimizationLevel::None,
+                #[cfg(feature = "no_optimize")]
+                OptimizationLevel::default(),
             )?;
             if has_null {
                 scope.push_constant("null", ());
