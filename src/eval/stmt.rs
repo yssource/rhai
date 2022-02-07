@@ -211,12 +211,12 @@ impl Engine {
         // Popular branches are lifted out of the `match` statement into their own branches.
 
         // Function calls should account for a relatively larger portion of statements.
-        if let Stmt::FnCall(x, pos) = stmt {
+        if let Stmt::FnCall(x, _) = stmt {
             #[cfg(not(feature = "unchecked"))]
             self.inc_operations(&mut global.num_operations, stmt.position())?;
 
             let result =
-                self.eval_fn_call_expr(scope, global, state, lib, this_ptr, x, *pos, level);
+                self.eval_fn_call_expr(scope, global, state, lib, this_ptr, x, x.pos, level);
 
             #[cfg(feature = "debugging")]
             global.debugger.reset_status(reset_debugger);

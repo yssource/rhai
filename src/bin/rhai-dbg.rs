@@ -271,7 +271,7 @@ fn main() {
                 }
                 DebuggerEvent::FunctionExitWithValue(r) => {
                     println!(
-                        "! Return from function call '{}' => {}",
+                        "! Return from function call '{}' => {:?}",
                         context
                             .global_runtime_state()
                             .debugger

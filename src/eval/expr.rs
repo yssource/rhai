@@ -270,7 +270,7 @@ impl Engine {
 
         // Function calls should account for a relatively larger portion of expressions because
         // binary operators are also function calls.
-        if let Expr::FnCall(x, pos) = expr {
+        if let Expr::FnCall(x, _) = expr {
             #[cfg(feature = "debugging")]
             let reset_debugger =
                 self.run_debugger_with_reset(scope, global, state, lib, this_ptr, expr, level)?;
@@ -279,7 +279,7 @@ impl Engine {
             self.inc_operations(&mut global.num_operations, expr.position())?;
 
             let result =
-                self.eval_fn_call_expr(scope, global, state, lib, this_ptr, x, *pos, level);
+                self.eval_fn_call_expr(scope, global, state, lib, this_ptr, x, x.pos, level);
 
             #[cfg(feature = "debugging")]
             global.debugger.reset_status(reset_debugger);
