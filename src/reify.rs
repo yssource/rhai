@@ -7,7 +7,7 @@ macro_rules! reify {
         #[allow(unused_imports)]
         use std::any::Any;
 
-        if std::any::TypeId::of::<$t>() == $old.type_id() {
+        if std::any::TypeId::of::<$t>() == std::any::Any::type_id(&$old) {
             // SAFETY: This is safe because we check to make sure the two types are
             // actually the same type.
             let $new: $t = unsafe { std::mem::transmute_copy(&std::mem::ManuallyDrop::new($old)) };
@@ -26,21 +26,4 @@ macro_rules! reify {
     ($old:expr, |$new:ident : $t:ty| $code:expr) => {
         reify!($old, |$new: $t| $code, || ())
     };
-}
-
-#[macro_export]
-macro_rules! reify_dynamic {
-    ($old:ident, |$new:ident : $t:ty| $code:expr) => {{
-        #[allow(unused_imports)]
-        use ::std::{
-            any::{Any, TypeId},
-            mem::{transmute_copy, ManuallyDrop},
-        };
-        if TypeId::of::<$t>() == TypeId::of::<crate::Dynamic>() {
-            // SAFETY: This is safe because we check to make sure the two types are
-            // actually the same type.
-            let $new: $t = unsafe { transmute_copy(&ManuallyDrop::new($old)) };
-            $code
-        }
-    }};
 }

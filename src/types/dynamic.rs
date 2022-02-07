@@ -1,7 +1,7 @@
 //! Helper module which defines the [`Any`] trait to to allow dynamic value handling.
 
 use crate::func::native::SendSync;
-use crate::{reify, reify_dynamic, ExclusiveRange, FnPtr, ImmutableString, InclusiveRange, INT};
+use crate::{reify, ExclusiveRange, FnPtr, ImmutableString, InclusiveRange, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -1270,7 +1270,7 @@ impl Dynamic {
             return self.flatten().try_cast::<T>();
         }
 
-        reify_dynamic!(self, |v: T| return Some(v));
+        reify!(self, |v: T| return Some(v));
 
         match self.0 {
             Union::Int(v, ..) => reify!(v, |v: T| Some(v), || None),
