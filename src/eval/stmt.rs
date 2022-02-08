@@ -67,13 +67,13 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_module"))]
-            if matches!(stmt, Stmt::Import(_, _, _)) {
+            if matches!(stmt, Stmt::Import(..)) {
                 // Get the extra modules - see if any functions are marked global.
                 // Without global functions, the extra modules never affect function resolution.
                 if global
                     .scan_imports_raw()
                     .skip(imports_len)
-                    .any(|(_, m)| m.contains_indexed_global_functions())
+                    .any(|(.., m)| m.contains_indexed_global_functions())
                 {
                     if state.fn_resolution_caches_len() > orig_fn_resolution_caches_len {
                         // When new module is imported with global functions and there is already
@@ -162,10 +162,10 @@ impl Engine {
                     #[cfg(not(feature = "unchecked"))]
                     self.check_data_size(&args[0], root.1)?;
                 }
-                Err(err) if matches!(*err, ERR::ErrorFunctionNotFound(ref f, _) if f.starts_with(op_assign)) =>
+                Err(err) if matches!(*err, ERR::ErrorFunctionNotFound(ref f, ..) if f.starts_with(op_assign)) =>
                 {
                     // Expand to `var = var op rhs`
-                    let (value, _) = self.call_native_fn(
+                    let (value, ..) = self.call_native_fn(
                         global, state, lib, op, hash_op, args, true, false, op_pos, level,
                     )?;
 
@@ -211,7 +211,7 @@ impl Engine {
         // Popular branches are lifted out of the `match` statement into their own branches.
 
         // Function calls should account for a relatively larger portion of statements.
-        if let Stmt::FnCall(x, _) = stmt {
+        if let Stmt::FnCall(x, ..) = stmt {
             #[cfg(not(feature = "unchecked"))]
             self.inc_operations(&mut global.num_operations, stmt.position())?;
 
@@ -288,19 +288,19 @@ impl Engine {
                     // Must be either `var[index] op= val` or `var.prop op= val`
                     match lhs {
                         // name op= rhs (handled above)
-                        Expr::Variable(_, _, _) => {
+                        Expr::Variable(..) => {
                             unreachable!("Expr::Variable case is already handled")
                         }
                         // idx_lhs[idx_expr] op= rhs
                         #[cfg(not(feature = "no_index"))]
-                        Expr::Index(_, _, _) => self
+                        Expr::Index(..) => self
                             .eval_dot_index_chain(
                                 scope, global, state, lib, this_ptr, lhs, level, _new_val,
                             )
                             .map(|_| Dynamic::UNIT),
                         // dot_lhs.dot_rhs op= rhs
                         #[cfg(not(feature = "no_object"))]
-                        Expr::Dot(_, _, _) => self
+                        Expr::Dot(..) => self
                             .eval_dot_index_chain(
                                 scope, global, state, lib, this_ptr, lhs, level, _new_val,
                             )
@@ -331,13 +331,13 @@ impl Engine {
                 .map(Dynamic::flatten),
 
             // Block scope
-            Stmt::Block(statements, _) if statements.is_empty() => Ok(Dynamic::UNIT),
-            Stmt::Block(statements, _) => {
+            Stmt::Block(statements, ..) if statements.is_empty() => Ok(Dynamic::UNIT),
+            Stmt::Block(statements, ..) => {
                 self.eval_stmt_block(scope, global, state, lib, this_ptr, statements, true, level)
             }
 
             // If statement
-            Stmt::If(expr, x, _) => {
+            Stmt::If(expr, x, ..) => {
                 let guard_val = self
                     .eval_expr(scope, global, state, lib, this_ptr, expr, level)
                     .and_then(|v| {
@@ -370,7 +370,7 @@ impl Engine {
             }
 
             // Switch statement
-            Stmt::Switch(match_expr, x, _) => {
+            Stmt::Switch(match_expr, x, ..) => {
                 let SwitchCases {
                     cases,
                     def_case,
@@ -414,8 +414,8 @@ impl Engine {
                             let value = value.as_int().expect("`INT`");
                             let mut result = Ok(None);
 
-                            for (_, _, _, block) in
-                                ranges.iter().filter(|&&(start, end, inclusive, _)| {
+                            for (.., block) in
+                                ranges.iter().filter(|&&(start, end, inclusive, ..)| {
                                     (!inclusive && (start..end).contains(&value))
                                         || (inclusive && (start..=end).contains(&value))
                                 })
@@ -483,15 +483,15 @@ impl Engine {
             }
 
             // Loop
-            Stmt::While(Expr::Unit(_), body, _) => loop {
+            Stmt::While(Expr::Unit(_), body, ..) => loop {
                 if !body.is_empty() {
                     match self
                         .eval_stmt_block(scope, global, state, lib, this_ptr, body, true, level)
                     {
                         Ok(_) => (),
                         Err(err) => match *err {
-                            ERR::LoopBreak(false, _) => (),
-                            ERR::LoopBreak(true, _) => break Ok(Dynamic::UNIT),
+                            ERR::LoopBreak(false, ..) => (),
+                            ERR::LoopBreak(true, ..) => break Ok(Dynamic::UNIT),
                             _ => break Err(err),
                         },
                     }
@@ -502,7 +502,7 @@ impl Engine {
             },
 
             // While loop
-            Stmt::While(expr, body, _) => loop {
+            Stmt::While(expr, body, ..) => loop {
                 let condition = self
                     .eval_expr(scope, global, state, lib, this_ptr, expr, level)
                     .and_then(|v| {
@@ -520,8 +520,8 @@ impl Engine {
                         {
                             Ok(_) => (),
                             Err(err) => match *err {
-                                ERR::LoopBreak(false, _) => (),
-                                ERR::LoopBreak(true, _) => break Ok(Dynamic::UNIT),
+                                ERR::LoopBreak(false, ..) => (),
+                                ERR::LoopBreak(true, ..) => break Ok(Dynamic::UNIT),
                                 _ => break Err(err),
                             },
                         }
@@ -531,7 +531,7 @@ impl Engine {
             },
 
             // Do loop
-            Stmt::Do(body, expr, options, _) => loop {
+            Stmt::Do(body, expr, options, ..) => loop {
                 let is_while = !options.contains(AST_OPTION_NEGATED);
 
                 if !body.is_empty() {
@@ -540,8 +540,8 @@ impl Engine {
                     {
                         Ok(_) => (),
                         Err(err) => match *err {
-                            ERR::LoopBreak(false, _) => continue,
-                            ERR::LoopBreak(true, _) => break Ok(Dynamic::UNIT),
+                            ERR::LoopBreak(false, ..) => continue,
+                            ERR::LoopBreak(true, ..) => break Ok(Dynamic::UNIT),
                             _ => break Err(err),
                         },
                     }
@@ -563,7 +563,7 @@ impl Engine {
             },
 
             // For loop
-            Stmt::For(expr, x, _) => {
+            Stmt::For(expr, x, ..) => {
                 let (Ident { name: var_name, .. }, counter, statements) = x.as_ref();
 
                 let iter_result = self
@@ -672,8 +672,8 @@ impl Engine {
                             match result {
                                 Ok(_) => (),
                                 Err(err) => match *err {
-                                    ERR::LoopBreak(false, _) => (),
-                                    ERR::LoopBreak(true, _) => break,
+                                    ERR::LoopBreak(false, ..) => (),
+                                    ERR::LoopBreak(true, ..) => break,
                                     _ => {
                                         loop_result = Err(err);
                                         break;
@@ -699,7 +699,7 @@ impl Engine {
             }
 
             // Try/Catch statement
-            Stmt::TryCatch(x, _) => {
+            Stmt::TryCatch(x, ..) => {
                 let TryCatchBlock {
                     try_block,
                     catch_var,
@@ -716,7 +716,7 @@ impl Engine {
                     Err(err) if !err.is_catchable() => Err(err),
                     Err(mut err) => {
                         let err_value = match *err {
-                            ERR::ErrorRuntime(ref x, _) => x.clone(),
+                            ERR::ErrorRuntime(ref x, ..) => x.clone(),
 
                             #[cfg(feature = "no_object")]
                             _ => {
@@ -773,7 +773,7 @@ impl Engine {
                             Ok(_) => Ok(Dynamic::UNIT),
                             Err(result_err) => match *result_err {
                                 // Re-throw exception
-                                ERR::ErrorRuntime(Dynamic(Union::Unit(_, _, _)), pos) => {
+                                ERR::ErrorRuntime(Dynamic(Union::Unit(..)), pos) => {
                                     err.set_position(pos);
                                     Err(err)
                                 }
@@ -795,15 +795,15 @@ impl Engine {
             }
 
             // Return value
-            Stmt::Return(_, Some(expr), pos) => self
+            Stmt::Return(.., Some(expr), pos) => self
                 .eval_expr(scope, global, state, lib, this_ptr, expr, level)
                 .and_then(|v| Err(ERR::Return(v.flatten(), *pos).into())),
 
             // Empty return
-            Stmt::Return(_, None, pos) => Err(ERR::Return(Dynamic::UNIT, *pos).into()),
+            Stmt::Return(.., None, pos) => Err(ERR::Return(Dynamic::UNIT, *pos).into()),
 
             // Let/const statement - shadowing disallowed
-            Stmt::Var(_, x, _, pos) if !self.allow_shadowing() && scope.contains(&x.name) => {
+            Stmt::Var(.., x, _, pos) if !self.allow_shadowing() && scope.contains(&x.name) => {
                 Err(ERR::ErrorVariableExists(x.name.to_string(), *pos).into())
             }
             // Let/const statement
@@ -924,7 +924,7 @@ impl Engine {
                     let module_result = resolver
                         .as_ref()
                         .and_then(|r| match r.resolve_raw(self, global, &path, path_pos) {
-                            Err(err) if matches!(*err, ERR::ErrorModuleNotFound(_, _)) => None,
+                            Err(err) if matches!(*err, ERR::ErrorModuleNotFound(..)) => None,
                             result => Some(result),
                         })
                         .or_else(|| {
@@ -961,10 +961,10 @@ impl Engine {
 
             // Export statement
             #[cfg(not(feature = "no_module"))]
-            Stmt::Export(x, _) => {
+            Stmt::Export(x, ..) => {
                 let (Ident { name, pos, .. }, Ident { name: alias, .. }) = x.as_ref();
                 // Mark scope variables as public
-                if let Some((index, _)) = scope.get_index(name) {
+                if let Some((index, ..)) = scope.get_index(name) {
                     scope.add_entry_alias(
                         index,
                         if alias.is_empty() { name } else { alias }.clone(),
@@ -978,7 +978,7 @@ impl Engine {
             // Share statement
             #[cfg(not(feature = "no_closure"))]
             Stmt::Share(name) => {
-                if let Some((index, _)) = scope.get_index(name) {
+                if let Some((index, ..)) = scope.get_index(name) {
                     let val = scope.get_mut_by_index(index);
 
                     if !val.is_shared() {

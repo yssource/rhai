@@ -489,7 +489,7 @@ fn main() {
                     .iter()
                     .rev()
                     .enumerate()
-                    .find(|&(_, h)| h.contains(text))
+                    .find(|&(.., h)| h.contains(text))
                 {
                     replacement = Some(line.clone());
                     replacement_index = history_offset + (rl.history().len() - 1 - n);
@@ -514,7 +514,7 @@ fn main() {
                         .iter()
                         .rev()
                         .enumerate()
-                        .find(|&(_, h)| h.trim_start().starts_with(prefix))
+                        .find(|&(.., h)| h.trim_start().starts_with(prefix))
                     {
                         replacement = Some(line.clone());
                         replacement_index = history_offset + (rl.history().len() - 1 - n);

@@ -124,7 +124,7 @@ pub mod blob_functions {
             return 0;
         }
 
-        let (index, _) = calc_offset_len(blob.len(), index, 0);
+        let (index, ..) = calc_offset_len(blob.len(), index, 0);
 
         if index >= blob.len() {
             0
@@ -162,7 +162,7 @@ pub mod blob_functions {
             return;
         }
 
-        let (index, _) = calc_offset_len(blob.len(), index, 0);
+        let (index, ..) = calc_offset_len(blob.len(), index, 0);
 
         if index < blob.len() {
             blob[index] = (value & 0x000000ff) as u8;
@@ -256,7 +256,7 @@ pub mod blob_functions {
             return;
         }
 
-        let (index, _) = calc_offset_len(blob.len(), index, 0);
+        let (index, ..) = calc_offset_len(blob.len(), index, 0);
 
         if index >= blob.len() {
             blob.push(value);

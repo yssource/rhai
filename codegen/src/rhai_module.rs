@@ -240,7 +240,7 @@ pub fn generate_body(
     })
     .unwrap();
 
-    let (_, generate_call_content) = generate_fn_call.content.take().unwrap();
+    let (.., generate_call_content) = generate_fn_call.content.take().unwrap();
 
     quote! {
         #(#generate_call_content)*
@@ -275,7 +275,7 @@ pub fn check_rename_collisions(fns: &[ExportedFn]) -> Result<(), syn::Error> {
                 .map(|n| (n.clone(), n.clone()))
                 .collect();
 
-            if let Some((s, n, _)) = item_fn.params().special.get_fn_name() {
+            if let Some((s, n, ..)) = item_fn.params().special.get_fn_name() {
                 names.push((s, n));
             }
 

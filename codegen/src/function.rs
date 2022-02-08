@@ -252,7 +252,7 @@ impl ExportedParams for ExportedFnParams {
                     }
                 }
 
-                (attr, _) => {
+                (attr, ..) => {
                     return Err(syn::Error::new(
                         key.span(),
                         format!("unknown attribute '{}'", attr),
@@ -379,7 +379,7 @@ impl Parse for ExportedFn {
 
         // Check return type.
         match fn_all.sig.output {
-            syn::ReturnType::Type(_, ref ret_type) => {
+            syn::ReturnType::Type(.., ref ret_type) => {
                 match flatten_type_groups(ret_type.as_ref()) {
                     syn::Type::Ptr(_) => {
                         return Err(syn::Error::new(
@@ -425,10 +425,10 @@ impl ExportedFn {
 
     pub fn update_scope(&mut self, parent_scope: &ExportScope) {
         let keep = match (self.params.skip, parent_scope) {
-            (true, _) => false,
-            (_, ExportScope::PubOnly) => self.is_public(),
-            (_, ExportScope::Prefix(s)) => self.name().to_string().starts_with(s),
-            (_, ExportScope::All) => true,
+            (true, ..) => false,
+            (.., ExportScope::PubOnly) => self.is_public(),
+            (.., ExportScope::Prefix(s)) => self.name().to_string().starts_with(s),
+            (.., ExportScope::All) => true,
         };
         self.params.skip = !keep;
     }
@@ -502,7 +502,7 @@ impl ExportedFn {
 
     pub fn return_type(&self) -> Option<&syn::Type> {
         match self.signature.output {
-            syn::ReturnType::Type(_, ref ret_type) => Some(flatten_type_groups(ret_type)),
+            syn::ReturnType::Type(.., ref ret_type) => Some(flatten_type_groups(ret_type)),
             _ => None,
         }
     }

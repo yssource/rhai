@@ -52,7 +52,7 @@ pub mod array_functions {
             return Dynamic::UNIT;
         }
 
-        let (index, _) = calc_offset_len(array.len(), index, 0);
+        let (index, ..) = calc_offset_len(array.len(), index, 0);
 
         if index >= array.len() {
             Dynamic::UNIT
@@ -88,7 +88,7 @@ pub mod array_functions {
             return;
         }
 
-        let (index, _) = calc_offset_len(array.len(), index, 0);
+        let (index, ..) = calc_offset_len(array.len(), index, 0);
 
         if index < array.len() {
             array[index] = value;
@@ -182,7 +182,7 @@ pub mod array_functions {
             return;
         }
 
-        let (index, _) = calc_offset_len(array.len(), index, 0);
+        let (index, ..) = calc_offset_len(array.len(), index, 0);
 
         if index >= array.len() {
             array.push(item);
@@ -231,10 +231,11 @@ pub mod array_functions {
             }
 
             let check_sizes = match item.0 {
-                crate::types::dynamic::Union::Array(_, _, _)
-                | crate::types::dynamic::Union::Str(_, _, _) => true,
+                crate::types::dynamic::Union::Array(..) | crate::types::dynamic::Union::Str(..) => {
+                    true
+                }
                 #[cfg(not(feature = "no_object"))]
-                crate::types::dynamic::Union::Map(_, _, _) => true,
+                crate::types::dynamic::Union::Map(..) => true,
                 _ => false,
             };
 
@@ -651,7 +652,7 @@ pub mod array_functions {
                 mapper
                     .call_raw(&ctx, None, [item.clone()])
                     .or_else(|err| match *err {
-                        ERR::ErrorFunctionNotFound(fn_sig, _)
+                        ERR::ErrorFunctionNotFound(fn_sig, ..)
                             if fn_sig.starts_with(mapper.fn_name()) =>
                         {
                             mapper.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
@@ -740,7 +741,7 @@ pub mod array_functions {
             if filter
                 .call_raw(&ctx, None, [item.clone()])
                 .or_else(|err| match *err {
-                    ERR::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, ..)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
                         filter.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
@@ -828,7 +829,7 @@ pub mod array_functions {
             if ctx
                 .call_fn_raw(OP_EQUALS, true, false, &mut [item, &mut value.clone()])
                 .or_else(|err| match *err {
-                    ERR::ErrorFunctionNotFound(ref fn_sig, _) if fn_sig.starts_with(OP_EQUALS) => {
+                    ERR::ErrorFunctionNotFound(ref fn_sig, ..) if fn_sig.starts_with(OP_EQUALS) => {
                         if item.type_id() == value.type_id() {
                             // No default when comparing same type
                             Err(err)
@@ -914,13 +915,13 @@ pub mod array_functions {
             return Ok(-1);
         }
 
-        let (start, _) = calc_offset_len(array.len(), start, 0);
+        let (start, ..) = calc_offset_len(array.len(), start, 0);
 
         for (i, item) in array.iter_mut().enumerate().skip(start) {
             if ctx
                 .call_fn_raw(OP_EQUALS, true, false, &mut [item, &mut value.clone()])
                 .or_else(|err| match *err {
-                    ERR::ErrorFunctionNotFound(ref fn_sig, _) if fn_sig.starts_with(OP_EQUALS) => {
+                    ERR::ErrorFunctionNotFound(ref fn_sig, ..) if fn_sig.starts_with(OP_EQUALS) => {
                         if item.type_id() == value.type_id() {
                             // No default when comparing same type
                             Err(err)
@@ -1044,13 +1045,13 @@ pub mod array_functions {
             return Ok(-1);
         }
 
-        let (start, _) = calc_offset_len(array.len(), start, 0);
+        let (start, ..) = calc_offset_len(array.len(), start, 0);
 
         for (i, item) in array.iter().enumerate().skip(start) {
             if filter
                 .call_raw(&ctx, None, [item.clone()])
                 .or_else(|err| match *err {
-                    ERR::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, ..)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
                         filter.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
@@ -1149,7 +1150,7 @@ pub mod array_functions {
             if filter
                 .call_raw(&ctx, None, [item.clone()])
                 .or_else(|err| match *err {
-                    ERR::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, ..)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
                         filter.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
@@ -1236,7 +1237,7 @@ pub mod array_functions {
             if !filter
                 .call_raw(&ctx, None, [item.clone()])
                 .or_else(|err| match *err {
-                    ERR::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, ..)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
                         filter.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
@@ -1486,7 +1487,7 @@ pub mod array_functions {
             result = reducer
                 .call_raw(&ctx, None, [result.clone(), item.clone()])
                 .or_else(|err| match *err {
-                    ERR::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, ..)
                         if fn_sig.starts_with(reducer.fn_name()) =>
                     {
                         reducer.call_raw(&ctx, None, [result, item, (i as INT).into()])
@@ -1648,7 +1649,7 @@ pub mod array_functions {
             result = reducer
                 .call_raw(&ctx, None, [result.clone(), item.clone()])
                 .or_else(|err| match *err {
-                    ERR::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, ..)
                         if fn_sig.starts_with(reducer.fn_name()) =>
                     {
                         reducer.call_raw(&ctx, None, [result, item, ((len - 1 - i) as INT).into()])
@@ -1925,7 +1926,7 @@ pub mod array_functions {
             if filter
                 .call_raw(&ctx, None, [array[x].clone()])
                 .or_else(|err| match *err {
-                    ERR::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, ..)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
                         filter.call_raw(&ctx, None, [array[x].clone(), (i as INT).into()])
@@ -2121,7 +2122,7 @@ pub mod array_functions {
             if !filter
                 .call_raw(&ctx, None, [array[x].clone()])
                 .or_else(|err| match *err {
-                    ERR::ErrorFunctionNotFound(fn_sig, _)
+                    ERR::ErrorFunctionNotFound(fn_sig, ..)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
                         filter.call_raw(&ctx, None, [array[x].clone(), (i as INT).into()])
@@ -2311,7 +2312,7 @@ pub mod array_functions {
             if !ctx
                 .call_fn_raw(OP_EQUALS, true, false, &mut [a1, a2])
                 .or_else(|err| match *err {
-                    ERR::ErrorFunctionNotFound(ref fn_sig, _) if fn_sig.starts_with(OP_EQUALS) => {
+                    ERR::ErrorFunctionNotFound(ref fn_sig, ..) if fn_sig.starts_with(OP_EQUALS) => {
                         if a1.type_id() == a2.type_id() {
                             // No default when comparing same type
                             Err(err)

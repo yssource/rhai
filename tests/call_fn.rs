@@ -330,7 +330,7 @@ fn test_call_fn_events() -> Result<(), Box<EvalAltResult>> {
                 "update" => engine
                     .call_fn(scope, ast, "update", (event_data,))
                     .or_else(|err| match *err {
-                        EvalAltResult::ErrorFunctionNotFound(fn_name, _)
+                        EvalAltResult::ErrorFunctionNotFound(fn_name, ..)
                             if fn_name.starts_with("update") =>
                         {
                             // Default implementation of 'update' event handler

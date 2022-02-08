@@ -92,8 +92,8 @@ fn test_functions_global_module() -> Result<(), Box<EvalAltResult>> {
                 foo()
             }
         ").expect_err("should error"),
-        EvalAltResult::ErrorInFunctionCall(_, _, err, _)
-            if matches!(&*err, EvalAltResult::ErrorVariableNotFound(v, _) if v == "global::ANSWER")
+        EvalAltResult::ErrorInFunctionCall(.., err, _)
+            if matches!(&*err, EvalAltResult::ErrorVariableNotFound(v, ..) if v == "global::ANSWER")
     ));
 
     engine.register_result_fn(
@@ -110,8 +110,8 @@ fn test_functions_global_module() -> Result<(), Box<EvalAltResult>> {
                 global::LOCAL_VALUE
             });
         ").expect_err("should error"),
-        EvalAltResult::ErrorInFunctionCall(_, _, err, _)
-            if matches!(&*err, EvalAltResult::ErrorVariableNotFound(v, _) if v == "global::LOCAL_VALUE")
+        EvalAltResult::ErrorInFunctionCall(.., err, _)
+            if matches!(&*err, EvalAltResult::ErrorVariableNotFound(v, ..) if v == "global::LOCAL_VALUE")
     ));
 
     #[cfg(not(feature = "no_closure"))]

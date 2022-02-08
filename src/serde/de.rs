@@ -118,55 +118,55 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
 
     fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> RhaiResultOf<V::Value> {
         match self.value.0 {
-            Union::Unit(_, _, _) => self.deserialize_unit(visitor),
-            Union::Bool(_, _, _) => self.deserialize_bool(visitor),
-            Union::Str(_, _, _) => self.deserialize_str(visitor),
-            Union::Char(_, _, _) => self.deserialize_char(visitor),
+            Union::Unit(..) => self.deserialize_unit(visitor),
+            Union::Bool(..) => self.deserialize_bool(visitor),
+            Union::Str(..) => self.deserialize_str(visitor),
+            Union::Char(..) => self.deserialize_char(visitor),
 
             #[cfg(not(feature = "only_i32"))]
-            Union::Int(_, _, _) => self.deserialize_i64(visitor),
+            Union::Int(..) => self.deserialize_i64(visitor),
             #[cfg(feature = "only_i32")]
-            Union::Int(_, _, _) => self.deserialize_i32(visitor),
+            Union::Int(..) => self.deserialize_i32(visitor),
 
             #[cfg(not(feature = "no_float"))]
             #[cfg(not(feature = "f32_float"))]
-            Union::Float(_, _, _) => self.deserialize_f64(visitor),
+            Union::Float(..) => self.deserialize_f64(visitor),
             #[cfg(not(feature = "no_float"))]
             #[cfg(feature = "f32_float")]
-            Union::Float(_, _, _) => self.deserialize_f32(visitor),
+            Union::Float(..) => self.deserialize_f32(visitor),
 
             #[cfg(feature = "decimal")]
             #[cfg(not(feature = "f32_float"))]
-            Union::Decimal(_, _, _) => self.deserialize_f64(visitor),
+            Union::Decimal(..) => self.deserialize_f64(visitor),
             #[cfg(feature = "decimal")]
             #[cfg(feature = "f32_float")]
-            Union::Decimal(_, _, _) => self.deserialize_f32(visitor),
+            Union::Decimal(..) => self.deserialize_f32(visitor),
 
             #[cfg(not(feature = "no_index"))]
-            Union::Array(_, _, _) => self.deserialize_seq(visitor),
+            Union::Array(..) => self.deserialize_seq(visitor),
             #[cfg(not(feature = "no_index"))]
-            Union::Blob(_, _, _) => self.deserialize_bytes(visitor),
+            Union::Blob(..) => self.deserialize_bytes(visitor),
             #[cfg(not(feature = "no_object"))]
-            Union::Map(_, _, _) => self.deserialize_map(visitor),
-            Union::FnPtr(_, _, _) => self.type_error(),
+            Union::Map(..) => self.deserialize_map(visitor),
+            Union::FnPtr(..) => self.type_error(),
             #[cfg(not(feature = "no_std"))]
-            Union::TimeStamp(_, _, _) => self.type_error(),
+            Union::TimeStamp(..) => self.type_error(),
 
-            Union::Variant(ref value, _, _) if value.is::<i8>() => self.deserialize_i8(visitor),
-            Union::Variant(ref value, _, _) if value.is::<i16>() => self.deserialize_i16(visitor),
-            Union::Variant(ref value, _, _) if value.is::<i32>() => self.deserialize_i32(visitor),
-            Union::Variant(ref value, _, _) if value.is::<i64>() => self.deserialize_i64(visitor),
-            Union::Variant(ref value, _, _) if value.is::<i128>() => self.deserialize_i128(visitor),
-            Union::Variant(ref value, _, _) if value.is::<u8>() => self.deserialize_u8(visitor),
-            Union::Variant(ref value, _, _) if value.is::<u16>() => self.deserialize_u16(visitor),
-            Union::Variant(ref value, _, _) if value.is::<u32>() => self.deserialize_u32(visitor),
-            Union::Variant(ref value, _, _) if value.is::<u64>() => self.deserialize_u64(visitor),
-            Union::Variant(ref value, _, _) if value.is::<u128>() => self.deserialize_u128(visitor),
+            Union::Variant(ref value, ..) if value.is::<i8>() => self.deserialize_i8(visitor),
+            Union::Variant(ref value, ..) if value.is::<i16>() => self.deserialize_i16(visitor),
+            Union::Variant(ref value, ..) if value.is::<i32>() => self.deserialize_i32(visitor),
+            Union::Variant(ref value, ..) if value.is::<i64>() => self.deserialize_i64(visitor),
+            Union::Variant(ref value, ..) if value.is::<i128>() => self.deserialize_i128(visitor),
+            Union::Variant(ref value, ..) if value.is::<u8>() => self.deserialize_u8(visitor),
+            Union::Variant(ref value, ..) if value.is::<u16>() => self.deserialize_u16(visitor),
+            Union::Variant(ref value, ..) if value.is::<u32>() => self.deserialize_u32(visitor),
+            Union::Variant(ref value, ..) if value.is::<u64>() => self.deserialize_u64(visitor),
+            Union::Variant(ref value, ..) if value.is::<u128>() => self.deserialize_u128(visitor),
 
-            Union::Variant(_, _, _) => self.type_error(),
+            Union::Variant(..) => self.type_error(),
 
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(_, _, _) => self.type_error(),
+            Union::Shared(..) => self.type_error(),
         }
     }
 

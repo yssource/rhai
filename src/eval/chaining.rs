@@ -25,9 +25,9 @@ impl From<&Expr> for ChainType {
     fn from(expr: &Expr) -> Self {
         match expr {
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(_, _, _) => Self::Indexing,
+            Expr::Index(..) => Self::Indexing,
             #[cfg(not(feature = "no_object"))]
-            Expr::Dot(_, _, _) => Self::Dotting,
+            Expr::Dot(..) => Self::Dotting,
             expr => unreachable!("Expr::Index or Expr::Dot expected but gets {:?}", expr),
         }
     }
@@ -58,7 +58,7 @@ impl ChainArgument {
     #[must_use]
     pub fn into_index_value(self) -> Option<Dynamic> {
         match self {
-            Self::IndexValue(value, _) => Some(value),
+            Self::IndexValue(value, ..) => Some(value),
             #[cfg(not(feature = "no_object"))]
             _ => None,
         }
@@ -89,9 +89,9 @@ impl ChainArgument {
             #[cfg(not(feature = "no_object"))]
             ChainArgument::Property(pos) => *pos,
             #[cfg(not(feature = "no_object"))]
-            ChainArgument::MethodCallArgs(_, pos) => *pos,
+            ChainArgument::MethodCallArgs(.., pos) => *pos,
             #[cfg(not(feature = "no_index"))]
-            ChainArgument::IndexValue(_, pos) => *pos,
+            ChainArgument::IndexValue(.., pos) => *pos,
         }
     }
     /// Create n [`MethodCallArgs`][ChainArgument::MethodCallArgs].
@@ -193,7 +193,7 @@ impl Engine {
                                 true, root_pos, level,
                             ) {
                                 // Just ignore if there is no index setter
-                                if !matches!(*err, ERR::ErrorFunctionNotFound(_, _)) {
+                                if !matches!(*err, ERR::ErrorFunctionNotFound(..)) {
                                     return Err(err);
                                 }
                             }
@@ -225,9 +225,7 @@ impl Engine {
                             }
                             // Can't index - try to call an index setter
                             #[cfg(not(feature = "no_index"))]
-                            Err(err) if matches!(*err, ERR::ErrorIndexingType(_, _)) => {
-                                Some(new_val)
-                            }
+                            Err(err) if matches!(*err, ERR::ErrorIndexingType(..)) => Some(new_val),
                             // Any other error
                             Err(err) => return Err(err),
                         };
@@ -283,11 +281,11 @@ impl Engine {
                         result
                     }
                     // xxx.fn_name(...) = ???
-                    Expr::FnCall(_, _) if new_val.is_some() => {
+                    Expr::FnCall(..) if new_val.is_some() => {
                         unreachable!("method call cannot be assigned to")
                     }
                     // xxx.module::fn_name(...) - syntax error
-                    Expr::FnCall(_, _) => {
+                    Expr::FnCall(..) => {
                         unreachable!("function call in dot chain should not be namespace-qualified")
                     }
                     // {xxx:map}.id op= ???
@@ -333,14 +331,14 @@ impl Engine {
                         if op_info.is_some() {
                             let hash = crate::ast::FnCallHashes::from_native(*hash_get);
                             let args = &mut [target.as_mut()];
-                            let (mut orig_val, _) = self
+                            let (mut orig_val, ..) = self
                                 .exec_fn_call(
                                     None, global, state, lib, getter, hash, args, is_ref_mut, true,
                                     *pos, level,
                                 )
                                 .or_else(|err| match *err {
                                     // Try an indexer if property does not exist
-                                    ERR::ErrorDotExpr(_, _) => {
+                                    ERR::ErrorDotExpr(..) => {
                                         let prop = name.into();
                                         self.get_indexed_mut(
                                             global, state, lib, target, prop, *pos, false, true,
@@ -349,7 +347,7 @@ impl Engine {
                                         .map(|v| (v.take_or_clone(), false))
                                         .map_err(
                                             |idx_err| match *idx_err {
-                                                ERR::ErrorIndexingType(_, _) => err,
+                                                ERR::ErrorIndexingType(..) => err,
                                                 _ => idx_err,
                                             },
                                         )
@@ -381,7 +379,7 @@ impl Engine {
                         )
                         .or_else(|err| match *err {
                             // Try an indexer if property does not exist
-                            ERR::ErrorDotExpr(_, _) => {
+                            ERR::ErrorDotExpr(..) => {
                                 let args = &mut [target, &mut name.into(), &mut new_val];
                                 let fn_name = crate::engine::FN_IDX_SET;
                                 let hash_set =
@@ -394,7 +392,7 @@ impl Engine {
                                 )
                                 .map_err(
                                     |idx_err| match *idx_err {
-                                        ERR::ErrorIndexingType(_, _) => err,
+                                        ERR::ErrorIndexingType(..) => err,
                                         _ => idx_err,
                                     },
                                 )
@@ -417,7 +415,7 @@ impl Engine {
                         .map_or_else(
                             |err| match *err {
                                 // Try an indexer if property does not exist
-                                ERR::ErrorDotExpr(_, _) => {
+                                ERR::ErrorDotExpr(..) => {
                                     let prop = name.into();
                                     self.get_indexed_mut(
                                         global, state, lib, target, prop, *pos, false, true, level,
@@ -425,7 +423,7 @@ impl Engine {
                                     .map(|v| (v.take_or_clone(), false))
                                     .map_err(|idx_err| {
                                         match *idx_err {
-                                            ERR::ErrorIndexingType(_, _) => err,
+                                            ERR::ErrorIndexingType(..) => err,
                                             _ => idx_err,
                                         }
                                     })
@@ -433,7 +431,7 @@ impl Engine {
                                 _ => Err(err),
                             },
                             // Assume getters are always pure
-                            |(v, _)| Ok((v, false)),
+                            |(v, ..)| Ok((v, false)),
                         )
                     }
                     // {xxx:map}.sub_lhs[expr] | {xxx:map}.sub_lhs.expr
@@ -475,7 +473,7 @@ impl Engine {
                                 result?.0.into()
                             }
                             // {xxx:map}.module::fn_name(...) - syntax error
-                            Expr::FnCall(_, _) => unreachable!(
+                            Expr::FnCall(..) => unreachable!(
                                 "function call in dot chain should not be namespace-qualified"
                             ),
                             // Others - syntax error
@@ -509,14 +507,14 @@ impl Engine {
                                 let args = &mut arg_values[..1];
 
                                 // Assume getters are always pure
-                                let (mut val, _) = self
+                                let (mut val, ..) = self
                                     .exec_fn_call(
                                         None, global, state, lib, getter, hash_get, args,
                                         is_ref_mut, true, pos, level,
                                     )
                                     .or_else(|err| match *err {
                                         // Try an indexer if property does not exist
-                                        ERR::ErrorDotExpr(_, _) => {
+                                        ERR::ErrorDotExpr(..) => {
                                             let prop = name.into();
                                             self.get_indexed_mut(
                                                 global, state, lib, target, prop, pos, false, true,
@@ -525,7 +523,7 @@ impl Engine {
                                             .map(|v| (v.take_or_clone(), false))
                                             .map_err(
                                                 |idx_err| match *idx_err {
-                                                    ERR::ErrorIndexingType(_, _) => err,
+                                                    ERR::ErrorIndexingType(..) => err,
                                                     _ => idx_err,
                                                 },
                                             )
@@ -565,7 +563,7 @@ impl Engine {
                                     .or_else(
                                         |err| match *err {
                                             // Try an indexer if property does not exist
-                                            ERR::ErrorDotExpr(_, _) => {
+                                            ERR::ErrorDotExpr(..) => {
                                                 let args =
                                                     &mut [target.as_mut(), &mut name.into(), val];
                                                 let fn_name = crate::engine::FN_IDX_SET;
@@ -578,7 +576,7 @@ impl Engine {
                                                     args, is_ref_mut, true, pos, level,
                                                 )
                                                 .or_else(|idx_err| match *idx_err {
-                                                    ERR::ErrorIndexingType(_, _) => {
+                                                    ERR::ErrorIndexingType(..) => {
                                                         // If there is no setter, no need to feed it back because
                                                         // the property is read-only
                                                         Ok((Dynamic::UNIT, false))
@@ -621,7 +619,7 @@ impl Engine {
                                 .map_err(|err| err.fill_position(pos))
                             }
                             // xxx.module::fn_name(...) - syntax error
-                            Expr::FnCall(_, _) => unreachable!(
+                            Expr::FnCall(..) => unreachable!(
                                 "function call in dot chain should not be namespace-qualified"
                             ),
                             // Others - syntax error
@@ -665,14 +663,14 @@ impl Engine {
 
         match lhs {
             // id.??? or id[???]
-            Expr::Variable(_, var_pos, x) => {
+            Expr::Variable(.., var_pos, x) => {
                 #[cfg(feature = "debugging")]
                 self.run_debugger(scope, global, state, lib, this_ptr, lhs, level)?;
 
                 #[cfg(not(feature = "unchecked"))]
                 self.inc_operations(&mut global.num_operations, *var_pos)?;
 
-                let (mut target, _) =
+                let (mut target, ..) =
                     self.search_namespace(scope, global, state, lib, this_ptr, lhs, level)?;
 
                 let obj_ptr = &mut target;
@@ -682,7 +680,7 @@ impl Engine {
                     global, state, lib, &mut None, obj_ptr, root, expr, rhs, term, idx_values,
                     chain_type, level, new_val,
                 )
-                .map(|(v, _)| v)
+                .map(|(v, ..)| v)
                 .map_err(|err| err.fill_position(op_pos))
             }
             // {expr}.??? = ??? or {expr}[???] = ???
@@ -696,7 +694,7 @@ impl Engine {
                     global, state, lib, this_ptr, obj_ptr, root, expr, rhs, term, idx_values,
                     chain_type, level, new_val,
                 )
-                .map(|(v, _)| if is_assignment { Dynamic::UNIT } else { v })
+                .map(|(v, ..)| if is_assignment { Dynamic::UNIT } else { v })
                 .map_err(|err| err.fill_position(op_pos))
             }
         }
@@ -726,7 +724,7 @@ impl Engine {
 
         match expr {
             #[cfg(not(feature = "no_object"))]
-            Expr::FnCall(x, _) if _parent_chain_type == ChainType::Dotting && !x.is_qualified() => {
+            Expr::FnCall(x, ..) if _parent_chain_type == ChainType::Dotting && !x.is_qualified() => {
                 let crate::ast::FnCallExpr {
                     args, constants, ..
                 } = x.as_ref();
@@ -748,29 +746,29 @@ impl Engine {
                 idx_values.push(super::ChainArgument::from_fn_call_args(values, pos));
             }
             #[cfg(not(feature = "no_object"))]
-            Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dotting => {
+            Expr::FnCall(..) if _parent_chain_type == ChainType::Dotting => {
                 unreachable!("function call in dot chain should not be namespace-qualified")
             }
 
             #[cfg(not(feature = "no_object"))]
-            Expr::Property(_, pos) if _parent_chain_type == ChainType::Dotting => {
+            Expr::Property(.., pos) if _parent_chain_type == ChainType::Dotting => {
                 idx_values.push(super::ChainArgument::Property(*pos))
             }
-            Expr::Property(_, _) => unreachable!("unexpected Expr::Property for indexing"),
+            Expr::Property(..) => unreachable!("unexpected Expr::Property for indexing"),
 
-            Expr::Index(x, term, _) | Expr::Dot(x, term, _) if !terminate_chaining => {
+            Expr::Index(x, term, ..) | Expr::Dot(x, term, ..) if !terminate_chaining => {
                 let crate::ast::BinaryExpr { lhs, rhs, .. } = x.as_ref();
 
                 // Evaluate in left-to-right order
                 let lhs_arg_val = match lhs {
                     #[cfg(not(feature = "no_object"))]
-                    Expr::Property(_, pos) if _parent_chain_type == ChainType::Dotting => {
+                    Expr::Property(.., pos) if _parent_chain_type == ChainType::Dotting => {
                         super::ChainArgument::Property(*pos)
                     }
-                    Expr::Property(_, _) => unreachable!("unexpected Expr::Property for indexing"),
+                    Expr::Property(..) => unreachable!("unexpected Expr::Property for indexing"),
 
                     #[cfg(not(feature = "no_object"))]
-                    Expr::FnCall(x, _)
+                    Expr::FnCall(x, ..)
                         if _parent_chain_type == ChainType::Dotting && !x.is_qualified() =>
                     {
                         let crate::ast::FnCallExpr {
@@ -793,7 +791,7 @@ impl Engine {
                         super::ChainArgument::from_fn_call_args(values, pos)
                     }
                     #[cfg(not(feature = "no_object"))]
-                    Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dotting => {
+                    Expr::FnCall(..) if _parent_chain_type == ChainType::Dotting => {
                         unreachable!("function call in dot chain should not be namespace-qualified")
                     }
                     #[cfg(not(feature = "no_object"))]
@@ -862,7 +860,7 @@ impl Engine {
 
         match target {
             #[cfg(not(feature = "no_index"))]
-            Dynamic(Union::Array(arr, _, _)) => {
+            Dynamic(Union::Array(arr, ..)) => {
                 // val_array[idx]
                 let index = idx
                     .as_int()
@@ -876,7 +874,7 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_index"))]
-            Dynamic(Union::Blob(arr, _, _)) => {
+            Dynamic(Union::Blob(arr, ..)) => {
                 // val_blob[idx]
                 let index = idx
                     .as_int()
@@ -896,7 +894,7 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_object"))]
-            Dynamic(Union::Map(map, _, _)) => {
+            Dynamic(Union::Map(map, ..)) => {
                 // val_map[idx]
                 let index = idx.read_lock::<crate::ImmutableString>().ok_or_else(|| {
                     self.make_type_mismatch_err::<crate::ImmutableString>(idx.type_name(), pos)
@@ -913,7 +911,7 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_index"))]
-            Dynamic(Union::Int(value, _, _))
+            Dynamic(Union::Int(value, ..))
                 if idx.is::<crate::ExclusiveRange>() || idx.is::<crate::InclusiveRange>() =>
             {
                 // val_int[range]
@@ -984,7 +982,7 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_index"))]
-            Dynamic(Union::Int(value, _, _)) => {
+            Dynamic(Union::Int(value, ..)) => {
                 // val_int[idx]
                 let index = idx
                     .as_int()
@@ -1006,7 +1004,7 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_index"))]
-            Dynamic(Union::Str(s, _, _)) => {
+            Dynamic(Union::Str(s, ..)) => {
                 // val_string[idx]
                 let index = idx
                     .as_int()
@@ -1052,7 +1050,7 @@ impl Engine {
                 self.exec_fn_call(
                     None, global, state, lib, fn_name, hash_get, args, true, true, pos, level,
                 )
-                .map(|(v, _)| v.into())
+                .map(|(v, ..)| v.into())
             }
 
             _ => Err(ERR::ErrorIndexingType(

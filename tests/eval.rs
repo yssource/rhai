@@ -171,7 +171,7 @@ fn test_eval_disabled() -> Result<(), Box<EvalAltResult>> {
             .compile(r#"eval("40 + 2")"#)
             .expect_err("should error")
             .0,
-        ParseErrorType::BadInput(LexError::ImproperSymbol(err, _)) if err == "eval"
+        ParseErrorType::BadInput(LexError::ImproperSymbol(err, ..)) if err == "eval"
     ));
 
     Ok(())

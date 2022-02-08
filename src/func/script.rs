@@ -103,7 +103,7 @@ impl Engine {
                 scope
                     .iter()
                     .skip(orig_scope_len)
-                    .map(|(_, _, v)| v.clone())
+                    .map(|(.., v)| v.clone())
                     .collect(),
                 global.source.clone(),
                 pos,
@@ -161,9 +161,9 @@ impl Engine {
             )
             .or_else(|err| match *err {
                 // Convert return statement to return value
-                ERR::Return(x, _) => Ok(x),
+                ERR::Return(x, ..) => Ok(x),
                 // Error in sub function call
-                ERR::ErrorInFunctionCall(name, src, err, _) => {
+                ERR::ErrorInFunctionCall(name, src, err, ..) => {
                     let fn_name = if src.is_empty() {
                         format!("{} < {}", name, fn_def.name)
                     } else {
@@ -185,7 +185,7 @@ impl Engine {
         {
             let trigger = match global.debugger.status {
                 crate::eval::DebuggerStatus::FunctionExit(n) => n >= level,
-                crate::eval::DebuggerStatus::Next(_, true) => true,
+                crate::eval::DebuggerStatus::Next(.., true) => true,
                 _ => false,
             };
             if trigger {

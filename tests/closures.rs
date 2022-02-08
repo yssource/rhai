@@ -251,7 +251,7 @@ fn test_closures_data_race() -> Result<(), Box<EvalAltResult>> {
                 "
             )
             .expect_err("should error"),
-        EvalAltResult::ErrorDataRace(_, _)
+        EvalAltResult::ErrorDataRace(..)
     ));
 
     Ok(())

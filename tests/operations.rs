@@ -138,7 +138,7 @@ fn test_max_operations_eval() -> Result<(), Box<EvalAltResult>> {
                 "#
             )
             .expect_err("should error"),
-        EvalAltResult::ErrorInFunctionCall(_, _, err, _) if matches!(*err, EvalAltResult::ErrorTooManyOperations(_))
+        EvalAltResult::ErrorInFunctionCall(.., err, _) if matches!(*err, EvalAltResult::ErrorTooManyOperations(_))
     ));
 
     Ok(())
@@ -163,7 +163,7 @@ fn test_max_operations_progress() -> Result<(), Box<EvalAltResult>> {
         *engine
             .run("for x in 0..500 {}")
             .expect_err("should error"),
-        EvalAltResult::ErrorTerminated(x, _) if x.as_int()? == 42
+        EvalAltResult::ErrorTerminated(x, ..) if x.as_int()? == 42
     ));
 
     Ok(())

@@ -99,7 +99,7 @@ impl Engine {
         ) {
             ast.walk(&mut |path| match path.last().unwrap() {
                 // Collect all `import` statements with a string constant path
-                ASTNode::Stmt(Stmt::Import(Expr::StringConstant(s, _), _, _))
+                ASTNode::Stmt(Stmt::Import(Expr::StringConstant(s, ..), ..))
                     if !resolver.contains_path(s) && !imports.contains(s.as_str()) =>
                 {
                     imports.insert(s.clone().into());

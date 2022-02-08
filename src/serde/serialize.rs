@@ -15,26 +15,26 @@ use crate::types::dynamic::Variant;
 impl Serialize for Dynamic {
     fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
         match self.0 {
-            Union::Unit(_, _, _) => ser.serialize_unit(),
-            Union::Bool(x, _, _) => ser.serialize_bool(x),
-            Union::Str(ref s, _, _) => ser.serialize_str(s.as_str()),
-            Union::Char(c, _, _) => ser.serialize_str(&c.to_string()),
+            Union::Unit(..) => ser.serialize_unit(),
+            Union::Bool(x, ..) => ser.serialize_bool(x),
+            Union::Str(ref s, ..) => ser.serialize_str(s.as_str()),
+            Union::Char(c, ..) => ser.serialize_str(&c.to_string()),
 
             #[cfg(not(feature = "only_i32"))]
-            Union::Int(x, _, _) => ser.serialize_i64(x),
+            Union::Int(x, ..) => ser.serialize_i64(x),
             #[cfg(feature = "only_i32")]
-            Union::Int(x, _, _) => ser.serialize_i32(x),
+            Union::Int(x, ..) => ser.serialize_i32(x),
 
             #[cfg(not(feature = "no_float"))]
             #[cfg(not(feature = "f32_float"))]
-            Union::Float(x, _, _) => ser.serialize_f64(*x),
+            Union::Float(x, ..) => ser.serialize_f64(*x),
             #[cfg(not(feature = "no_float"))]
             #[cfg(feature = "f32_float")]
-            Union::Float(x, _, _) => ser.serialize_f32(*x),
+            Union::Float(x, ..) => ser.serialize_f32(*x),
 
             #[cfg(feature = "decimal")]
             #[cfg(not(feature = "f32_float"))]
-            Union::Decimal(ref x, _, _) => {
+            Union::Decimal(ref x, ..) => {
                 use rust_decimal::prelude::ToPrimitive;
 
                 if let Some(v) = x.to_f64() {
@@ -45,7 +45,7 @@ impl Serialize for Dynamic {
             }
             #[cfg(feature = "decimal")]
             #[cfg(feature = "f32_float")]
-            Union::Decimal(ref x, _, _) => {
+            Union::Decimal(ref x, ..) => {
                 use rust_decimal::prelude::ToPrimitive;
 
                 if let Some(v) = x.to_f32() {
@@ -56,28 +56,28 @@ impl Serialize for Dynamic {
             }
 
             #[cfg(not(feature = "no_index"))]
-            Union::Array(ref a, _, _) => (**a).serialize(ser),
+            Union::Array(ref a, ..) => (**a).serialize(ser),
             #[cfg(not(feature = "no_index"))]
-            Union::Blob(ref a, _, _) => (**a).serialize(ser),
+            Union::Blob(ref a, ..) => (**a).serialize(ser),
             #[cfg(not(feature = "no_object"))]
-            Union::Map(ref m, _, _) => {
+            Union::Map(ref m, ..) => {
                 let mut map = ser.serialize_map(Some(m.len()))?;
                 m.iter()
                     .try_for_each(|(k, v)| map.serialize_entry(k.as_str(), v))?;
                 map.end()
             }
-            Union::FnPtr(ref f, _, _) => ser.serialize_str(f.fn_name()),
+            Union::FnPtr(ref f, ..) => ser.serialize_str(f.fn_name()),
             #[cfg(not(feature = "no_std"))]
-            Union::TimeStamp(ref x, _, _) => ser.serialize_str(x.as_ref().type_name()),
+            Union::TimeStamp(ref x, ..) => ser.serialize_str(x.as_ref().type_name()),
 
-            Union::Variant(ref v, _, _) => ser.serialize_str((***v).type_name()),
+            Union::Variant(ref v, ..) => ser.serialize_str((***v).type_name()),
 
             #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "sync"))]
-            Union::Shared(ref cell, _, _) => cell.borrow().serialize(ser),
+            Union::Shared(ref cell, ..) => cell.borrow().serialize(ser),
             #[cfg(not(feature = "no_closure"))]
             #[cfg(feature = "sync")]
-            Union::Shared(ref cell, _, _) => cell.read().unwrap().serialize(ser),
+            Union::Shared(ref cell, ..) => cell.read().unwrap().serialize(ser),
         }
     }
 }

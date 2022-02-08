@@ -6,12 +6,12 @@ fn test_throw() {
 
     assert!(matches!(
         *engine.run("if true { throw 42 }").expect_err("expects error"),
-        EvalAltResult::ErrorRuntime(s, _) if s.as_int().unwrap() == 42
+        EvalAltResult::ErrorRuntime(s, ..) if s.as_int().unwrap() == 42
     ));
 
     assert!(matches!(
         *engine.run(r#"throw"#).expect_err("expects error"),
-        EvalAltResult::ErrorRuntime(s, _) if s.is::<()>()
+        EvalAltResult::ErrorRuntime(s, ..) if s.is::<()>()
     ));
 }
 
@@ -96,7 +96,7 @@ fn test_try_catch() -> Result<(), Box<EvalAltResult>> {
         *engine
             .run("try { 42/0; } catch { throw; }")
             .expect_err("expects error"),
-        EvalAltResult::ErrorArithmetic(_, _)
+        EvalAltResult::ErrorArithmetic(..)
     ));
 
     Ok(())

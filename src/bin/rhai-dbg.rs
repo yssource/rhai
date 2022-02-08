@@ -584,7 +584,7 @@ fn main() {
     while let Err(err) = engine.run_ast_with_scope(&mut Scope::new(), &main_ast) {
         match *err {
             // Loop back to restart
-            EvalAltResult::ErrorTerminated(_, _) => (),
+            EvalAltResult::ErrorTerminated(..) => (),
             // Break evaluation
             _ => {
                 print_error(&script, *err);

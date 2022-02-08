@@ -323,7 +323,7 @@ impl Engine {
         match result {
             Ok(ref mut r) => {
                 // Concentrate all empty strings into one instance to save memory
-                if let Dynamic(Union::Str(s, _, _)) = r {
+                if let Dynamic(Union::Str(s, ..)) = r {
                     if s.is_empty() {
                         if !s.ptr_eq(&self.empty_string) {
                             *s = self.const_empty_string();

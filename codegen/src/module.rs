@@ -69,7 +69,7 @@ impl ExportedParams for ExportedModParams {
                 ("export_all", Some(s)) => {
                     return Err(syn::Error::new(s.span(), "extraneous value"))
                 }
-                (attr, _) => {
+                (attr, ..) => {
                     return Err(syn::Error::new(
                         key.span(),
                         format!("unknown attribute '{}'", attr),
@@ -109,7 +109,7 @@ impl Parse for Module {
         let mut consts = Vec::new();
         let mut sub_modules = Vec::new();
 
-        if let Some((_, ref mut content)) = mod_all.content {
+        if let Some((.., ref mut content)) = mod_all.content {
             // Gather and parse functions.
             fns = content
                 .iter_mut()
@@ -211,10 +211,10 @@ impl Module {
 
     pub fn update_scope(&mut self, parent_scope: &ExportScope) {
         let keep = match (self.params.skip, parent_scope) {
-            (true, _) => false,
-            (_, ExportScope::PubOnly) => matches!(self.mod_all.vis, syn::Visibility::Public(_)),
-            (_, ExportScope::Prefix(s)) => self.mod_all.ident.to_string().starts_with(s),
-            (_, ExportScope::All) => true,
+            (true, ..) => false,
+            (.., ExportScope::PubOnly) => matches!(self.mod_all.vis, syn::Visibility::Public(_)),
+            (.., ExportScope::Prefix(s)) => self.mod_all.ident.to_string().starts_with(s),
+            (.., ExportScope::All) => true,
         };
         self.params.skip = !keep;
     }
@@ -245,7 +245,7 @@ impl Module {
         } = self;
         let mod_vis = mod_all.vis;
         let mod_name = mod_all.ident.clone();
-        let (_, orig_content) = mod_all.content.take().unwrap();
+        let (.., orig_content) = mod_all.content.take().unwrap();
         let mod_attrs = mem::take(&mut mod_all.attrs);
 
         if !params.skip {
@@ -312,7 +312,7 @@ impl Module {
     pub fn content(&self) -> Option<&[syn::Item]> {
         match self.mod_all {
             syn::ItemMod {
-                content: Some((_, ref vec)),
+                content: Some((.., ref vec)),
                 ..
             } => Some(vec),
             _ => None,

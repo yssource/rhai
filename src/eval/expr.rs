@@ -53,7 +53,7 @@ impl Engine {
         level: usize,
     ) -> RhaiResultOf<(Target<'s>, Position)> {
         match expr {
-            Expr::Variable(Some(_), _, _) => {
+            Expr::Variable(Some(_), ..) => {
                 self.search_scope_only(scope, global, state, lib, this_ptr, expr, level)
             }
             Expr::Variable(None, _var_pos, v) => match v.as_ref() {
@@ -80,7 +80,7 @@ impl Engine {
                                 Ok((target.into(), *_var_pos))
                             }
                             Err(err) => Err(match *err {
-                                ERR::ErrorVariableNotFound(_, _) => ERR::ErrorVariableNotFound(
+                                ERR::ErrorVariableNotFound(..) => ERR::ErrorVariableNotFound(
                                     format!(
                                         "{}{}{}",
                                         namespace,
@@ -155,7 +155,7 @@ impl Engine {
                 }
             }
             _ if state.always_search_scope => (0, expr.start_position()),
-            Expr::Variable(Some(i), pos, _) => (i.get() as usize, *pos),
+            Expr::Variable(Some(i), pos, ..) => (i.get() as usize, *pos),
             Expr::Variable(None, pos, v) => (v.0.map(NonZeroUsize::get).unwrap_or(0), *pos),
             _ => unreachable!("Expr::Variable expected but gets {:?}", expr),
         };
@@ -270,7 +270,7 @@ impl Engine {
 
         // Function calls should account for a relatively larger portion of expressions because
         // binary operators are also function calls.
-        if let Expr::FnCall(x, _) = expr {
+        if let Expr::FnCall(x, ..) = expr {
             #[cfg(feature = "debugging")]
             let reset_debugger =
                 self.run_debugger_with_reset(scope, global, state, lib, this_ptr, expr, level)?;
@@ -304,7 +304,7 @@ impl Engine {
                     .ok_or_else(|| ERR::ErrorUnboundThis(*var_pos).into())
             } else {
                 self.search_namespace(scope, global, state, lib, this_ptr, expr, level)
-                    .map(|(val, _)| val.take_or_clone())
+                    .map(|(val, ..)| val.take_or_clone())
             };
         }
 
@@ -317,13 +317,13 @@ impl Engine {
 
         let result = match expr {
             // Constants
-            Expr::DynamicConstant(x, _) => Ok(x.as_ref().clone()),
-            Expr::IntegerConstant(x, _) => Ok((*x).into()),
+            Expr::DynamicConstant(x, ..) => Ok(x.as_ref().clone()),
+            Expr::IntegerConstant(x, ..) => Ok((*x).into()),
             #[cfg(not(feature = "no_float"))]
-            Expr::FloatConstant(x, _) => Ok((*x).into()),
-            Expr::StringConstant(x, _) => Ok(x.clone().into()),
-            Expr::CharConstant(x, _) => Ok((*x).into()),
-            Expr::BoolConstant(x, _) => Ok((*x).into()),
+            Expr::FloatConstant(x, ..) => Ok((*x).into()),
+            Expr::StringConstant(x, ..) => Ok(x.clone().into()),
+            Expr::CharConstant(x, ..) => Ok((*x).into()),
+            Expr::BoolConstant(x, ..) => Ok((*x).into()),
             Expr::Unit(_) => Ok(Dynamic::UNIT),
 
             // `... ${...} ...`
@@ -364,7 +364,7 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_index"))]
-            Expr::Array(x, _) => {
+            Expr::Array(x, ..) => {
                 let mut arr = crate::Array::with_capacity(x.len());
                 let mut result = Ok(Dynamic::UNIT);
 
@@ -402,7 +402,7 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_object"))]
-            Expr::Map(x, _) => {
+            Expr::Map(x, ..) => {
                 let mut map = x.1.clone();
                 let mut result = Ok(Dynamic::UNIT);
 
@@ -440,7 +440,7 @@ impl Engine {
                 result.map(|_| map.into())
             }
 
-            Expr::And(x, _) => {
+            Expr::And(x, ..) => {
                 let lhs = self
                     .eval_expr(scope, global, state, lib, this_ptr, &x.lhs, level)
                     .and_then(|v| {
@@ -463,7 +463,7 @@ impl Engine {
                 }
             }
 
-            Expr::Or(x, _) => {
+            Expr::Or(x, ..) => {
                 let lhs = self
                     .eval_expr(scope, global, state, lib, this_ptr, &x.lhs, level)
                     .and_then(|v| {
@@ -519,12 +519,12 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(_, _, _) => {
+            Expr::Index(..) => {
                 self.eval_dot_index_chain(scope, global, state, lib, this_ptr, expr, level, None)
             }
 
             #[cfg(not(feature = "no_object"))]
-            Expr::Dot(_, _, _) => {
+            Expr::Dot(..) => {
                 self.eval_dot_index_chain(scope, global, state, lib, this_ptr, expr, level, None)
             }
 
