@@ -10,7 +10,7 @@ const HISTORY_FILE: &str = ".rhai-repl-history";
 
 /// Pretty-print error.
 fn print_error(input: &str, mut err: EvalAltResult) {
-    let lines: Vec<_> = input.trim().split('\n').collect();
+    let lines: Vec<_> = input.split('\n').collect();
     let pos = err.take_position();
 
     let line_no = if lines.len() > 1 {
@@ -344,13 +344,13 @@ fn main() {
                     // Line continuation
                     Ok(mut line) if line.ends_with("\\") => {
                         line.pop();
-                        input += line.trim_end();
+                        input += &line;
                         input.push('\n');
                     }
                     Ok(line) => {
-                        input += line.trim_end();
-                        if !input.is_empty() && !input.starts_with('!') && input.trim() != "history"
-                        {
+                        input += &line;
+                        let cmd = input.trim();
+                        if !cmd.is_empty() && !cmd.starts_with('!') && cmd.trim() != "history" {
                             if rl.add_history_entry(input.clone()) {
                                 history_offset += 1;
                             }
@@ -368,14 +368,14 @@ fn main() {
             }
         }
 
-        let script = input.trim();
+        let cmd = input.trim();
 
-        if script.is_empty() {
+        if cmd.is_empty() {
             continue;
         }
 
         // Implement standard commands
-        match script {
+        match cmd {
             "help" => {
                 print_help();
                 continue;
@@ -473,8 +473,8 @@ fn main() {
                 }
                 continue;
             }
-            _ if script.starts_with("!?") => {
-                let text = script[2..].trim();
+            _ if cmd.starts_with("!?") => {
+                let text = cmd[2..].trim();
                 if let Some((n, line)) = rl
                     .history()
                     .iter()
@@ -489,8 +489,8 @@ fn main() {
                 }
                 continue;
             }
-            _ if script.starts_with('!') => {
-                if let Ok(num) = script[1..].parse::<usize>() {
+            _ if cmd.starts_with('!') => {
+                if let Ok(num) = cmd[1..].parse::<usize>() {
                     if num >= history_offset {
                         if let Some(line) = rl.history().get(num - history_offset) {
                             replacement = Some(line.clone());
@@ -499,7 +499,7 @@ fn main() {
                         }
                     }
                 } else {
-                    let prefix = script[1..].trim();
+                    let prefix = cmd[1..].trim();
                     if let Some((n, line)) = rl
                         .history()
                         .iter()
@@ -512,14 +512,14 @@ fn main() {
                         continue;
                     }
                 }
-                eprintln!("History line not found: {}", &script[1..]);
+                eprintln!("History line not found: {}", &cmd[1..]);
                 continue;
             }
             _ => (),
         }
 
         match engine
-            .compile_with_scope(&scope, &script)
+            .compile_with_scope(&scope, &input)
             .map_err(Into::into)
             .and_then(|r| {
                 ast_u = r.clone();
