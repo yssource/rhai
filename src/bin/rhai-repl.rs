@@ -60,6 +60,7 @@ fn print_help() {
     #[cfg(feature = "metadata")]
     println!("json       => output all functions in JSON format");
     println!("ast        => print the last AST (optimized)");
+    #[cfg(not(feature = "no_optimize"))]
     println!("astu       => print the last raw, un-optimized AST");
     println!();
     println!("press Ctrl-Enter or end a line with `\\`");
@@ -311,6 +312,7 @@ fn main() {
     let mut history_offset = 1;
 
     let mut main_ast = AST::empty();
+    #[cfg(not(feature = "no_optimize"))]
     let mut ast_u = AST::empty();
     let mut ast = AST::empty();
 
@@ -429,6 +431,7 @@ fn main() {
                 print_scope(&scope);
                 continue;
             }
+            #[cfg(not(feature = "no_optimize"))]
             "astu" => {
                 // print the last un-optimized AST
                 println!("{:#?}\n", ast_u);
@@ -522,10 +525,10 @@ fn main() {
             .compile_with_scope(&scope, &input)
             .map_err(Into::into)
             .and_then(|r| {
-                ast_u = r.clone();
-
                 #[cfg(not(feature = "no_optimize"))]
                 {
+                    ast_u = r.clone();
+
                     ast = engine.optimize_ast(&scope, r, optimize_level);
                 }
 
