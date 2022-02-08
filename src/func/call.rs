@@ -46,11 +46,13 @@ impl<'a> ArgBackup<'a> {
     /// This function replaces the first argument of a method call with a clone copy.
     /// This is to prevent a pure function unintentionally consuming the first argument.
     ///
-    /// `restore_first_arg` must be called before the end of the scope to prevent the shorter lifetime from leaking.
+    /// `restore_first_arg` must be called before the end of the scope to prevent the shorter
+    /// lifetime from leaking.
     ///
     /// # Safety
     ///
-    /// This method blindly casts a reference to another lifetime, which saves allocation and string cloning.
+    /// This method blindly casts a reference to another lifetime, which saves allocation and
+    /// string cloning.
     ///
     /// As long as `restore_first_arg` is called before the end of the scope, the shorter lifetime
     /// will not leak.
@@ -71,8 +73,8 @@ impl<'a> ArgBackup<'a> {
         // Blindly casting a reference to another lifetime saves allocation and string cloning,
         // but must be used with the utmost care.
         //
-        // We can do this here because, before the end of this scope, we'd restore the original reference
-        // via `restore_first_arg`. Therefore this shorter lifetime does not leak.
+        // We can do this here because, before the end of this scope, we'd restore the original
+        // reference via `restore_first_arg`. Therefore this shorter lifetime does not leak.
         self.orig_mut = Some(mem::replace(&mut args[0], unsafe {
             mem::transmute(&mut self.value_copy)
         }));
@@ -81,8 +83,8 @@ impl<'a> ArgBackup<'a> {
     ///
     /// # Safety
     ///
-    /// If `change_first_arg_to_copy` has been called, this function **MUST** be called _BEFORE_ exiting
-    /// the current scope.  Otherwise it is undefined behavior as the shorter lifetime will leak.
+    /// If `change_first_arg_to_copy` has been called, this function **MUST** be called _BEFORE_
+    /// exiting the current scope.  Otherwise it is undefined behavior as the shorter lifetime will leak.
     #[inline(always)]
     fn restore_first_arg(mut self, args: &mut FnCallArgs<'a>) {
         if let Some(p) = self.orig_mut.take() {

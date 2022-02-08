@@ -72,8 +72,8 @@ impl Expression<'_> {
     pub fn get_string_value(&self) -> Option<&str> {
         match self.0 {
             #[cfg(not(feature = "no_module"))]
-            Expr::Variable(.., _, x) if x.1.is_some() => None,
-            Expr::Variable(.., _, x) => Some(x.2.as_str()),
+            Expr::Variable(.., x) if x.1.is_some() => None,
+            Expr::Variable(.., x) => Some(x.2.as_str()),
             Expr::StringConstant(x, ..) => Some(x.as_str()),
             _ => None,
         }
@@ -94,19 +94,19 @@ impl Expression<'_> {
     pub fn get_literal_value<T: Variant>(&self) -> Option<T> {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
         match self.0 {
-            Expr::IntegerConstant(x, ..) => reify!(*x, |x: T| Some(x), || None),
+            Expr::IntegerConstant(x, ..) => reify!(*x => Option<T>),
 
             #[cfg(not(feature = "no_float"))]
-            Expr::FloatConstant(x, ..) => reify!(*x, |x: T| Some(x), || None),
+            Expr::FloatConstant(x, ..) => reify!(*x => Option<T>),
 
-            Expr::CharConstant(x, ..) => reify!(*x, |x: T| Some(x), || None),
-            Expr::StringConstant(x, ..) => reify!(x.clone(), |x: T| Some(x), || None),
-            Expr::Variable(.., _, x) => {
+            Expr::CharConstant(x, ..) => reify!(*x => Option<T>),
+            Expr::StringConstant(x, ..) => reify!(x.clone() => Option<T>),
+            Expr::Variable(.., x) => {
                 let x: ImmutableString = x.2.clone().into();
-                reify!(x, |x: T| Some(x), || None)
+                reify!(x => Option<T>)
             }
-            Expr::BoolConstant(x, ..) => reify!(*x, |x: T| Some(x), || None),
-            Expr::Unit(_) => reify!((), |x: T| Some(x), || None),
+            Expr::BoolConstant(x, ..) => reify!(*x => Option<T>),
+            Expr::Unit(..) => reify!(() => Option<T>),
 
             _ => None,
         }

@@ -4,9 +4,6 @@
 #[macro_export]
 macro_rules! reify {
     ($old:ident, |$new:ident : $t:ty| $code:expr, || $fallback:expr) => {{
-        #[allow(unused_imports)]
-        use std::any::Any;
-
         if std::any::TypeId::of::<$t>() == std::any::Any::type_id(&$old) {
             // SAFETY: This is safe because we check to make sure the two types are
             // actually the same type.
@@ -25,5 +22,19 @@ macro_rules! reify {
     };
     ($old:expr, |$new:ident : $t:ty| $code:expr) => {
         reify!($old, |$new: $t| $code, || ())
+    };
+
+    ($old:ident => Option<$t:ty>) => {
+        reify!($old, |v: $t| Some(v), || None)
+    };
+    ($old:expr => Option<$t:ty>) => {
+        reify!($old, |v: $t| Some(v), || None)
+    };
+
+    ($old:ident => $t:ty) => {
+        reify!($old, |v: $t| v, || unreachable!())
+    };
+    ($old:expr => $t:ty) => {
+        reify!($old, |v: $t| v, || unreachable!())
     };
 }
