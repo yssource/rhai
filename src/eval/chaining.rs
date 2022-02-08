@@ -4,7 +4,9 @@
 use super::{EvalState, GlobalRuntimeState, Target};
 use crate::ast::{Expr, OpAssignment};
 use crate::types::dynamic::Union;
-use crate::{Dynamic, Engine, Module, Position, RhaiResult, RhaiResultOf, Scope, StaticVec, ERR};
+use crate::{
+    Dynamic, Engine, Module, Position, RhaiError, RhaiResult, RhaiResultOf, Scope, StaticVec, ERR,
+};
 use std::hash::Hash;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -733,7 +735,7 @@ impl Engine {
 
                 let (values, pos) = args.iter().try_fold(
                     (crate::FnArgsVec::with_capacity(args.len()), Position::NONE),
-                    |(mut values, mut pos), expr| -> RhaiResultOf<_> {
+                    |(mut values, mut pos), expr| {
                         let (value, arg_pos) = self.get_arg_value(
                             scope, global, state, lib, this_ptr, expr, constants, level,
                         )?;
@@ -741,7 +743,7 @@ impl Engine {
                             pos = arg_pos;
                         }
                         values.push(value.flatten());
-                        Ok((values, pos))
+                        Ok::<_, RhaiError>((values, pos))
                     },
                 )?;
 
@@ -779,7 +781,7 @@ impl Engine {
 
                         let (values, pos) = args.iter().try_fold(
                             (crate::FnArgsVec::with_capacity(args.len()), Position::NONE),
-                            |(mut values, mut pos), expr| -> RhaiResultOf<_> {
+                            |(mut values, mut pos), expr| {
                                 let (value, arg_pos) = self.get_arg_value(
                                     scope, global, state, lib, this_ptr, expr, constants, level,
                                 )?;
@@ -787,7 +789,7 @@ impl Engine {
                                     pos = arg_pos
                                 }
                                 values.push(value.flatten());
-                                Ok((values, pos))
+                                Ok::<_, RhaiError>((values, pos))
                             },
                         )?;
                         super::ChainArgument::from_fn_call_args(values, pos)

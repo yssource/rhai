@@ -1264,8 +1264,10 @@ fn parse_primary(
             let (expr, func) = parse_anon_fn(input, &mut new_state, lib, new_settings)?;
 
             #[cfg(not(feature = "no_closure"))]
-            new_state.external_vars.iter().try_for_each(
-                |crate::ast::Ident { name, pos }| -> ParseResult<_> {
+            new_state
+                .external_vars
+                .iter()
+                .try_for_each(|crate::ast::Ident { name, pos }| {
                     let index = state.access_var(name, *pos);
 
                     if settings.strict_var && !settings.is_closure && index.is_none() {
@@ -1274,10 +1276,9 @@ fn parse_primary(
                         // Under Strict Variables mode, this is not allowed.
                         Err(PERR::VariableUndefined(name.to_string()).into_err(*pos))
                     } else {
-                        Ok(())
+                        Ok::<_, ParseError>(())
                     }
-                },
-            )?;
+                })?;
 
             let hash_script = calc_fn_hash(&func.name, func.params.len());
             lib.insert(hash_script, func.into());

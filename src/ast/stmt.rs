@@ -477,9 +477,11 @@ impl Stmt {
             | Self::Expr(..)
             | Self::FnCall(..) => true,
 
-            Self::Noop(..) | Self::While(..) | Self::Do(..) | Self::For(..) | Self::TryCatch(..) => {
-                false
-            }
+            Self::Noop(..)
+            | Self::While(..)
+            | Self::Do(..)
+            | Self::For(..)
+            | Self::TryCatch(..) => false,
 
             Self::Var(..) | Self::Assignment(..) | Self::BreakLoop(..) | Self::Return(..) => false,
 

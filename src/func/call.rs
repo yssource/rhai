@@ -12,8 +12,8 @@ use crate::engine::{
 use crate::eval::{EvalState, GlobalRuntimeState};
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnArgsVec, FnPtr,
-    Identifier, ImmutableString, Module, OptimizationLevel, Position, RhaiResult, RhaiResultOf,
-    Scope, ERR,
+    Identifier, ImmutableString, Module, OptimizationLevel, Position, RhaiError, RhaiResult,
+    RhaiResultOf, Scope, ERR,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -1079,16 +1079,13 @@ impl Engine {
                 let (name, fn_curry) = arg_value.cast::<FnPtr>().take_data();
 
                 // Append the new curried arguments to the existing list.
-                let fn_curry =
-                    a_expr
-                        .iter()
-                        .try_fold(fn_curry, |mut curried, expr| -> RhaiResultOf<_> {
-                            let (value, ..) = self.get_arg_value(
-                                scope, global, state, lib, this_ptr, expr, constants, level,
-                            )?;
-                            curried.push(value);
-                            Ok(curried)
-                        })?;
+                let fn_curry = a_expr.iter().try_fold(fn_curry, |mut curried, expr| {
+                    let (value, ..) = self.get_arg_value(
+                        scope, global, state, lib, this_ptr, expr, constants, level,
+                    )?;
+                    curried.push(value);
+                    Ok::<_, RhaiError>(curried)
+                })?;
 
                 return Ok(FnPtr::new_unchecked(name, fn_curry).into());
             }
