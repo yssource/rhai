@@ -55,15 +55,16 @@ The REPL bin tool, `rhai-rpl`, has been enhanced.
 
 ### Line editor
 
-* `rhai-repl` now uses [`rustyline`](https://crates.io/crates/rustyline) as a line editor with history.
-* Shift-Enter can now be used to enter multiple lines without having to attach the `\` continuation character the end of each line.
+* `rhai-repl` now uses a modified version of [`rustyline`](https://crates.io/crates/rustyline) as a line editor with history.
+* Ctrl-Enter can now be used to enter multiple lines without having to attach the `\` continuation character the end of each line.
+* Bracketed paste is supported, even on Windows (version 10 or above), so pasting code directly into `rhai-repl` is made much more convenient.
 
 ### New commands
 
 * `strict` to turn on/off _Strict Variables Mode_.
 * `optimize` to turn on/off script optimization.
 * `history` to print lines history.
-* `!!`, `!`_num_ and `!`_text_ to recall a history line.
+* `!!`, `!`_num_, `!`_text_ and `!?`_text_ to recall a history line.
 * `keys` to print all key bindings.
 
 

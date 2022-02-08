@@ -29,7 +29,9 @@ serde = { version = "1.0", default-features = false, features = ["derive", "allo
 serde_json = { version = "1.0", default-features = false, features = ["alloc"], optional = true }
 unicode-xid = { version = "0.2", default-features = false, optional = true }
 rust_decimal = { version = "1.16", default-features = false, features = ["maths"], optional = true }
-rustyline = { version = "9", optional = true }
+# notice that a custom modified version of `rustyline` is used which supports bracketed paste on Windows
+# this can be moved to the official version when bracketed paste is added
+rustyline = { version = "9", optional = true, git = "https://github.com/schungx/rustyline", branch = "bracketed_paste" }
 
 [dev-dependencies]
 serde_bytes = "0.11"
