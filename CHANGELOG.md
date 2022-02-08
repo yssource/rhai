@@ -14,6 +14,7 @@ Bug fixes
 * Off-by-one error in character positions after a comment line is now fixed.
 * Globally-defined constants are now encapsulated correctly inside a loaded module and no longer spill across call boundaries.
 * Type names display is fixed.
+* Exceptions thrown inside function calls now unwrap correctly when `catch`-ed.
 
 Script-breaking changes
 -----------------------
@@ -40,6 +41,7 @@ Enhancements
 * `AST` position display is improved:
   * `Expr::start_position` is added to give the beginning of the expression (not the operator's position).
   * `StmtBlock` and `Stmt::Block` now keep the position of the closing `}` as well.
+* `EvalAltResult::unwrap_inner` is added to access the base error inside multiple layers of wrappings (e.g. `EvalAltResult::ErrorInFunction`).
 
 REPL tool changes
 -----------------

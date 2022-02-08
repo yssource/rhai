@@ -1,5 +1,5 @@
 use rhai::debugger::{BreakPoint, DebuggerCommand, DebuggerEvent};
-use rhai::{Dynamic, Engine, EvalAltResult, ImmutableString, Position, Scope};
+use rhai::{Dynamic, Engine, EvalAltResult, ImmutableString, Position, Scope, INT};
 
 use std::{
     env,
@@ -553,7 +553,16 @@ fn main() {
                         ["throw"] => {
                             break Err(EvalAltResult::ErrorRuntime(Dynamic::UNIT, pos).into())
                         }
-                        ["throw", _msg, ..] => {
+                        ["throw", num] if num.trim().parse::<INT>().is_ok() => {
+                            let value = num.trim().parse::<INT>().unwrap().into();
+                            break Err(EvalAltResult::ErrorRuntime(value, pos).into());
+                        }
+                        #[cfg(not(feature = "no_float"))]
+                        ["throw", num] if num.trim().parse::<rhai::FLOAT>().is_ok() => {
+                            let value = num.trim().parse::<rhai::FLOAT>().unwrap().into();
+                            break Err(EvalAltResult::ErrorRuntime(value, pos).into());
+                        }
+                        ["throw", ..] => {
                             let msg = input.trim().splitn(2, ' ').skip(1).next().unwrap_or("");
                             break Err(EvalAltResult::ErrorRuntime(msg.trim().into(), pos).into());
                         }

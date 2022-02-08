@@ -715,8 +715,8 @@ impl Engine {
                     Err(err) if err.is_pseudo_error() => Err(err),
                     Err(err) if !err.is_catchable() => Err(err),
                     Err(mut err) => {
-                        let err_value = match *err {
-                            ERR::ErrorRuntime(ref x, ..) => x.clone(),
+                        let err_value = match err.unwrap_inner() {
+                            ERR::ErrorRuntime(x, ..) => x.clone(),
 
                             #[cfg(feature = "no_object")]
                             _ => {

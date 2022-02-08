@@ -403,6 +403,16 @@ impl EvalAltResult {
             }
         };
     }
+    /// Unwrap this error and get the very base error.
+    #[must_use]
+    pub fn unwrap_inner(&self) -> &Self {
+        match self {
+            Self::ErrorInFunctionCall(.., err, _) | Self::ErrorInModule(.., err, _) => {
+                err.unwrap_inner()
+            }
+            _ => self,
+        }
+    }
     /// Get the [position][Position] of this error.
     #[must_use]
     pub const fn position(&self) -> Position {
