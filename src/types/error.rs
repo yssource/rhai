@@ -153,11 +153,11 @@ impl fmt::Display for EvalAltResult {
                 s => f.write_str(s),
             }?,
             Self::ErrorIndexingType(s, ..) => write!(f, "Indexer not registered: {}", s)?,
-            Self::ErrorUnboundThis(_) => f.write_str("'this' is not bound")?,
-            Self::ErrorFor(_) => f.write_str("For loop expects a type that is iterable")?,
-            Self::ErrorTooManyOperations(_) => f.write_str("Too many operations")?,
-            Self::ErrorTooManyModules(_) => f.write_str("Too many modules imported")?,
-            Self::ErrorStackOverflow(_) => f.write_str("Stack overflow")?,
+            Self::ErrorUnboundThis(..) => f.write_str("'this' is not bound")?,
+            Self::ErrorFor(..) => f.write_str("For loop expects a type that is iterable")?,
+            Self::ErrorTooManyOperations(..) => f.write_str("Too many operations")?,
+            Self::ErrorTooManyModules(..) => f.write_str("Too many modules imported")?,
+            Self::ErrorStackOverflow(..) => f.write_str("Stack overflow")?,
             Self::ErrorTerminated(..) => f.write_str("Script terminated")?,
 
             Self::ErrorRuntime(d, ..) if d.is::<()>() => f.write_str("Runtime error")?,
@@ -270,13 +270,13 @@ impl EvalAltResult {
             Self::ErrorFunctionNotFound(..)
             | Self::ErrorInFunctionCall(..)
             | Self::ErrorInModule(..)
-            | Self::ErrorUnboundThis(_)
+            | Self::ErrorUnboundThis(..)
             | Self::ErrorMismatchDataType(..)
             | Self::ErrorArrayBounds(..)
             | Self::ErrorStringBounds(..)
             | Self::ErrorBitFieldBounds(..)
             | Self::ErrorIndexingType(..)
-            | Self::ErrorFor(_)
+            | Self::ErrorFor(..)
             | Self::ErrorVariableExists(..)
             | Self::ErrorVariableNotFound(..)
             | Self::ErrorModuleNotFound(..)
@@ -293,9 +293,9 @@ impl EvalAltResult {
             // Therefore, this error should not be catchable.
             Self::ErrorCustomSyntax(..) => false,
 
-            Self::ErrorTooManyOperations(_)
-            | Self::ErrorTooManyModules(_)
-            | Self::ErrorStackOverflow(_)
+            Self::ErrorTooManyOperations(..)
+            | Self::ErrorTooManyModules(..)
+            | Self::ErrorStackOverflow(..)
             | Self::ErrorDataTooLarge(..)
             | Self::ErrorTerminated(..) => false,
 
@@ -310,9 +310,9 @@ impl EvalAltResult {
             Self::ErrorParsing(..) => true,
 
             Self::ErrorCustomSyntax(..)
-            | Self::ErrorTooManyOperations(_)
-            | Self::ErrorTooManyModules(_)
-            | Self::ErrorStackOverflow(_)
+            | Self::ErrorTooManyOperations(..)
+            | Self::ErrorTooManyModules(..)
+            | Self::ErrorStackOverflow(..)
             | Self::ErrorDataTooLarge(..) => true,
 
             Self::ErrorTerminated(..) => true,
@@ -337,12 +337,12 @@ impl EvalAltResult {
 
             Self::ErrorSystem(..)
             | Self::ErrorParsing(..)
-            | Self::ErrorUnboundThis(_)
-            | Self::ErrorFor(_)
+            | Self::ErrorUnboundThis(..)
+            | Self::ErrorFor(..)
             | Self::ErrorArithmetic(..)
-            | Self::ErrorTooManyOperations(_)
-            | Self::ErrorTooManyModules(_)
-            | Self::ErrorStackOverflow(_)
+            | Self::ErrorTooManyOperations(..)
+            | Self::ErrorTooManyModules(..)
+            | Self::ErrorStackOverflow(..)
             | Self::ErrorRuntime(..) => (),
 
             Self::ErrorFunctionNotFound(f, ..) => {

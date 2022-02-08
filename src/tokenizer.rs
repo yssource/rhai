@@ -603,8 +603,8 @@ impl Token {
             FloatConstant(f) => f.to_string().into(),
             #[cfg(feature = "decimal")]
             DecimalConstant(d) => d.to_string().into(),
-            StringConstant(_) => "string".into(),
-            InterpolatedString(_) => "string".into(),
+            StringConstant(..) => "string".into(),
+            InterpolatedString(..) => "string".into(),
             CharConstant(c) => c.to_string().into(),
             Identifier(s) => s.to_string().into(),
             Reserved(s) => s.to_string().into(),
@@ -825,7 +825,7 @@ impl Token {
         use Token::*;
 
         match self {
-            LexError(_)      |
+            LexError(..)      |
             SemiColon        | // ; - is unary
             Colon            | // #{ foo: - is unary
             Comma            | // ( ... , -expr ) - is unary
@@ -970,7 +970,7 @@ impl Token {
     #[inline(always)]
     #[must_use]
     pub const fn is_reserved(&self) -> bool {
-        matches!(self, Self::Reserved(_))
+        matches!(self, Self::Reserved(..))
     }
 
     /// Convert a token into a function name, if possible.
@@ -987,7 +987,7 @@ impl Token {
     #[inline(always)]
     #[must_use]
     pub const fn is_custom(&self) -> bool {
-        matches!(self, Self::Custom(_))
+        matches!(self, Self::Custom(..))
     }
 }
 
@@ -2197,7 +2197,7 @@ impl<'a> Iterator for TokenIterator<'a> {
             // a verbatim string or a string with continuation encounters {EOF}.
             // This is necessary to handle such cases for line-by-line parsing, but for an entire
             // script it is a syntax error.
-            Some((Token::StringConstant(_), pos)) if self.state.is_within_text_terminated_by.is_some() => {
+            Some((Token::StringConstant(..), pos)) if self.state.is_within_text_terminated_by.is_some() => {
                 self.state.is_within_text_terminated_by = None;
                 return Some((Token::LexError(LERR::UnterminatedString), pos));
             }

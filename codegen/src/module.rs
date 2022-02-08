@@ -144,12 +144,14 @@ impl Parse for Module {
                         attrs,
                         ty,
                         ..
-                    }) if matches!(vis, syn::Visibility::Public(_)) => consts.push(ExportedConst {
-                        name: ident.to_string(),
-                        typ: ty.clone(),
-                        expr: expr.as_ref().clone(),
-                        cfg_attrs: crate::attrs::collect_cfg_attr(&attrs),
-                    }),
+                    }) if matches!(vis, syn::Visibility::Public(..)) => {
+                        consts.push(ExportedConst {
+                            name: ident.to_string(),
+                            typ: ty.clone(),
+                            expr: expr.as_ref().clone(),
+                            cfg_attrs: crate::attrs::collect_cfg_attr(&attrs),
+                        })
+                    }
                     _ => {}
                 }
             }
@@ -161,7 +163,7 @@ impl Parse for Module {
             let mut i = 0;
             while i < content.len() {
                 match content[i] {
-                    syn::Item::Mod(_) => {
+                    syn::Item::Mod(..) => {
                         let mut item_mod = match content.remove(i) {
                             syn::Item::Mod(m) => m,
                             _ => unreachable!(),
@@ -212,7 +214,7 @@ impl Module {
     pub fn update_scope(&mut self, parent_scope: &ExportScope) {
         let keep = match (self.params.skip, parent_scope) {
             (true, ..) => false,
-            (.., ExportScope::PubOnly) => matches!(self.mod_all.vis, syn::Visibility::Public(_)),
+            (.., ExportScope::PubOnly) => matches!(self.mod_all.vis, syn::Visibility::Public(..)),
             (.., ExportScope::Prefix(s)) => self.mod_all.ident.to_string().starts_with(s),
             (.., ExportScope::All) => true,
         };

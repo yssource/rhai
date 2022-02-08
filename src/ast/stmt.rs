@@ -404,7 +404,7 @@ impl Stmt {
     #[inline(always)]
     #[must_use]
     pub const fn is_noop(&self) -> bool {
-        matches!(self, Self::Noop(_))
+        matches!(self, Self::Noop(..))
     }
     /// Get the [position][Position] of this statement.
     #[must_use]
@@ -432,7 +432,7 @@ impl Stmt {
             Self::Export(.., pos) => *pos,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_) => Position::NONE,
+            Self::Share(..) => Position::NONE,
         }
     }
     /// Override the [position][Position] of this statement.
@@ -462,7 +462,7 @@ impl Stmt {
             Self::Export(.., pos) => *pos = new_pos,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_) => (),
+            Self::Share(..) => (),
         }
 
         self
@@ -474,10 +474,10 @@ impl Stmt {
             Self::If(..)
             | Self::Switch(..)
             | Self::Block(..)
-            | Self::Expr(_)
+            | Self::Expr(..)
             | Self::FnCall(..) => true,
 
-            Self::Noop(_) | Self::While(..) | Self::Do(..) | Self::For(..) | Self::TryCatch(..) => {
+            Self::Noop(..) | Self::While(..) | Self::Do(..) | Self::For(..) | Self::TryCatch(..) => {
                 false
             }
 
@@ -487,7 +487,7 @@ impl Stmt {
             Self::Import(..) | Self::Export(..) => false,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_) => false,
+            Self::Share(..) => false,
         }
     }
     /// Is this statement self-terminated (i.e. no need for a semicolon terminator)?
@@ -502,13 +502,13 @@ impl Stmt {
             | Self::TryCatch(..) => true,
 
             // A No-op requires a semicolon in order to know it is an empty statement!
-            Self::Noop(_) => false,
+            Self::Noop(..) => false,
 
             Self::Expr(Expr::Custom(x, ..)) if x.is_self_terminated() => true,
 
             Self::Var(..)
             | Self::Assignment(..)
-            | Self::Expr(_)
+            | Self::Expr(..)
             | Self::FnCall(..)
             | Self::Do(..)
             | Self::BreakLoop(..)
@@ -518,7 +518,7 @@ impl Stmt {
             Self::Import(..) | Self::Export(..) => false,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_) => false,
+            Self::Share(..) => false,
         }
     }
     /// Is this statement _pure_?
@@ -527,7 +527,7 @@ impl Stmt {
     #[must_use]
     pub fn is_pure(&self) -> bool {
         match self {
-            Self::Noop(_) => true,
+            Self::Noop(..) => true,
             Self::Expr(expr) => expr.is_pure(),
             Self::If(condition, x, ..) => {
                 condition.is_pure()
@@ -575,7 +575,7 @@ impl Stmt {
             Self::Export(..) => false,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_) => false,
+            Self::Share(..) => false,
         }
     }
     /// Does this statement's behavior depend on its containing block?

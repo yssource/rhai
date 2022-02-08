@@ -972,7 +972,7 @@ impl Engine {
                 // Do not match function exit for arguments
                 #[cfg(feature = "debugging")]
                 let reset_debugger = global.debugger.clear_status_if(|status| {
-                    matches!(status, crate::eval::DebuggerStatus::FunctionExit(_))
+                    matches!(status, crate::eval::DebuggerStatus::FunctionExit(..))
                 });
 
                 let result = self.eval_expr(scope, global, state, lib, this_ptr, arg_expr, level);

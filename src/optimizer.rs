@@ -349,7 +349,7 @@ fn optimize_stmt_block(
                             .map_or_else(|| Stmt::Noop(pos), |e| Stmt::Expr(mem::take(e)));
                     }
                     // { ...; stmt; noop } -> done
-                    [.., ref second_last_stmt, Stmt::Noop(_)]
+                    [.., ref second_last_stmt, Stmt::Noop(..)]
                         if second_last_stmt.returns_value() =>
                     {
                         break
@@ -636,7 +636,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                         if let Some(mut condition) = mem::take(&mut block.condition) {
                             optimize_expr(&mut condition, state, false);
                             match condition {
-                                Expr::Unit(_) | Expr::BoolConstant(true, ..) => state.set_dirty(),
+                                Expr::Unit(..) | Expr::BoolConstant(true, ..) => state.set_dirty(),
                                 _ => block.condition = Some(condition),
                             }
                         }
@@ -665,7 +665,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                 if let Some(mut condition) = mem::take(&mut block.condition) {
                     optimize_expr(&mut condition, state, false);
                     match condition {
-                        Expr::Unit(_) | Expr::BoolConstant(true, ..) => state.set_dirty(),
+                        Expr::Unit(..) | Expr::BoolConstant(true, ..) => state.set_dirty(),
                         _ => block.condition = Some(condition),
                     }
                 }
@@ -941,8 +941,8 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
             while n < x.len() - 1 {
                 match (mem::take(&mut x[n]), mem::take(&mut x[n+1])) {
                     (Expr::StringConstant(mut s1, pos), Expr::StringConstant(s2, ..)) => { s1 += s2; x[n] = Expr::StringConstant(s1, pos); x.remove(n+1); state.set_dirty(); }
-                    (expr1, Expr::Unit(_))  => { x[n] = expr1; x.remove(n+1); state.set_dirty(); }
-                    (Expr::Unit(_), expr2) => { x[n+1] = expr2; x.remove(n); state.set_dirty(); }
+                    (expr1, Expr::Unit(..))  => { x[n] = expr1; x.remove(n+1); state.set_dirty(); }
+                    (Expr::Unit(..), expr2) => { x[n+1] = expr2; x.remove(n); state.set_dirty(); }
                     (expr1, Expr::StringConstant(s, ..)) if s.is_empty() => { x[n] = expr1; x.remove(n+1); state.set_dirty(); }
                     (Expr::StringConstant(s, ..), expr2) if s.is_empty()=> { x[n+1] = expr2; x.remove(n); state.set_dirty(); }
                     (expr1, expr2) => { x[n] = expr1; x[n+1] = expr2; n += 1; }

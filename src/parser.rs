@@ -291,7 +291,7 @@ impl Expr {
     /// Raise an error if the expression can never yield a boolean value.
     fn ensure_bool_expr(self) -> ParseResult<Expr> {
         let type_name = match self {
-            Expr::Unit(_) => "()",
+            Expr::Unit(..) => "()",
             Expr::DynamicConstant(ref v, ..) if !v.is::<bool>() => v.type_name(),
             Expr::IntegerConstant(..) => "a number",
             #[cfg(not(feature = "no_float"))]
@@ -312,7 +312,7 @@ impl Expr {
     /// Raise an error if the expression can never yield an iterable value.
     fn ensure_iterable(self) -> ParseResult<Expr> {
         let type_name = match self {
-            Expr::Unit(_) => "()",
+            Expr::Unit(..) => "()",
             Expr::BoolConstant(..) => "a boolean",
             Expr::IntegerConstant(..) => "a number",
             #[cfg(not(feature = "no_float"))]
@@ -661,7 +661,7 @@ fn parse_index_chain(
             | Expr::And(..)
             | Expr::Or(..)
             | Expr::BoolConstant(..)
-            | Expr::Unit(_) => {
+            | Expr::Unit(..) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Only arrays, object maps and strings can be indexed".into(),
                 )
@@ -694,7 +694,7 @@ fn parse_index_chain(
             | Expr::And(..)
             | Expr::Or(..)
             | Expr::BoolConstant(..)
-            | Expr::Unit(_) => {
+            | Expr::Unit(..) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Only arrays, object maps and strings can be indexed".into(),
                 )
@@ -720,7 +720,7 @@ fn parse_index_chain(
             .into_err(x.start_position()))
         }
         // lhs[()]
-        x @ Expr::Unit(_) => {
+        x @ Expr::Unit(..) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not ()".into(),
             )
@@ -897,7 +897,9 @@ fn parse_map_literal(
                 }
                 (s, pos)
             }
-            (Token::InterpolatedString(_), pos) => return Err(PERR::PropertyExpected.into_err(pos)),
+            (Token::InterpolatedString(..), pos) => {
+                return Err(PERR::PropertyExpected.into_err(pos))
+            }
             (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
                 return Err(PERR::Reserved(s.to_string()).into_err(pos));
             }
@@ -951,7 +953,7 @@ fn parse_map_literal(
                 eat_token(input, Token::Comma);
             }
             (Token::RightBrace, ..) => (),
-            (Token::Identifier(_), pos) => {
+            (Token::Identifier(..), pos) => {
                 return Err(PERR::MissingToken(
                     Token::Comma.into(),
                     "to separate the items of this object map literal".into(),
@@ -1147,7 +1149,7 @@ fn parse_switch(
                 )
                 .into_err(*pos))
             }
-            (..) => (),
+            _ => (),
         }
     }
 
@@ -1183,9 +1185,9 @@ fn parse_primary(
     let root_expr = match token {
         Token::EOF => return Err(PERR::UnexpectedEOF.into_err(settings.pos)),
 
-        Token::IntegerConstant(_)
-        | Token::CharConstant(_)
-        | Token::StringConstant(_)
+        Token::IntegerConstant(..)
+        | Token::CharConstant(..)
+        | Token::StringConstant(..)
         | Token::True
         | Token::False => match input.next().expect(NEVER_ENDS).0 {
             Token::IntegerConstant(x) => Expr::IntegerConstant(x, settings.pos),
@@ -1284,7 +1286,7 @@ fn parse_primary(
         }
 
         // Interpolated string
-        Token::InterpolatedString(_) => {
+        Token::InterpolatedString(..) => {
             let mut segments = StaticVec::<Expr>::new();
 
             match input.next().expect(NEVER_ENDS) {
@@ -1352,7 +1354,7 @@ fn parse_primary(
         }
 
         // Identifier
-        Token::Identifier(_) => {
+        Token::Identifier(..) => {
             #[cfg(not(feature = "no_module"))]
             let none = None;
             #[cfg(feature = "no_module")]
@@ -1416,7 +1418,7 @@ fn parse_primary(
         }
 
         // Reserved keyword or symbol
-        Token::Reserved(_) => {
+        Token::Reserved(..) => {
             #[cfg(not(feature = "no_module"))]
             let none = None;
             #[cfg(feature = "no_module")]
@@ -1450,7 +1452,7 @@ fn parse_primary(
             }
         }
 
-        Token::LexError(_) => match input.next().expect(NEVER_ENDS) {
+        Token::LexError(..) => match input.next().expect(NEVER_ENDS) {
             (Token::LexError(err), ..) => return Err(err.into_err(settings.pos)),
             token => unreachable!("Token::LexError expected but gets {:?}", token),
         },
@@ -1575,7 +1577,7 @@ fn parse_postfix(
             (expr, Token::Period) => {
                 // Expression after dot must start with an identifier
                 match input.peek().expect(NEVER_ENDS) {
-                    (Token::Identifier(_), ..) => {
+                    (Token::Identifier(..), ..) => {
                         #[cfg(not(feature = "no_closure"))]
                         {
                             // Prevents capturing of the object properties as vars: xxx.<var>
@@ -2792,7 +2794,7 @@ fn parse_block(
                 eat_token(input, Token::SemiColon);
             }
             // { ... { stmt } ???
-            (..) if !need_semicolon => (),
+            _ if !need_semicolon => (),
             // { ... stmt <error>
             (Token::LexError(err), err_pos) => return Err(err.clone().into_err(*err_pos)),
             // { ... stmt ???
@@ -2874,7 +2876,7 @@ fn parse_stmt(
 
                     match input.peek().expect(NEVER_ENDS) {
                         (Token::Fn, ..) | (Token::Private, ..) => break,
-                        (Token::Comment(_), ..) => (),
+                        (Token::Comment(..), ..) => (),
                         _ => return Err(PERR::WrongDocComment.into_err(comments_pos)),
                     }
                 }
@@ -3027,7 +3029,7 @@ fn parse_stmt(
                 // `return;` or `throw;`
                 (Token::SemiColon, ..) => Ok(Stmt::Return(return_type, None, token_pos)),
                 // `return` or `throw` with expression
-                (..) => {
+                _ => {
                     let expr = parse_expr(input, state, lib, settings.level_up())?;
                     Ok(Stmt::Return(return_type, Some(expr), token_pos))
                 }
@@ -3491,7 +3493,7 @@ impl Engine {
                 // stmt ;
                 (Token::SemiColon, ..) if !need_semicolon => (),
                 // { stmt } ???
-                (..) if !need_semicolon => (),
+                _ if !need_semicolon => (),
                 // stmt <error>
                 (Token::LexError(err), pos) => return Err(err.clone().into_err(*pos)),
                 // stmt ???

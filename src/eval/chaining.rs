@@ -724,7 +724,9 @@ impl Engine {
 
         match expr {
             #[cfg(not(feature = "no_object"))]
-            Expr::FnCall(x, ..) if _parent_chain_type == ChainType::Dotting && !x.is_qualified() => {
+            Expr::FnCall(x, ..)
+                if _parent_chain_type == ChainType::Dotting && !x.is_qualified() =>
+            {
                 let crate::ast::FnCallExpr {
                     args, constants, ..
                 } = x.as_ref();

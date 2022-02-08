@@ -324,7 +324,7 @@ impl Engine {
             Expr::StringConstant(x, ..) => Ok(x.clone().into()),
             Expr::CharConstant(x, ..) => Ok((*x).into()),
             Expr::BoolConstant(x, ..) => Ok((*x).into()),
-            Expr::Unit(_) => Ok(Dynamic::UNIT),
+            Expr::Unit(..) => Ok(Dynamic::UNIT),
 
             // `... ${...} ...`
             Expr::InterpolatedString(x, pos) => {

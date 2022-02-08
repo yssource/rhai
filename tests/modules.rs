@@ -214,7 +214,7 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
                     "#
                 )
                 .expect_err("should error"),
-            EvalAltResult::ErrorTooManyModules(_)
+            EvalAltResult::ErrorTooManyModules(..)
         ));
 
         #[cfg(not(feature = "no_function"))]

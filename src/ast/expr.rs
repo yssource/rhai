@@ -450,7 +450,7 @@ impl fmt::Debug for Expr {
             Self::FloatConstant(value, ..) => write!(f, "{:?}", value),
             Self::CharConstant(value, ..) => write!(f, "{:?}", value),
             Self::StringConstant(value, ..) => write!(f, "{:?}", value),
-            Self::Unit(_) => f.write_str("()"),
+            Self::Unit(..) => f.write_str("()"),
 
             Self::InterpolatedString(x, ..) => {
                 f.write_str("InterpolatedString")?;
@@ -535,7 +535,7 @@ impl Expr {
             Self::CharConstant(x, ..) => (*x).into(),
             Self::StringConstant(x, ..) => x.clone().into(),
             Self::BoolConstant(x, ..) => (*x).into(),
-            Self::Unit(_) => Dynamic::UNIT,
+            Self::Unit(..) => Dynamic::UNIT,
 
             #[cfg(not(feature = "no_index"))]
             Self::Array(x, ..) if self.is_constant() => {
@@ -772,7 +772,7 @@ impl Expr {
     #[inline(always)]
     #[must_use]
     pub const fn is_unit(&self) -> bool {
-        matches!(self, Self::Unit(_))
+        matches!(self, Self::Unit(..))
     }
     /// Is the expression a constant?
     #[inline]
@@ -787,7 +787,7 @@ impl Expr {
             | Self::IntegerConstant(..)
             | Self::CharConstant(..)
             | Self::StringConstant(..)
-            | Self::Unit(_)
+            | Self::Unit(..)
             | Self::Stack(..) => true,
 
             Self::InterpolatedString(x, ..) | Self::Array(x, ..) => x.iter().all(Self::is_constant),
@@ -816,13 +816,13 @@ impl Expr {
             | Self::CharConstant(..)
             | Self::And(..)
             | Self::Or(..)
-            | Self::Unit(_) => false,
+            | Self::Unit(..) => false,
 
             Self::IntegerConstant(..)
             | Self::StringConstant(..)
             | Self::InterpolatedString(..)
             | Self::FnCall(..)
-            | Self::Stmt(_)
+            | Self::Stmt(..)
             | Self::Dot(..)
             | Self::Index(..)
             | Self::Array(..)

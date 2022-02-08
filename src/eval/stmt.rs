@@ -323,7 +323,7 @@ impl Engine {
 
         let result = match stmt {
             // No-op
-            Stmt::Noop(_) => Ok(Dynamic::UNIT),
+            Stmt::Noop(..) => Ok(Dynamic::UNIT),
 
             // Expression as statement
             Stmt::Expr(expr) => self
@@ -483,7 +483,7 @@ impl Engine {
             }
 
             // Loop
-            Stmt::While(Expr::Unit(_), body, ..) => loop {
+            Stmt::While(Expr::Unit(..), body, ..) => loop {
                 if !body.is_empty() {
                     match self
                         .eval_stmt_block(scope, global, state, lib, this_ptr, body, true, level)

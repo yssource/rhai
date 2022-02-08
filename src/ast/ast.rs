@@ -449,7 +449,7 @@ impl AST {
     ///     foo("!")
     /// "#)?;
     ///
-    /// // Merge 'ast2', picking only 'error()' but not 'foo(_)', into 'ast1'
+    /// // Merge 'ast2', picking only 'error()' but not 'foo(..)', into 'ast1'
     /// let ast = ast1.merge_filtered(&ast2, |_, _, script, name, params|
     ///                                 script && name == "error" && params == 0);
     ///
@@ -551,7 +551,7 @@ impl AST {
     ///     foo("!")
     /// "#)?;
     ///
-    /// // Combine 'ast2', picking only 'error()' but not 'foo(_)', into 'ast1'
+    /// // Combine 'ast2', picking only 'error()' but not 'foo(..)', into 'ast1'
     /// ast1.combine_filtered(ast2, |_, _, script, name, params|
     ///                                 script && name == "error" && params == 0);
     ///
@@ -613,7 +613,7 @@ impl AST {
     ///     fn bar() { print("hello"); }
     /// "#)?;
     ///
-    /// // Remove all functions except 'foo(_)'
+    /// // Remove all functions except 'foo(..)'
     /// ast.retain_functions(|_, _, name, params| name == "foo" && params == 1);
     /// # }
     /// # Ok(())

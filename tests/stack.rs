@@ -29,7 +29,7 @@ fn test_stack_overflow_fn_calls() -> Result<(), Box<EvalAltResult>> {
                 max + 1
             ))
             .expect_err("should error"),
-        EvalAltResult::ErrorStackOverflow(_)
+        EvalAltResult::ErrorStackOverflow(..)
     ));
 
     Ok(())

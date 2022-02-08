@@ -465,16 +465,16 @@ impl Engine {
 
         // Skip transitive nodes
         match node {
-            ASTNode::Expr(Expr::Stmt(_)) | ASTNode::Stmt(Stmt::Expr(_)) => return Ok(None),
+            ASTNode::Expr(Expr::Stmt(..)) | ASTNode::Stmt(Stmt::Expr(..)) => return Ok(None),
             _ => (),
         }
 
         let stop = match global.debugger.status {
             DebuggerStatus::Next(false, false) => false,
-            DebuggerStatus::Next(true, false) => matches!(node, ASTNode::Stmt(_)),
-            DebuggerStatus::Next(false, true) => matches!(node, ASTNode::Expr(_)),
+            DebuggerStatus::Next(true, false) => matches!(node, ASTNode::Stmt(..)),
+            DebuggerStatus::Next(false, true) => matches!(node, ASTNode::Expr(..)),
             DebuggerStatus::Next(true, true) => true,
-            DebuggerStatus::FunctionExit(_) => false,
+            DebuggerStatus::FunctionExit(..) => false,
         };
 
         let event = if stop {

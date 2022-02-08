@@ -249,7 +249,7 @@ fn test_internal_fn_bang() -> Result<(), Box<EvalAltResult>> {
             )
             .expect_err("should error")
             .0,
-        ParseErrorType::MalformedCapture(_)
+        ParseErrorType::MalformedCapture(..)
     ));
 
     Ok(())
