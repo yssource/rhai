@@ -9,7 +9,7 @@ use crate::ast::{
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::func::hashing::get_hasher;
 use crate::tokenizer::{
-    is_keyword_function, is_valid_function_name, is_valid_identifier, Token, TokenStream,
+    is_keyword_function, is_valid_function_name, is_valid_identifier, Span, Token, TokenStream,
     TokenizerControl,
 };
 use crate::types::dynamic::AccessMode;
@@ -2818,7 +2818,7 @@ fn parse_block(
 
     Ok(Stmt::Block(
         statements.into_boxed_slice(),
-        (settings.pos, end_pos),
+        Span::new(settings.pos, end_pos),
     ))
 }
 

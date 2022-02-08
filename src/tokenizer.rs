@@ -59,10 +59,10 @@ pub type TokenStream<'a> = Peekable<TokenIterator<'a>>;
 /// Advancing beyond the maximum line length or maximum number of lines is not an error but has no effect.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
 pub struct Position {
-    /// Line number - 0 = none
+    /// Line number: 0 = none
     #[cfg(not(feature = "no_position"))]
     line: u16,
-    /// Character position - 0 = BOL
+    /// Character position: 0 = BOL
     #[cfg(not(feature = "no_position"))]
     pos: u16,
 }
@@ -297,6 +297,71 @@ impl Add for Position {
 impl AddAssign for Position {
     fn add_assign(&mut self, rhs: Self) {
         *self = *self + rhs;
+    }
+}
+
+/// _(internals)_ A span consisting of a starting and an ending [positions][Position].
+/// Exported under the `internals` feature only.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, Default)]
+pub struct Span {
+    /// Starting [position][Position].
+    start: Position,
+    /// Ending [position][Position].
+    end: Position,
+}
+
+impl Span {
+    pub const NONE: Self = Self::new(Position::NONE, Position::NONE);
+
+    /// Create a new [`Span`].
+    #[inline(always)]
+    #[must_use]
+    pub const fn new(start: Position, end: Position) -> Self {
+        Self { start, end }
+    }
+    /// Is this [`Span`] non-existent?
+    #[inline(always)]
+    #[must_use]
+    pub const fn is_none(&self) -> bool {
+        self.start.is_none() && self.end.is_none()
+    }
+    /// Get the [`Span`]'s starting [position][Position].
+    #[inline(always)]
+    #[must_use]
+    pub const fn start(&self) -> Position {
+        self.start
+    }
+    /// Get the [`Span`]'s ending [position][Position].
+    #[inline(always)]
+    #[must_use]
+    pub const fn end(&self) -> Position {
+        self.end
+    }
+}
+
+impl fmt::Display for Span {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match (self.start().is_none(), self.end().is_none()) {
+            (false, false) if self.start().line() != self.end().line() => {
+                write!(f, "{:?}-{:?}", self.start(), self.end())
+            }
+            (false, false) => write!(
+                f,
+                "{}:{}-{}",
+                self.start().line().unwrap(),
+                self.start().position().unwrap_or(0),
+                self.end().position().unwrap_or(0)
+            ),
+            (true, false) => write!(f, "..{:?}", self.end()),
+            (false, true) => write!(f, "{:?}", self.start()),
+            (true, true) => write!(f, "{:?}", Position::NONE),
+        }
+    }
+}
+
+impl fmt::Debug for Span {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
     }
 }
 
