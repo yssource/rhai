@@ -271,7 +271,7 @@ impl Debugger {
             } else {
                 DebuggerStatus::CONTINUE
             },
-            state: if let Some((ref init, _)) = engine.debugger {
+            state: if let Some((ref init, ..)) = engine.debugger {
                 init()
             } else {
                 Dynamic::UNIT
@@ -348,8 +348,8 @@ impl Debugger {
         self.break_points()
             .iter()
             .enumerate()
-            .filter(|&(_, bp)| bp.is_enabled())
-            .find(|&(_, bp)| match bp {
+            .filter(|&(.., bp)| bp.is_enabled())
+            .find(|&(.., bp)| match bp {
                 #[cfg(not(feature = "no_position"))]
                 BreakPoint::AtPosition { pos, .. } if pos.is_none() => false,
                 #[cfg(not(feature = "no_position"))]
@@ -361,26 +361,26 @@ impl Debugger {
                     node.position() == *pos && _src == source
                 }
                 BreakPoint::AtFunctionName { name, .. } => match node {
-                    ASTNode::Expr(Expr::FnCall(x, _))
-                    | ASTNode::Stmt(Stmt::FnCall(x, _))
-                    | ASTNode::Stmt(Stmt::Expr(Expr::FnCall(x, _))) => x.name == *name,
+                    ASTNode::Expr(Expr::FnCall(x, ..))
+                    | ASTNode::Stmt(Stmt::FnCall(x, ..))
+                    | ASTNode::Stmt(Stmt::Expr(Expr::FnCall(x, ..))) => x.name == *name,
                     _ => false,
                 },
                 BreakPoint::AtFunctionCall { name, args, .. } => match node {
-                    ASTNode::Expr(Expr::FnCall(x, _))
-                    | ASTNode::Stmt(Stmt::FnCall(x, _))
-                    | ASTNode::Stmt(Stmt::Expr(Expr::FnCall(x, _))) => {
+                    ASTNode::Expr(Expr::FnCall(x, ..))
+                    | ASTNode::Stmt(Stmt::FnCall(x, ..))
+                    | ASTNode::Stmt(Stmt::Expr(Expr::FnCall(x, ..))) => {
                         x.args.len() == *args && x.name == *name
                     }
                     _ => false,
                 },
                 #[cfg(not(feature = "no_object"))]
                 BreakPoint::AtProperty { name, .. } => match node {
-                    ASTNode::Expr(Expr::Property(x, _)) => x.2 == *name,
+                    ASTNode::Expr(Expr::Property(x, ..)) => x.2 == *name,
                     _ => false,
                 },
             })
-            .map(|(i, _)| i)
+            .map(|(i, ..)| i)
     }
     /// Get a slice of all [`BreakPoint`]'s.
     #[inline(always)]
@@ -465,16 +465,16 @@ impl Engine {
 
         // Skip transitive nodes
         match node {
-            ASTNode::Expr(Expr::Stmt(_)) | ASTNode::Stmt(Stmt::Expr(_)) => return Ok(None),
+            ASTNode::Expr(Expr::Stmt(..)) | ASTNode::Stmt(Stmt::Expr(..)) => return Ok(None),
             _ => (),
         }
 
         let stop = match global.debugger.status {
             DebuggerStatus::Next(false, false) => false,
-            DebuggerStatus::Next(true, false) => matches!(node, ASTNode::Stmt(_)),
-            DebuggerStatus::Next(false, true) => matches!(node, ASTNode::Expr(_)),
+            DebuggerStatus::Next(true, false) => matches!(node, ASTNode::Stmt(..)),
+            DebuggerStatus::Next(false, true) => matches!(node, ASTNode::Expr(..)),
             DebuggerStatus::Next(true, true) => true,
-            DebuggerStatus::FunctionExit(_) => false,
+            DebuggerStatus::FunctionExit(..) => false,
         };
 
         let event = if stop {
@@ -525,7 +525,7 @@ impl Engine {
             level,
         };
 
-        if let Some((_, ref on_debugger)) = self.debugger {
+        if let Some((.., ref on_debugger)) = self.debugger {
             let command = on_debugger(&mut context, event, node, source, node.position())?;
 
             match command {
@@ -548,9 +548,9 @@ impl Engine {
                 DebuggerCommand::FunctionExit => {
                     // Bump a level if it is a function call
                     let level = match node {
-                        ASTNode::Expr(Expr::FnCall(_, _))
-                        | ASTNode::Stmt(Stmt::FnCall(_, _))
-                        | ASTNode::Stmt(Stmt::Expr(Expr::FnCall(_, _))) => context.call_level() + 1,
+                        ASTNode::Expr(Expr::FnCall(..))
+                        | ASTNode::Stmt(Stmt::FnCall(..))
+                        | ASTNode::Stmt(Stmt::Expr(Expr::FnCall(..))) => context.call_level() + 1,
                         _ => context.call_level(),
                     };
                     global.debugger.status = DebuggerStatus::FunctionExit(level);

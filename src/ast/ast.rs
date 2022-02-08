@@ -53,7 +53,7 @@ impl fmt::Debug for AST {
 
         #[cfg(not(feature = "no_function"))]
         if !self.lib.is_empty() {
-            for (_, _, _, _, ref fn_def) in self.lib.iter_script_fn() {
+            for (.., ref fn_def) in self.lib.iter_script_fn() {
                 let sig = fn_def.to_string();
                 fp.field(&sig, &fn_def.body.as_slice());
             }
@@ -449,7 +449,7 @@ impl AST {
     ///     foo("!")
     /// "#)?;
     ///
-    /// // Merge 'ast2', picking only 'error()' but not 'foo(_)', into 'ast1'
+    /// // Merge 'ast2', picking only 'error()' but not 'foo(..)', into 'ast1'
     /// let ast = ast1.merge_filtered(&ast2, |_, _, script, name, params|
     ///                                 script && name == "error" && params == 0);
     ///
@@ -551,7 +551,7 @@ impl AST {
     ///     foo("!")
     /// "#)?;
     ///
-    /// // Combine 'ast2', picking only 'error()' but not 'foo(_)', into 'ast1'
+    /// // Combine 'ast2', picking only 'error()' but not 'foo(..)', into 'ast1'
     /// ast1.combine_filtered(ast2, |_, _, script, name, params|
     ///                                 script && name == "error" && params == 0);
     ///
@@ -613,7 +613,7 @@ impl AST {
     ///     fn bar() { print("hello"); }
     /// "#)?;
     ///
-    /// // Remove all functions except 'foo(_)'
+    /// // Remove all functions except 'foo(..)'
     /// ast.retain_functions(|_, _, name, params| name == "foo" && params == 1);
     /// # }
     /// # Ok(())
@@ -640,7 +640,7 @@ impl AST {
     pub fn iter_fn_def(&self) -> impl Iterator<Item = &super::ScriptFnDef> {
         self.lib
             .iter_script_fn()
-            .map(|(_, _, _, _, fn_def)| fn_def.as_ref())
+            .map(|(.., fn_def)| fn_def.as_ref())
     }
     /// Iterate through all function definitions.
     ///
@@ -652,7 +652,7 @@ impl AST {
     pub(crate) fn iter_fn_def(&self) -> impl Iterator<Item = &super::ScriptFnDef> {
         self.lib
             .iter_script_fn()
-            .map(|(_, _, _, _, fn_def)| fn_def.as_ref())
+            .map(|(.., fn_def)| fn_def.as_ref())
     }
     /// Iterate through all function definitions.
     ///
@@ -662,7 +662,7 @@ impl AST {
     pub fn iter_functions<'a>(&'a self) -> impl Iterator<Item = super::ScriptFnMetadata> + 'a {
         self.lib
             .iter_script_fn()
-            .map(|(_, _, _, _, fn_def)| fn_def.as_ref().into())
+            .map(|(.., fn_def)| fn_def.as_ref().into())
     }
     /// Clear all function definitions in the [`AST`].
     ///
@@ -744,7 +744,7 @@ impl AST {
         include_variables: bool,
     ) -> impl Iterator<Item = (&str, bool, Dynamic)> {
         self.statements().iter().filter_map(move |stmt| match stmt {
-            Stmt::Var(expr, name, options, _)
+            Stmt::Var(expr, name, options, ..)
                 if options.contains(AST_OPTION_CONSTANT) && include_constants
                     || !options.contains(AST_OPTION_CONSTANT) && include_variables =>
             {

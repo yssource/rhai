@@ -10,13 +10,13 @@ fn test_constant() -> Result<(), Box<EvalAltResult>> {
         *engine
             .eval::<INT>("const x = 123; x = 42;")
             .expect_err("expects error"),
-        EvalAltResult::ErrorParsing(ParseErrorType::AssignmentToConstant(x), _) if x == "x"
+        EvalAltResult::ErrorParsing(ParseErrorType::AssignmentToConstant(x), ..) if x == "x"
     ));
 
     #[cfg(not(feature = "no_index"))]
     assert!(matches!(
         *engine.run("const x = [1, 2, 3, 4, 5]; x[2] = 42;").expect_err("expects error"),
-        EvalAltResult::ErrorAssignmentToConstant(x, _) if x == "x"
+        EvalAltResult::ErrorAssignmentToConstant(x, ..) if x == "x"
     ));
 
     Ok(())
@@ -31,7 +31,7 @@ fn test_constant_scope() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine.run_with_scope(&mut scope, "x = 1").expect_err("expects error"),
-        EvalAltResult::ErrorAssignmentToConstant(x, _) if x == "x"
+        EvalAltResult::ErrorAssignmentToConstant(x, ..) if x == "x"
     ));
 
     Ok(())
@@ -87,7 +87,7 @@ fn test_constant_mut() -> Result<(), Box<EvalAltResult>> {
                 "
             )
             .expect_err("should error"),
-        EvalAltResult::ErrorAssignmentToConstant(_, _)
+        EvalAltResult::ErrorAssignmentToConstant(..)
     ));
 
     let mut scope = Scope::new();
@@ -120,7 +120,7 @@ fn test_constant_mut() -> Result<(), Box<EvalAltResult>> {
         *engine
             .run_with_scope(&mut scope, "MY_NUMBER.value = 42;")
             .expect_err("should error"),
-        EvalAltResult::ErrorAssignmentToConstant(_, _)
+        EvalAltResult::ErrorAssignmentToConstant(..)
     ));
 
     Ok(())

@@ -144,10 +144,10 @@ impl<'a> Target<'a> {
     #[must_use]
     pub const fn is_ref(&self) -> bool {
         match self {
-            Self::RefMut(_) => true,
+            Self::RefMut(..) => true,
             #[cfg(not(feature = "no_closure"))]
             Self::SharedValue { .. } => true,
-            Self::TempValue(_) => false,
+            Self::TempValue(..) => false,
             #[cfg(not(feature = "no_index"))]
             Self::Bit { .. }
             | Self::BitField { .. }
@@ -160,10 +160,10 @@ impl<'a> Target<'a> {
     #[must_use]
     pub const fn is_temp_value(&self) -> bool {
         match self {
-            Self::RefMut(_) => false,
+            Self::RefMut(..) => false,
             #[cfg(not(feature = "no_closure"))]
             Self::SharedValue { .. } => false,
-            Self::TempValue(_) => true,
+            Self::TempValue(..) => true,
             #[cfg(not(feature = "no_index"))]
             Self::Bit { .. }
             | Self::BitField { .. }
@@ -275,7 +275,7 @@ impl<'a> Target<'a> {
     #[inline]
     pub fn propagate_changed_value(&mut self) -> RhaiResultOf<()> {
         match self {
-            Self::RefMut(_) | Self::TempValue(_) => (),
+            Self::RefMut(..) | Self::TempValue(..) => (),
             #[cfg(not(feature = "no_closure"))]
             Self::SharedValue { .. } => (),
             #[cfg(not(feature = "no_index"))]

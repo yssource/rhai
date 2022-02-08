@@ -443,24 +443,24 @@ impl fmt::Debug for Expr {
         let mut display_pos = self.start_position();
 
         match self {
-            Self::DynamicConstant(value, _) => write!(f, "{:?}", value),
-            Self::BoolConstant(value, _) => write!(f, "{:?}", value),
-            Self::IntegerConstant(value, _) => write!(f, "{:?}", value),
+            Self::DynamicConstant(value, ..) => write!(f, "{:?}", value),
+            Self::BoolConstant(value, ..) => write!(f, "{:?}", value),
+            Self::IntegerConstant(value, ..) => write!(f, "{:?}", value),
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(value, _) => write!(f, "{:?}", value),
-            Self::CharConstant(value, _) => write!(f, "{:?}", value),
-            Self::StringConstant(value, _) => write!(f, "{:?}", value),
-            Self::Unit(_) => f.write_str("()"),
+            Self::FloatConstant(value, ..) => write!(f, "{:?}", value),
+            Self::CharConstant(value, ..) => write!(f, "{:?}", value),
+            Self::StringConstant(value, ..) => write!(f, "{:?}", value),
+            Self::Unit(..) => f.write_str("()"),
 
-            Self::InterpolatedString(x, _) => {
+            Self::InterpolatedString(x, ..) => {
                 f.write_str("InterpolatedString")?;
                 return f.debug_list().entries(x.iter()).finish();
             }
-            Self::Array(x, _) => {
+            Self::Array(x, ..) => {
                 f.write_str("Array")?;
                 f.debug_list().entries(x.iter()).finish()
             }
-            Self::Map(x, _) => {
+            Self::Map(x, ..) => {
                 f.write_str("Map")?;
                 f.debug_map()
                     .entries(x.0.iter().map(|(k, v)| (k, v)))
@@ -470,7 +470,7 @@ impl fmt::Debug for Expr {
                 f.write_str("Variable(")?;
 
                 #[cfg(not(feature = "no_module"))]
-                if let Some((_, ref namespace)) = x.1 {
+                if let Some((.., ref namespace)) = x.1 {
                     write!(f, "{}{}", namespace, Token::DoubleColon.literal_syntax())?
                 }
                 f.write_str(&x.2)?;
@@ -479,13 +479,13 @@ impl fmt::Debug for Expr {
                 }
                 f.write_str(")")
             }
-            Self::Property(x, _) => write!(f, "Property({})", x.2),
-            Self::Stack(x, _) => write!(f, "ConstantArg#{}", x),
+            Self::Property(x, ..) => write!(f, "Property({})", x.2),
+            Self::Stack(x, ..) => write!(f, "ConstantArg#{}", x),
             Self::Stmt(x) => {
                 f.write_str("ExprStmtBlock")?;
                 f.debug_list().entries(x.iter()).finish()
             }
-            Self::FnCall(x, _) => fmt::Debug::fmt(x, f),
+            Self::FnCall(x, ..) => fmt::Debug::fmt(x, f),
             Self::Index(x, term, pos) => {
                 display_pos = *pos;
 
@@ -497,9 +497,9 @@ impl fmt::Debug for Expr {
             }
             Self::Dot(x, _, pos) | Self::And(x, pos) | Self::Or(x, pos) => {
                 let op_name = match self {
-                    Self::Dot(_, _, _) => "Dot",
-                    Self::And(_, _) => "And",
-                    Self::Or(_, _) => "Or",
+                    Self::Dot(..) => "Dot",
+                    Self::And(..) => "And",
+                    Self::Or(..) => "Or",
                     expr => unreachable!(
                         "Self::Dot or Self::And or Self::Or expected but gets {:?}",
                         expr
@@ -513,7 +513,7 @@ impl fmt::Debug for Expr {
                     .field("rhs", &x.rhs)
                     .finish()
             }
-            Self::Custom(x, _) => f.debug_tuple("Custom").field(x).finish(),
+            Self::Custom(x, ..) => f.debug_tuple("Custom").field(x).finish(),
         }?;
 
         display_pos.debug_print(f)
@@ -528,24 +528,24 @@ impl Expr {
     #[must_use]
     pub fn get_literal_value(&self) -> Option<Dynamic> {
         Some(match self {
-            Self::DynamicConstant(x, _) => x.as_ref().clone(),
-            Self::IntegerConstant(x, _) => (*x).into(),
+            Self::DynamicConstant(x, ..) => x.as_ref().clone(),
+            Self::IntegerConstant(x, ..) => (*x).into(),
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(x, _) => (*x).into(),
-            Self::CharConstant(x, _) => (*x).into(),
-            Self::StringConstant(x, _) => x.clone().into(),
-            Self::BoolConstant(x, _) => (*x).into(),
-            Self::Unit(_) => Dynamic::UNIT,
+            Self::FloatConstant(x, ..) => (*x).into(),
+            Self::CharConstant(x, ..) => (*x).into(),
+            Self::StringConstant(x, ..) => x.clone().into(),
+            Self::BoolConstant(x, ..) => (*x).into(),
+            Self::Unit(..) => Dynamic::UNIT,
 
             #[cfg(not(feature = "no_index"))]
-            Self::Array(x, _) if self.is_constant() => {
+            Self::Array(x, ..) if self.is_constant() => {
                 let mut arr = crate::Array::with_capacity(x.len());
                 arr.extend(x.iter().map(|v| v.get_literal_value().unwrap()));
                 Dynamic::from_array(arr)
             }
 
             #[cfg(not(feature = "no_object"))]
-            Self::Map(x, _) if self.is_constant() => {
+            Self::Map(x, ..) if self.is_constant() => {
                 Dynamic::from_map(x.0.iter().fold(x.1.clone(), |mut map, (k, v)| {
                     let value_ref = map.get_mut(k.name.as_str()).unwrap();
                     *value_ref = v.get_literal_value().unwrap();
@@ -554,10 +554,10 @@ impl Expr {
             }
 
             // Fn
-            Self::FnCall(ref x, _)
+            Self::FnCall(ref x, ..)
                 if !x.is_qualified() && x.args.len() == 1 && x.name == KEYWORD_FN_PTR =>
             {
-                if let Expr::StringConstant(ref s, _) = x.args[0] {
+                if let Expr::StringConstant(ref s, ..) = x.args[0] {
                     if let Ok(fn_ptr) = FnPtr::new(s) {
                         fn_ptr.into()
                     } else {
@@ -569,33 +569,35 @@ impl Expr {
             }
 
             // Binary operators
-            Self::FnCall(x, _) if !x.is_qualified() && x.args.len() == 2 => match x.name.as_str() {
-                // x..y
-                OP_EXCLUSIVE_RANGE => {
-                    if let Expr::IntegerConstant(ref start, _) = x.args[0] {
-                        if let Expr::IntegerConstant(ref end, _) = x.args[1] {
-                            (*start..*end).into()
+            Self::FnCall(x, ..) if !x.is_qualified() && x.args.len() == 2 => {
+                match x.name.as_str() {
+                    // x..y
+                    OP_EXCLUSIVE_RANGE => {
+                        if let Expr::IntegerConstant(ref start, ..) = x.args[0] {
+                            if let Expr::IntegerConstant(ref end, ..) = x.args[1] {
+                                (*start..*end).into()
+                            } else {
+                                return None;
+                            }
                         } else {
                             return None;
                         }
-                    } else {
-                        return None;
                     }
-                }
-                // x..=y
-                OP_INCLUSIVE_RANGE => {
-                    if let Expr::IntegerConstant(ref start, _) = x.args[0] {
-                        if let Expr::IntegerConstant(ref end, _) = x.args[1] {
-                            (*start..=*end).into()
+                    // x..=y
+                    OP_INCLUSIVE_RANGE => {
+                        if let Expr::IntegerConstant(ref start, ..) = x.args[0] {
+                            if let Expr::IntegerConstant(ref end, ..) = x.args[1] {
+                                (*start..=*end).into()
+                            } else {
+                                return None;
+                            }
                         } else {
                             return None;
                         }
-                    } else {
-                        return None;
                     }
+                    _ => return None,
                 }
-                _ => return None,
-            },
+            }
 
             _ => return None,
         })
@@ -605,25 +607,25 @@ impl Expr {
     #[must_use]
     pub fn from_dynamic(value: Dynamic, pos: Position) -> Self {
         match value.0 {
-            Union::Unit(_, _, _) => Self::Unit(pos),
-            Union::Bool(b, _, _) => Self::BoolConstant(b, pos),
-            Union::Str(s, _, _) => Self::StringConstant(s, pos),
-            Union::Char(c, _, _) => Self::CharConstant(c, pos),
-            Union::Int(i, _, _) => Self::IntegerConstant(i, pos),
+            Union::Unit(..) => Self::Unit(pos),
+            Union::Bool(b, ..) => Self::BoolConstant(b, pos),
+            Union::Str(s, ..) => Self::StringConstant(s, pos),
+            Union::Char(c, ..) => Self::CharConstant(c, pos),
+            Union::Int(i, ..) => Self::IntegerConstant(i, pos),
 
             #[cfg(feature = "decimal")]
-            Union::Decimal(value, _, _) => Self::DynamicConstant(Box::new((*value).into()), pos),
+            Union::Decimal(value, ..) => Self::DynamicConstant(Box::new((*value).into()), pos),
 
             #[cfg(not(feature = "no_float"))]
-            Union::Float(f, _, _) => Self::FloatConstant(f, pos),
+            Union::Float(f, ..) => Self::FloatConstant(f, pos),
 
             #[cfg(not(feature = "no_index"))]
-            Union::Array(a, _, _) => Self::DynamicConstant(Box::new((*a).into()), pos),
+            Union::Array(a, ..) => Self::DynamicConstant(Box::new((*a).into()), pos),
 
             #[cfg(not(feature = "no_object"))]
-            Union::Map(m, _, _) => Self::DynamicConstant(Box::new((*m).into()), pos),
+            Union::Map(m, ..) => Self::DynamicConstant(Box::new((*m).into()), pos),
 
-            Union::FnPtr(f, _, _) if !f.is_curried() => Self::FnCall(
+            Union::FnPtr(f, ..) if !f.is_curried() => Self::FnCall(
                 FnCallExpr {
                     #[cfg(not(feature = "no_module"))]
                     namespace: None,
@@ -651,8 +653,8 @@ impl Expr {
 
         match self {
             #[cfg(not(feature = "no_module"))]
-            Self::Variable(_, _, x) if _non_qualified && x.1.is_some() => false,
-            Self::Variable(_, _, _) => true,
+            Self::Variable(.., x) if _non_qualified && x.1.is_some() => false,
+            Self::Variable(..) => true,
             _ => false,
         }
     }
@@ -666,8 +668,8 @@ impl Expr {
 
         match self {
             #[cfg(not(feature = "no_module"))]
-            Self::Variable(_, _, x) if _non_qualified && x.1.is_some() => None,
-            Self::Variable(_, _, x) => Some(x.2.as_str()),
+            Self::Variable(.., x) if _non_qualified && x.1.is_some() => None,
+            Self::Variable(.., x) => Some(x.2.as_str()),
             _ => None,
         }
     }
@@ -677,27 +679,27 @@ impl Expr {
     pub const fn position(&self) -> Position {
         match self {
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(_, pos) => *pos,
+            Self::FloatConstant(.., pos) => *pos,
 
-            Self::DynamicConstant(_, pos)
-            | Self::BoolConstant(_, pos)
-            | Self::IntegerConstant(_, pos)
-            | Self::CharConstant(_, pos)
+            Self::DynamicConstant(.., pos)
+            | Self::BoolConstant(.., pos)
+            | Self::IntegerConstant(.., pos)
+            | Self::CharConstant(.., pos)
             | Self::Unit(pos)
-            | Self::StringConstant(_, pos)
-            | Self::Array(_, pos)
-            | Self::Map(_, pos)
-            | Self::Variable(_, pos, _)
-            | Self::Stack(_, pos)
-            | Self::And(_, pos)
-            | Self::Or(_, pos)
-            | Self::Index(_, _, pos)
-            | Self::Dot(_, _, pos)
-            | Self::Custom(_, pos)
-            | Self::InterpolatedString(_, pos)
-            | Self::Property(_, pos) => *pos,
+            | Self::StringConstant(.., pos)
+            | Self::Array(.., pos)
+            | Self::Map(.., pos)
+            | Self::Variable(.., pos, _)
+            | Self::Stack(.., pos)
+            | Self::And(.., pos)
+            | Self::Or(.., pos)
+            | Self::Index(.., pos)
+            | Self::Dot(.., pos)
+            | Self::Custom(.., pos)
+            | Self::InterpolatedString(.., pos)
+            | Self::Property(.., pos) => *pos,
 
-            Self::FnCall(x, _) => x.pos,
+            Self::FnCall(x, ..) => x.pos,
 
             Self::Stmt(x) => x.position(),
         }
@@ -708,10 +710,10 @@ impl Expr {
     #[must_use]
     pub const fn start_position(&self) -> Position {
         match self {
-            Self::And(x, _) | Self::Or(x, _) | Self::Index(x, _, _) | Self::Dot(x, _, _) => {
+            Self::And(x, ..) | Self::Or(x, ..) | Self::Index(x, ..) | Self::Dot(x, ..) => {
                 x.lhs.start_position()
             }
-            Self::FnCall(_, pos) => *pos,
+            Self::FnCall(.., pos) => *pos,
             _ => self.position(),
         }
     }
@@ -720,26 +722,26 @@ impl Expr {
     pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
         match self {
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(_, pos) => *pos = new_pos,
+            Self::FloatConstant(.., pos) => *pos = new_pos,
 
-            Self::DynamicConstant(_, pos)
-            | Self::BoolConstant(_, pos)
-            | Self::IntegerConstant(_, pos)
-            | Self::CharConstant(_, pos)
+            Self::DynamicConstant(.., pos)
+            | Self::BoolConstant(.., pos)
+            | Self::IntegerConstant(.., pos)
+            | Self::CharConstant(.., pos)
             | Self::Unit(pos)
-            | Self::StringConstant(_, pos)
-            | Self::Array(_, pos)
-            | Self::Map(_, pos)
-            | Self::And(_, pos)
-            | Self::Or(_, pos)
-            | Self::Dot(_, _, pos)
-            | Self::Index(_, _, pos)
-            | Self::Variable(_, pos, _)
-            | Self::Stack(_, pos)
-            | Self::FnCall(_, pos)
-            | Self::Custom(_, pos)
-            | Self::InterpolatedString(_, pos)
-            | Self::Property(_, pos) => *pos = new_pos,
+            | Self::StringConstant(.., pos)
+            | Self::Array(.., pos)
+            | Self::Map(.., pos)
+            | Self::And(.., pos)
+            | Self::Or(.., pos)
+            | Self::Dot(.., pos)
+            | Self::Index(.., pos)
+            | Self::Variable(.., pos, _)
+            | Self::Stack(.., pos)
+            | Self::FnCall(.., pos)
+            | Self::Custom(.., pos)
+            | Self::InterpolatedString(.., pos)
+            | Self::Property(.., pos) => *pos = new_pos,
 
             Self::Stmt(x) => x.set_position(new_pos, Position::NONE),
         }
@@ -753,15 +755,15 @@ impl Expr {
     #[must_use]
     pub fn is_pure(&self) -> bool {
         match self {
-            Self::InterpolatedString(x, _) | Self::Array(x, _) => x.iter().all(Self::is_pure),
+            Self::InterpolatedString(x, ..) | Self::Array(x, ..) => x.iter().all(Self::is_pure),
 
-            Self::Map(x, _) => x.0.iter().map(|(_, v)| v).all(Self::is_pure),
+            Self::Map(x, ..) => x.0.iter().map(|(.., v)| v).all(Self::is_pure),
 
-            Self::And(x, _) | Self::Or(x, _) => x.lhs.is_pure() && x.rhs.is_pure(),
+            Self::And(x, ..) | Self::Or(x, ..) => x.lhs.is_pure() && x.rhs.is_pure(),
 
             Self::Stmt(x) => x.iter().all(Stmt::is_pure),
 
-            Self::Variable(_, _, _) | Self::Stack(_, _) => true,
+            Self::Variable(..) | Self::Stack(..) => true,
 
             _ => self.is_constant(),
         }
@@ -770,7 +772,7 @@ impl Expr {
     #[inline(always)]
     #[must_use]
     pub const fn is_unit(&self) -> bool {
-        matches!(self, Self::Unit(_))
+        matches!(self, Self::Unit(..))
     }
     /// Is the expression a constant?
     #[inline]
@@ -778,19 +780,19 @@ impl Expr {
     pub fn is_constant(&self) -> bool {
         match self {
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(_, _) => true,
+            Self::FloatConstant(..) => true,
 
-            Self::DynamicConstant(_, _)
-            | Self::BoolConstant(_, _)
-            | Self::IntegerConstant(_, _)
-            | Self::CharConstant(_, _)
-            | Self::StringConstant(_, _)
-            | Self::Unit(_)
-            | Self::Stack(_, _) => true,
+            Self::DynamicConstant(..)
+            | Self::BoolConstant(..)
+            | Self::IntegerConstant(..)
+            | Self::CharConstant(..)
+            | Self::StringConstant(..)
+            | Self::Unit(..)
+            | Self::Stack(..) => true,
 
-            Self::InterpolatedString(x, _) | Self::Array(x, _) => x.iter().all(Self::is_constant),
+            Self::InterpolatedString(x, ..) | Self::Array(x, ..) => x.iter().all(Self::is_constant),
 
-            Self::Map(x, _) => x.0.iter().map(|(_, expr)| expr).all(Self::is_constant),
+            Self::Map(x, ..) => x.0.iter().map(|(.., expr)| expr).all(Self::is_constant),
 
             _ => false,
         }
@@ -807,31 +809,31 @@ impl Expr {
 
         match self {
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(_, _) => false,
+            Self::FloatConstant(..) => false,
 
-            Self::DynamicConstant(_, _)
-            | Self::BoolConstant(_, _)
-            | Self::CharConstant(_, _)
-            | Self::And(_, _)
-            | Self::Or(_, _)
-            | Self::Unit(_) => false,
+            Self::DynamicConstant(..)
+            | Self::BoolConstant(..)
+            | Self::CharConstant(..)
+            | Self::And(..)
+            | Self::Or(..)
+            | Self::Unit(..) => false,
 
-            Self::IntegerConstant(_, _)
-            | Self::StringConstant(_, _)
-            | Self::InterpolatedString(_, _)
-            | Self::FnCall(_, _)
-            | Self::Stmt(_)
-            | Self::Dot(_, _, _)
-            | Self::Index(_, _, _)
-            | Self::Array(_, _)
-            | Self::Map(_, _)
-            | Self::Custom(_, _) => match token {
+            Self::IntegerConstant(..)
+            | Self::StringConstant(..)
+            | Self::InterpolatedString(..)
+            | Self::FnCall(..)
+            | Self::Stmt(..)
+            | Self::Dot(..)
+            | Self::Index(..)
+            | Self::Array(..)
+            | Self::Map(..)
+            | Self::Custom(..) => match token {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
                 _ => false,
             },
 
-            Self::Variable(_, _, _) => match token {
+            Self::Variable(..) => match token {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
                 Token::LeftParen => true,
@@ -840,14 +842,14 @@ impl Expr {
                 _ => false,
             },
 
-            Self::Property(_, _) => match token {
+            Self::Property(..) => match token {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
                 Token::LeftParen => true,
                 _ => false,
             },
 
-            Self::Stack(_, _) => false,
+            Self::Stack(..) => false,
         }
     }
     /// Recursively walk this expression.
@@ -872,21 +874,21 @@ impl Expr {
                     }
                 }
             }
-            Self::InterpolatedString(x, _) | Self::Array(x, _) => {
+            Self::InterpolatedString(x, ..) | Self::Array(x, ..) => {
                 for e in x.as_ref() {
                     if !e.walk(path, on_node) {
                         return false;
                     }
                 }
             }
-            Self::Map(x, _) => {
-                for (_, e) in &x.0 {
+            Self::Map(x, ..) => {
+                for (.., e) in &x.0 {
                     if !e.walk(path, on_node) {
                         return false;
                     }
                 }
             }
-            Self::Index(x, _, _) | Self::Dot(x, _, _) | Expr::And(x, _) | Expr::Or(x, _) => {
+            Self::Index(x, ..) | Self::Dot(x, ..) | Expr::And(x, ..) | Expr::Or(x, ..) => {
                 if !x.lhs.walk(path, on_node) {
                     return false;
                 }
@@ -894,14 +896,14 @@ impl Expr {
                     return false;
                 }
             }
-            Self::FnCall(x, _) => {
+            Self::FnCall(x, ..) => {
                 for e in &x.args {
                     if !e.walk(path, on_node) {
                         return false;
                     }
                 }
             }
-            Self::Custom(x, _) => {
+            Self::Custom(x, ..) => {
                 for e in &x.inputs {
                     if !e.walk(path, on_node) {
                         return false;

@@ -115,7 +115,7 @@ fn test_var_resolver() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(engine.eval_with_scope::<INT>(&mut scope, "chameleon")?, 1);
     assert!(
         matches!(*engine.eval_with_scope::<INT>(&mut scope, "DO_NOT_USE").expect_err("should error"),
-        EvalAltResult::ErrorVariableNotFound(n, _) if n == "DO_NOT_USE")
+        EvalAltResult::ErrorVariableNotFound(n, ..) if n == "DO_NOT_USE")
     );
 
     Ok(())

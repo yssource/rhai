@@ -37,37 +37,37 @@ fn test_math() -> Result<(), Box<EvalAltResult>> {
                 *engine
                     .eval::<INT>("abs(-9223372036854775808)")
                     .expect_err("expects negation overflow"),
-                EvalAltResult::ErrorArithmetic(_, _)
+                EvalAltResult::ErrorArithmetic(..)
             ));
             assert!(matches!(
                 *engine
                     .eval::<INT>("9223372036854775807 + 1")
                     .expect_err("expects overflow"),
-                EvalAltResult::ErrorArithmetic(_, _)
+                EvalAltResult::ErrorArithmetic(..)
             ));
             assert!(matches!(
                 *engine
                     .eval::<INT>("-9223372036854775808 - 1")
                     .expect_err("expects underflow"),
-                EvalAltResult::ErrorArithmetic(_, _)
+                EvalAltResult::ErrorArithmetic(..)
             ));
             assert!(matches!(
                 *engine
                     .eval::<INT>("9223372036854775807 * 9223372036854775807")
                     .expect_err("expects overflow"),
-                EvalAltResult::ErrorArithmetic(_, _)
+                EvalAltResult::ErrorArithmetic(..)
             ));
             assert!(matches!(
                 *engine
                     .eval::<INT>("9223372036854775807 / 0")
                     .expect_err("expects division by zero"),
-                EvalAltResult::ErrorArithmetic(_, _)
+                EvalAltResult::ErrorArithmetic(..)
             ));
             assert!(matches!(
                 *engine
                     .eval::<INT>("9223372036854775807 % 0")
                     .expect_err("expects division by zero"),
-                EvalAltResult::ErrorArithmetic(_, _)
+                EvalAltResult::ErrorArithmetic(..)
             ));
         }
 
@@ -77,31 +77,31 @@ fn test_math() -> Result<(), Box<EvalAltResult>> {
                 *engine
                     .eval::<INT>("2147483647 + 1")
                     .expect_err("expects overflow"),
-                EvalAltResult::ErrorArithmetic(_, _)
+                EvalAltResult::ErrorArithmetic(..)
             ));
             assert!(matches!(
                 *engine
                     .eval::<INT>("-2147483648 - 1")
                     .expect_err("expects underflow"),
-                EvalAltResult::ErrorArithmetic(_, _)
+                EvalAltResult::ErrorArithmetic(..)
             ));
             assert!(matches!(
                 *engine
                     .eval::<INT>("2147483647 * 2147483647")
                     .expect_err("expects overflow"),
-                EvalAltResult::ErrorArithmetic(_, _)
+                EvalAltResult::ErrorArithmetic(..)
             ));
             assert!(matches!(
                 *engine
                     .eval::<INT>("2147483647 / 0")
                     .expect_err("expects division by zero"),
-                EvalAltResult::ErrorArithmetic(_, _)
+                EvalAltResult::ErrorArithmetic(..)
             ));
             assert!(matches!(
                 *engine
                     .eval::<INT>("2147483647 % 0")
                     .expect_err("expects division by zero"),
-                EvalAltResult::ErrorArithmetic(_, _)
+                EvalAltResult::ErrorArithmetic(..)
             ));
         }
     }

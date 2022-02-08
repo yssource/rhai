@@ -62,8 +62,8 @@ fn print_help() {
     println!("ast        => print the last AST (optimized)");
     println!("astu       => print the last raw, un-optimized AST");
     println!();
-    println!("press Shift-Enter to continue to the next line,");
-    println!(r"or end a line with '\' (e.g. when pasting code).");
+    println!("press Ctrl-Enter or end a line with `\\`");
+    println!("to continue to the next line.");
     println!();
 }
 
@@ -204,6 +204,7 @@ fn load_script_files(engine: &mut Engine) {
 
 // Setup the Rustyline editor.
 fn setup_editor() -> Editor<()> {
+    //env_logger::init();
     let config = Builder::new()
         .tab_stop(4)
         .indent_size(4)
@@ -225,23 +226,13 @@ fn setup_editor() -> Editor<()> {
         Event::KeySeq(smallvec![KeyEvent::ctrl('z')]),
         EventHandler::Simple(Cmd::Undo(1)),
     );
-    // Map Shift-Return to insert a new line - bypass need for `\` continuation
+    // Map Ctrl-Enter to insert a new line - bypass need for `\` continuation
     rl.bind_sequence(
-        Event::KeySeq(smallvec![KeyEvent(
-            KeyCode::Char('m'),
-            Modifiers::CTRL_SHIFT
-        )]),
+        Event::KeySeq(smallvec![KeyEvent(KeyCode::Char('J'), Modifiers::CTRL)]),
         EventHandler::Simple(Cmd::Newline),
     );
     rl.bind_sequence(
-        Event::KeySeq(smallvec![KeyEvent(
-            KeyCode::Char('j'),
-            Modifiers::CTRL_SHIFT
-        )]),
-        EventHandler::Simple(Cmd::Newline),
-    );
-    rl.bind_sequence(
-        Event::KeySeq(smallvec![KeyEvent(KeyCode::Enter, Modifiers::SHIFT)]),
+        Event::KeySeq(smallvec![KeyEvent(KeyCode::Enter, Modifiers::CTRL)]),
         EventHandler::Simple(Cmd::Newline),
     );
     // Map Ctrl-Home and Ctrl-End for beginning/end of input
@@ -489,7 +480,7 @@ fn main() {
                     .iter()
                     .rev()
                     .enumerate()
-                    .find(|&(_, h)| h.contains(text))
+                    .find(|&(.., h)| h.contains(text))
                 {
                     replacement = Some(line.clone());
                     replacement_index = history_offset + (rl.history().len() - 1 - n);
@@ -514,7 +505,7 @@ fn main() {
                         .iter()
                         .rev()
                         .enumerate()
-                        .find(|&(_, h)| h.trim_start().starts_with(prefix))
+                        .find(|&(.., h)| h.trim_start().starts_with(prefix))
                     {
                         replacement = Some(line.clone());
                         replacement_index = history_offset + (rl.history().len() - 1 - n);

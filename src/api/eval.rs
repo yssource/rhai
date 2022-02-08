@@ -3,7 +3,9 @@
 use crate::eval::{EvalState, GlobalRuntimeState};
 use crate::parser::ParseState;
 use crate::types::dynamic::Variant;
-use crate::{Dynamic, Engine, Module, Position, RhaiResult, RhaiResultOf, Scope, AST, ERR};
+use crate::{
+    Dynamic, Engine, Module, OptimizationLevel, Position, RhaiResult, RhaiResultOf, Scope, AST, ERR,
+};
 use std::any::type_name;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -64,7 +66,6 @@ impl Engine {
         let ast = self.compile_with_scope_and_optimization_level(
             scope,
             &[script],
-            #[cfg(not(feature = "no_optimize"))]
             self.optimization_level,
         )?;
         self.eval_ast_with_scope(scope, &ast)
@@ -122,7 +123,9 @@ impl Engine {
             &mut state,
             scope,
             #[cfg(not(feature = "no_optimize"))]
-            crate::OptimizationLevel::None,
+            OptimizationLevel::None,
+            #[cfg(feature = "no_optimize")]
+            OptimizationLevel::default(),
         )?;
 
         self.eval_ast_with_scope(scope, &ast)

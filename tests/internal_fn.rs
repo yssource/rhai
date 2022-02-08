@@ -170,7 +170,7 @@ fn test_function_pointers() -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_object"))]
     assert!(matches!(
         *engine.eval::<INT>(r#"let f = Fn("abc"); f.call(0)"#).expect_err("should error"),
-        EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with("abc (")
+        EvalAltResult::ErrorFunctionNotFound(f, ..) if f.starts_with("abc (")
     ));
 
     #[cfg(not(feature = "no_object"))]
@@ -249,7 +249,7 @@ fn test_internal_fn_bang() -> Result<(), Box<EvalAltResult>> {
             )
             .expect_err("should error")
             .0,
-        ParseErrorType::MalformedCapture(_)
+        ParseErrorType::MalformedCapture(..)
     ));
 
     Ok(())

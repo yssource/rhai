@@ -10,7 +10,7 @@ use std::prelude::v1::*;
 impl Engine {
     /// Recursively calculate the sizes of a value.
     ///
-    /// Sizes returned are `(`[`Array`][crate::Array], [`Map`][crate::Map] and `String)`.
+    /// Sizes returned are `(` [`Array`][crate::Array], [`Map`][crate::Map] and [`String`] `)`.
     ///
     /// # Panics
     ///
@@ -21,51 +21,51 @@ impl Engine {
 
         match value.0 {
             #[cfg(not(feature = "no_index"))]
-            Union::Array(ref arr, _, _) => {
+            Union::Array(ref arr, ..) => {
                 arr.iter()
                     .fold((0, 0, 0), |(arrays, maps, strings), value| match value.0 {
-                        Union::Array(_, _, _) => {
+                        Union::Array(..) => {
                             let (a, m, s) = Self::calc_data_sizes(value, false);
                             (arrays + a + 1, maps + m, strings + s)
                         }
-                        Union::Blob(ref a, _, _) => (arrays + 1 + a.len(), maps, strings),
+                        Union::Blob(ref a, ..) => (arrays + 1 + a.len(), maps, strings),
                         #[cfg(not(feature = "no_object"))]
-                        Union::Map(_, _, _) => {
+                        Union::Map(..) => {
                             let (a, m, s) = Self::calc_data_sizes(value, false);
                             (arrays + a + 1, maps + m, strings + s)
                         }
-                        Union::Str(ref s, _, _) => (arrays + 1, maps, strings + s.len()),
+                        Union::Str(ref s, ..) => (arrays + 1, maps, strings + s.len()),
                         _ => (arrays + 1, maps, strings),
                     })
             }
             #[cfg(not(feature = "no_index"))]
-            Union::Blob(ref arr, _, _) => (arr.len(), 0, 0),
+            Union::Blob(ref arr, ..) => (arr.len(), 0, 0),
             #[cfg(not(feature = "no_object"))]
-            Union::Map(ref map, _, _) => {
+            Union::Map(ref map, ..) => {
                 map.values()
                     .fold((0, 0, 0), |(arrays, maps, strings), value| match value.0 {
                         #[cfg(not(feature = "no_index"))]
-                        Union::Array(_, _, _) => {
+                        Union::Array(..) => {
                             let (a, m, s) = Self::calc_data_sizes(value, false);
                             (arrays + a, maps + m + 1, strings + s)
                         }
                         #[cfg(not(feature = "no_index"))]
-                        Union::Blob(ref a, _, _) => (arrays + a.len(), maps, strings),
-                        Union::Map(_, _, _) => {
+                        Union::Blob(ref a, ..) => (arrays + a.len(), maps, strings),
+                        Union::Map(..) => {
                             let (a, m, s) = Self::calc_data_sizes(value, false);
                             (arrays + a, maps + m + 1, strings + s)
                         }
-                        Union::Str(ref s, _, _) => (arrays, maps + 1, strings + s.len()),
+                        Union::Str(ref s, ..) => (arrays, maps + 1, strings + s.len()),
                         _ => (arrays, maps + 1, strings),
                     })
             }
-            Union::Str(ref s, _, _) => (0, 0, s.len()),
+            Union::Str(ref s, ..) => (0, 0, s.len()),
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(_, _, _) if _top => {
+            Union::Shared(..) if _top => {
                 Self::calc_data_sizes(&*value.read_lock::<Dynamic>().unwrap(), true)
             }
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(_, _, _) => {
+            Union::Shared(..) => {
                 unreachable!("shared values discovered within data: {}", value)
             }
             _ => (0, 0, 0),

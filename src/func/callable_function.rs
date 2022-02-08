@@ -30,10 +30,10 @@ pub enum CallableFunction {
 impl fmt::Debug for CallableFunction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Pure(_) => write!(f, "NativePureFunction"),
-            Self::Method(_) => write!(f, "NativeMethod"),
-            Self::Iterator(_) => write!(f, "NativeIterator"),
-            Self::Plugin(_) => write!(f, "PluginFunction"),
+            Self::Pure(..) => write!(f, "NativePureFunction"),
+            Self::Method(..) => write!(f, "NativeMethod"),
+            Self::Iterator(..) => write!(f, "NativeIterator"),
+            Self::Plugin(..) => write!(f, "PluginFunction"),
 
             #[cfg(not(feature = "no_function"))]
             Self::Script(fn_def) => fmt::Debug::fmt(fn_def, f),
@@ -44,10 +44,10 @@ impl fmt::Debug for CallableFunction {
 impl fmt::Display for CallableFunction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Pure(_) => write!(f, "NativePureFunction"),
-            Self::Method(_) => write!(f, "NativeMethod"),
-            Self::Iterator(_) => write!(f, "NativeIterator"),
-            Self::Plugin(_) => write!(f, "PluginFunction"),
+            Self::Pure(..) => write!(f, "NativePureFunction"),
+            Self::Method(..) => write!(f, "NativeMethod"),
+            Self::Iterator(..) => write!(f, "NativeIterator"),
+            Self::Plugin(..) => write!(f, "PluginFunction"),
 
             #[cfg(not(feature = "no_function"))]
             Self::Script(s) => fmt::Display::fmt(s, f),
@@ -61,13 +61,13 @@ impl CallableFunction {
     #[must_use]
     pub fn is_pure(&self) -> bool {
         match self {
-            Self::Pure(_) => true,
-            Self::Method(_) | Self::Iterator(_) => false,
+            Self::Pure(..) => true,
+            Self::Method(..) | Self::Iterator(..) => false,
 
             Self::Plugin(p) => !p.is_method_call(),
 
             #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => false,
+            Self::Script(..) => false,
         }
     }
     /// Is this a native Rust method function?
@@ -75,13 +75,13 @@ impl CallableFunction {
     #[must_use]
     pub fn is_method(&self) -> bool {
         match self {
-            Self::Method(_) => true,
-            Self::Pure(_) | Self::Iterator(_) => false,
+            Self::Method(..) => true,
+            Self::Pure(..) | Self::Iterator(..) => false,
 
             Self::Plugin(p) => p.is_method_call(),
 
             #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => false,
+            Self::Script(..) => false,
         }
     }
     /// Is this an iterator function?
@@ -89,11 +89,11 @@ impl CallableFunction {
     #[must_use]
     pub const fn is_iter(&self) -> bool {
         match self {
-            Self::Iterator(_) => true,
-            Self::Pure(_) | Self::Method(_) | Self::Plugin(_) => false,
+            Self::Iterator(..) => true,
+            Self::Pure(..) | Self::Method(..) | Self::Plugin(..) => false,
 
             #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => false,
+            Self::Script(..) => false,
         }
     }
     /// Is this a script-defined function?
@@ -105,8 +105,8 @@ impl CallableFunction {
 
         #[cfg(not(feature = "no_function"))]
         match self {
-            Self::Script(_) => true,
-            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) | Self::Plugin(_) => false,
+            Self::Script(..) => true,
+            Self::Pure(..) | Self::Method(..) | Self::Iterator(..) | Self::Plugin(..) => false,
         }
     }
     /// Is this a plugin function?
@@ -114,11 +114,11 @@ impl CallableFunction {
     #[must_use]
     pub const fn is_plugin_fn(&self) -> bool {
         match self {
-            Self::Plugin(_) => true,
-            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => false,
+            Self::Plugin(..) => true,
+            Self::Pure(..) | Self::Method(..) | Self::Iterator(..) => false,
 
             #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => false,
+            Self::Script(..) => false,
         }
     }
     /// Is this a native Rust function?
@@ -130,10 +130,10 @@ impl CallableFunction {
 
         #[cfg(not(feature = "no_function"))]
         match self {
-            Self::Pure(_) | Self::Method(_) => true,
-            Self::Plugin(_) => true,
-            Self::Iterator(_) => true,
-            Self::Script(_) => false,
+            Self::Pure(..) | Self::Method(..) => true,
+            Self::Plugin(..) => true,
+            Self::Iterator(..) => true,
+            Self::Script(..) => false,
         }
     }
     /// Get the access mode.
@@ -145,8 +145,8 @@ impl CallableFunction {
 
         #[cfg(not(feature = "no_function"))]
         match self {
-            Self::Plugin(_) => FnAccess::Public,
-            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => FnAccess::Public,
+            Self::Plugin(..) => FnAccess::Public,
+            Self::Pure(..) | Self::Method(..) | Self::Iterator(..) => FnAccess::Public,
             Self::Script(f) => f.access,
         }
     }
@@ -156,10 +156,10 @@ impl CallableFunction {
     pub fn get_native_fn(&self) -> Option<&Shared<FnAny>> {
         match self {
             Self::Pure(f) | Self::Method(f) => Some(f),
-            Self::Iterator(_) | Self::Plugin(_) => None,
+            Self::Iterator(..) | Self::Plugin(..) => None,
 
             #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => None,
+            Self::Script(..) => None,
         }
     }
     /// Get a shared reference to a script-defined function definition.
@@ -170,7 +170,7 @@ impl CallableFunction {
     #[must_use]
     pub const fn get_script_fn_def(&self) -> Option<&Shared<crate::ast::ScriptFnDef>> {
         match self {
-            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) | Self::Plugin(_) => None,
+            Self::Pure(..) | Self::Method(..) | Self::Iterator(..) | Self::Plugin(..) => None,
             Self::Script(f) => Some(f),
         }
     }
@@ -180,10 +180,10 @@ impl CallableFunction {
     pub fn get_iter_fn(&self) -> Option<&IteratorFn> {
         match self {
             Self::Iterator(f) => Some(f.as_ref()),
-            Self::Pure(_) | Self::Method(_) | Self::Plugin(_) => None,
+            Self::Pure(..) | Self::Method(..) | Self::Plugin(..) => None,
 
             #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => None,
+            Self::Script(..) => None,
         }
     }
     /// Get a shared reference to a plugin function.
@@ -192,10 +192,10 @@ impl CallableFunction {
     pub fn get_plugin_fn(&self) -> Option<&Shared<FnPlugin>> {
         match self {
             Self::Plugin(f) => Some(f),
-            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => None,
+            Self::Pure(..) | Self::Method(..) | Self::Iterator(..) => None,
 
             #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => None,
+            Self::Script(..) => None,
         }
     }
     /// Create a new [`CallableFunction::Pure`].

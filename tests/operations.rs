@@ -19,7 +19,7 @@ fn test_max_operations() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine.run("for x in 0..500 {}").expect_err("should error"),
-        EvalAltResult::ErrorTooManyOperations(_)
+        EvalAltResult::ErrorTooManyOperations(..)
     ));
 
     engine.set_max_operations(0);
@@ -44,7 +44,7 @@ fn test_max_operations_literal() -> Result<(), Box<EvalAltResult>> {
         *engine
             .run("[1, 2, 3, 4, 5, 6, 7, 8, 9]")
             .expect_err("should error"),
-        EvalAltResult::ErrorTooManyOperations(_)
+        EvalAltResult::ErrorTooManyOperations(..)
     ));
 
     #[cfg(not(feature = "no_object"))]
@@ -55,7 +55,7 @@ fn test_max_operations_literal() -> Result<(), Box<EvalAltResult>> {
         *engine
             .run("#{a:1, b:2, c:3, d:4, e:5, f:6, g:7, h:8, i:9}")
             .expect_err("should error"),
-        EvalAltResult::ErrorTooManyOperations(_)
+        EvalAltResult::ErrorTooManyOperations(..)
     ));
 
     Ok(())
@@ -111,7 +111,7 @@ fn test_max_operations_functions() -> Result<(), Box<EvalAltResult>> {
                 "#,
             )
             .expect_err("should error"),
-        EvalAltResult::ErrorTooManyOperations(_)
+        EvalAltResult::ErrorTooManyOperations(..)
     ));
 
     Ok(())
@@ -138,7 +138,7 @@ fn test_max_operations_eval() -> Result<(), Box<EvalAltResult>> {
                 "#
             )
             .expect_err("should error"),
-        EvalAltResult::ErrorInFunctionCall(_, _, err, _) if matches!(*err, EvalAltResult::ErrorTooManyOperations(_))
+        EvalAltResult::ErrorInFunctionCall(.., err, _) if matches!(*err, EvalAltResult::ErrorTooManyOperations(..))
     ));
 
     Ok(())
@@ -163,7 +163,7 @@ fn test_max_operations_progress() -> Result<(), Box<EvalAltResult>> {
         *engine
             .run("for x in 0..500 {}")
             .expect_err("should error"),
-        EvalAltResult::ErrorTerminated(x, _) if x.as_int()? == 42
+        EvalAltResult::ErrorTerminated(x, ..) if x.as_int()? == 42
     ));
 
     Ok(())

@@ -152,7 +152,7 @@ fn collect_fn_metadata(
     ctx.iter_namespaces()
         .flat_map(Module::iter_script_fn)
         .filter(|(s, a, n, p, f)| filter(*s, *a, n, *p, f))
-        .for_each(|(_, _, _, _, f)| {
+        .for_each(|(.., f)| {
             list.push(
                 make_metadata(
                     &dict,
@@ -169,7 +169,7 @@ fn collect_fn_metadata(
         .iter()
         .flat_map(|m| m.iter_script_fn())
         .filter(|(ns, a, n, p, f)| filter(*ns, *a, n, *p, f))
-        .for_each(|(_, _, _, _, f)| {
+        .for_each(|(.., f)| {
             list.push(
                 make_metadata(
                     &dict,
@@ -187,7 +187,7 @@ fn collect_fn_metadata(
         .values()
         .flat_map(|m| m.iter_script_fn())
         .filter(|(ns, a, n, p, f)| filter(*ns, *a, n, *p, f))
-        .for_each(|(_, _, _, _, f)| {
+        .for_each(|(.., f)| {
             list.push(
                 make_metadata(
                     &dict,
@@ -219,7 +219,7 @@ fn collect_fn_metadata(
             module
                 .iter_script_fn()
                 .filter(|(s, a, n, p, f)| filter(*s, *a, n, *p, f))
-                .for_each(|(_, _, _, _, f)| {
+                .for_each(|(.., f)| {
                     list.push(make_metadata(dict, Some(namespace.clone()), f).into())
                 });
             for (ns, m) in module.iter_sub_modules() {

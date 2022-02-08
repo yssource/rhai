@@ -333,7 +333,7 @@ impl<'a> NativeCallContext<'a> {
                 Position::NONE,
                 self.level + 1,
             )
-            .map(|(r, _)| r)
+            .map(|(r, ..)| r)
     }
 }
 

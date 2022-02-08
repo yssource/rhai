@@ -81,7 +81,7 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
         *engine
             .run("let foo = (exec [x<<15] -> { x += 2 } while x < 42) * 10;")
             .expect_err("should error"),
-        EvalAltResult::ErrorRuntime(_, _)
+        EvalAltResult::ErrorRuntime(..)
     ));
 
     assert_eq!(

@@ -214,7 +214,7 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
                     "#
                 )
                 .expect_err("should error"),
-            EvalAltResult::ErrorTooManyModules(_)
+            EvalAltResult::ErrorTooManyModules(..)
         ));
 
         #[cfg(not(feature = "no_function"))]
@@ -237,7 +237,7 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
                     "#
                 )
                 .expect_err("should error"),
-            EvalAltResult::ErrorInFunctionCall(fn_name, _, _, _) if fn_name == "foo"
+            EvalAltResult::ErrorInFunctionCall(fn_name, _, ..) if fn_name == "foo"
         ));
 
         engine.set_max_modules(1000);
@@ -369,7 +369,7 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
         *engine
             .run(r#"import "testing" as ttt; ttt::hidden()"#)
             .expect_err("should error"),
-        EvalAltResult::ErrorFunctionNotFound(fn_name, _) if fn_name == "ttt::hidden ()"
+        EvalAltResult::ErrorFunctionNotFound(fn_name, ..) if fn_name == "ttt::hidden ()"
     ));
 
     Ok(())
@@ -381,13 +381,13 @@ fn test_module_export() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         engine.compile("let x = 10; { export x; }").expect_err("should error"),
-        ParseError(x, _) if *x == ParseErrorType::WrongExport
+        ParseError(x, ..) if *x == ParseErrorType::WrongExport
     ));
 
     #[cfg(not(feature = "no_function"))]
     assert!(matches!(
         engine.compile("fn abc(x) { export x; }").expect_err("should error"),
-        ParseError(x, _) if *x == ParseErrorType::WrongExport
+        ParseError(x, ..) if *x == ParseErrorType::WrongExport
     ));
 
     Ok(())

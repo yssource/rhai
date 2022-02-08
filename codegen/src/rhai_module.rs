@@ -99,7 +99,7 @@ pub fn generate_body(
         let fn_input_types: Vec<_> = function
             .arg_list()
             .map(|fn_arg| match fn_arg {
-                syn::FnArg::Receiver(_) => panic!("internal error: receiver fn outside impl!?"),
+                syn::FnArg::Receiver(..) => panic!("internal error: receiver fn outside impl!?"),
                 syn::FnArg::Typed(syn::PatType { ref ty, .. }) => {
                     let arg_type = match flatten_type_groups(ty.as_ref()) {
                         syn::Type::Reference(syn::TypeReference {
@@ -150,7 +150,7 @@ pub fn generate_body(
 
             match function.params().special {
                 FnSpecialAccess::None => (),
-                FnSpecialAccess::Index(_) | FnSpecialAccess::Property(_) => {
+                FnSpecialAccess::Index(..) | FnSpecialAccess::Property(..) => {
                     let reg_name = fn_literal.value();
                     if reg_name.starts_with(FN_GET)
                         || reg_name.starts_with(FN_SET)
@@ -240,7 +240,7 @@ pub fn generate_body(
     })
     .unwrap();
 
-    let (_, generate_call_content) = generate_fn_call.content.take().unwrap();
+    let (.., generate_call_content) = generate_fn_call.content.take().unwrap();
 
     quote! {
         #(#generate_call_content)*
@@ -254,7 +254,7 @@ pub fn check_rename_collisions(fns: &[ExportedFn]) -> Result<(), syn::Error> {
             .arg_list()
             .fold(name.to_string(), |mut arg_str, fn_arg| {
                 let type_string: String = match fn_arg {
-                    syn::FnArg::Receiver(_) => unimplemented!("receiver rhai_fns not implemented"),
+                    syn::FnArg::Receiver(..) => unimplemented!("receiver rhai_fns not implemented"),
                     syn::FnArg::Typed(syn::PatType { ref ty, .. }) => print_type(ty),
                 };
                 arg_str.push('.');
@@ -275,7 +275,7 @@ pub fn check_rename_collisions(fns: &[ExportedFn]) -> Result<(), syn::Error> {
                 .map(|n| (n.clone(), n.clone()))
                 .collect();
 
-            if let Some((s, n, _)) = item_fn.params().special.get_fn_name() {
+            if let Some((s, n, ..)) = item_fn.params().special.get_fn_name() {
                 names.push((s, n));
             }
 

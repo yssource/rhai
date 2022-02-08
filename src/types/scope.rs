@@ -310,7 +310,7 @@ impl Scope<'_> {
     #[inline]
     #[must_use]
     pub fn contains(&self, name: &str) -> bool {
-        self.names.iter().any(|(key, _)| name == key)
+        self.names.iter().any(|(key, ..)| name == key)
     }
     /// Find an entry in the [`Scope`], starting from the last.
     #[inline]
@@ -322,7 +322,7 @@ impl Scope<'_> {
             .iter()
             .rev() // Always search a Scope in reverse order
             .enumerate()
-            .find_map(|(i, (key, _))| {
+            .find_map(|(i, (key, ..))| {
                 if name == key {
                     let index = len - 1 - i;
                     Some((index, self.values[index].access_mode()))
@@ -352,8 +352,8 @@ impl Scope<'_> {
             .iter()
             .rev()
             .enumerate()
-            .find(|(_, (key, _))| name == key)
-            .and_then(|(index, _)| self.values[len - 1 - index].flatten_clone().try_cast())
+            .find(|(.., (key, ..))| name == key)
+            .and_then(|(index, ..)| self.values[len - 1 - index].flatten_clone().try_cast())
     }
     /// Check if the named entry in the [`Scope`] is constant.
     ///
@@ -374,7 +374,7 @@ impl Scope<'_> {
     /// ```
     #[inline]
     pub fn is_constant(&self, name: &str) -> Option<bool> {
-        self.get_index(name).and_then(|(_, access)| match access {
+        self.get_index(name).and_then(|(.., access)| match access {
             AccessMode::ReadWrite => None,
             AccessMode::ReadOnly => Some(true),
         })
@@ -411,7 +411,7 @@ impl Scope<'_> {
         value: impl Variant + Clone,
     ) -> &mut Self {
         match self.get_index(name.as_ref()) {
-            None | Some((_, AccessMode::ReadOnly)) => {
+            None | Some((.., AccessMode::ReadOnly)) => {
                 self.push(name, value);
             }
             Some((index, AccessMode::ReadWrite)) => {
@@ -453,7 +453,7 @@ impl Scope<'_> {
             None => {
                 self.push(name, value);
             }
-            Some((_, AccessMode::ReadOnly)) => panic!("variable {} is constant", name.as_ref()),
+            Some((.., AccessMode::ReadOnly)) => panic!("variable {} is constant", name.as_ref()),
             Some((index, AccessMode::ReadWrite)) => {
                 let value_ref = self.values.get_mut(index).unwrap();
                 *value_ref = Dynamic::from(value);
@@ -511,7 +511,7 @@ impl Scope<'_> {
     #[cfg(not(feature = "no_module"))]
     #[inline]
     pub(crate) fn add_entry_alias(&mut self, index: usize, alias: Identifier) -> &mut Self {
-        let (_, aliases) = self.names.get_mut(index).unwrap();
+        let (.., aliases) = self.names.get_mut(index).unwrap();
         match aliases {
             None => {
                 let mut list = StaticVec::new_const();
@@ -533,7 +533,7 @@ impl Scope<'_> {
         self.names.iter().rev().enumerate().fold(
             Self::new(),
             |mut entries, (index, (name, alias))| {
-                if !entries.names.iter().any(|(key, _)| key == name) {
+                if !entries.names.iter().any(|(key, ..)| key == name) {
                     let orig_value = &self.values[len - 1 - index];
                     let mut value = orig_value.clone();
                     value.set_access_mode(orig_value.access_mode());
@@ -593,7 +593,7 @@ impl Scope<'_> {
         self.names
             .iter()
             .zip(self.values.iter())
-            .map(|((name, _), value)| (name.as_ref(), value.is_read_only(), value))
+            .map(|((name, ..), value)| (name.as_ref(), value.is_read_only(), value))
     }
     /// Remove a range of entries within the [`Scope`].
     ///

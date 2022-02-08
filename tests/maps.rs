@@ -53,7 +53,7 @@ b`: 1}; y["a\nb"]
         *engine
             .eval::<INT>("let y = #{`a${1}`: 1}; y.a1")
             .expect_err("should error"),
-        EvalAltResult::ErrorParsing(ParseErrorType::PropertyExpected, _)
+        EvalAltResult::ErrorParsing(ParseErrorType::PropertyExpected, ..)
     ));
 
     assert!(engine.eval::<bool>(r#"let y = #{a: 1, b: 2, c: 3}; "c" in y"#)?);
@@ -205,7 +205,7 @@ fn test_map_json() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine.parse_json("   123", true).expect_err("should error"),
-        EvalAltResult::ErrorParsing(ParseErrorType::MissingToken(token, _), _)
+        EvalAltResult::ErrorParsing(ParseErrorType::MissingToken(token, ..), ..)
             if token == "{"
     ));
 

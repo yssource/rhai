@@ -1,8 +1,5 @@
 use rhai::{Engine, EvalAltResult, Position};
 
-#[cfg(not(feature = "no_optimize"))]
-use rhai::OptimizationLevel;
-
 use std::{env, fs::File, io::Read, path::Path, process::exit};
 
 fn eprint_error(input: &str, mut err: EvalAltResult) {
@@ -53,7 +50,7 @@ fn main() {
         let mut engine = Engine::new();
 
         #[cfg(not(feature = "no_optimize"))]
-        engine.set_optimization_level(OptimizationLevel::Full);
+        engine.set_optimization_level(rhai::OptimizationLevel::Full);
 
         let mut f = match File::open(&filename) {
             Err(err) => {

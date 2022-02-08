@@ -12,7 +12,8 @@ use crate::engine::{
 use crate::eval::{EvalState, GlobalRuntimeState};
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnArgsVec, FnPtr,
-    Identifier, ImmutableString, Module, Position, RhaiResult, RhaiResultOf, Scope, ERR,
+    Identifier, ImmutableString, Module, OptimizationLevel, Position, RhaiError, RhaiResult,
+    RhaiResultOf, Scope, ERR,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -45,11 +46,13 @@ impl<'a> ArgBackup<'a> {
     /// This function replaces the first argument of a method call with a clone copy.
     /// This is to prevent a pure function unintentionally consuming the first argument.
     ///
-    /// `restore_first_arg` must be called before the end of the scope to prevent the shorter lifetime from leaking.
+    /// `restore_first_arg` must be called before the end of the scope to prevent the shorter
+    /// lifetime from leaking.
     ///
     /// # Safety
     ///
-    /// This method blindly casts a reference to another lifetime, which saves allocation and string cloning.
+    /// This method blindly casts a reference to another lifetime, which saves allocation and
+    /// string cloning.
     ///
     /// As long as `restore_first_arg` is called before the end of the scope, the shorter lifetime
     /// will not leak.
@@ -70,8 +73,8 @@ impl<'a> ArgBackup<'a> {
         // Blindly casting a reference to another lifetime saves allocation and string cloning,
         // but must be used with the utmost care.
         //
-        // We can do this here because, before the end of this scope, we'd restore the original reference
-        // via `restore_first_arg`. Therefore this shorter lifetime does not leak.
+        // We can do this here because, before the end of this scope, we'd restore the original
+        // reference via `restore_first_arg`. Therefore this shorter lifetime does not leak.
         self.orig_mut = Some(mem::replace(&mut args[0], unsafe {
             mem::transmute(&mut self.value_copy)
         }));
@@ -80,8 +83,8 @@ impl<'a> ArgBackup<'a> {
     ///
     /// # Safety
     ///
-    /// If `change_first_arg_to_copy` has been called, this function **MUST** be called _BEFORE_ exiting
-    /// the current scope.  Otherwise it is undefined behavior as the shorter lifetime will leak.
+    /// If `change_first_arg_to_copy` has been called, this function **MUST** be called _BEFORE_
+    /// exiting the current scope.  Otherwise it is undefined behavior as the shorter lifetime will leak.
     #[inline(always)]
     fn restore_first_arg(mut self, args: &mut FnCallArgs<'a>) {
         if let Some(p) = self.orig_mut.take() {
@@ -108,11 +111,11 @@ pub fn ensure_no_data_race(
     args: &FnCallArgs,
     is_method_call: bool,
 ) -> RhaiResultOf<()> {
-    if let Some((n, _)) = args
+    if let Some((n, ..)) = args
         .iter()
         .enumerate()
         .skip(if is_method_call { 1 } else { 0 })
-        .find(|(_, a)| a.is_locked())
+        .find(|(.., a)| a.is_locked())
     {
         return Err(ERR::ErrorDataRace(
             format!("argument #{} of function '{}'", n + 1, fn_name),
@@ -391,7 +394,7 @@ impl Engine {
 
                 let source = match (source.as_str(), parent_source.as_str()) {
                     ("", "") => None,
-                    ("", s) | (s, _) => Some(s),
+                    ("", s) | (s, ..) => Some(s),
                 };
 
                 #[cfg(feature = "debugging")]
@@ -429,7 +432,7 @@ impl Engine {
             {
                 let trigger = match global.debugger.status {
                     crate::eval::DebuggerStatus::FunctionExit(n) => n >= level,
-                    crate::eval::DebuggerStatus::Next(_, true) => true,
+                    crate::eval::DebuggerStatus::Next(.., true) => true,
                     _ => false,
                 };
                 if trigger {
@@ -773,8 +776,8 @@ impl Engine {
             scope, global, state, lib, &mut None, statements, false, level,
         )
         .or_else(|err| match *err {
-            ERR::Return(out, _) => Ok(out),
-            ERR::LoopBreak(_, _) => {
+            ERR::Return(out, ..) => Ok(out),
+            ERR::LoopBreak(..) => {
                 unreachable!("no outer loop scope to break out of")
             }
             _ => Err(err),
@@ -957,7 +960,7 @@ impl Engine {
         level: usize,
     ) -> RhaiResultOf<(Dynamic, Position)> {
         Ok((
-            if let Expr::Stack(slot, _) = arg_expr {
+            if let Expr::Stack(slot, ..) = arg_expr {
                 #[cfg(feature = "debugging")]
                 self.run_debugger(scope, global, state, lib, this_ptr, arg_expr, level)?;
                 constants[*slot].clone()
@@ -969,7 +972,7 @@ impl Engine {
                 // Do not match function exit for arguments
                 #[cfg(feature = "debugging")]
                 let reset_debugger = global.debugger.clear_status_if(|status| {
-                    matches!(status, crate::eval::DebuggerStatus::FunctionExit(_))
+                    matches!(status, crate::eval::DebuggerStatus::FunctionExit(..))
                 });
 
                 let result = self.eval_expr(scope, global, state, lib, this_ptr, arg_expr, level);
@@ -1076,16 +1079,13 @@ impl Engine {
                 let (name, fn_curry) = arg_value.cast::<FnPtr>().take_data();
 
                 // Append the new curried arguments to the existing list.
-                let fn_curry =
-                    a_expr
-                        .iter()
-                        .try_fold(fn_curry, |mut curried, expr| -> RhaiResultOf<_> {
-                            let (value, _) = self.get_arg_value(
-                                scope, global, state, lib, this_ptr, expr, constants, level,
-                            )?;
-                            curried.push(value);
-                            Ok(curried)
-                        })?;
+                let fn_curry = a_expr.iter().try_fold(fn_curry, |mut curried, expr| {
+                    let (value, ..) = self.get_arg_value(
+                        scope, global, state, lib, this_ptr, expr, constants, level,
+                    )?;
+                    curried.push(value);
+                    Ok::<_, RhaiError>(curried)
+                })?;
 
                 return Ok(FnPtr::new_unchecked(name, fn_curry).into());
             }
@@ -1094,7 +1094,7 @@ impl Engine {
             #[cfg(not(feature = "no_closure"))]
             crate::engine::KEYWORD_IS_SHARED if total_args == 1 => {
                 let arg = first_arg.unwrap();
-                let (arg_value, _) =
+                let (arg_value, ..) =
                     self.get_arg_value(scope, global, state, lib, this_ptr, arg, constants, level)?;
                 return Ok(arg_value.is_shared().into());
             }
@@ -1194,7 +1194,7 @@ impl Engine {
                 .chain(a_expr.iter())
                 .try_for_each(|expr| {
                     self.get_arg_value(scope, global, state, lib, this_ptr, expr, constants, level)
-                        .map(|(value, _)| arg_values.push(value.flatten()))
+                        .map(|(value, ..)| arg_values.push(value.flatten()))
                 })?;
             args.extend(curry.iter_mut());
             args.extend(arg_values.iter_mut());
@@ -1207,7 +1207,7 @@ impl Engine {
                     scope, global, state, lib, name, hashes, &mut args, is_ref_mut, false, pos,
                     level,
                 )
-                .map(|(v, _)| v);
+                .map(|(v, ..)| v);
         }
 
         // Call with blank scope
@@ -1226,7 +1226,7 @@ impl Engine {
                 // func(x, ...) -> x.func(...)
                 a_expr.iter().try_for_each(|expr| {
                     self.get_arg_value(scope, global, state, lib, this_ptr, expr, constants, level)
-                        .map(|(value, _)| arg_values.push(value.flatten()))
+                        .map(|(value, ..)| arg_values.push(value.flatten()))
                 })?;
 
                 let (mut target, _pos) =
@@ -1263,7 +1263,7 @@ impl Engine {
                         self.get_arg_value(
                             scope, global, state, lib, this_ptr, expr, constants, level,
                         )
-                        .map(|(value, _)| arg_values.push(value.flatten()))
+                        .map(|(value, ..)| arg_values.push(value.flatten()))
                     })?;
                 args.extend(curry.iter_mut());
                 args.extend(arg_values.iter_mut());
@@ -1273,7 +1273,7 @@ impl Engine {
         self.exec_fn_call(
             None, global, state, lib, name, hashes, &mut args, is_ref_mut, false, pos, level,
         )
-        .map(|(v, _)| v)
+        .map(|(v, ..)| v)
     }
 
     /// Call a namespace-qualified function in normal function-call style.
@@ -1312,7 +1312,7 @@ impl Engine {
 
                 args_expr.iter().skip(1).try_for_each(|expr| {
                     self.get_arg_value(scope, global, state, lib, this_ptr, expr, constants, level)
-                        .map(|(value, _)| arg_values.push(value.flatten()))
+                        .map(|(value, ..)| arg_values.push(value.flatten()))
                 })?;
 
                 // Get target reference to first argument
@@ -1343,7 +1343,7 @@ impl Engine {
                 // func(..., ...) or func(mod::x, ...)
                 args_expr.iter().try_for_each(|expr| {
                     self.get_arg_value(scope, global, state, lib, this_ptr, expr, constants, level)
-                        .map(|(value, _)| arg_values.push(value.flatten()))
+                        .map(|(value, ..)| arg_values.push(value.flatten()))
                 })?;
                 args.extend(arg_values.iter_mut());
             }
@@ -1450,7 +1450,9 @@ impl Engine {
             &Scope::new(),
             &[script],
             #[cfg(not(feature = "no_optimize"))]
-            crate::OptimizationLevel::None,
+            OptimizationLevel::None,
+            #[cfg(feature = "no_optimize")]
+            OptimizationLevel::default(),
         )?;
 
         // If new functions are defined within the eval string, it is an error

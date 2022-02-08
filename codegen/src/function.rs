@@ -252,7 +252,7 @@ impl ExportedParams for ExportedFnParams {
                     }
                 }
 
-                (attr, _) => {
+                (attr, ..) => {
                     return Err(syn::Error::new(
                         key.span(),
                         format!("unknown attribute '{}'", attr),
@@ -366,7 +366,7 @@ impl Parse for ExportedFn {
                 }) => {
                     matches!(flatten_type_groups(elem.as_ref()), syn::Type::Path(ref p) if p.path == str_type_path)
                 }
-                syn::Type::Verbatim(_) => false,
+                syn::Type::Verbatim(..) => false,
                 _ => true,
             };
             if !is_ok {
@@ -379,15 +379,15 @@ impl Parse for ExportedFn {
 
         // Check return type.
         match fn_all.sig.output {
-            syn::ReturnType::Type(_, ref ret_type) => {
+            syn::ReturnType::Type(.., ref ret_type) => {
                 match flatten_type_groups(ret_type.as_ref()) {
-                    syn::Type::Ptr(_) => {
+                    syn::Type::Ptr(..) => {
                         return Err(syn::Error::new(
                             fn_all.sig.output.span(),
                             "Rhai functions cannot return pointers",
                         ))
                     }
-                    syn::Type::Reference(_) => {
+                    syn::Type::Reference(..) => {
                         return Err(syn::Error::new(
                             fn_all.sig.output.span(),
                             "Rhai functions cannot return references",
@@ -425,10 +425,10 @@ impl ExportedFn {
 
     pub fn update_scope(&mut self, parent_scope: &ExportScope) {
         let keep = match (self.params.skip, parent_scope) {
-            (true, _) => false,
-            (_, ExportScope::PubOnly) => self.is_public(),
-            (_, ExportScope::Prefix(s)) => self.name().to_string().starts_with(s),
-            (_, ExportScope::All) => true,
+            (true, ..) => false,
+            (.., ExportScope::PubOnly) => self.is_public(),
+            (.., ExportScope::Prefix(s)) => self.name().to_string().starts_with(s),
+            (.., ExportScope::All) => true,
         };
         self.params.skip = !keep;
     }
@@ -502,7 +502,7 @@ impl ExportedFn {
 
     pub fn return_type(&self) -> Option<&syn::Type> {
         match self.signature.output {
-            syn::ReturnType::Type(_, ref ret_type) => Some(flatten_type_groups(ret_type)),
+            syn::ReturnType::Type(.., ref ret_type) => Some(flatten_type_groups(ret_type)),
             _ => None,
         }
     }
@@ -544,28 +544,28 @@ impl ExportedFn {
 
         match params.special {
             // 2a. Property getters must take only the subject as an argument.
-            FnSpecialAccess::Property(Property::Get(_)) if self.arg_count() != 1 => {
+            FnSpecialAccess::Property(Property::Get(..)) if self.arg_count() != 1 => {
                 return Err(syn::Error::new(
                     self.signature.inputs.span(),
                     "property getter requires exactly 1 parameter",
                 ))
             }
             // 2b. Property getters must return a value.
-            FnSpecialAccess::Property(Property::Get(_)) if self.return_type().is_none() => {
+            FnSpecialAccess::Property(Property::Get(..)) if self.return_type().is_none() => {
                 return Err(syn::Error::new(
                     self.signature.span(),
                     "property getter must return a value",
                 ))
             }
             // 3a. Property setters must take the subject and a new value as arguments.
-            FnSpecialAccess::Property(Property::Set(_)) if self.arg_count() != 2 => {
+            FnSpecialAccess::Property(Property::Set(..)) if self.arg_count() != 2 => {
                 return Err(syn::Error::new(
                     self.signature.inputs.span(),
                     "property setter requires exactly 2 parameters",
                 ))
             }
             // 3b. Non-raw property setters must return nothing.
-            FnSpecialAccess::Property(Property::Set(_))
+            FnSpecialAccess::Property(Property::Set(..))
                 if params.return_raw.is_none() && self.return_type().is_some() =>
             {
                 return Err(syn::Error::new(
@@ -734,7 +734,7 @@ impl ExportedFn {
                         .unwrap(),
                     );
                 }
-                syn::FnArg::Receiver(_) => todo!("true self parameters not implemented yet"),
+                syn::FnArg::Receiver(..) => todo!("true self parameters not implemented yet"),
             }
             unpack_exprs.push(syn::parse2::<syn::Expr>(quote! { #var }).unwrap());
         } else {
@@ -811,7 +811,7 @@ impl ExportedFn {
                         );
                     }
                 }
-                syn::FnArg::Receiver(_) => panic!("internal error: how did this happen!?"),
+                syn::FnArg::Receiver(..) => panic!("internal error: how did this happen!?"),
             }
             if !is_ref {
                 unpack_exprs.push(syn::parse2::<syn::Expr>(quote! { #var }).unwrap());

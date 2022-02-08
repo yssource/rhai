@@ -3,16 +3,15 @@
 use crate::ast::Expr;
 use crate::func::native::SendSync;
 use crate::parser::ParseResult;
-use crate::r#unsafe::unsafe_try_cast;
 use crate::tokenizer::{is_valid_identifier, Token};
 use crate::types::dynamic::Variant;
 use crate::{
-    Engine, EvalContext, Identifier, ImmutableString, LexError, Position, RhaiResult, Shared,
-    StaticVec, INT,
+    reify, Engine, EvalContext, Identifier, ImmutableString, LexError, Position, RhaiResult,
+    Shared, StaticVec,
 };
+use std::ops::Deref;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-use std::{any::TypeId, ops::Deref};
 
 /// Collection of special markers for custom syntax definition.
 pub mod markers {
@@ -73,9 +72,9 @@ impl Expression<'_> {
     pub fn get_string_value(&self) -> Option<&str> {
         match self.0 {
             #[cfg(not(feature = "no_module"))]
-            Expr::Variable(_, _, x) if x.1.is_some() => None,
-            Expr::Variable(_, _, x) => Some(x.2.as_str()),
-            Expr::StringConstant(x, _) => Some(x.as_str()),
+            Expr::Variable(.., x) if x.1.is_some() => None,
+            Expr::Variable(.., x) => Some(x.2.as_str()),
+            Expr::StringConstant(x, ..) => Some(x.as_str()),
             _ => None,
         }
     }
@@ -94,46 +93,23 @@ impl Expression<'_> {
     #[must_use]
     pub fn get_literal_value<T: Variant>(&self) -> Option<T> {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
+        match self.0 {
+            Expr::IntegerConstant(x, ..) => reify!(*x => Option<T>),
 
-        if TypeId::of::<T>() == TypeId::of::<INT>() {
-            return match self.0 {
-                Expr::IntegerConstant(x, _) => unsafe_try_cast(*x),
-                _ => None,
-            };
+            #[cfg(not(feature = "no_float"))]
+            Expr::FloatConstant(x, ..) => reify!(*x => Option<T>),
+
+            Expr::CharConstant(x, ..) => reify!(*x => Option<T>),
+            Expr::StringConstant(x, ..) => reify!(x.clone() => Option<T>),
+            Expr::Variable(.., x) => {
+                let x: ImmutableString = x.2.clone().into();
+                reify!(x => Option<T>)
+            }
+            Expr::BoolConstant(x, ..) => reify!(*x => Option<T>),
+            Expr::Unit(..) => reify!(() => Option<T>),
+
+            _ => None,
         }
-        #[cfg(not(feature = "no_float"))]
-        if TypeId::of::<T>() == TypeId::of::<crate::FLOAT>() {
-            return match self.0 {
-                Expr::FloatConstant(x, _) => unsafe_try_cast(*x),
-                _ => None,
-            };
-        }
-        if TypeId::of::<T>() == TypeId::of::<char>() {
-            return match self.0 {
-                Expr::CharConstant(x, _) => unsafe_try_cast(*x),
-                _ => None,
-            };
-        }
-        if TypeId::of::<T>() == TypeId::of::<ImmutableString>() {
-            return match self.0 {
-                Expr::StringConstant(x, _) => unsafe_try_cast(x.clone()),
-                Expr::Variable(_, _, x) => unsafe_try_cast(Into::<ImmutableString>::into(&x.2)),
-                _ => None,
-            };
-        }
-        if TypeId::of::<T>() == TypeId::of::<bool>() {
-            return match self.0 {
-                Expr::BoolConstant(x, _) => unsafe_try_cast(*x),
-                _ => None,
-            };
-        }
-        if TypeId::of::<T>() == TypeId::of::<()>() {
-            return match self.0 {
-                Expr::Unit(_) => unsafe_try_cast(()),
-                _ => None,
-            };
-        }
-        None
     }
 }
 

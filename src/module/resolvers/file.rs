@@ -230,7 +230,7 @@ impl FileModuleResolver {
 
         locked_write(&self.cache)
             .remove_entry(&file_path)
-            .map(|(_, v)| v)
+            .map(|(.., v)| v)
     }
     /// Construct a full file path.
     #[must_use]
@@ -288,7 +288,7 @@ impl FileModuleResolver {
         let mut ast = engine
             .compile_file(file_path.clone())
             .map_err(|err| match *err {
-                ERR::ErrorSystem(_, err) if err.is::<IoError>() => {
+                ERR::ErrorSystem(.., err) if err.is::<IoError>() => {
                     Box::new(ERR::ErrorModuleNotFound(path.to_string(), pos))
                 }
                 _ => Box::new(ERR::ErrorInModule(path.to_string(), err, pos)),
@@ -356,7 +356,7 @@ impl ModuleResolver for FileModuleResolver {
                     ast
                 })
                 .map_err(|err| match *err {
-                    ERR::ErrorSystem(_, err) if err.is::<IoError>() => {
+                    ERR::ErrorSystem(.., err) if err.is::<IoError>() => {
                         ERR::ErrorModuleNotFound(path.to_string(), pos).into()
                     }
                     _ => ERR::ErrorInModule(path.to_string(), err, pos).into(),

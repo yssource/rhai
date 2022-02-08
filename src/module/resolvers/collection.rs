@@ -128,7 +128,7 @@ impl ModuleResolver for ModuleResolversCollection {
             match resolver.resolve(engine, source_path, path, pos) {
                 Ok(module) => return Ok(module),
                 Err(err) => match *err {
-                    ERR::ErrorModuleNotFound(_, _) => continue,
+                    ERR::ErrorModuleNotFound(..) => continue,
                     ERR::ErrorInModule(_, err, _) => return Err(err),
                     _ => panic!("ModuleResolver::resolve returns error that is not ErrorModuleNotFound or ErrorInModule"),
                 },

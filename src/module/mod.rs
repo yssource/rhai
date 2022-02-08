@@ -1402,7 +1402,7 @@ impl Module {
     /// Sub-modules are flattened onto the root [`Module`], with higher level overriding lower level.
     #[inline]
     pub fn combine_flatten(&mut self, other: Self) -> &mut Self {
-        for (_, m) in other.modules.into_iter() {
+        for (.., m) in other.modules.into_iter() {
             self.combine_flatten(shared_take_or_clone(m));
         }
         self.variables.extend(other.variables.into_iter());
@@ -1471,7 +1471,7 @@ impl Module {
             other
                 .functions
                 .iter()
-                .filter(|&(_, f)| {
+                .filter(|&(.., f)| {
                     _filter(
                         f.metadata.namespace,
                         f.metadata.access,
@@ -1502,7 +1502,7 @@ impl Module {
     ) -> &mut Self {
         self.functions = std::mem::take(&mut self.functions)
             .into_iter()
-            .filter(|(_, f)| {
+            .filter(|(.., f)| {
                 if f.func.is_script() {
                     filter(
                         f.metadata.namespace,
@@ -1717,7 +1717,7 @@ impl Module {
         result?;
 
         // Variables with an alias left in the scope become module variables
-        for (_, value, mut aliases) in scope {
+        for (.., value, mut aliases) in scope {
             match aliases.len() {
                 0 => (),
                 1 => {

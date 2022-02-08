@@ -11,7 +11,7 @@ Root Sources
 | `tokenizer.rs` | Script tokenizer/lexer                                                          |
 | `parser.rs`    | Script parser                                                                   |
 | `optimizer.rs` | Script optimizer                                                                |
-| `unsafe.rs`    | `unsafe` functions                                                              |
+| `reify.rs`     | Utilities for making generic types concrete                                     |
 | `tests.rs`     | Unit tests (not integration tests, which are in the `rhai/tests` sub-directory) |
 
 

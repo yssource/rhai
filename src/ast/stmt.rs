@@ -404,65 +404,65 @@ impl Stmt {
     #[inline(always)]
     #[must_use]
     pub const fn is_noop(&self) -> bool {
-        matches!(self, Self::Noop(_))
+        matches!(self, Self::Noop(..))
     }
     /// Get the [position][Position] of this statement.
     #[must_use]
     pub const fn position(&self) -> Position {
         match self {
             Self::Noop(pos)
-            | Self::BreakLoop(_, pos)
-            | Self::Block(_, (pos, _))
-            | Self::Assignment(_, pos)
-            | Self::FnCall(_, pos)
-            | Self::If(_, _, pos)
-            | Self::Switch(_, _, pos)
-            | Self::While(_, _, pos)
-            | Self::Do(_, _, _, pos)
-            | Self::For(_, _, pos)
-            | Self::Return(_, _, pos)
-            | Self::Var(_, _, _, pos)
-            | Self::TryCatch(_, pos) => *pos,
+            | Self::BreakLoop(.., pos)
+            | Self::Block(.., (pos, ..))
+            | Self::Assignment(.., pos)
+            | Self::FnCall(.., pos)
+            | Self::If(.., pos)
+            | Self::Switch(.., pos)
+            | Self::While(.., pos)
+            | Self::Do(.., pos)
+            | Self::For(.., pos)
+            | Self::Return(.., pos)
+            | Self::Var(.., pos)
+            | Self::TryCatch(.., pos) => *pos,
 
             Self::Expr(x) => x.start_position(),
 
             #[cfg(not(feature = "no_module"))]
-            Self::Import(_, _, pos) => *pos,
+            Self::Import(.., pos) => *pos,
             #[cfg(not(feature = "no_module"))]
-            Self::Export(_, pos) => *pos,
+            Self::Export(.., pos) => *pos,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_) => Position::NONE,
+            Self::Share(..) => Position::NONE,
         }
     }
     /// Override the [position][Position] of this statement.
     pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
         match self {
             Self::Noop(pos)
-            | Self::BreakLoop(_, pos)
-            | Self::Block(_, (pos, _))
-            | Self::Assignment(_, pos)
-            | Self::FnCall(_, pos)
-            | Self::If(_, _, pos)
-            | Self::Switch(_, _, pos)
-            | Self::While(_, _, pos)
-            | Self::Do(_, _, _, pos)
-            | Self::For(_, _, pos)
-            | Self::Return(_, _, pos)
-            | Self::Var(_, _, _, pos)
-            | Self::TryCatch(_, pos) => *pos = new_pos,
+            | Self::BreakLoop(.., pos)
+            | Self::Block(.., (pos, ..))
+            | Self::Assignment(.., pos)
+            | Self::FnCall(.., pos)
+            | Self::If(.., pos)
+            | Self::Switch(.., pos)
+            | Self::While(.., pos)
+            | Self::Do(.., pos)
+            | Self::For(.., pos)
+            | Self::Return(.., pos)
+            | Self::Var(.., pos)
+            | Self::TryCatch(.., pos) => *pos = new_pos,
 
             Self::Expr(x) => {
                 x.set_position(new_pos);
             }
 
             #[cfg(not(feature = "no_module"))]
-            Self::Import(_, _, pos) => *pos = new_pos,
+            Self::Import(.., pos) => *pos = new_pos,
             #[cfg(not(feature = "no_module"))]
-            Self::Export(_, pos) => *pos = new_pos,
+            Self::Export(.., pos) => *pos = new_pos,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_) => (),
+            Self::Share(..) => (),
         }
 
         self
@@ -471,59 +471,56 @@ impl Stmt {
     #[must_use]
     pub const fn returns_value(&self) -> bool {
         match self {
-            Self::If(_, _, _)
-            | Self::Switch(_, _, _)
-            | Self::Block(_, _)
-            | Self::Expr(_)
-            | Self::FnCall(_, _) => true,
+            Self::If(..)
+            | Self::Switch(..)
+            | Self::Block(..)
+            | Self::Expr(..)
+            | Self::FnCall(..) => true,
 
-            Self::Noop(_)
-            | Self::While(_, _, _)
-            | Self::Do(_, _, _, _)
-            | Self::For(_, _, _)
-            | Self::TryCatch(_, _) => false,
+            Self::Noop(..)
+            | Self::While(..)
+            | Self::Do(..)
+            | Self::For(..)
+            | Self::TryCatch(..) => false,
 
-            Self::Var(_, _, _, _)
-            | Self::Assignment(_, _)
-            | Self::BreakLoop(_, _)
-            | Self::Return(_, _, _) => false,
+            Self::Var(..) | Self::Assignment(..) | Self::BreakLoop(..) | Self::Return(..) => false,
 
             #[cfg(not(feature = "no_module"))]
-            Self::Import(_, _, _) | Self::Export(_, _) => false,
+            Self::Import(..) | Self::Export(..) => false,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_) => false,
+            Self::Share(..) => false,
         }
     }
     /// Is this statement self-terminated (i.e. no need for a semicolon terminator)?
     #[must_use]
     pub const fn is_self_terminated(&self) -> bool {
         match self {
-            Self::If(_, _, _)
-            | Self::Switch(_, _, _)
-            | Self::While(_, _, _)
-            | Self::For(_, _, _)
-            | Self::Block(_, _)
-            | Self::TryCatch(_, _) => true,
+            Self::If(..)
+            | Self::Switch(..)
+            | Self::While(..)
+            | Self::For(..)
+            | Self::Block(..)
+            | Self::TryCatch(..) => true,
 
             // A No-op requires a semicolon in order to know it is an empty statement!
-            Self::Noop(_) => false,
+            Self::Noop(..) => false,
 
-            Self::Expr(Expr::Custom(x, _)) if x.is_self_terminated() => true,
+            Self::Expr(Expr::Custom(x, ..)) if x.is_self_terminated() => true,
 
-            Self::Var(_, _, _, _)
-            | Self::Assignment(_, _)
-            | Self::Expr(_)
-            | Self::FnCall(_, _)
-            | Self::Do(_, _, _, _)
-            | Self::BreakLoop(_, _)
-            | Self::Return(_, _, _) => false,
+            Self::Var(..)
+            | Self::Assignment(..)
+            | Self::Expr(..)
+            | Self::FnCall(..)
+            | Self::Do(..)
+            | Self::BreakLoop(..)
+            | Self::Return(..) => false,
 
             #[cfg(not(feature = "no_module"))]
-            Self::Import(_, _, _) | Self::Export(_, _) => false,
+            Self::Import(..) | Self::Export(..) => false,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_) => false,
+            Self::Share(..) => false,
         }
     }
     /// Is this statement _pure_?
@@ -532,20 +529,20 @@ impl Stmt {
     #[must_use]
     pub fn is_pure(&self) -> bool {
         match self {
-            Self::Noop(_) => true,
+            Self::Noop(..) => true,
             Self::Expr(expr) => expr.is_pure(),
-            Self::If(condition, x, _) => {
+            Self::If(condition, x, ..) => {
                 condition.is_pure()
                     && x.0.iter().all(Stmt::is_pure)
                     && x.1.iter().all(Stmt::is_pure)
             }
-            Self::Switch(expr, x, _) => {
+            Self::Switch(expr, x, ..) => {
                 expr.is_pure()
                     && x.cases.values().all(|block| {
                         block.condition.as_ref().map(Expr::is_pure).unwrap_or(true)
                             && block.statements.iter().all(Stmt::is_pure)
                     })
-                    && x.ranges.iter().all(|(_, _, _, block)| {
+                    && x.ranges.iter().all(|(.., block)| {
                         block.condition.as_ref().map(Expr::is_pure).unwrap_or(true)
                             && block.statements.iter().all(Stmt::is_pure)
                     })
@@ -553,34 +550,34 @@ impl Stmt {
             }
 
             // Loops that exit can be pure because it can never be infinite.
-            Self::While(Expr::BoolConstant(false, _), _, _) => true,
-            Self::Do(body, Expr::BoolConstant(x, _), options, _)
+            Self::While(Expr::BoolConstant(false, ..), ..) => true,
+            Self::Do(body, Expr::BoolConstant(x, ..), options, ..)
                 if *x == options.contains(AST_OPTION_NEGATED) =>
             {
                 body.iter().all(Stmt::is_pure)
             }
 
             // Loops are never pure since they can be infinite - and that's a side effect.
-            Self::While(_, _, _) | Self::Do(_, _, _, _) => false,
+            Self::While(..) | Self::Do(..) => false,
 
             // For loops can be pure because if the iterable is pure, it is finite,
             // so infinite loops can never occur.
-            Self::For(iterable, x, _) => iterable.is_pure() && x.2.iter().all(Stmt::is_pure),
+            Self::For(iterable, x, ..) => iterable.is_pure() && x.2.iter().all(Stmt::is_pure),
 
-            Self::Var(_, _, _, _) | Self::Assignment(_, _) | Self::FnCall(_, _) => false,
-            Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
-            Self::BreakLoop(_, _) | Self::Return(_, _, _) => false,
-            Self::TryCatch(x, _) => {
+            Self::Var(..) | Self::Assignment(..) | Self::FnCall(..) => false,
+            Self::Block(block, ..) => block.iter().all(|stmt| stmt.is_pure()),
+            Self::BreakLoop(..) | Self::Return(..) => false,
+            Self::TryCatch(x, ..) => {
                 x.try_block.iter().all(Stmt::is_pure) && x.catch_block.iter().all(Stmt::is_pure)
             }
 
             #[cfg(not(feature = "no_module"))]
-            Self::Import(_, _, _) => false,
+            Self::Import(..) => false,
             #[cfg(not(feature = "no_module"))]
-            Self::Export(_, _) => false,
+            Self::Export(..) => false,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_) => false,
+            Self::Share(..) => false,
         }
     }
     /// Does this statement's behavior depend on its containing block?
@@ -594,16 +591,16 @@ impl Stmt {
     #[must_use]
     pub fn is_block_dependent(&self) -> bool {
         match self {
-            Self::Var(_, _, _, _) => true,
+            Self::Var(..) => true,
 
             Self::Expr(Expr::Stmt(s)) => s.iter().all(Stmt::is_block_dependent),
 
-            Self::FnCall(x, _) | Self::Expr(Expr::FnCall(x, _)) => {
+            Self::FnCall(x, ..) | Self::Expr(Expr::FnCall(x, ..)) => {
                 !x.is_qualified() && x.name == KEYWORD_EVAL
             }
 
             #[cfg(not(feature = "no_module"))]
-            Self::Import(_, _, _) | Self::Export(_, _) => true,
+            Self::Import(..) | Self::Export(..) => true,
 
             _ => false,
         }
@@ -618,14 +615,14 @@ impl Stmt {
     #[must_use]
     pub fn is_internally_pure(&self) -> bool {
         match self {
-            Self::Var(expr, _, _, _) => expr.is_pure(),
+            Self::Var(expr, _, ..) => expr.is_pure(),
 
             Self::Expr(Expr::Stmt(s)) => s.iter().all(Stmt::is_internally_pure),
 
             #[cfg(not(feature = "no_module"))]
-            Self::Import(expr, _, _) => expr.is_pure(),
+            Self::Import(expr, ..) => expr.is_pure(),
             #[cfg(not(feature = "no_module"))]
-            Self::Export(_, _) => true,
+            Self::Export(..) => true,
 
             _ => self.is_pure(),
         }
@@ -639,7 +636,7 @@ impl Stmt {
     #[must_use]
     pub const fn is_control_flow_break(&self) -> bool {
         match self {
-            Self::Return(_, _, _) | Self::BreakLoop(_, _) => true,
+            Self::Return(..) | Self::BreakLoop(..) => true,
             _ => false,
         }
     }
@@ -658,12 +655,12 @@ impl Stmt {
         }
 
         match self {
-            Self::Var(e, _, _, _) => {
+            Self::Var(e, _, ..) => {
                 if !e.walk(path, on_node) {
                     return false;
                 }
             }
-            Self::If(e, x, _) => {
+            Self::If(e, x, ..) => {
                 if !e.walk(path, on_node) {
                     return false;
                 }
@@ -678,7 +675,7 @@ impl Stmt {
                     }
                 }
             }
-            Self::Switch(e, x, _) => {
+            Self::Switch(e, x, ..) => {
                 if !e.walk(path, on_node) {
                     return false;
                 }
@@ -697,7 +694,7 @@ impl Stmt {
                         }
                     }
                 }
-                for (_, _, _, b) in &x.ranges {
+                for (.., b) in &x.ranges {
                     if !b
                         .condition
                         .as_ref()
@@ -718,7 +715,7 @@ impl Stmt {
                     }
                 }
             }
-            Self::While(e, s, _) | Self::Do(s, e, _, _) => {
+            Self::While(e, s, ..) | Self::Do(s, e, ..) => {
                 if !e.walk(path, on_node) {
                     return false;
                 }
@@ -728,7 +725,7 @@ impl Stmt {
                     }
                 }
             }
-            Self::For(e, x, _) => {
+            Self::For(e, x, ..) => {
                 if !e.walk(path, on_node) {
                     return false;
                 }
@@ -738,7 +735,7 @@ impl Stmt {
                     }
                 }
             }
-            Self::Assignment(x, _) => {
+            Self::Assignment(x, ..) => {
                 if !x.1.lhs.walk(path, on_node) {
                     return false;
                 }
@@ -746,21 +743,21 @@ impl Stmt {
                     return false;
                 }
             }
-            Self::FnCall(x, _) => {
+            Self::FnCall(x, ..) => {
                 for s in &x.args {
                     if !s.walk(path, on_node) {
                         return false;
                     }
                 }
             }
-            Self::Block(x, _) => {
+            Self::Block(x, ..) => {
                 for s in x.iter() {
                     if !s.walk(path, on_node) {
                         return false;
                     }
                 }
             }
-            Self::TryCatch(x, _) => {
+            Self::TryCatch(x, ..) => {
                 for s in x.try_block.iter() {
                     if !s.walk(path, on_node) {
                         return false;
@@ -778,7 +775,7 @@ impl Stmt {
                 }
             }
             #[cfg(not(feature = "no_module"))]
-            Self::Import(e, _, _) => {
+            Self::Import(e, ..) => {
                 if !e.walk(path, on_node) {
                     return false;
                 }

@@ -226,7 +226,7 @@ impl Engine {
 
         match Token::lookup_from_syntax(keyword.as_ref()) {
             // Standard identifiers, reserved keywords and custom keywords are OK
-            None | Some(Token::Reserved(_)) | Some(Token::Custom(_)) => (),
+            None | Some(Token::Reserved(..)) | Some(Token::Custom(..)) => (),
             // Active standard keywords cannot be made custom
             // Disabled keywords are OK
             Some(token) if token.is_standard_keyword() => {

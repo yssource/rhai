@@ -6,7 +6,7 @@ fn test_mismatched_op() {
 
     assert!(matches!(
         *engine.eval::<INT>(r#""hello, " + "world!""#).expect_err("expects error"),
-        EvalAltResult::ErrorMismatchOutputType(need, actual, _) if need == std::any::type_name::<INT>() && actual == "string"
+        EvalAltResult::ErrorMismatchOutputType(need, actual, ..) if need == std::any::type_name::<INT>() && actual == "string"
     ));
 }
 
@@ -35,18 +35,18 @@ fn test_mismatched_op_custom_type() -> Result<(), Box<EvalAltResult>> {
             let y = new_ts();
             x == y
         ").expect_err("should error"),
-        EvalAltResult::ErrorFunctionNotFound(f, _) if f == "== (TestStruct, TestStruct)"));
+        EvalAltResult::ErrorFunctionNotFound(f, ..) if f == "== (TestStruct, TestStruct)"));
 
     assert!(!engine.eval::<bool>("new_ts() == 42")?);
 
     assert!(matches!(
         *engine.eval::<INT>("60 + new_ts()").expect_err("should error"),
-        EvalAltResult::ErrorFunctionNotFound(f, _) if f == format!("+ ({}, TestStruct)", std::any::type_name::<INT>())
+        EvalAltResult::ErrorFunctionNotFound(f, ..) if f == format!("+ ({}, TestStruct)", std::any::type_name::<INT>())
     ));
 
     assert!(matches!(
         *engine.eval::<TestStruct>("42").expect_err("should error"),
-        EvalAltResult::ErrorMismatchOutputType(need, actual, _)
+        EvalAltResult::ErrorMismatchOutputType(need, actual, ..)
             if need == "TestStruct" && actual == std::any::type_name::<INT>()
     ));
 

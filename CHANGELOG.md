@@ -14,6 +14,7 @@ Bug fixes
 * Off-by-one error in character positions after a comment line is now fixed.
 * Globally-defined constants are now encapsulated correctly inside a loaded module and no longer spill across call boundaries.
 * Type names display is fixed.
+* Exceptions thrown inside function calls now unwrap correctly when `catch`-ed.
 
 Script-breaking changes
 -----------------------
@@ -40,6 +41,7 @@ Enhancements
 * `AST` position display is improved:
   * `Expr::start_position` is added to give the beginning of the expression (not the operator's position).
   * `StmtBlock` and `Stmt::Block` now keep the position of the closing `}` as well.
+* `EvalAltResult::unwrap_inner` is added to access the base error inside multiple layers of wrappings (e.g. `EvalAltResult::ErrorInFunction`).
 
 REPL tool changes
 -----------------
@@ -53,15 +55,16 @@ The REPL bin tool, `rhai-rpl`, has been enhanced.
 
 ### Line editor
 
-* `rhai-repl` now uses [`rustyline`](https://crates.io/crates/rustyline) as a line editor with history.
-* Shift-Enter can now be used to enter multiple lines without having to attach the `\` continuation character the end of each line.
+* `rhai-repl` now uses a modified version of [`rustyline`](https://crates.io/crates/rustyline) as a line editor with history.
+* Ctrl-Enter can now be used to enter multiple lines without having to attach the `\` continuation character the end of each line.
+* Bracketed paste is supported, even on Windows (version 10 or above), so pasting code directly into `rhai-repl` is made much more convenient.
 
 ### New commands
 
 * `strict` to turn on/off _Strict Variables Mode_.
 * `optimize` to turn on/off script optimization.
 * `history` to print lines history.
-* `!!`, `!`_num_ and `!`_text_ to recall a history line.
+* `!!`, `!`_num_, `!`_text_ and `!?`_text_ to recall a history line.
 * `keys` to print all key bindings.
 
 

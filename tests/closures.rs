@@ -48,7 +48,7 @@ fn test_closures() -> Result<(), Box<EvalAltResult>> {
             .compile_expression("let f = |x| {};")
             .expect_err("should error")
             .0,
-        ParseErrorType::BadInput(_)
+        ParseErrorType::BadInput(..)
     ));
 
     assert_eq!(
@@ -251,7 +251,7 @@ fn test_closures_data_race() -> Result<(), Box<EvalAltResult>> {
                 "
             )
             .expect_err("should error"),
-        EvalAltResult::ErrorDataRace(_, _)
+        EvalAltResult::ErrorDataRace(..)
     ));
 
     Ok(())

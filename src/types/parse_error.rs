@@ -52,7 +52,7 @@ impl fmt::Display for LexError {
             Self::ImproperSymbol(s, d) if d.is_empty() => {
                 write!(f, "Invalid symbol encountered: '{}'", s)
             }
-            Self::ImproperSymbol(_, d) => f.write_str(d),
+            Self::ImproperSymbol(.., d) => f.write_str(d),
         }
     }
 }

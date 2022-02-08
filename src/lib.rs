@@ -68,7 +68,6 @@ extern crate no_std_compat as std;
 use std::prelude::v1::*;
 
 // Internal modules
-
 mod api;
 mod ast;
 mod engine;
@@ -78,10 +77,10 @@ mod module;
 mod optimizer;
 pub mod packages;
 mod parser;
+mod reify;
 mod tests;
 mod tokenizer;
 mod types;
-mod r#unsafe;
 
 /// Error encountered when parsing a script.
 type PERR = ParseErrorType;
@@ -233,6 +232,10 @@ pub mod serde;
 
 #[cfg(not(feature = "no_optimize"))]
 pub use optimizer::OptimizationLevel;
+
+/// Placeholder for the optimization level.
+#[cfg(feature = "no_optimize")]
+pub type OptimizationLevel = ();
 
 // Expose internal data structures.
 

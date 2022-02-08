@@ -5,10 +5,9 @@
 use super::call::FnCallArgs;
 use super::callable_function::CallableFunction;
 use super::native::{FnAny, SendSync};
-use crate::r#unsafe::unsafe_cast;
 use crate::tokenizer::Position;
 use crate::types::dynamic::{DynamicWriteLock, Variant};
-use crate::{Dynamic, NativeCallContext, RhaiResultOf, ERR};
+use crate::{reify, Dynamic, NativeCallContext, RhaiResultOf, ERR};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{any::TypeId, mem};
@@ -39,23 +38,26 @@ pub fn by_ref<T: Variant + Clone>(data: &mut Dynamic) -> DynamicWriteLock<T> {
 }
 
 /// Dereference into value.
-#[inline]
+#[inline(always)]
 #[must_use]
 pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
     if TypeId::of::<T>() == TypeId::of::<&str>() {
         // If T is `&str`, data must be `ImmutableString`, so map directly to it
         data.flatten_in_place();
         let ref_str = data.as_str_ref().expect("&str");
-        let ref_t = unsafe { mem::transmute::<_, &T>(&ref_str) };
-        ref_t.clone()
-    } else if TypeId::of::<T>() == TypeId::of::<String>() {
-        // If T is `String`, data must be `ImmutableString`, so map directly to it
-        unsafe_cast(mem::take(data).into_string().expect("`ImmutableString`"))
-    } else {
-        // We consume the argument and then replace it with () - the argument is not supposed to be used again.
-        // This way, we avoid having to clone the argument again, because it is already a clone when passed here.
-        mem::take(data).cast::<T>()
+        // # Safety
+        //
+        // We already checked that `T` is `&str`, so it is safe to cast here.
+        return unsafe { std::mem::transmute_copy::<_, T>(&ref_str) };
     }
+    if TypeId::of::<T>() == TypeId::of::<String>() {
+        // If T is `String`, data must be `ImmutableString`, so map directly to it
+        return reify!(mem::take(data).into_string().expect("`ImmutableString`") => T);
+    }
+
+    // We consume the argument and then replace it with () - the argument is not supposed to be used again.
+    // This way, we avoid having to clone the argument again, because it is already a clone when passed here.
+    return mem::take(data).cast::<T>();
 }
 
 /// Trait to register custom Rust functions.

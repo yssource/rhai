@@ -120,77 +120,77 @@ impl fmt::Display for EvalAltResult {
                 s => write!(f, "{}: {}", s, err),
             }?,
 
-            Self::ErrorParsing(p, _) => write!(f, "Syntax error: {}", p)?,
+            Self::ErrorParsing(p, ..) => write!(f, "Syntax error: {}", p)?,
 
             #[cfg(not(feature = "no_function"))]
-            Self::ErrorInFunctionCall(s, src, err, _) if crate::parser::is_anonymous_fn(s) => {
+            Self::ErrorInFunctionCall(s, src, err, ..) if crate::parser::is_anonymous_fn(s) => {
                 write!(f, "{} in call to closure", err)?;
                 if !src.is_empty() {
                     write!(f, " @ '{}'", src)?;
                 }
             }
-            Self::ErrorInFunctionCall(s, src, err, _) => {
+            Self::ErrorInFunctionCall(s, src, err, ..) => {
                 write!(f, "{} in call to function {}", err, s)?;
                 if !src.is_empty() {
                     write!(f, " @ '{}'", src)?;
                 }
             }
 
-            Self::ErrorInModule(s, err, _) if s.is_empty() => {
+            Self::ErrorInModule(s, err, ..) if s.is_empty() => {
                 write!(f, "Error in module: {}", err)?
             }
-            Self::ErrorInModule(s, err, _) => write!(f, "Error in module {}: {}", s, err)?,
+            Self::ErrorInModule(s, err, ..) => write!(f, "Error in module {}: {}", s, err)?,
 
-            Self::ErrorVariableExists(s, _) => write!(f, "Variable is already defined: {}", s)?,
-            Self::ErrorVariableNotFound(s, _) => write!(f, "Variable not found: {}", s)?,
-            Self::ErrorFunctionNotFound(s, _) => write!(f, "Function not found: {}", s)?,
-            Self::ErrorModuleNotFound(s, _) => write!(f, "Module not found: {}", s)?,
-            Self::ErrorDataRace(s, _) => {
+            Self::ErrorVariableExists(s, ..) => write!(f, "Variable is already defined: {}", s)?,
+            Self::ErrorVariableNotFound(s, ..) => write!(f, "Variable not found: {}", s)?,
+            Self::ErrorFunctionNotFound(s, ..) => write!(f, "Function not found: {}", s)?,
+            Self::ErrorModuleNotFound(s, ..) => write!(f, "Module not found: {}", s)?,
+            Self::ErrorDataRace(s, ..) => {
                 write!(f, "Data race detected when accessing variable: {}", s)?
             }
-            Self::ErrorDotExpr(s, _) => match s.as_str() {
+            Self::ErrorDotExpr(s, ..) => match s.as_str() {
                 "" => f.write_str("Malformed dot expression"),
                 s => f.write_str(s),
             }?,
-            Self::ErrorIndexingType(s, _) => write!(f, "Indexer not registered: {}", s)?,
-            Self::ErrorUnboundThis(_) => f.write_str("'this' is not bound")?,
-            Self::ErrorFor(_) => f.write_str("For loop expects a type that is iterable")?,
-            Self::ErrorTooManyOperations(_) => f.write_str("Too many operations")?,
-            Self::ErrorTooManyModules(_) => f.write_str("Too many modules imported")?,
-            Self::ErrorStackOverflow(_) => f.write_str("Stack overflow")?,
-            Self::ErrorTerminated(_, _) => f.write_str("Script terminated")?,
+            Self::ErrorIndexingType(s, ..) => write!(f, "Indexer not registered: {}", s)?,
+            Self::ErrorUnboundThis(..) => f.write_str("'this' is not bound")?,
+            Self::ErrorFor(..) => f.write_str("For loop expects a type that is iterable")?,
+            Self::ErrorTooManyOperations(..) => f.write_str("Too many operations")?,
+            Self::ErrorTooManyModules(..) => f.write_str("Too many modules imported")?,
+            Self::ErrorStackOverflow(..) => f.write_str("Stack overflow")?,
+            Self::ErrorTerminated(..) => f.write_str("Script terminated")?,
 
-            Self::ErrorRuntime(d, _) if d.is::<()>() => f.write_str("Runtime error")?,
-            Self::ErrorRuntime(d, _)
+            Self::ErrorRuntime(d, ..) if d.is::<()>() => f.write_str("Runtime error")?,
+            Self::ErrorRuntime(d, ..)
                 if d.read_lock::<ImmutableString>()
                     .map_or(false, |v| v.is_empty()) =>
             {
                 write!(f, "Runtime error")?
             }
-            Self::ErrorRuntime(d, _) => write!(f, "Runtime error: {}", d)?,
+            Self::ErrorRuntime(d, ..) => write!(f, "Runtime error: {}", d)?,
 
-            Self::ErrorAssignmentToConstant(s, _) => write!(f, "Cannot modify constant: {}", s)?,
-            Self::ErrorMismatchOutputType(s, r, _) => match (r.as_str(), s.as_str()) {
+            Self::ErrorAssignmentToConstant(s, ..) => write!(f, "Cannot modify constant: {}", s)?,
+            Self::ErrorMismatchOutputType(s, r, ..) => match (r.as_str(), s.as_str()) {
                 ("", s) => write!(f, "Output type is incorrect, expecting {}", s),
                 (r, "") => write!(f, "Output type is incorrect: {}", r),
                 (r, s) => write!(f, "Output type is incorrect: {} (expecting {})", r, s),
             }?,
-            Self::ErrorMismatchDataType(s, r, _) => match (r.as_str(), s.as_str()) {
+            Self::ErrorMismatchDataType(s, r, ..) => match (r.as_str(), s.as_str()) {
                 ("", s) => write!(f, "Data type is incorrect, expecting {}", s),
                 (r, "") => write!(f, "Data type is incorrect: {}", r),
                 (r, s) => write!(f, "Data type is incorrect: {} (expecting {})", r, s),
             }?,
-            Self::ErrorArithmetic(s, _) => match s.as_str() {
+            Self::ErrorArithmetic(s, ..) => match s.as_str() {
                 "" => f.write_str("Arithmetic error"),
                 s => f.write_str(s),
             }?,
 
-            Self::LoopBreak(true, _) => f.write_str("'break' not inside a loop")?,
-            Self::LoopBreak(false, _) => f.write_str("'continue' not inside a loop")?,
+            Self::LoopBreak(true, ..) => f.write_str("'break' not inside a loop")?,
+            Self::LoopBreak(false, ..) => f.write_str("'continue' not inside a loop")?,
 
-            Self::Return(_, _) => f.write_str("NOT AN ERROR - function returns value")?,
+            Self::Return(..) => f.write_str("NOT AN ERROR - function returns value")?,
 
-            Self::ErrorArrayBounds(max, index, _) => match max {
+            Self::ErrorArrayBounds(max, index, ..) => match max {
                 0 => write!(f, "Array index {} out of bounds: array is empty", index),
                 1 => write!(
                     f,
@@ -203,7 +203,7 @@ impl fmt::Display for EvalAltResult {
                     index, max
                 ),
             }?,
-            Self::ErrorStringBounds(max, index, _) => match max {
+            Self::ErrorStringBounds(max, index, ..) => match max {
                 0 => write!(f, "String index {} out of bounds: string is empty", index),
                 1 => write!(
                     f,
@@ -216,14 +216,14 @@ impl fmt::Display for EvalAltResult {
                     index, max
                 ),
             }?,
-            Self::ErrorBitFieldBounds(max, index, _) => write!(
+            Self::ErrorBitFieldBounds(max, index, ..) => write!(
                 f,
                 "Bit-field index {} out of bounds: only {} bits in the bit-field",
                 index, max
             )?,
-            Self::ErrorDataTooLarge(typ, _) => write!(f, "{} exceeds maximum limit", typ)?,
+            Self::ErrorDataTooLarge(typ, ..) => write!(f, "{} exceeds maximum limit", typ)?,
 
-            Self::ErrorCustomSyntax(s, tokens, _) => write!(f, "{}: {}", s, tokens.join(" "))?,
+            Self::ErrorCustomSyntax(s, tokens, ..) => write!(f, "{}: {}", s, tokens.join(" "))?,
         }
 
         // Do not write any position if None
@@ -256,7 +256,7 @@ impl EvalAltResult {
     #[must_use]
     pub const fn is_pseudo_error(&self) -> bool {
         match self {
-            Self::LoopBreak(_, _) | Self::Return(_, _) => true,
+            Self::LoopBreak(..) | Self::Return(..) => true,
             _ => false,
         }
     }
@@ -264,58 +264,58 @@ impl EvalAltResult {
     #[must_use]
     pub const fn is_catchable(&self) -> bool {
         match self {
-            Self::ErrorSystem(_, _) => false,
-            Self::ErrorParsing(_, _) => false,
+            Self::ErrorSystem(..) => false,
+            Self::ErrorParsing(..) => false,
 
-            Self::ErrorFunctionNotFound(_, _)
-            | Self::ErrorInFunctionCall(_, _, _, _)
-            | Self::ErrorInModule(_, _, _)
-            | Self::ErrorUnboundThis(_)
-            | Self::ErrorMismatchDataType(_, _, _)
-            | Self::ErrorArrayBounds(_, _, _)
-            | Self::ErrorStringBounds(_, _, _)
-            | Self::ErrorBitFieldBounds(_, _, _)
-            | Self::ErrorIndexingType(_, _)
-            | Self::ErrorFor(_)
-            | Self::ErrorVariableExists(_, _)
-            | Self::ErrorVariableNotFound(_, _)
-            | Self::ErrorModuleNotFound(_, _)
-            | Self::ErrorDataRace(_, _)
-            | Self::ErrorAssignmentToConstant(_, _)
-            | Self::ErrorMismatchOutputType(_, _, _)
-            | Self::ErrorDotExpr(_, _)
-            | Self::ErrorArithmetic(_, _)
-            | Self::ErrorRuntime(_, _) => true,
+            Self::ErrorFunctionNotFound(..)
+            | Self::ErrorInFunctionCall(..)
+            | Self::ErrorInModule(..)
+            | Self::ErrorUnboundThis(..)
+            | Self::ErrorMismatchDataType(..)
+            | Self::ErrorArrayBounds(..)
+            | Self::ErrorStringBounds(..)
+            | Self::ErrorBitFieldBounds(..)
+            | Self::ErrorIndexingType(..)
+            | Self::ErrorFor(..)
+            | Self::ErrorVariableExists(..)
+            | Self::ErrorVariableNotFound(..)
+            | Self::ErrorModuleNotFound(..)
+            | Self::ErrorDataRace(..)
+            | Self::ErrorAssignmentToConstant(..)
+            | Self::ErrorMismatchOutputType(..)
+            | Self::ErrorDotExpr(..)
+            | Self::ErrorArithmetic(..)
+            | Self::ErrorRuntime(..) => true,
 
             // Custom syntax raises errors only when they are compiled by one
             // [`Engine`][crate::Engine] and run by another, causing a mismatch.
             //
             // Therefore, this error should not be catchable.
-            Self::ErrorCustomSyntax(_, _, _) => false,
+            Self::ErrorCustomSyntax(..) => false,
 
-            Self::ErrorTooManyOperations(_)
-            | Self::ErrorTooManyModules(_)
-            | Self::ErrorStackOverflow(_)
-            | Self::ErrorDataTooLarge(_, _)
-            | Self::ErrorTerminated(_, _) => false,
+            Self::ErrorTooManyOperations(..)
+            | Self::ErrorTooManyModules(..)
+            | Self::ErrorStackOverflow(..)
+            | Self::ErrorDataTooLarge(..)
+            | Self::ErrorTerminated(..) => false,
 
-            Self::LoopBreak(_, _) | Self::Return(_, _) => false,
+            Self::LoopBreak(..) | Self::Return(..) => false,
         }
     }
     /// Is this error a system exception?
     #[must_use]
     pub const fn is_system_exception(&self) -> bool {
         match self {
-            Self::ErrorSystem(_, _) => true,
-            Self::ErrorParsing(_, _) => true,
+            Self::ErrorSystem(..) => true,
+            Self::ErrorParsing(..) => true,
 
-            Self::ErrorCustomSyntax(_, _, _)
-            | Self::ErrorTooManyOperations(_)
-            | Self::ErrorTooManyModules(_)
-            | Self::ErrorStackOverflow(_)
-            | Self::ErrorDataTooLarge(_, _) => true,
+            Self::ErrorCustomSyntax(..)
+            | Self::ErrorTooManyOperations(..)
+            | Self::ErrorTooManyModules(..)
+            | Self::ErrorStackOverflow(..)
+            | Self::ErrorDataTooLarge(..) => true,
 
-            Self::ErrorTerminated(_, _) => true,
+            Self::ErrorTerminated(..) => true,
 
             _ => false,
         }
@@ -333,58 +333,58 @@ impl EvalAltResult {
         );
 
         match self {
-            Self::LoopBreak(_, _) | Self::Return(_, _) => (),
+            Self::LoopBreak(..) | Self::Return(..) => (),
 
-            Self::ErrorSystem(_, _)
-            | Self::ErrorParsing(_, _)
-            | Self::ErrorUnboundThis(_)
-            | Self::ErrorFor(_)
-            | Self::ErrorArithmetic(_, _)
-            | Self::ErrorTooManyOperations(_)
-            | Self::ErrorTooManyModules(_)
-            | Self::ErrorStackOverflow(_)
-            | Self::ErrorRuntime(_, _) => (),
+            Self::ErrorSystem(..)
+            | Self::ErrorParsing(..)
+            | Self::ErrorUnboundThis(..)
+            | Self::ErrorFor(..)
+            | Self::ErrorArithmetic(..)
+            | Self::ErrorTooManyOperations(..)
+            | Self::ErrorTooManyModules(..)
+            | Self::ErrorStackOverflow(..)
+            | Self::ErrorRuntime(..) => (),
 
-            Self::ErrorFunctionNotFound(f, _) => {
+            Self::ErrorFunctionNotFound(f, ..) => {
                 map.insert("function".into(), f.into());
             }
-            Self::ErrorInFunctionCall(f, s, _, _) => {
+            Self::ErrorInFunctionCall(f, s, ..) => {
                 map.insert("function".into(), f.into());
                 map.insert("source".into(), s.into());
             }
-            Self::ErrorInModule(m, _, _) => {
+            Self::ErrorInModule(m, ..) => {
                 map.insert("module".into(), m.into());
             }
-            Self::ErrorMismatchDataType(r, a, _) | Self::ErrorMismatchOutputType(r, a, _) => {
+            Self::ErrorMismatchDataType(r, a, ..) | Self::ErrorMismatchOutputType(r, a, ..) => {
                 map.insert("requested".into(), r.into());
                 map.insert("actual".into(), a.into());
             }
-            Self::ErrorArrayBounds(n, i, _)
-            | Self::ErrorStringBounds(n, i, _)
-            | Self::ErrorBitFieldBounds(n, i, _) => {
+            Self::ErrorArrayBounds(n, i, ..)
+            | Self::ErrorStringBounds(n, i, ..)
+            | Self::ErrorBitFieldBounds(n, i, ..) => {
                 map.insert("length".into(), (*n as INT).into());
                 map.insert("index".into(), (*i as INT).into());
             }
-            Self::ErrorIndexingType(t, _) => {
+            Self::ErrorIndexingType(t, ..) => {
                 map.insert("type".into(), t.into());
             }
-            Self::ErrorVariableExists(v, _)
-            | Self::ErrorVariableNotFound(v, _)
-            | Self::ErrorDataRace(v, _)
-            | Self::ErrorAssignmentToConstant(v, _) => {
+            Self::ErrorVariableExists(v, ..)
+            | Self::ErrorVariableNotFound(v, ..)
+            | Self::ErrorDataRace(v, ..)
+            | Self::ErrorAssignmentToConstant(v, ..) => {
                 map.insert("variable".into(), v.into());
             }
-            Self::ErrorModuleNotFound(m, _) => {
+            Self::ErrorModuleNotFound(m, ..) => {
                 map.insert("module".into(), m.into());
             }
-            Self::ErrorDotExpr(p, _) => {
+            Self::ErrorDotExpr(p, ..) => {
                 map.insert("property".into(), p.into());
             }
 
-            Self::ErrorDataTooLarge(t, _) => {
+            Self::ErrorDataTooLarge(t, ..) => {
                 map.insert("type".into(), t.into());
             }
-            Self::ErrorTerminated(t, _) => {
+            Self::ErrorTerminated(t, ..) => {
                 map.insert("token".into(), t.clone());
             }
             Self::ErrorCustomSyntax(_, tokens, _) => {
@@ -403,40 +403,50 @@ impl EvalAltResult {
             }
         };
     }
+    /// Unwrap this error and get the very base error.
+    #[must_use]
+    pub fn unwrap_inner(&self) -> &Self {
+        match self {
+            Self::ErrorInFunctionCall(.., err, _) | Self::ErrorInModule(.., err, _) => {
+                err.unwrap_inner()
+            }
+            _ => self,
+        }
+    }
     /// Get the [position][Position] of this error.
     #[must_use]
     pub const fn position(&self) -> Position {
         match self {
-            Self::ErrorSystem(_, _) => Position::NONE,
+            Self::ErrorSystem(..) => Position::NONE,
 
-            Self::ErrorParsing(_, pos)
-            | Self::ErrorFunctionNotFound(_, pos)
-            | Self::ErrorInFunctionCall(_, _, _, pos)
-            | Self::ErrorInModule(_, _, pos)
+            Self::ErrorParsing(.., pos)
+            | Self::ErrorFunctionNotFound(.., pos)
+            | Self::ErrorInFunctionCall(.., pos)
+            | Self::ErrorInModule(.., pos)
             | Self::ErrorUnboundThis(pos)
-            | Self::ErrorMismatchDataType(_, _, pos)
-            | Self::ErrorArrayBounds(_, _, pos)
-            | Self::ErrorStringBounds(_, _, pos)
-            | Self::ErrorBitFieldBounds(_, _, pos)
-            | Self::ErrorIndexingType(_, pos)
+            | Self::ErrorMismatchDataType(.., pos)
+            | Self::ErrorArrayBounds(.., pos)
+            | Self::ErrorStringBounds(.., pos)
+            | Self::ErrorBitFieldBounds(.., pos)
+            | Self::ErrorIndexingType(.., pos)
             | Self::ErrorFor(pos)
-            | Self::ErrorVariableExists(_, pos)
-            | Self::ErrorVariableNotFound(_, pos)
-            | Self::ErrorModuleNotFound(_, pos)
-            | Self::ErrorDataRace(_, pos)
-            | Self::ErrorAssignmentToConstant(_, pos)
-            | Self::ErrorMismatchOutputType(_, _, pos)
-            | Self::ErrorDotExpr(_, pos)
-            | Self::ErrorArithmetic(_, pos)
+            | Self::ErrorVariableExists(.., pos)
+            | Self::ErrorVariableNotFound(.., pos)
+            | Self::ErrorModuleNotFound(.., pos)
+            | Self::ErrorDataRace(.., pos)
+            | Self::ErrorAssignmentToConstant(.., pos)
+            | Self::ErrorMismatchOutputType(.., pos)
+            | Self::ErrorDotExpr(.., pos)
+            | Self::ErrorArithmetic(.., pos)
             | Self::ErrorTooManyOperations(pos)
             | Self::ErrorTooManyModules(pos)
             | Self::ErrorStackOverflow(pos)
-            | Self::ErrorDataTooLarge(_, pos)
-            | Self::ErrorTerminated(_, pos)
-            | Self::ErrorCustomSyntax(_, _, pos)
-            | Self::ErrorRuntime(_, pos)
-            | Self::LoopBreak(_, pos)
-            | Self::Return(_, pos) => *pos,
+            | Self::ErrorDataTooLarge(.., pos)
+            | Self::ErrorTerminated(.., pos)
+            | Self::ErrorCustomSyntax(.., pos)
+            | Self::ErrorRuntime(.., pos)
+            | Self::LoopBreak(.., pos)
+            | Self::Return(.., pos) => *pos,
         }
     }
     /// Remove the [position][Position] information from this error.
@@ -456,36 +466,36 @@ impl EvalAltResult {
     /// Override the [position][Position] of this error.
     pub fn set_position(&mut self, new_position: Position) -> &mut Self {
         match self {
-            Self::ErrorSystem(_, _) => (),
+            Self::ErrorSystem(..) => (),
 
-            Self::ErrorParsing(_, pos)
-            | Self::ErrorFunctionNotFound(_, pos)
-            | Self::ErrorInFunctionCall(_, _, _, pos)
-            | Self::ErrorInModule(_, _, pos)
+            Self::ErrorParsing(.., pos)
+            | Self::ErrorFunctionNotFound(.., pos)
+            | Self::ErrorInFunctionCall(.., pos)
+            | Self::ErrorInModule(.., pos)
             | Self::ErrorUnboundThis(pos)
-            | Self::ErrorMismatchDataType(_, _, pos)
-            | Self::ErrorArrayBounds(_, _, pos)
-            | Self::ErrorStringBounds(_, _, pos)
-            | Self::ErrorBitFieldBounds(_, _, pos)
-            | Self::ErrorIndexingType(_, pos)
+            | Self::ErrorMismatchDataType(.., pos)
+            | Self::ErrorArrayBounds(.., pos)
+            | Self::ErrorStringBounds(.., pos)
+            | Self::ErrorBitFieldBounds(.., pos)
+            | Self::ErrorIndexingType(.., pos)
             | Self::ErrorFor(pos)
-            | Self::ErrorVariableExists(_, pos)
-            | Self::ErrorVariableNotFound(_, pos)
-            | Self::ErrorModuleNotFound(_, pos)
-            | Self::ErrorDataRace(_, pos)
-            | Self::ErrorAssignmentToConstant(_, pos)
-            | Self::ErrorMismatchOutputType(_, _, pos)
-            | Self::ErrorDotExpr(_, pos)
-            | Self::ErrorArithmetic(_, pos)
+            | Self::ErrorVariableExists(.., pos)
+            | Self::ErrorVariableNotFound(.., pos)
+            | Self::ErrorModuleNotFound(.., pos)
+            | Self::ErrorDataRace(.., pos)
+            | Self::ErrorAssignmentToConstant(.., pos)
+            | Self::ErrorMismatchOutputType(.., pos)
+            | Self::ErrorDotExpr(.., pos)
+            | Self::ErrorArithmetic(.., pos)
             | Self::ErrorTooManyOperations(pos)
             | Self::ErrorTooManyModules(pos)
             | Self::ErrorStackOverflow(pos)
-            | Self::ErrorDataTooLarge(_, pos)
-            | Self::ErrorTerminated(_, pos)
-            | Self::ErrorCustomSyntax(_, _, pos)
-            | Self::ErrorRuntime(_, pos)
-            | Self::LoopBreak(_, pos)
-            | Self::Return(_, pos) => *pos = new_position,
+            | Self::ErrorDataTooLarge(.., pos)
+            | Self::ErrorTerminated(.., pos)
+            | Self::ErrorCustomSyntax(.., pos)
+            | Self::ErrorRuntime(.., pos)
+            | Self::LoopBreak(.., pos)
+            | Self::Return(.., pos) => *pos = new_position,
         }
         self
     }
