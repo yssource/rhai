@@ -480,7 +480,7 @@ impl fmt::Debug for Expr {
                 f.write_str(")")
             }
             Self::Property(x, ..) => write!(f, "Property({})", x.2),
-            Self::Stack(x, ..) => write!(f, "ConstantArg#{}", x),
+            Self::Stack(x, ..) => write!(f, "ConstantArg[{}]", x),
             Self::Stmt(x) => {
                 f.write_str("ExprStmtBlock")?;
                 f.debug_list().entries(x.iter()).finish()

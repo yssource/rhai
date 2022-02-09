@@ -3226,7 +3226,7 @@ fn parse_fn(
 fn make_curry_from_externals(
     state: &mut ParseState,
     fn_expr: Expr,
-    externals: StaticVec<Identifier>,
+    externals: StaticVec<crate::ast::Ident>,
     pos: Position,
 ) -> Expr {
     // If there are no captured variables, no need to curry
@@ -3239,21 +3239,26 @@ fn make_curry_from_externals(
 
     args.push(fn_expr);
 
-    args.extend(externals.iter().cloned().map(|x| {
-        Expr::Variable(
-            None,
-            Position::NONE,
-            (
-                None,
-                #[cfg(not(feature = "no_module"))]
-                None,
-                #[cfg(feature = "no_module")]
-                (),
-                x,
-            )
-                .into(),
-        )
-    }));
+    args.extend(
+        externals
+            .iter()
+            .cloned()
+            .map(|crate::ast::Ident { name, pos }| {
+                Expr::Variable(
+                    None,
+                    pos,
+                    (
+                        None,
+                        #[cfg(not(feature = "no_module"))]
+                        None,
+                        #[cfg(feature = "no_module")]
+                        (),
+                        name,
+                    )
+                        .into(),
+                )
+            }),
+    );
 
     let expr = FnCallExpr {
         name: state.get_identifier("", crate::engine::KEYWORD_FN_PTR_CURRY),
@@ -3270,7 +3275,11 @@ fn make_curry_from_externals(
     // Convert the entire expression into a statement block, then insert the relevant
     // [`Share`][Stmt::Share] statements.
     let mut statements = StaticVec::with_capacity(externals.len() + 1);
-    statements.extend(externals.into_iter().map(Stmt::Share));
+    statements.extend(
+        externals
+            .into_iter()
+            .map(|crate::ast::Ident { name, pos }| Stmt::Share(name, pos)),
+    );
     statements.push(Stmt::Expr(expr));
     Expr::Stmt(crate::ast::StmtBlock::new(statements, pos, Position::NONE).into())
 }
@@ -3336,14 +3345,14 @@ fn parse_anon_fn(
     // so extract them into a list.
     #[cfg(not(feature = "no_closure"))]
     let (mut params, externals) = {
-        let externals: StaticVec<Identifier> = state
-            .external_vars
-            .iter()
-            .map(|crate::ast::Ident { name, .. }| name.clone())
-            .collect();
+        let externals: StaticVec<_> = state.external_vars.iter().cloned().collect();
 
         let mut params = StaticVec::with_capacity(params_list.len() + externals.len());
-        params.extend(externals.iter().cloned());
+        params.extend(
+            externals
+                .iter()
+                .map(|crate::ast::Ident { name, .. }| name.clone()),
+        );
 
         (params, externals)
     };

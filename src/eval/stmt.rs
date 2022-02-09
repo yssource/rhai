@@ -977,7 +977,7 @@ impl Engine {
 
             // Share statement
             #[cfg(not(feature = "no_closure"))]
-            Stmt::Share(name) => {
+            Stmt::Share(name, ..) => {
                 if let Some((index, ..)) = scope.get_index(name) {
                     let val = scope.get_mut_by_index(index);
 
@@ -985,6 +985,8 @@ impl Engine {
                         // Replace the variable with a shared value.
                         *val = std::mem::take(val).into_shared();
                     }
+                } else {
+                    unreachable!("variable {} not found for sharing", name);
                 }
                 Ok(Dynamic::UNIT)
             }
