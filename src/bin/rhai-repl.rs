@@ -85,6 +85,7 @@ fn print_keys() {
     println!("Ctrl-R            => reverse search history");
     println!("                     (Ctrl-S forward, Ctrl-G cancel)");
     println!("Ctrl-L            => clear screen");
+    #[cfg(target_family = "windows")]
     println!("Escape            => clear all input");
     println!("Ctrl-C            => exit");
     println!("Ctrl-D            => EOF (when line empty)");
@@ -95,7 +96,10 @@ fn print_keys() {
     println!("Ctrl-T            => transpose characters");
     println!("Ctrl-V            => insert special character");
     println!("Ctrl-Y            => paste yank");
-    println!("Ctrl-Z            => suspend (Unix), undo (Windows)");
+    #[cfg(target_family = "unix")]
+    println!("Ctrl-Z            => suspend");
+    #[cfg(target_family = "windows")]
+    println!("Ctrl-Z            => undo");
     println!("Ctrl-_            => undo");
     println!("Enter             => run code");
     println!("Shift-Ctrl-Enter  => continue to next line");
