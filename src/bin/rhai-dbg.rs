@@ -179,6 +179,9 @@ fn main() {
     // Initialize scripting engine
     let mut engine = Engine::new();
 
+    #[cfg(not(feature = "no_optimize"))]
+    engine.set_optimization_level(rhai::OptimizationLevel::None);
+
     let mut script = String::new();
     let main_ast;
 

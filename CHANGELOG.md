@@ -6,6 +6,8 @@ Version 1.5.0
 
 This version adds a debugging interface, which can be used to integrate a debugger.
 
+The `REPL` tool uses [`rustyline`](https://crates.io/crates/rustyline) for line editing and history.
+
 Bug fixes
 ---------
 
