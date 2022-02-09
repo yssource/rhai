@@ -12,7 +12,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-/// _(internals)_ A chain of [module][Module] names to namespace-qualify a variable or function call.
+/// _(internals)_ A chain of [module][crate::Module] names to namespace-qualify a variable or function call.
 /// Exported under the `internals` feature only.
 ///
 /// Not available under `no_module`.

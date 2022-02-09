@@ -81,7 +81,7 @@ impl Engine {
     /// ## Return value
     ///
     /// * `Ok(true)`: continue with normal variable definition.
-    /// * `Ok(false)`: deny the variable definition with an [runtime error][EvalAltResult::ErrorRuntime].
+    /// * `Ok(false)`: deny the variable definition with an [runtime error][crate::EvalAltResult::ErrorRuntime].
     ///
     /// ## Raising errors
     ///
