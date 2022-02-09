@@ -6,13 +6,11 @@ use crate::plugin::*;
 use std::prelude::v1::*;
 
 #[cfg(not(feature = "no_function"))]
-use crate::{Dynamic, NativeCallContext};
+#[cfg(not(feature = "no_index"))]
+use crate::{Array, Dynamic, NativeCallContext};
 
 #[cfg(not(feature = "no_function"))]
 #[cfg(not(feature = "no_index"))]
-use crate::Array;
-
-#[cfg(not(feature = "no_function"))]
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
 

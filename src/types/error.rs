@@ -13,6 +13,10 @@ use std::prelude::v1::*;
 ///
 /// All wrapped [`Position`] values represent the location in the script where the error occurs.
 ///
+/// Some errors never appear when certain features are turned on.
+/// They still exist so that the application can turn features on and off without going through
+/// massive code changes to remove/add back enum variants in match statements.
+///
 /// # Thread Safety
 ///
 /// Currently, [`EvalAltResult`] is neither [`Send`] nor [`Sync`].
@@ -32,8 +36,10 @@ pub enum EvalAltResult {
 
     /// Shadowing of an existing variable disallowed. Wrapped value is the variable name.
     ErrorVariableExists(String, Position),
-    /// Usage of an unknown variable. Wrapped value is the variable name.
+    /// Access of an unknown variable. Wrapped value is the variable name.
     ErrorVariableNotFound(String, Position),
+    /// Access of an unknown object map property. Wrapped value is the property name.
+    ErrorPropertyNotFound(String, Position),
     /// Call to an unknown function. Wrapped value is the function signature.
     ErrorFunctionNotFound(String, Position),
     /// Usage of an unknown [module][crate::Module]. Wrapped value is the [module][crate::Module] name.
@@ -143,6 +149,7 @@ impl fmt::Display for EvalAltResult {
 
             Self::ErrorVariableExists(s, ..) => write!(f, "Variable is already defined: {}", s)?,
             Self::ErrorVariableNotFound(s, ..) => write!(f, "Variable not found: {}", s)?,
+            Self::ErrorPropertyNotFound(s, ..) => write!(f, "Property not found: {}", s)?,
             Self::ErrorFunctionNotFound(s, ..) => write!(f, "Function not found: {}", s)?,
             Self::ErrorModuleNotFound(s, ..) => write!(f, "Module not found: {}", s)?,
             Self::ErrorDataRace(s, ..) => {
@@ -279,6 +286,7 @@ impl EvalAltResult {
             | Self::ErrorFor(..)
             | Self::ErrorVariableExists(..)
             | Self::ErrorVariableNotFound(..)
+            | Self::ErrorPropertyNotFound(..)
             | Self::ErrorModuleNotFound(..)
             | Self::ErrorDataRace(..)
             | Self::ErrorAssignmentToConstant(..)
@@ -370,6 +378,7 @@ impl EvalAltResult {
             }
             Self::ErrorVariableExists(v, ..)
             | Self::ErrorVariableNotFound(v, ..)
+            | Self::ErrorPropertyNotFound(v, ..)
             | Self::ErrorDataRace(v, ..)
             | Self::ErrorAssignmentToConstant(v, ..) => {
                 map.insert("variable".into(), v.into());
@@ -432,6 +441,7 @@ impl EvalAltResult {
             | Self::ErrorFor(pos)
             | Self::ErrorVariableExists(.., pos)
             | Self::ErrorVariableNotFound(.., pos)
+            | Self::ErrorPropertyNotFound(.., pos)
             | Self::ErrorModuleNotFound(.., pos)
             | Self::ErrorDataRace(.., pos)
             | Self::ErrorAssignmentToConstant(.., pos)
@@ -481,6 +491,7 @@ impl EvalAltResult {
             | Self::ErrorFor(pos)
             | Self::ErrorVariableExists(.., pos)
             | Self::ErrorVariableNotFound(.., pos)
+            | Self::ErrorPropertyNotFound(.., pos)
             | Self::ErrorModuleNotFound(.., pos)
             | Self::ErrorDataRace(.., pos)
             | Self::ErrorAssignmentToConstant(.., pos)

@@ -89,21 +89,12 @@ pub enum ParseErrorType {
     MalformedCallExpr(String),
     /// An expression in indexing brackets `[]` has syntax error. Wrapped value is the error
     /// description (if any).
-    ///
-    /// Never appears under the `no_index` feature.
     MalformedIndexExpr(String),
-    /// An expression in an `in` expression has syntax error. Wrapped value is the error description
-    /// (if any).
-    ///
-    /// Never appears under the `no_object` and `no_index` features combination.
+    /// An expression in an `in` expression has syntax error. Wrapped value is the error description (if any).
     MalformedInExpr(String),
     /// A capturing  has syntax error. Wrapped value is the error description (if any).
-    ///
-    /// Never appears under the `no_closure` feature.
     MalformedCapture(String),
     /// A map definition has duplicated property names. Wrapped value is the property name.
-    ///
-    /// Never appears under the `no_object` feature.
     DuplicatedProperty(String),
     /// A `switch` case is duplicated.
     DuplicatedSwitchCase,
@@ -116,8 +107,6 @@ pub enum ParseErrorType {
     /// The case condition of a `switch` statement is not appropriate.
     WrongSwitchCaseCondition,
     /// Missing a property name for custom types and maps.
-    ///
-    /// Never appears under the `no_object` feature.
     PropertyExpected,
     /// Missing a variable name after the `let`, `const`, `for` or `catch` keywords.
     VariableExpected,
@@ -129,38 +118,22 @@ pub enum ParseErrorType {
     /// Missing an expression. Wrapped value is the expression type.
     ExprExpected(String),
     /// Defining a doc-comment in an appropriate place (e.g. not at global level).
-    ///
-    /// Never appears under the `no_function` feature.
     WrongDocComment,
     /// Defining a function `fn` in an appropriate place (e.g. inside another function).
-    ///
-    /// Never appears under the `no_function` feature.
     WrongFnDefinition,
     /// Defining a function with a name that conflicts with an existing function.
     /// Wrapped values are the function name and number of parameters.
-    ///
-    /// Never appears under the `no_object` feature.
     FnDuplicatedDefinition(String, usize),
     /// Missing a function name after the `fn` keyword.
-    ///
-    /// Never appears under the `no_function` feature.
     FnMissingName,
     /// A function definition is missing the parameters list. Wrapped value is the function name.
-    ///
-    /// Never appears under the `no_function` feature.
     FnMissingParams(String),
     /// A function definition has duplicated parameters. Wrapped values are the function name and
     /// parameter name.
-    ///
-    /// Never appears under the `no_function` feature.
     FnDuplicatedParam(String, String),
     /// A function definition is missing the body. Wrapped value is the function name.
-    ///
-    /// Never appears under the `no_function` feature.
     FnMissingBody(String),
     /// Export statement not at global level.
-    ///
-    /// Never appears under the `no_module` feature.
     WrongExport,
     /// Assignment to an a constant variable. Wrapped value is the constant variable name.
     AssignmentToConstant(String),
@@ -178,16 +151,10 @@ pub enum ParseErrorType {
     /// An imported module is not found.
     ///
     /// Only appears when strict variables mode is enabled.
-    ///
-    /// Never appears under the `no_module` feature.
     ModuleUndefined(String),
     /// Expression exceeding the maximum levels of complexity.
-    ///
-    /// Never appears under the `unchecked` feature.
     ExprTooDeep,
     /// Literal exceeding the maximum size. Wrapped values are the data type name and the maximum size.
-    ///
-    /// Never appears under the `unchecked` feature.
     LiteralTooLarge(String, usize),
     /// Break statement not inside a loop.
     LoopBreak,

@@ -6,7 +6,11 @@ Version 1.5.0
 
 This version adds a debugging interface, which can be used to integrate a debugger.
 
-The `REPL` tool uses [`rustyline`](https://crates.io/crates/rustyline) for line editing and history.
+Based on popular demand, an option is added to throw exceptions when invalid properties are accessed
+on object maps (default is to return `()`).
+
+Also based on popular demand, the `REPL` tool now uses
+[`rustyline`](https://crates.io/crates/rustyline) for line editing and history.
 
 Bug fixes
 ---------
@@ -17,6 +21,7 @@ Bug fixes
 * Globally-defined constants are now encapsulated correctly inside a loaded module and no longer spill across call boundaries.
 * Type names display is fixed.
 * Exceptions thrown inside function calls now unwrap correctly when `catch`-ed.
+* Error messages for certain invalid property accesses are fixed.
 
 Script-breaking changes
 -----------------------
@@ -29,6 +34,7 @@ New features
 * A debugging interface is added.
 * A new bin tool, `rhai-dbg` (aka _The Rhai Debugger_), is added to showcase the debugging interface.
 * A new package, `DebuggingPackage`, is added which contains the `back_trace` function to get the current call stack anywhere in a script.
+* `Engine::set_fail_on_invalid_map_property` is added to control whether to raise an error (new `EvalAltResult::ErrorPropertyNotFound`) when invalid properties are accessed on object maps.
 * `Engine::set_allow_shadowing` is added to allow/disallow variables _shadowing_, with new errors `EvalAltResult::ErrorVariableExists` and `ParseErrorType::VariableExists`.
 * `Engine::on_def_var` allows registering a closure which can decide whether a variable definition is allow to continue, or should fail with an error.
 

@@ -4,9 +4,7 @@
 use super::{EvalState, GlobalRuntimeState, Target};
 use crate::ast::{Expr, OpAssignment};
 use crate::types::dynamic::Union;
-use crate::{
-    Dynamic, Engine, Module, Position, RhaiError, RhaiResult, RhaiResultOf, Scope, StaticVec, ERR,
-};
+use crate::{Dynamic, Engine, Module, Position, RhaiResult, RhaiResultOf, Scope, StaticVec, ERR};
 use std::hash::Hash;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -185,20 +183,15 @@ impl Engine {
 
                         if let Some(mut new_val) = try_setter {
                             // Try to call index setter if value is changed
-                            let hash_set =
-                                crate::ast::FnCallHashes::from_native(global.hash_idx_set());
-                            let args = &mut [target, &mut idx_val_for_setter, &mut new_val];
-                            let fn_name = crate::engine::FN_IDX_SET;
-
-                            if let Err(err) = self.exec_fn_call(
-                                None, global, state, lib, fn_name, hash_set, args, is_ref_mut,
-                                true, root_pos, level,
-                            ) {
-                                // Just ignore if there is no index setter
-                                if !matches!(*err, ERR::ErrorFunctionNotFound(..)) {
-                                    return Err(err);
-                                }
-                            }
+                            let idx = &mut idx_val_for_setter;
+                            let new_val = &mut new_val;
+                            self.call_indexer_set(
+                                global, state, lib, target, idx, new_val, is_ref_mut, level,
+                            )
+                            .or_else(|idx_err| match *idx_err {
+                                ERR::ErrorIndexingType(..) => Ok((Dynamic::UNIT, false)),
+                                _ => Err(idx_err.fill_position(root_pos)),
+                            })?;
                         }
 
                         Ok(result)
@@ -234,15 +227,12 @@ impl Engine {
 
                         if let Some(mut new_val) = try_setter {
                             // Try to call index setter
-                            let hash_set =
-                                crate::ast::FnCallHashes::from_native(global.hash_idx_set());
-                            let args = &mut [target, &mut idx_val_for_setter, &mut new_val];
-                            let fn_name = crate::engine::FN_IDX_SET;
-
-                            self.exec_fn_call(
-                                None, global, state, lib, fn_name, hash_set, args, is_ref_mut,
-                                true, root_pos, level,
-                            )?;
+                            let idx = &mut idx_val_for_setter;
+                            let new_val = &mut new_val;
+                            self.call_indexer_set(
+                                global, state, lib, target, idx, new_val, is_ref_mut, level,
+                            )
+                            .map_err(|err| err.fill_position(root_pos))?;
                         }
 
                         Ok((Dynamic::UNIT, true))
@@ -341,12 +331,10 @@ impl Engine {
                                 .or_else(|err| match *err {
                                     // Try an indexer if property does not exist
                                     ERR::ErrorDotExpr(..) => {
-                                        let prop = name.into();
-                                        self.get_indexed_mut(
-                                            global, state, lib, target, prop, *pos, false, true,
-                                            level,
+                                        let mut prop = name.into();
+                                        self.call_indexer_get(
+                                            global, state, lib, target, &mut prop, level,
                                         )
-                                        .map(|v| (v.take_or_clone(), false))
                                         .map_err(
                                             |idx_err| match *idx_err {
                                                 ERR::ErrorIndexingType(..) => err,
@@ -382,15 +370,10 @@ impl Engine {
                         .or_else(|err| match *err {
                             // Try an indexer if property does not exist
                             ERR::ErrorDotExpr(..) => {
-                                let args = &mut [target, &mut name.into(), &mut new_val];
-                                let fn_name = crate::engine::FN_IDX_SET;
-                                let hash_set =
-                                    crate::ast::FnCallHashes::from_native(global.hash_idx_set());
-                                let pos = Position::NONE;
-
-                                self.exec_fn_call(
-                                    None, global, state, lib, fn_name, hash_set, args, is_ref_mut,
-                                    true, pos, level,
+                                let idx = &mut name.into();
+                                let new_val = &mut new_val;
+                                self.call_indexer_set(
+                                    global, state, lib, target, idx, new_val, is_ref_mut, level,
                                 )
                                 .map_err(
                                     |idx_err| match *idx_err {
@@ -418,11 +401,10 @@ impl Engine {
                             |err| match *err {
                                 // Try an indexer if property does not exist
                                 ERR::ErrorDotExpr(..) => {
-                                    let prop = name.into();
-                                    self.get_indexed_mut(
-                                        global, state, lib, target, prop, *pos, false, true, level,
+                                    let mut prop = name.into();
+                                    self.call_indexer_get(
+                                        global, state, lib, target, &mut prop, level,
                                     )
-                                    .map(|v| (v.take_or_clone(), false))
                                     .map_err(|idx_err| {
                                         match *idx_err {
                                             ERR::ErrorIndexingType(..) => err,
@@ -517,16 +499,14 @@ impl Engine {
                                     .or_else(|err| match *err {
                                         // Try an indexer if property does not exist
                                         ERR::ErrorDotExpr(..) => {
-                                            let prop = name.into();
-                                            self.get_indexed_mut(
-                                                global, state, lib, target, prop, pos, false, true,
-                                                level,
+                                            let mut prop = name.into();
+                                            self.call_indexer_get(
+                                                global, state, lib, target, &mut prop, level,
                                             )
-                                            .map(|v| (v.take_or_clone(), false))
                                             .map_err(
                                                 |idx_err| match *idx_err {
                                                     ERR::ErrorIndexingType(..) => err,
-                                                    _ => idx_err,
+                                                    _ => idx_err.fill_position(pos),
                                                 },
                                             )
                                         }
@@ -566,16 +546,11 @@ impl Engine {
                                         |err| match *err {
                                             // Try an indexer if property does not exist
                                             ERR::ErrorDotExpr(..) => {
-                                                let args =
-                                                    &mut [target.as_mut(), &mut name.into(), val];
-                                                let fn_name = crate::engine::FN_IDX_SET;
-                                                let hash_set =
-                                                    crate::ast::FnCallHashes::from_native(
-                                                        global.hash_idx_set(),
-                                                    );
-                                                self.exec_fn_call(
-                                                    None, global, state, lib, fn_name, hash_set,
-                                                    args, is_ref_mut, true, pos, level,
+                                                let idx = &mut name.into();
+                                                let new_val = val;
+                                                self.call_indexer_set(
+                                                    global, state, lib, target, idx, new_val,
+                                                    is_ref_mut, level,
                                                 )
                                                 .or_else(|idx_err| match *idx_err {
                                                     ERR::ErrorIndexingType(..) => {
@@ -583,7 +558,7 @@ impl Engine {
                                                         // the property is read-only
                                                         Ok((Dynamic::UNIT, false))
                                                     }
-                                                    _ => Err(idx_err),
+                                                    _ => Err(idx_err.fill_position(pos)),
                                                 })
                                             }
                                             _ => Err(err),
@@ -743,7 +718,7 @@ impl Engine {
                             pos = arg_pos;
                         }
                         values.push(value.flatten());
-                        Ok::<_, RhaiError>((values, pos))
+                        Ok::<_, crate::RhaiError>((values, pos))
                     },
                 )?;
 
@@ -789,7 +764,7 @@ impl Engine {
                                     pos = arg_pos
                                 }
                                 values.push(value.flatten());
-                                Ok::<_, RhaiError>((values, pos))
+                                Ok::<_, crate::RhaiError>((values, pos))
                             },
                         )?;
                         super::ChainArgument::from_fn_call_args(values, pos)
@@ -840,6 +815,52 @@ impl Engine {
         }
 
         Ok(())
+    }
+
+    /// Call a get indexer.
+    /// [`Position`] in [`EvalAltResult`] may be [`NONE`][Position::NONE] and should be set afterwards.
+    #[inline(always)]
+    fn call_indexer_get(
+        &self,
+        global: &mut GlobalRuntimeState,
+        state: &mut EvalState,
+        lib: &[&Module],
+        target: &mut Dynamic,
+        idx: &mut Dynamic,
+        level: usize,
+    ) -> RhaiResultOf<(Dynamic, bool)> {
+        let args = &mut [target, idx];
+        let hash_get = crate::ast::FnCallHashes::from_native(global.hash_idx_get());
+        let fn_name = crate::engine::FN_IDX_GET;
+        let pos = Position::NONE;
+
+        self.exec_fn_call(
+            None, global, state, lib, fn_name, hash_get, args, true, true, pos, level,
+        )
+    }
+
+    /// Call a set indexer.
+    /// [`Position`] in [`EvalAltResult`] may be [`NONE`][Position::NONE] and should be set afterwards.
+    #[inline(always)]
+    fn call_indexer_set(
+        &self,
+        global: &mut GlobalRuntimeState,
+        state: &mut EvalState,
+        lib: &[&Module],
+        target: &mut Dynamic,
+        idx: &mut Dynamic,
+        new_val: &mut Dynamic,
+        is_ref_mut: bool,
+        level: usize,
+    ) -> RhaiResultOf<(Dynamic, bool)> {
+        let hash_set = crate::ast::FnCallHashes::from_native(global.hash_idx_set());
+        let args = &mut [target, idx, new_val];
+        let fn_name = crate::engine::FN_IDX_SET;
+        let pos = Position::NONE;
+
+        self.exec_fn_call(
+            None, global, state, lib, fn_name, hash_set, args, is_ref_mut, true, pos, level,
+        )
     }
 
     /// Get the value at the indexed position of a base type.
@@ -908,10 +929,13 @@ impl Engine {
                     map.insert(index.clone().into(), Dynamic::UNIT);
                 }
 
-                Ok(map
-                    .get_mut(index.as_str())
-                    .map(Target::from)
-                    .unwrap_or_else(|| Target::from(Dynamic::UNIT)))
+                if let Some(value) = map.get_mut(index.as_str()) {
+                    Ok(Target::from(value))
+                } else if self.fail_on_invalid_map_property() {
+                    Err(ERR::ErrorPropertyNotFound(index.to_string(), pos).into())
+                } else {
+                    Ok(Target::from(Dynamic::UNIT))
+                }
             }
 
             #[cfg(not(feature = "no_index"))]
@@ -1045,17 +1069,9 @@ impl Engine {
                 })
             }
 
-            _ if use_indexers => {
-                let args = &mut [target, &mut idx];
-                let hash_get = crate::ast::FnCallHashes::from_native(global.hash_idx_get());
-                let fn_name = crate::engine::FN_IDX_GET;
-                let pos = Position::NONE;
-
-                self.exec_fn_call(
-                    None, global, state, lib, fn_name, hash_get, args, true, true, pos, level,
-                )
-                .map(|(v, ..)| v.into())
-            }
+            _ if use_indexers => self
+                .call_indexer_get(global, state, lib, target, &mut idx, level)
+                .map(|(v, ..)| v.into()),
 
             _ => Err(ERR::ErrorIndexingType(
                 format!(
