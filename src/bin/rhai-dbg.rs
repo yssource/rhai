@@ -101,6 +101,7 @@ fn print_debug_help() {
     println!("quit, q, exit, kill    => quit");
     println!("scope                  => print the scope");
     println!("print, p               => print all variables de-duplicated");
+    println!("print/p this           => print the `this` pointer");
     println!("print/p <variable>     => print the current value of a variable");
     #[cfg(not(feature = "no_module"))]
     println!("imports                => print all imported modules");
@@ -167,8 +168,6 @@ fn print_scope(scope: &Scope, dedup: bool) {
             );
         }
     }
-
-    println!();
 }
 
 fn main() {
@@ -336,18 +335,26 @@ fn main() {
                         ["over", ..] => break Ok(DebuggerCommand::StepOver),
                         ["next" | "n", ..] => break Ok(DebuggerCommand::Next),
                         ["scope", ..] => print_scope(context.scope(), false),
+                        ["print" | "p", "this"] => {
+                            if let Some(value) = context.this_ptr() {
+                                println!("=> {:?}", value);
+                            } else {
+                                println!("`this` pointer is unbound.");
+                            }
+                        }
                         ["print" | "p", var_name, ..] => {
                             if let Some(value) = context.scope().get_value::<Dynamic>(var_name) {
-                                if value.is::<()>() {
-                                    println!("=> ()");
-                                } else {
-                                    println!("=> {}", value);
-                                }
+                                println!("=> {:?}", value);
                             } else {
                                 eprintln!("Variable not found: {}", var_name);
                             }
                         }
-                        ["print" | "p"] => print_scope(context.scope(), true),
+                        ["print" | "p"] => {
+                            print_scope(context.scope(), true);
+                            if let Some(value) = context.this_ptr() {
+                                println!("this = {:?}", value);
+                            }
+                        }
                         #[cfg(not(feature = "no_module"))]
                         ["imports", ..] => {
                             for (i, (name, module)) in context
