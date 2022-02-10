@@ -3,7 +3,7 @@
 
 use crate::ast::Ident;
 use crate::tokenizer::Token;
-use crate::StaticVec;
+use crate::{Position, StaticVec};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -113,5 +113,13 @@ impl Namespace {
     #[inline(always)]
     pub(crate) fn set_index(&mut self, index: Option<NonZeroUsize>) {
         self.index = index
+    }
+    /// Get the [position][Position] of this [`NameSpace`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the path is empty.
+    pub fn position(&self) -> Position {
+        self.path[0].pos
     }
 }

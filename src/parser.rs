@@ -1291,8 +1291,9 @@ fn parse_primary(
             let mut segments = StaticVec::<Expr>::new();
 
             match input.next().expect(NEVER_ENDS) {
+                (Token::InterpolatedString(s), ..) if s.is_empty() => (),
                 (Token::InterpolatedString(s), pos) => {
-                    segments.push(Expr::StringConstant(s.into(), pos));
+                    segments.push(Expr::StringConstant(s.into(), pos))
                 }
                 token => unreachable!("Token::InterpolatedString expected but gets {:?}", token),
             }
@@ -1302,7 +1303,10 @@ fn parse_primary(
                     block @ Stmt::Block(..) => Expr::Stmt(Box::new(block.into())),
                     stmt => unreachable!("Stmt::Block expected but gets {:?}", stmt),
                 };
-                segments.push(expr);
+                match expr {
+                    Expr::StringConstant(s, ..) if s.is_empty() => (),
+                    _ => segments.push(expr),
+                }
 
                 // Make sure to parse the following as text
                 let mut control = state.tokenizer_control.get();
@@ -1332,6 +1336,12 @@ fn parse_primary(
                 }
             }
 
+            if segments.is_empty() {
+                segments.push(Expr::StringConstant(
+                    state.get_interned_string("", ""),
+                    settings.pos,
+                ));
+            }
             segments.shrink_to_fit();
             Expr::InterpolatedString(segments.into(), settings.pos)
         }

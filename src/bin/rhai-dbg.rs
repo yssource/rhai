@@ -325,7 +325,13 @@ fn main() {
                             exit(0);
                         }
                         ["node", ..] => {
-                            println!("{:?} {}@{:?}", node, source.unwrap_or_default(), pos);
+                            if pos.is_none() {
+                                println!("{:?}", node);
+                            } else if let Some(source) = source {
+                                println!("{:?} {} @ {:?}", node, source, pos);
+                            } else {
+                                println!("{:?} @ {:?}", node, pos);
+                            }
                             println!();
                         }
                         ["list" | "l", ..] => print_current_source(context, source, pos, &lines),

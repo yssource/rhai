@@ -402,7 +402,7 @@ impl Stmt {
     }
     /// Get the [position][Position] of this statement.
     #[must_use]
-    pub const fn position(&self) -> Position {
+    pub fn position(&self) -> Position {
         match self {
             Self::Noop(pos)
             | Self::BreakLoop(.., pos)
