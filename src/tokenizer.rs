@@ -1192,8 +1192,13 @@ pub fn parse_string_literal(
 
         // Close wrapper
         if termination_char == next_char && escape.is_empty() {
-            state.is_within_text_terminated_by = None;
-            break;
+            // Double wrapper
+            if stream.peek_next().map_or(false, |c| c == termination_char) {
+                eat_next(stream, pos);
+            } else {
+                state.is_within_text_terminated_by = None;
+                break;
+            }
         }
 
         if first_char.is_none() {
@@ -1265,15 +1270,6 @@ pub fn parse_string_literal(
             _ if termination_char == next_char && !escape.is_empty() => {
                 escape.clear();
                 result.push(next_char)
-            }
-
-            // Double wrapper
-            _ if termination_char == next_char
-                && escape.is_empty()
-                && stream.peek_next().map_or(false, |c| c == termination_char) =>
-            {
-                eat_next(stream, pos);
-                result.push(termination_char)
             }
 
             // Verbatim
