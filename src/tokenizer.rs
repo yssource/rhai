@@ -226,11 +226,9 @@ impl Position {
     /// Print this [`Position`] for debug purposes.
     #[inline]
     pub(crate) fn debug_print(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        #[cfg(not(feature = "no_position"))]
         if !self.is_none() {
             write!(_f, " @ {:?}", self)?;
         }
-
         Ok(())
     }
 }
@@ -1131,11 +1129,12 @@ pub fn parse_string_literal(
     verbatim: bool,
     allow_line_continuation: bool,
     allow_interpolation: bool,
-) -> Result<(Box<str>, bool), (LexError, Position)> {
+) -> Result<(Box<str>, bool, Position), (LexError, Position)> {
     let mut result = String::with_capacity(12);
     let mut escape = String::with_capacity(12);
 
     let start = *pos;
+    let mut first_char = Position::NONE;
     let mut interpolated = false;
     #[cfg(not(feature = "no_position"))]
     let mut skip_whitespace_until = 0;
@@ -1186,6 +1185,16 @@ pub fn parse_string_literal(
             if result.len() > max.get() {
                 return Err((LexError::StringTooLong(max.get()), *pos));
             }
+        }
+
+        // Close wrapper
+        if termination_char == next_char && escape.is_empty() {
+            state.is_within_text_terminated_by = None;
+            break;
+        }
+
+        if first_char.is_none() {
+            first_char = *pos;
         }
 
         match next_char {
@@ -1264,12 +1273,6 @@ pub fn parse_string_literal(
                 result.push(termination_char)
             }
 
-            // Close wrapper
-            _ if termination_char == next_char && escape.is_empty() => {
-                state.is_within_text_terminated_by = None;
-                break;
-            }
-
             // Verbatim
             '\n' if verbatim => {
                 assert_eq!(escape, "", "verbatim strings should not have any escapes");
@@ -1327,7 +1330,7 @@ pub fn parse_string_literal(
         }
     }
 
-    Ok((result.into(), interpolated))
+    Ok((result.into(), interpolated, first_char))
 }
 
 /// Consume the next character.
@@ -1462,11 +1465,9 @@ fn get_next_token_inner(
 
     // Within text?
     if let Some(ch) = state.is_within_text_terminated_by.take() {
-        let start_pos = *pos;
-
         return parse_string_literal(stream, state, pos, ch, true, false, true).map_or_else(
             |(err, err_pos)| Some((Token::LexError(err), err_pos)),
-            |(result, interpolated)| {
+            |(result, interpolated, start_pos)| {
                 if interpolated {
                     Some((Token::InterpolatedString(result), start_pos))
                 } else {
@@ -1677,7 +1678,7 @@ fn get_next_token_inner(
 
                 return parse_string_literal(stream, state, pos, c, true, false, true).map_or_else(
                     |(err, err_pos)| Some((Token::LexError(err), err_pos)),
-                    |(result, interpolated)| {
+                    |(result, interpolated, ..)| {
                         if interpolated {
                             Some((Token::InterpolatedString(result), start_pos))
                         } else {
