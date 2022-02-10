@@ -53,7 +53,7 @@ macro_rules! reg_functions {
 
 def_package! {
     /// Basic mathematical package.
-    crate::BasicMathPackage => |lib| {
+    pub BasicMathPackage(lib) {
         lib.standard = true;
 
         // Integer functions

@@ -15,7 +15,7 @@ pub const FUNC_TO_DEBUG: &str = "to_debug";
 
 def_package! {
     /// Package of basic string utilities (e.g. printing)
-    crate::BasicStringPackage => |lib| {
+    pub BasicStringPackage(lib) {
         lib.standard = true;
 
         combine_with_exported_module!(lib, "print_debug", print_debug_functions);

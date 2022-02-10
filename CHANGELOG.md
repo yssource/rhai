@@ -37,6 +37,7 @@ New features
 * `Engine::set_fail_on_invalid_map_property` is added to control whether to raise an error (new `EvalAltResult::ErrorPropertyNotFound`) when invalid properties are accessed on object maps.
 * `Engine::set_allow_shadowing` is added to allow/disallow variables _shadowing_, with new errors `EvalAltResult::ErrorVariableExists` and `ParseErrorType::VariableExists`.
 * `Engine::on_def_var` allows registering a closure which can decide whether a variable definition is allow to continue, or should fail with an error.
+* A new syntax for defining custom packages is introduced that removes the need to specify the Rhai crate name (internally uses the `$crate` meta variable).
 
 Enhancements
 ------------
@@ -50,6 +51,7 @@ Enhancements
   * `Expr::start_position` is added to give the beginning of the expression (not the operator's position).
   * `StmtBlock` and `Stmt::Block` now keep the position of the closing `}` as well.
 * `EvalAltResult::unwrap_inner` is added to access the base error inside multiple layers of wrappings (e.g. `EvalAltResult::ErrorInFunction`).
+* Yet another new syntax is introduced for `def_package!` that further simplifies the old syntax.
 
 REPL tool changes
 -----------------

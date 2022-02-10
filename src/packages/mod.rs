@@ -67,16 +67,52 @@ pub trait Package {
 ///
 /// fn add(x: i64, y: i64) -> Result<i64, Box<EvalAltResult>> { Ok(x + y) }
 ///
-/// def_package!(rhai:MyPackage:"My super-duper package", module,
-/// {
-///     // Load a binary function with all value parameters.
-///     module.set_native_fn("my_add", add);
-/// });
+/// def_package! {
+///     /// My super-duper package.
+///     pub MyPackage(module) {
+///         // Load a binary function with all value parameters.
+///         module.set_native_fn("my_add", add);
+///     }
+/// }
 /// ```
 #[macro_export]
 macro_rules! def_package {
+    ($($(#[$outer:meta])* $mod:vis $package:ident($lib:ident) $block:block)+) => { $(
+        $(#[$outer])*
+        $mod struct $package($crate::Shared<$crate::Module>);
+
+        impl $crate::packages::Package for $package {
+            fn as_shared_module(&self) -> $crate::Shared<$crate::Module> {
+                self.0.clone()
+            }
+            fn init($lib: &mut $crate::Module) {
+                $block
+            }
+        }
+
+        impl Default for $package {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+
+        impl $package {
+            pub fn new() -> Self {
+                let mut module = $crate::Module::new();
+                <Self as $crate::packages::Package>::init(&mut module);
+                module.build_index();
+                Self(module.into())
+            }
+        }
+    )* };
     ($($(#[$outer:meta])* $root:ident :: $package:ident => | $lib:ident | $block:block)+) => { $(
         $(#[$outer])*
+        /// # Deprecated
+        ///
+        /// This old syntax of `def_package!` is deprecated. Use the new syntax instead.
+        ///
+        /// This syntax will be removed in the next major version.
+        #[deprecated(since = "1.5.0", note = "this is an old syntax of `def_package!` and is deprecated; use the new syntax of `def_package!` instead")]
         pub struct $package($root::Shared<$root::Module>);
 
         impl $root::packages::Package for $package {
@@ -104,7 +140,6 @@ macro_rules! def_package {
         }
     )* };
     ($root:ident : $package:ident : $comment:expr , $lib:ident , $block:stmt) => {
-        #[deprecated(since = "1.4.0", note = "this is an old syntax of `def_package!` and is deprecated; use the new syntax of `def_package!` instead")]
         #[doc=$comment]
         ///
         /// # Deprecated
@@ -112,6 +147,7 @@ macro_rules! def_package {
         /// This old syntax of `def_package!` is deprecated. Use the new syntax instead.
         ///
         /// This syntax will be removed in the next major version.
+        #[deprecated(since = "1.4.0", note = "this is an old syntax of `def_package!` and is deprecated; use the new syntax of `def_package!` instead")]
         pub struct $package($root::Shared<$root::Module>);
 
         impl $root::packages::Package for $package {

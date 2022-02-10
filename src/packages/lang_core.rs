@@ -7,7 +7,7 @@ use std::prelude::v1::*;
 
 def_package! {
     /// Package of core language features.
-    crate::LanguageCorePackage => |lib| {
+    pub LanguageCorePackage(lib) {
         lib.standard = true;
 
         combine_with_exported_module!(lib, "core", core_functions);

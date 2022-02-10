@@ -20,7 +20,7 @@ const FLOAT_BYTES: usize = mem::size_of::<FLOAT>();
 
 def_package! {
     /// Package of basic BLOB utilities.
-    crate::BasicBlobPackage => |lib| {
+    pub BasicBlobPackage(lib) {
         lib.standard = true;
 
         combine_with_exported_module!(lib, "blob", blob_functions);

@@ -14,7 +14,7 @@ def_package! {
     /// * [`BasicIteratorPackage`][super::BasicIteratorPackage]
     /// * [`BasicFnPackage`][super::BasicFnPackage]
     /// * [`DebuggingPackage`][super::DebuggingPackage]
-    crate::CorePackage => |lib| {
+    pub CorePackage(lib) {
         lib.standard = true;
 
         super::LanguageCorePackage::init(lib);

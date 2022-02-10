@@ -5,7 +5,7 @@ use std::prelude::v1::*;
 
 def_package! {
     /// Package of basic function pointer utilities.
-    crate::BasicFnPackage => |lib| {
+    pub BasicFnPackage(lib) {
         lib.standard = true;
 
         combine_with_exported_module!(lib, "FnPtr", fn_ptr_functions);

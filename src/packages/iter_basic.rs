@@ -299,7 +299,7 @@ macro_rules! reg_range {
 
 def_package! {
     /// Package of basic range iterators
-    crate::BasicIteratorPackage => |lib| {
+    pub BasicIteratorPackage(lib) {
         lib.standard = true;
 
         reg_range!(lib | "range" => INT);

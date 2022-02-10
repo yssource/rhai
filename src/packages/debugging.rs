@@ -16,7 +16,7 @@ use crate::Map;
 
 def_package! {
     /// Package of basic debugging utilities.
-    crate::DebuggingPackage => |lib| {
+    pub DebuggingPackage(lib) {
         lib.standard = true;
 
         combine_with_exported_module!(lib, "debugging", debugging_functions);
