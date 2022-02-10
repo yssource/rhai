@@ -10,8 +10,7 @@ use std::fmt;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
-/// _(internals)_ Error encountered when tokenizing the script text.
-/// Exported under the `internals` feature only.
+/// Error encountered when tokenizing the script text.
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 #[non_exhaustive]
 pub enum LexError {
