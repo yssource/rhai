@@ -1,28 +1,40 @@
 use rhai::{Engine, EvalAltResult};
 
-#[derive(Debug, Clone)]
-struct TestStruct {
-    x: i64,
-}
-
-impl TestStruct {
-    pub fn update(&mut self) {
-        self.x += 1000;
-    }
-    pub fn new() -> Self {
-        Self { x: 1 }
-    }
-}
-
 #[cfg(not(feature = "no_index"))]
 #[cfg(not(feature = "no_object"))]
 fn main() -> Result<(), Box<EvalAltResult>> {
+    #[derive(Debug, Clone)]
+    struct TestStruct {
+        x: i64,
+    }
+
+    impl TestStruct {
+        pub fn new() -> Self {
+            Self { x: 1 }
+        }
+        pub fn update(&mut self) {
+            self.x += 1000;
+        }
+    }
+
     let mut engine = Engine::new();
 
     engine
-        .register_type::<TestStruct>()
+        .register_type_with_name::<TestStruct>("TestStruct")
         .register_fn("new_ts", TestStruct::new)
         .register_fn("update", TestStruct::update);
+
+    #[cfg(feature = "metadata")]
+    {
+        println!("Functions registered:");
+
+        engine
+            .gen_fn_signatures(false)
+            .into_iter()
+            .for_each(|func| println!("{}", func));
+
+        println!();
+    }
 
     let result = engine.eval::<TestStruct>(
         "
