@@ -7,6 +7,7 @@ Standard Examples
 | Example                                                   | Description                                                                                                                   |
 | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | [`arrays_and_structs`](arrays_and_structs.rs)             | shows how to register a Rust type and using it with arrays                                                                    |
+| [`callback`](callback.rs)                                 | shows how to store a Rhai closure and call it later within Rust                                                               |
 | [`custom_types_and_methods`](custom_types_and_methods.rs) | shows how to register a Rust type and methods/getters/setters for it                                                          |
 | [`hello`](hello.rs)                                       | simple example that evaluates an expression and prints the result                                                             |
 | [`reuse_scope`](reuse_scope.rs)                           | evaluates two pieces of code in separate runs, but using a common `Scope`                                                     |

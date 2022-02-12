@@ -1,3 +1,5 @@
+//! A simple example that evaluates an expression and prints the result.
+
 use rhai::{Engine, EvalAltResult};
 
 fn main() -> Result<(), Box<EvalAltResult>> {

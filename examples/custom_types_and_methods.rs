@@ -1,3 +1,5 @@
+//! An example showing how to register a Rust type and methods/getters/setters for it.
+
 use rhai::{Engine, EvalAltResult};
 
 #[cfg(not(feature = "no_object"))]

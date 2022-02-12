@@ -1,5 +1,6 @@
-///! This example registers a variety of functions that operate on strings.
-///! Remember to use `ImmutableString` or `&str` instead of `String` as parameters.
+//! An example that registers a variety of functions that operate on strings.
+//! Remember to use `ImmutableString` or `&str` instead of `String` as parameters.
+
 use rhai::{Engine, EvalAltResult, ImmutableString, Scope};
 use std::io::{stdin, stdout, Write};
 
@@ -12,6 +13,7 @@ fn trim_string(s: &mut ImmutableString) {
 
 /// Notice this is different from the built-in Rhai 'len' function for strings
 /// which counts the actual number of Unicode _characters_ in a string.
+///
 /// This version simply counts the number of _bytes_ in the UTF-8 representation.
 ///
 /// This version uses `&str`.

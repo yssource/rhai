@@ -1,3 +1,5 @@
+//! An example showing how to register a Rust type and use it with arrays.
+
 use rhai::{Engine, EvalAltResult};
 
 #[cfg(not(feature = "no_index"))]

@@ -1,3 +1,5 @@
+//! An example showing how to register a simple Rust function.
+
 use rhai::{Engine, EvalAltResult};
 
 fn add(x: i64, y: i64) -> i64 {
