@@ -64,20 +64,63 @@ mod print_debug_functions {
     pub fn to_debug_generic(ctx: NativeCallContext, item: &mut Dynamic) -> ImmutableString {
         ctx.engine().map_type_name(&format!("{:?}", item)).into()
     }
+
     /// Return the empty string.
     #[rhai_fn(name = "print", name = "debug")]
     pub fn print_empty_string(ctx: NativeCallContext) -> ImmutableString {
         ctx.engine().const_empty_string()
     }
+
     /// Return the `string`.
     #[rhai_fn(name = "print", name = "to_string")]
     pub fn print_string(string: ImmutableString) -> ImmutableString {
         string
     }
+    /// Convert the string into debug format.
+    #[rhai_fn(name = "debug", name = "to_debug", pure)]
+    pub fn debug_string(string: &mut ImmutableString) -> ImmutableString {
+        format!("{:?}", string).into()
+    }
+
+    /// Return the character into a string.
+    #[rhai_fn(name = "print", name = "to_string")]
+    pub fn print_char(character: char) -> ImmutableString {
+        character.to_string().into()
+    }
+    /// Convert the string into debug format.
+    #[rhai_fn(name = "debug", name = "to_debug")]
+    pub fn debug_char(character: char) -> ImmutableString {
+        format!("{:?}", character).into()
+    }
+
     /// Convert the function pointer into a string in debug format.
     #[rhai_fn(name = "debug", name = "to_debug", pure)]
     pub fn debug_fn_ptr(f: &mut FnPtr) -> ImmutableString {
         f.to_string().into()
+    }
+
+    /// Return the boolean value into a string.
+    #[rhai_fn(name = "print", name = "to_string")]
+    pub fn print_bool(value: bool) -> ImmutableString {
+        format!("{}", value).into()
+    }
+    /// Convert the boolean value into a string in debug format.
+    #[rhai_fn(name = "debug", name = "to_debug")]
+    pub fn debug_bool(value: bool) -> ImmutableString {
+        format!("{:?}", value).into()
+    }
+
+    /// Return the empty string.
+    #[rhai_fn(name = "print", name = "to_string")]
+    pub fn print_unit(ctx: NativeCallContext, unit: ()) -> ImmutableString {
+        let _ = unit;
+        ctx.engine().const_empty_string()
+    }
+    /// Convert the unit into a string in debug format.
+    #[rhai_fn(name = "debug", name = "to_debug")]
+    pub fn debug_unit(unit: ()) -> ImmutableString {
+        let _ = unit;
+        "()".into()
     }
 
     /// Convert the value of `number` into a string.
