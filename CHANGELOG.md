@@ -27,6 +27,8 @@ Script-breaking changes
 -----------------------
 
 * For consistency with the `import` statement, the `export` statement no longer exports multiple variables.
+* Appending a BLOB to a string (via `+`, `+=`, `append` or string interpolation) now treats the BLOB as a UTF-8 encoded string.
+* Appending a string/character to a BLOB (via `+=` or `append`) now adds the string/character as a UTF-8 encoded byte stream.
 
 New features
 ------------
@@ -52,6 +54,8 @@ Enhancements
   * `StmtBlock` and `Stmt::Block` now keep the position of the closing `}` as well.
 * `EvalAltResult::unwrap_inner` is added to access the base error inside multiple layers of wrappings (e.g. `EvalAltResult::ErrorInFunction`).
 * Yet another new syntax is introduced for `def_package!` that further simplifies the old syntax.
+* A new method `to_blob` is added to convert a string into a BLOB as UTF-8 encoded bytes.
+* A new method `to_array` is added to convert a BLOB into array of integers.
 
 REPL tool changes
 -----------------

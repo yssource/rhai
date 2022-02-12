@@ -682,19 +682,77 @@ pub fn get_builtin_op_assignment_fn(op: &str, x: &Dynamic, y: &Dynamic) -> Optio
         }
     }
 
-    // blob op= int
     #[cfg(not(feature = "no_index"))]
-    if types_pair == (TypeId::of::<crate::Blob>(), TypeId::of::<INT>()) {
-        use crate::Blob;
+    {
+        // string op= blob
+        if types_pair == (TypeId::of::<ImmutableString>(), TypeId::of::<crate::Blob>()) {
+            return match op {
+                "+=" => Some(|_, args| {
+                    let buf = {
+                        let x = args[1].read_lock::<crate::Blob>().expect(BUILTIN);
+                        if x.is_empty() {
+                            return Ok(Dynamic::UNIT);
+                        }
+                        let s = args[0].read_lock::<ImmutableString>().expect(BUILTIN);
+                        let mut buf = crate::SmartString::from(s.as_str());
+                        buf.push_str(&String::from_utf8_lossy(&x));
+                        buf
+                    };
+                    let mut s = args[0].write_lock::<ImmutableString>().expect(BUILTIN);
+                    *s = buf.into();
+                    Ok(Dynamic::UNIT)
+                }),
+                _ => None,
+            };
+        }
+        // blob op= int
+        if types_pair == (TypeId::of::<crate::Blob>(), TypeId::of::<INT>()) {
+            use crate::Blob;
 
-        return match op {
-            "+=" => Some(|_, args| {
-                let x = (args[1].as_int().expect("`INT`") & 0x000000ff) as u8;
-                let mut blob = args[0].write_lock::<Blob>().expect(BUILTIN);
-                Ok(blob.push(x).into())
-            }),
-            _ => None,
-        };
+            return match op {
+                "+=" => Some(|_, args| {
+                    let x = (args[1].as_int().expect("`INT`") & 0x000000ff) as u8;
+                    let mut blob = args[0].write_lock::<Blob>().expect(BUILTIN);
+                    Ok(blob.push(x).into())
+                }),
+                _ => None,
+            };
+        }
+
+        // blob op= char
+        if types_pair == (TypeId::of::<crate::Blob>(), TypeId::of::<char>()) {
+            use crate::Blob;
+
+            return match op {
+                "+=" => Some(|_, args| {
+                    let mut buf = [0_u8; 4];
+                    let x = args[1].as_char().expect("`char`").encode_utf8(&mut buf);
+                    let mut blob = args[0].write_lock::<Blob>().expect(BUILTIN);
+                    Ok(blob.extend(x.as_bytes()).into())
+                }),
+                _ => None,
+            };
+        }
+
+        // blob op= string
+        if types_pair == (TypeId::of::<crate::Blob>(), TypeId::of::<ImmutableString>()) {
+            use crate::Blob;
+
+            return match op {
+                "+=" => Some(|_, args| {
+                    let s: crate::Blob = {
+                        let s = args[1].read_lock::<ImmutableString>().expect(BUILTIN);
+                        if s.is_empty() {
+                            return Ok(Dynamic::UNIT);
+                        }
+                        s.as_bytes().into()
+                    };
+                    let mut blob = args[0].write_lock::<Blob>().expect(BUILTIN);
+                    Ok(blob.extend(s).into())
+                }),
+                _ => None,
+            };
+        }
     }
 
     // No built-in op-assignments for different types.
