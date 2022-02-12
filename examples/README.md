@@ -20,13 +20,13 @@ Scriptable Event Handler With State Examples
 -------------------------------------------
 
 Because of its popularity, included are sample implementations for the pattern
-[_Scriptable Event Handler With State_](https://rhai.rs/book/patterns/events.md) in different styles.
+[_Scriptable Event Handler With State_](https://rhai.rs/book/patterns/events.html) in different styles.
 
-| Example                                    | Handler Script                                                     |                        Description                        |
-| ------------------------------------------ | ------------------------------------------------------------------ | :-------------------------------------------------------: |
-| [`event_handler_main`](event_handler_main) | [`event_handler_main/script.rhai`](event_handler_main/script.rhai) | [_Main Style_](https://rhai.rs/book/patterns/events-1.md) |
-| [`event_handler_js`](event_handler_js)     | [`event_handler_js/script.rhai`](event_handler_js/script.rhai)     |  [_JS Style_](https://rhai.rs/book/patterns/events-2.md)  |
-| [`event_handler_map`](event_handler_map)   | [`event_handler_map/script.rhai`](event_handler_map/script.rhai)   | [_Map Style_](https://rhai.rs/book/patterns/events-3.md)  |
+| Example                                    | Handler Script                                                     |                         Description                         |
+| ------------------------------------------ | ------------------------------------------------------------------ | :---------------------------------------------------------: |
+| [`event_handler_main`](event_handler_main) | [`event_handler_main/script.rhai`](event_handler_main/script.rhai) | [_Main Style_](https://rhai.rs/book/patterns/events-1.html) |
+| [`event_handler_js`](event_handler_js)     | [`event_handler_js/script.rhai`](event_handler_js/script.rhai)     |  [_JS Style_](https://rhai.rs/book/patterns/events-2.html)  |
+| [`event_handler_map`](event_handler_map)   | [`event_handler_map/script.rhai`](event_handler_map/script.rhai)   | [_Map Style_](https://rhai.rs/book/patterns/events-3.html)  |
 
 
 Running Examples
