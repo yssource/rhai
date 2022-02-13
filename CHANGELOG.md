@@ -38,7 +38,7 @@ New features
 * A new package, `DebuggingPackage`, is added which contains the `back_trace` function to get the current call stack anywhere in a script.
 * `Engine::set_fail_on_invalid_map_property` is added to control whether to raise an error (new `EvalAltResult::ErrorPropertyNotFound`) when invalid properties are accessed on object maps.
 * `Engine::set_allow_shadowing` is added to allow/disallow variables _shadowing_, with new errors `EvalAltResult::ErrorVariableExists` and `ParseErrorType::VariableExists`.
-* `Engine::on_def_var` allows registering a closure which can decide whether a variable definition is allow to continue, or should fail with an error.
+* `Engine::on_def_var` allows registering a closure which can decide whether a variable definition is allow to continue, during compilation or runtime, or should fail with an error (`ParseErrorType::ForbiddenVariable` or `EvalAltResult::ErrorForbiddenVariable`).
 * A new syntax for defining custom packages is introduced that removes the need to specify the Rhai crate name (internally uses the `$crate` meta variable).
 
 Enhancements

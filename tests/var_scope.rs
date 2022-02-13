@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, Position, Scope, INT};
+use rhai::{Engine, EvalAltResult, ParseErrorType, Position, Scope, INT};
 
 #[test]
 fn test_var_scope() -> Result<(), Box<EvalAltResult>> {
@@ -125,7 +125,10 @@ fn test_var_resolver() -> Result<(), Box<EvalAltResult>> {
 fn test_var_def_filter() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
-    engine.on_def_var(|name, _, scope_level, _, _| match (name, scope_level) {
+    let ast = engine.compile("let x = 42;")?;
+    engine.run_ast(&ast)?;
+
+    engine.on_def_var(|name, _, _, scope_level, _, _| match (name, scope_level) {
         ("x", 0 | 1) => Ok(false),
         _ => Ok(true),
     });
@@ -135,7 +138,14 @@ fn test_var_def_filter() -> Result<(), Box<EvalAltResult>> {
         124
     );
 
-    assert!(engine.run("let x = 42;").is_err());
+    assert!(matches!(
+        *engine.compile("let x = 42;").expect_err("should error").0,
+        ParseErrorType::ForbiddenVariable(s) if s == "x"
+    ));
+    assert!(matches!(
+        *engine.run_ast(&ast).expect_err("should err"),
+        EvalAltResult::ErrorForbiddenVariable(s, _) if s == "x"
+    ));
     assert!(engine.run("const x = 42;").is_err());
     assert!(engine.run("let y = 42; { let x = y + 1; }").is_err());
     assert!(engine.run("let y = 42; { let x = y + 1; }").is_err());

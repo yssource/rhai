@@ -447,8 +447,9 @@ pub type OnVarCallback =
 
 /// Callback function for variable definition.
 #[cfg(not(feature = "sync"))]
-pub type OnDefVarCallback = dyn Fn(&str, bool, usize, bool, &EvalContext) -> RhaiResultOf<bool>;
+pub type OnDefVarCallback =
+    dyn Fn(&str, bool, bool, usize, bool, &EvalContext) -> RhaiResultOf<bool>;
 /// Callback function for variable definition.
 #[cfg(feature = "sync")]
 pub type OnDefVarCallback =
-    dyn Fn(&str, bool, usize, bool, &EvalContext) -> RhaiResultOf<bool> + Send + Sync;
+    dyn Fn(&str, bool, bool, usize, bool, &EvalContext) -> RhaiResultOf<bool> + Send + Sync;

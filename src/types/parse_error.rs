@@ -109,6 +109,8 @@ pub enum ParseErrorType {
     PropertyExpected,
     /// Missing a variable name after the `let`, `const`, `for` or `catch` keywords.
     VariableExpected,
+    /// Forbidden variable name.  Wrapped value is the variable name.
+    ForbiddenVariable(String),
     /// An identifier is a reserved symbol.
     Reserved(String),
     /// An expression is of the wrong type.
@@ -240,6 +242,7 @@ impl fmt::Display for ParseErrorType {
             Self::WrongSwitchCaseCondition => f.write_str("This switch case cannot have a condition"),
             Self::PropertyExpected => f.write_str("Expecting name of a property"),
             Self::VariableExpected => f.write_str("Expecting name of a variable"),
+            Self::ForbiddenVariable(s) => write!(f, "Forbidden variable name: {}", s),
             Self::WrongFnDefinition => f.write_str("Function definitions must be at global level and cannot be inside a block or another function"),
             Self::FnMissingName => f.write_str("Expecting function name in function declaration"),
             Self::WrongDocComment => f.write_str("Doc-comment must be followed immediately by a function definition"),

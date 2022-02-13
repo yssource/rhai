@@ -831,13 +831,13 @@ impl Engine {
                         level: level,
                     };
 
-                    match filter(var_name, is_const, scope_level, shadowing, &context) {
+                    match filter(var_name, true, is_const, scope_level, shadowing, &context) {
                         Ok(true) => None,
-                        Ok(false) => Some(Err(ERR::ErrorRuntime(
-                            format!("Variable cannot be defined: {}", var_name).into(),
-                            *pos,
-                        )
-                        .into())),
+                        Ok(false) => {
+                            Some(Err(
+                                ERR::ErrorForbiddenVariable(var_name.to_string(), *pos).into()
+                            ))
+                        }
                         err @ Err(_) => Some(err),
                     }
                 } else {

@@ -73,8 +73,9 @@ impl Engine {
     ///
     /// where:
     /// * `name`: name of the variable to be defined.
+    /// * `is_runtime`: `true` if the variable definition event happens during runtime, `false` if during compilation.
     /// * `is_const`: `true` if the statement is `const`, otherwise it is `let`.
-    /// * `block_level`: the current nesting level of statement blocks, with zero being the global level
+    /// * `block_level`: the current nesting level of statement blocks, with zero being the global level.
     /// * `will_shadow`: will the variable _shadow_ an existing variable?
     /// * `context`: the current [evaluation context][`EvalContext`].
     ///
@@ -96,7 +97,7 @@ impl Engine {
     /// let mut engine = Engine::new();
     ///
     /// // Register a variable definition filter.
-    /// engine.on_def_var(|name, is_const, _, _, _| {
+    /// engine.on_def_var(|name, _, is_const, _, _, _| {
     ///     // Disallow defining MYSTIC_NUMBER as a constant
     ///     if name == "MYSTIC_NUMBER" && is_const {
     ///         Ok(false)
@@ -117,7 +118,7 @@ impl Engine {
     #[inline(always)]
     pub fn on_def_var(
         &mut self,
-        callback: impl Fn(&str, bool, usize, bool, &EvalContext) -> RhaiResultOf<bool>
+        callback: impl Fn(&str, bool, bool, usize, bool, &EvalContext) -> RhaiResultOf<bool>
             + SendSync
             + 'static,
     ) -> &mut Self {

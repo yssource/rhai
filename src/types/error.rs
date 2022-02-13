@@ -36,6 +36,8 @@ pub enum EvalAltResult {
 
     /// Shadowing of an existing variable disallowed. Wrapped value is the variable name.
     ErrorVariableExists(String, Position),
+    /// Forbidden variable name. Wrapped value is the variable name.
+    ErrorForbiddenVariable(String, Position),
     /// Access of an unknown variable. Wrapped value is the variable name.
     ErrorVariableNotFound(String, Position),
     /// Access of an unknown object map property. Wrapped value is the property name.
@@ -148,6 +150,7 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorInModule(s, err, ..) => write!(f, "Error in module {}: {}", s, err)?,
 
             Self::ErrorVariableExists(s, ..) => write!(f, "Variable is already defined: {}", s)?,
+            Self::ErrorForbiddenVariable(s, ..) => write!(f, "Forbidden variable name: {}", s)?,
             Self::ErrorVariableNotFound(s, ..) => write!(f, "Variable not found: {}", s)?,
             Self::ErrorPropertyNotFound(s, ..) => write!(f, "Property not found: {}", s)?,
             Self::ErrorFunctionNotFound(s, ..) => write!(f, "Function not found: {}", s)?,
@@ -285,6 +288,7 @@ impl EvalAltResult {
             | Self::ErrorIndexingType(..)
             | Self::ErrorFor(..)
             | Self::ErrorVariableExists(..)
+            | Self::ErrorForbiddenVariable(..)
             | Self::ErrorVariableNotFound(..)
             | Self::ErrorPropertyNotFound(..)
             | Self::ErrorModuleNotFound(..)
@@ -377,6 +381,7 @@ impl EvalAltResult {
                 map.insert("type".into(), t.into());
             }
             Self::ErrorVariableExists(v, ..)
+            | Self::ErrorForbiddenVariable(v, ..)
             | Self::ErrorVariableNotFound(v, ..)
             | Self::ErrorPropertyNotFound(v, ..)
             | Self::ErrorDataRace(v, ..)
@@ -440,6 +445,7 @@ impl EvalAltResult {
             | Self::ErrorIndexingType(.., pos)
             | Self::ErrorFor(pos)
             | Self::ErrorVariableExists(.., pos)
+            | Self::ErrorForbiddenVariable(.., pos)
             | Self::ErrorVariableNotFound(.., pos)
             | Self::ErrorPropertyNotFound(.., pos)
             | Self::ErrorModuleNotFound(.., pos)
@@ -490,6 +496,7 @@ impl EvalAltResult {
             | Self::ErrorIndexingType(.., pos)
             | Self::ErrorFor(pos)
             | Self::ErrorVariableExists(.., pos)
+            | Self::ErrorForbiddenVariable(.., pos)
             | Self::ErrorVariableNotFound(.., pos)
             | Self::ErrorPropertyNotFound(.., pos)
             | Self::ErrorModuleNotFound(.., pos)

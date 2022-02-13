@@ -7,6 +7,7 @@ use crate::ast::{
     OpAssignment, ScriptFnDef, Stmt, SwitchCases, TryCatchBlock, AST_OPTION_FLAGS::*,
 };
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
+use crate::eval::{EvalState, GlobalRuntimeState};
 use crate::func::hashing::get_hasher;
 use crate::tokenizer::{
     is_keyword_function, is_valid_function_name, is_valid_identifier, Span, Token, TokenStream,
@@ -15,8 +16,9 @@ use crate::tokenizer::{
 use crate::types::dynamic::AccessMode;
 use crate::types::StringsInterner;
 use crate::{
-    calc_fn_hash, Dynamic, Engine, ExclusiveRange, Identifier, ImmutableString, InclusiveRange,
-    LexError, OptimizationLevel, ParseError, Position, Scope, Shared, StaticVec, AST, INT, PERR,
+    calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, ExclusiveRange, Identifier,
+    ImmutableString, InclusiveRange, LexError, OptimizationLevel, ParseError, Position, Scope,
+    Shared, StaticVec, AST, INT, PERR,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -47,7 +49,7 @@ pub struct ParseState<'e> {
     /// Interned strings.
     pub interned_strings: StringsInterner,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
-    pub stack: StaticVec<(Identifier, AccessMode)>,
+    pub stack: Scope<'e>,
     /// Size of the local variables stack upon entry of the current block scope.
     pub entry_stack_len: usize,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
@@ -89,7 +91,7 @@ impl<'e> ParseState<'e> {
             #[cfg(not(feature = "no_closure"))]
             allow_capture: true,
             interned_strings: StringsInterner::new(),
-            stack: StaticVec::new_const(),
+            stack: Scope::new(),
             entry_stack_len: 0,
             #[cfg(not(feature = "no_module"))]
             imports: StaticVec::new_const(),
@@ -112,10 +114,9 @@ impl<'e> ParseState<'e> {
 
         let index = self
             .stack
-            .iter()
-            .rev()
+            .iter_rev_raw()
             .enumerate()
-            .find(|(.., (n, ..))| {
+            .find(|&(.., (n, ..))| {
                 if n == SCOPE_SEARCH_BARRIER_MARKER {
                     // Do not go beyond the barrier
                     barrier = true;
@@ -1337,13 +1338,11 @@ fn parse_primary(
             }
 
             if segments.is_empty() {
-                segments.push(Expr::StringConstant(
-                    state.get_interned_string("", ""),
-                    settings.pos,
-                ));
+                Expr::StringConstant(state.get_interned_string("", ""), settings.pos)
+            } else {
+                segments.shrink_to_fit();
+                Expr::InterpolatedString(segments.into(), settings.pos)
             }
-            segments.shrink_to_fit();
-            Expr::InterpolatedString(segments.into(), settings.pos)
         }
 
         // Array literal
@@ -1802,7 +1801,11 @@ fn make_assignment_stmt(
                 || index.expect("either long or short index is `None`").get(),
                 |n| n.get() as usize,
             );
-            match state.stack[state.stack.len() - index].1 {
+            match state
+                .stack
+                .get_mut_by_index(state.stack.len() - index)
+                .access_mode()
+            {
                 AccessMode::ReadWrite => Ok(Stmt::Assignment(
                     (op_info, (lhs, rhs).into()).into(),
                     op_pos,
@@ -2195,7 +2198,7 @@ fn parse_custom_syntax(
         // Add a barrier variable to the stack so earlier variables will not be matched.
         // Variable searches stop at the first barrier.
         let marker = state.get_identifier("", SCOPE_SEARCH_BARRIER_MARKER);
-        state.stack.push((marker, AccessMode::ReadWrite));
+        state.stack.push(marker, ());
     }
 
     let parse_func = syntax.parse.as_ref();
@@ -2562,21 +2565,24 @@ fn parse_for(
     let counter_var = counter_name.map(|name| {
         let name = state.get_identifier("", name);
         let pos = counter_pos.expect("`Some`");
-        state.stack.push((name.clone(), AccessMode::ReadWrite));
-        Ident { name, pos }
+        state.stack.push(name.clone(), ());
+        Ident {
+            name: name.clone(),
+            pos,
+        }
     });
 
     let loop_var = state.get_identifier("", name);
-    state.stack.push((loop_var.clone(), AccessMode::ReadWrite));
+    state.stack.push(loop_var.clone(), ());
     let loop_var = Ident {
-        name: loop_var,
+        name: loop_var.clone(),
         pos: name_pos,
     };
 
     settings.is_breakable = true;
     let body = parse_block(input, state, lib, settings.level_up())?;
 
-    state.stack.truncate(prev_stack_len);
+    state.stack.rewind(prev_stack_len);
 
     Ok(Stmt::For(
         expr,
@@ -2610,6 +2616,30 @@ fn parse_let(
         return Err(PERR::VariableExists(name.to_string()).into_err(pos));
     }
 
+    if let Some(ref filter) = state.engine.def_var_filter {
+        let shadowing = state.stack.iter().any(|(v, ..)| v == name.as_ref());
+        let level = settings.level;
+        let is_const = var_type == AccessMode::ReadOnly;
+        let context = EvalContext {
+            engine: state.engine,
+            scope: &mut state.stack,
+            global: &mut GlobalRuntimeState::new(state.engine),
+            state: &mut EvalState::new(),
+            lib: &[],
+            this_ptr: &mut None,
+            level,
+        };
+
+        match filter(&name, false, is_const, level, shadowing, &context) {
+            Ok(true) => (),
+            Ok(false) => return Err(PERR::ForbiddenVariable(name.to_string()).into_err(pos)),
+            Err(err) => match *err {
+                EvalAltResult::ErrorParsing(perr, pos) => return Err(perr.into_err(pos)),
+                _ => return Err(PERR::ForbiddenVariable(name.to_string()).into_err(pos)),
+            },
+        }
+    }
+
     let name = state.get_identifier("", name);
     let var_def = Ident {
         name: name.clone(),
@@ -2624,8 +2654,6 @@ fn parse_let(
         Expr::Unit(Position::NONE)
     };
 
-    state.stack.push((name, var_type));
-
     let export = if is_export {
         AST_OPTION_EXPORTED
     } else {
@@ -2634,14 +2662,20 @@ fn parse_let(
 
     match var_type {
         // let name = expr
-        AccessMode::ReadWrite => Ok(Stmt::Var(expr, var_def.into(), export, settings.pos)),
+        AccessMode::ReadWrite => {
+            state.stack.push(name, ());
+            Ok(Stmt::Var(expr, var_def.into(), export, settings.pos))
+        }
         // const name = { expr:constant }
-        AccessMode::ReadOnly => Ok(Stmt::Var(
-            expr,
-            var_def.into(),
-            AST_OPTION_CONSTANT + export,
-            settings.pos,
-        )),
+        AccessMode::ReadOnly => {
+            state.stack.push_constant(name, ());
+            Ok(Stmt::Var(
+                expr,
+                var_def.into(),
+                AST_OPTION_CONSTANT + export,
+                settings.pos,
+            ))
+        }
     }
 }
 
@@ -2820,7 +2854,7 @@ fn parse_block(
         }
     };
 
-    state.stack.truncate(state.entry_stack_len);
+    state.stack.rewind(state.entry_stack_len);
     state.entry_stack_len = prev_entry_stack_len;
 
     #[cfg(not(feature = "no_module"))]
@@ -3106,7 +3140,7 @@ fn parse_try_catch(
         }
 
         let name = state.get_identifier("", name);
-        state.stack.push((name.clone(), AccessMode::ReadWrite));
+        state.stack.push(name.clone(), ());
         Some(Ident { name, pos })
     } else {
         None
@@ -3117,7 +3151,7 @@ fn parse_try_catch(
 
     if catch_var.is_some() {
         // Remove the error variable from the stack
-        state.stack.pop().unwrap();
+        state.stack.rewind(state.stack.len() - 1);
     }
 
     Ok(Stmt::TryCatch(
@@ -3176,7 +3210,7 @@ fn parse_fn(
                         );
                     }
                     let s = state.get_identifier("", s);
-                    state.stack.push((s.clone(), AccessMode::ReadWrite));
+                    state.stack.push(s.clone(), ());
                     params.push((s, pos))
                 }
                 (Token::LexError(err), pos) => return Err(err.into_err(pos)),
@@ -3319,7 +3353,7 @@ fn parse_anon_fn(
                         );
                     }
                     let s = state.get_identifier("", s);
-                    state.stack.push((s.clone(), AccessMode::ReadWrite));
+                    state.stack.push(s.clone(), ());
                     params_list.push(s)
                 }
                 (Token::LexError(err), pos) => return Err(err.into_err(pos)),
