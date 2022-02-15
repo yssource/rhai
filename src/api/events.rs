@@ -5,6 +5,19 @@ use crate::{Dynamic, Engine, EvalContext, Position, RhaiResultOf};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
+/// Information on a variable definition.
+#[non_exhaustive]
+pub struct VarDefInfo<'a> {
+    /// Name of the variable to be defined.
+    pub name: &'a str,
+    /// `true` if the statement is `const`, otherwise it is `let`.
+    pub is_const: bool,
+    /// The current nesting level, with zero being the global level.
+    pub nesting_level: usize,
+    /// Will the variable _shadow_ an existing variable?
+    pub will_shadow: bool,
+}
+
 impl Engine {
     /// Provide a callback that will be invoked before each variable access.
     ///
@@ -65,23 +78,25 @@ impl Engine {
     }
     /// Provide a callback that will be invoked before the definition of each variable .
     ///
+    /// # WARNING - Unstable API
+    ///
+    /// This API is volatile and may change in the future.
+    ///
     /// # Callback Function Signature
     ///
     /// The callback function signature takes the following form:
     ///
-    /// > `Fn(name: &str, is_const: bool, block_level: usize, will_shadow: bool, context: &EvalContext) -> Result<bool, Box<EvalAltResult>>`
+    /// > `Fn(is_runtime: bool, info: VarInfo, context: &EvalContext) -> Result<bool, Box<EvalAltResult>>`
     ///
     /// where:
-    /// * `name`: name of the variable to be defined.
-    /// * `is_const`: `true` if the statement is `const`, otherwise it is `let`.
-    /// * `block_level`: the current nesting level of statement blocks, with zero being the global level
-    /// * `will_shadow`: will the variable _shadow_ an existing variable?
+    /// * `is_runtime`: `true` if the variable definition event happens during runtime, `false` if during compilation.
+    /// * `info`: information on the variable.
     /// * `context`: the current [evaluation context][`EvalContext`].
     ///
     /// ## Return value
     ///
     /// * `Ok(true)`: continue with normal variable definition.
-    /// * `Ok(false)`: deny the variable definition with an [runtime error][EvalAltResult::ErrorRuntime].
+    /// * `Ok(false)`: deny the variable definition with an [runtime error][crate::EvalAltResult::ErrorRuntime].
     ///
     /// ## Raising errors
     ///
@@ -96,9 +111,9 @@ impl Engine {
     /// let mut engine = Engine::new();
     ///
     /// // Register a variable definition filter.
-    /// engine.on_def_var(|name, is_const, _, _, _| {
+    /// engine.on_def_var(|_, info, _| {
     ///     // Disallow defining MYSTIC_NUMBER as a constant
-    ///     if name == "MYSTIC_NUMBER" && is_const {
+    ///     if info.name == "MYSTIC_NUMBER" && info.is_const {
     ///         Ok(false)
     ///     } else {
     ///         Ok(true)
@@ -114,12 +129,11 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[deprecated = "This API is volatile and may change in the future."]
     #[inline(always)]
     pub fn on_def_var(
         &mut self,
-        callback: impl Fn(&str, bool, usize, bool, &EvalContext) -> RhaiResultOf<bool>
-            + SendSync
-            + 'static,
+        callback: impl Fn(bool, VarDefInfo, &EvalContext) -> RhaiResultOf<bool> + SendSync + 'static,
     ) -> &mut Self {
         self.def_var_filter = Some(Box::new(callback));
         self
@@ -321,8 +335,13 @@ impl Engine {
         self.debug = Some(Box::new(callback));
         self
     }
-    /// _(debugging)_ Register callbacks for debugging.
+    /// _(debugging)_ Register a callback for debugging.
     /// Exported under the `debugging` feature only.
+    ///
+    /// # WARNING - Unstable API
+    ///
+    /// This API is volatile and may change in the future.
+    #[deprecated = "This API is volatile and may change in the future."]
     #[cfg(feature = "debugging")]
     #[inline(always)]
     pub fn register_debugger(

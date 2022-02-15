@@ -59,10 +59,10 @@ pub type TokenStream<'a> = Peekable<TokenIterator<'a>>;
 /// Advancing beyond the maximum line length or maximum number of lines is not an error but has no effect.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
 pub struct Position {
-    /// Line number - 0 = none
+    /// Line number: 0 = none
     #[cfg(not(feature = "no_position"))]
     line: u16,
-    /// Character position - 0 = BOL
+    /// Character position: 0 = BOL
     #[cfg(not(feature = "no_position"))]
     pos: u16,
 }
@@ -226,11 +226,9 @@ impl Position {
     /// Print this [`Position`] for debug purposes.
     #[inline]
     pub(crate) fn debug_print(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        #[cfg(not(feature = "no_position"))]
         if !self.is_none() {
             write!(_f, " @ {:?}", self)?;
         }
-
         Ok(())
     }
 }
@@ -259,16 +257,19 @@ impl fmt::Display for Position {
 
 impl fmt::Debug for Position {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        #[cfg(not(feature = "no_position"))]
-        if self.is_beginning_of_line() {
-            write!(f, "{}", self.line)?;
+        if self.is_none() {
+            f.write_str("none")
         } else {
-            write!(f, "{}:{}", self.line, self.pos)?;
-        }
-        #[cfg(feature = "no_position")]
-        f.write_str("none")?;
+            #[cfg(not(feature = "no_position"))]
+            if self.is_beginning_of_line() {
+                write!(f, "{}", self.line)
+            } else {
+                write!(f, "{}:{}", self.line, self.pos)
+            }
 
-        Ok(())
+            #[cfg(feature = "no_position")]
+            unreachable!();
+        }
     }
 }
 
@@ -297,6 +298,71 @@ impl Add for Position {
 impl AddAssign for Position {
     fn add_assign(&mut self, rhs: Self) {
         *self = *self + rhs;
+    }
+}
+
+/// _(internals)_ A span consisting of a starting and an ending [positions][Position].
+/// Exported under the `internals` feature only.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, Default)]
+pub struct Span {
+    /// Starting [position][Position].
+    start: Position,
+    /// Ending [position][Position].
+    end: Position,
+}
+
+impl Span {
+    pub const NONE: Self = Self::new(Position::NONE, Position::NONE);
+
+    /// Create a new [`Span`].
+    #[inline(always)]
+    #[must_use]
+    pub const fn new(start: Position, end: Position) -> Self {
+        Self { start, end }
+    }
+    /// Is this [`Span`] non-existent?
+    #[inline(always)]
+    #[must_use]
+    pub const fn is_none(&self) -> bool {
+        self.start.is_none() && self.end.is_none()
+    }
+    /// Get the [`Span`]'s starting [position][Position].
+    #[inline(always)]
+    #[must_use]
+    pub const fn start(&self) -> Position {
+        self.start
+    }
+    /// Get the [`Span`]'s ending [position][Position].
+    #[inline(always)]
+    #[must_use]
+    pub const fn end(&self) -> Position {
+        self.end
+    }
+}
+
+impl fmt::Display for Span {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match (self.start().is_none(), self.end().is_none()) {
+            (false, false) if self.start().line() != self.end().line() => {
+                write!(f, "{:?}-{:?}", self.start(), self.end())
+            }
+            (false, false) => write!(
+                f,
+                "{}:{}-{}",
+                self.start().line().unwrap(),
+                self.start().position().unwrap_or(0),
+                self.end().position().unwrap_or(0)
+            ),
+            (true, false) => write!(f, "..{:?}", self.end()),
+            (false, true) => write!(f, "{:?}", self.start()),
+            (true, true) => write!(f, "{:?}", Position::NONE),
+        }
+    }
+}
+
+impl fmt::Debug for Span {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
     }
 }
 
@@ -1066,11 +1132,12 @@ pub fn parse_string_literal(
     verbatim: bool,
     allow_line_continuation: bool,
     allow_interpolation: bool,
-) -> Result<(Box<str>, bool), (LexError, Position)> {
+) -> Result<(Box<str>, bool, Position), (LexError, Position)> {
     let mut result = String::with_capacity(12);
     let mut escape = String::with_capacity(12);
 
     let start = *pos;
+    let mut first_char = Position::NONE;
     let mut interpolated = false;
     #[cfg(not(feature = "no_position"))]
     let mut skip_whitespace_until = 0;
@@ -1121,6 +1188,21 @@ pub fn parse_string_literal(
             if result.len() > max.get() {
                 return Err((LexError::StringTooLong(max.get()), *pos));
             }
+        }
+
+        // Close wrapper
+        if termination_char == next_char && escape.is_empty() {
+            // Double wrapper
+            if stream.peek_next().map_or(false, |c| c == termination_char) {
+                eat_next(stream, pos);
+            } else {
+                state.is_within_text_terminated_by = None;
+                break;
+            }
+        }
+
+        if first_char.is_none() {
+            first_char = *pos;
         }
 
         match next_char {
@@ -1190,21 +1272,6 @@ pub fn parse_string_literal(
                 result.push(next_char)
             }
 
-            // Double wrapper
-            _ if termination_char == next_char
-                && escape.is_empty()
-                && stream.peek_next().map_or(false, |c| c == termination_char) =>
-            {
-                eat_next(stream, pos);
-                result.push(termination_char)
-            }
-
-            // Close wrapper
-            _ if termination_char == next_char && escape.is_empty() => {
-                state.is_within_text_terminated_by = None;
-                break;
-            }
-
             // Verbatim
             '\n' if verbatim => {
                 assert_eq!(escape, "", "verbatim strings should not have any escapes");
@@ -1262,7 +1329,7 @@ pub fn parse_string_literal(
         }
     }
 
-    Ok((result.into(), interpolated))
+    Ok((result.into(), interpolated, first_char))
 }
 
 /// Consume the next character.
@@ -1397,11 +1464,9 @@ fn get_next_token_inner(
 
     // Within text?
     if let Some(ch) = state.is_within_text_terminated_by.take() {
-        let start_pos = *pos;
-
         return parse_string_literal(stream, state, pos, ch, true, false, true).map_or_else(
             |(err, err_pos)| Some((Token::LexError(err), err_pos)),
-            |(result, interpolated)| {
+            |(result, interpolated, start_pos)| {
                 if interpolated {
                     Some((Token::InterpolatedString(result), start_pos))
                 } else {
@@ -1612,7 +1677,7 @@ fn get_next_token_inner(
 
                 return parse_string_literal(stream, state, pos, c, true, false, true).map_or_else(
                     |(err, err_pos)| Some((Token::LexError(err), err_pos)),
-                    |(result, interpolated)| {
+                    |(result, interpolated, ..)| {
                         if interpolated {
                             Some((Token::InterpolatedString(result), start_pos))
                         } else {

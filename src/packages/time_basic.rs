@@ -15,7 +15,7 @@ use instant::{Duration, Instant};
 
 def_package! {
     /// Package of basic timing utilities.
-    crate::BasicTimePackage => |lib| {
+    pub BasicTimePackage(lib) {
         lib.standard = true;
 
         // Register date/time functions

@@ -3,7 +3,7 @@
 use crate::eval::{calc_index, calc_offset_len};
 use crate::plugin::*;
 use crate::{
-    def_package, Blob, Dynamic, ExclusiveRange, InclusiveRange, NativeCallContext, Position,
+    def_package, Array, Blob, Dynamic, ExclusiveRange, InclusiveRange, NativeCallContext, Position,
     RhaiResultOf, INT,
 };
 #[cfg(feature = "no_std")]
@@ -20,7 +20,7 @@ const FLOAT_BYTES: usize = mem::size_of::<FLOAT>();
 
 def_package! {
     /// Package of basic BLOB utilities.
-    crate::BasicBlobPackage => |lib| {
+    pub BasicBlobPackage(lib) {
         lib.standard = true;
 
         combine_with_exported_module!(lib, "blob", blob_functions);
@@ -94,12 +94,36 @@ pub mod blob_functions {
         blob.resize(len, (value & 0x000000ff) as u8);
         Ok(blob)
     }
+    /// Convert the BLOB into an array of integers.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let b = blob(5, 0x42);
+    ///
+    /// let x = b.to_array();
+    ///
+    /// print(x);       // prints "[66, 66, 66, 66, 66]"
+    /// ```
+    #[rhai_fn(pure)]
+    pub fn to_array(blob: &mut Blob) -> Array {
+        blob.iter().map(|&ch| (ch as INT).into()).collect()
+    }
     /// Return the length of the BLOB.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let b = blob(10, 0x42);
+    ///
+    /// print(b);           // prints "[4242424242424242 4242]"
+    ///
+    /// print(b.len());     // prints 10
+    /// ```
     #[rhai_fn(name = "len", get = "len", pure)]
     pub fn len(blob: &mut Blob) -> INT {
         blob.len() as INT
     }
-
     /// Get the byte value at the `index` position in the BLOB.
     ///
     /// * If `index` < 0, position counts from the end of the BLOB (`-1` is the last element).
@@ -196,14 +220,48 @@ pub mod blob_functions {
     ///
     /// print(b1);      // prints "[4242424242111111]"
     /// ```
-    pub fn append(blob: &mut Blob, y: Blob) {
-        if !y.is_empty() {
-            if blob.is_empty() {
-                *blob = y;
+    pub fn append(blob1: &mut Blob, blob2: Blob) {
+        if !blob2.is_empty() {
+            if blob1.is_empty() {
+                *blob1 = blob2;
             } else {
-                blob.extend(y);
+                blob1.extend(blob2);
             }
         }
+    }
+    /// Add a string (as UTF-8 encoded byte-stream) to the end of the BLOB
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let b = blob(5, 0x42);
+    ///
+    /// b.append("hello");
+    ///
+    /// print(b);       // prints "[424242424268656c 6c6f]"
+    /// ```
+    #[rhai_fn(name = "+=", name = "append")]
+    pub fn append_str(blob: &mut Blob, string: ImmutableString) {
+        if !string.is_empty() {
+            blob.extend(string.as_bytes());
+        }
+    }
+    /// Add a string (as UTF-8 encoded byte-stream) to the end of the BLOB
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let b = blob(5, 0x42);
+    ///
+    /// b.append('!');
+    ///
+    /// print(b);       // prints "[424242424221]"
+    /// ```
+    #[rhai_fn(name = "+=", name = "append")]
+    pub fn append_char(blob: &mut Blob, character: char) {
+        let mut buf = [0_u8; 4];
+        let x = character.encode_utf8(&mut buf);
+        blob.extend(x.as_bytes());
     }
     /// Add another BLOB to the end of the BLOB, returning it as a new BLOB.
     ///

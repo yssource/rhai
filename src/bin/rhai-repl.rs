@@ -10,7 +10,7 @@ const HISTORY_FILE: &str = ".rhai-repl-history";
 
 /// Pretty-print error.
 fn print_error(input: &str, mut err: EvalAltResult) {
-    let lines: Vec<_> = input.trim().split('\n').collect();
+    let lines: Vec<_> = input.split('\n').collect();
     let pos = err.take_position();
 
     let line_no = if lines.len() > 1 {
@@ -60,6 +60,7 @@ fn print_help() {
     #[cfg(feature = "metadata")]
     println!("json       => output all functions in JSON format");
     println!("ast        => print the last AST (optimized)");
+    #[cfg(not(feature = "no_optimize"))]
     println!("astu       => print the last raw, un-optimized AST");
     println!();
     println!("press Ctrl-Enter or end a line with `\\`");
@@ -84,6 +85,7 @@ fn print_keys() {
     println!("Ctrl-R            => reverse search history");
     println!("                     (Ctrl-S forward, Ctrl-G cancel)");
     println!("Ctrl-L            => clear screen");
+    #[cfg(target_family = "windows")]
     println!("Escape            => clear all input");
     println!("Ctrl-C            => exit");
     println!("Ctrl-D            => EOF (when line empty)");
@@ -94,7 +96,10 @@ fn print_keys() {
     println!("Ctrl-T            => transpose characters");
     println!("Ctrl-V            => insert special character");
     println!("Ctrl-Y            => paste yank");
-    println!("Ctrl-Z            => suspend (Unix), undo (Windows)");
+    #[cfg(target_family = "unix")]
+    println!("Ctrl-Z            => suspend");
+    #[cfg(target_family = "windows")]
+    println!("Ctrl-Z            => undo");
     println!("Ctrl-_            => undo");
     println!("Enter             => run code");
     println!("Shift-Ctrl-Enter  => continue to next line");
@@ -311,6 +316,7 @@ fn main() {
     let mut history_offset = 1;
 
     let mut main_ast = AST::empty();
+    #[cfg(not(feature = "no_optimize"))]
     let mut ast_u = AST::empty();
     let mut ast = AST::empty();
 
@@ -344,13 +350,13 @@ fn main() {
                     // Line continuation
                     Ok(mut line) if line.ends_with("\\") => {
                         line.pop();
-                        input += line.trim_end();
+                        input += &line;
                         input.push('\n');
                     }
                     Ok(line) => {
-                        input += line.trim_end();
-                        if !input.is_empty() && !input.starts_with('!') && input.trim() != "history"
-                        {
+                        input += &line;
+                        let cmd = input.trim();
+                        if !cmd.is_empty() && !cmd.starts_with('!') && cmd.trim() != "history" {
                             if rl.add_history_entry(input.clone()) {
                                 history_offset += 1;
                             }
@@ -368,14 +374,14 @@ fn main() {
             }
         }
 
-        let script = input.trim();
+        let cmd = input.trim();
 
-        if script.is_empty() {
+        if cmd.is_empty() {
             continue;
         }
 
         // Implement standard commands
-        match script {
+        match cmd {
             "help" => {
                 print_help();
                 continue;
@@ -429,6 +435,7 @@ fn main() {
                 print_scope(&scope);
                 continue;
             }
+            #[cfg(not(feature = "no_optimize"))]
             "astu" => {
                 // print the last un-optimized AST
                 println!("{:#?}\n", ast_u);
@@ -473,8 +480,8 @@ fn main() {
                 }
                 continue;
             }
-            _ if script.starts_with("!?") => {
-                let text = script[2..].trim();
+            _ if cmd.starts_with("!?") => {
+                let text = cmd[2..].trim();
                 if let Some((n, line)) = rl
                     .history()
                     .iter()
@@ -489,8 +496,8 @@ fn main() {
                 }
                 continue;
             }
-            _ if script.starts_with('!') => {
-                if let Ok(num) = script[1..].parse::<usize>() {
+            _ if cmd.starts_with('!') => {
+                if let Ok(num) = cmd[1..].parse::<usize>() {
                     if num >= history_offset {
                         if let Some(line) = rl.history().get(num - history_offset) {
                             replacement = Some(line.clone());
@@ -499,7 +506,7 @@ fn main() {
                         }
                     }
                 } else {
-                    let prefix = script[1..].trim();
+                    let prefix = cmd[1..].trim();
                     if let Some((n, line)) = rl
                         .history()
                         .iter()
@@ -512,20 +519,20 @@ fn main() {
                         continue;
                     }
                 }
-                eprintln!("History line not found: {}", &script[1..]);
+                eprintln!("History line not found: {}", &cmd[1..]);
                 continue;
             }
             _ => (),
         }
 
         match engine
-            .compile_with_scope(&scope, &script)
+            .compile_with_scope(&scope, &input)
             .map_err(Into::into)
             .and_then(|r| {
-                ast_u = r.clone();
-
                 #[cfg(not(feature = "no_optimize"))]
                 {
+                    ast_u = r.clone();
+
                     ast = engine.optimize_ast(&scope, r, optimize_level);
                 }
 

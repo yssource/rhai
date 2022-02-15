@@ -2,7 +2,7 @@
 
 use super::{ASTNode, BinaryExpr, Expr, FnCallExpr, Ident, OptionFlags, AST_OPTION_FLAGS::*};
 use crate::engine::KEYWORD_EVAL;
-use crate::tokenizer::Token;
+use crate::tokenizer::{Span, Token};
 use crate::{calc_fn_hash, Position, StaticVec, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -134,7 +134,7 @@ pub struct TryCatchBlock {
 /// _(internals)_ A scoped block of statements.
 /// Exported under the `internals` feature only.
 #[derive(Clone, Hash, Default)]
-pub struct StmtBlock(StaticVec<Stmt>, (Position, Position));
+pub struct StmtBlock(StaticVec<Stmt>, Span);
 
 impl StmtBlock {
     /// A [`StmtBlock`] that does not exist.
@@ -149,13 +149,13 @@ impl StmtBlock {
     ) -> Self {
         let mut statements: StaticVec<_> = statements.into_iter().collect();
         statements.shrink_to_fit();
-        Self(statements, (start_pos, end_pos))
+        Self(statements, Span::new(start_pos, end_pos))
     }
     /// Create an empty [`StmtBlock`].
     #[inline(always)]
     #[must_use]
     pub const fn empty(pos: Position) -> Self {
-        Self(StaticVec::new_const(), (pos, pos))
+        Self(StaticVec::new_const(), Span::new(pos, pos))
     }
     /// Is this statements block empty?
     #[inline(always)]
@@ -191,38 +191,34 @@ impl StmtBlock {
     #[inline(always)]
     #[must_use]
     pub const fn position(&self) -> Position {
-        (self.1).0
+        (self.1).start()
     }
     /// Get the end position (location of the ending `}`) of this statements block.
     #[inline(always)]
     #[must_use]
     pub const fn end_position(&self) -> Position {
-        (self.1).1
+        (self.1).end()
     }
     /// Get the positions (locations of the beginning `{` and ending `}`) of this statements block.
     #[inline(always)]
     #[must_use]
-    pub const fn positions(&self) -> (Position, Position) {
+    pub const fn span(&self) -> Span {
         self.1
     }
     /// Get the positions (locations of the beginning `{` and ending `}`) of this statements block
     /// or a default.
     #[inline(always)]
     #[must_use]
-    pub const fn positions_or_else(
-        &self,
-        def_start_pos: Position,
-        def_end_pos: Position,
-    ) -> (Position, Position) {
-        (
-            (self.1).0.or_else(def_start_pos),
-            (self.1).1.or_else(def_end_pos),
+    pub const fn span_or_else(&self, def_start_pos: Position, def_end_pos: Position) -> Span {
+        Span::new(
+            (self.1).start().or_else(def_start_pos),
+            (self.1).end().or_else(def_end_pos),
         )
     }
     /// Set the positions of this statements block.
     #[inline(always)]
     pub fn set_position(&mut self, start_pos: Position, end_pos: Position) {
-        self.1 = (start_pos, end_pos);
+        self.1 = Span::new(start_pos, end_pos);
     }
 }
 
@@ -260,10 +256,8 @@ impl fmt::Debug for StmtBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Block")?;
         fmt::Debug::fmt(&self.0, f)?;
-        (self.1).0.debug_print(f)?;
-        #[cfg(not(feature = "no_position"))]
-        if !(self.1).1.is_none() {
-            write!(f, "-{:?}", (self.1).1)?;
+        if !self.1.is_none() {
+            write!(f, " @ {:?}", self.1)?;
         }
         Ok(())
     }
@@ -273,11 +267,11 @@ impl From<Stmt> for StmtBlock {
     #[inline]
     fn from(stmt: Stmt) -> Self {
         match stmt {
-            Stmt::Block(mut block, pos) => Self(block.iter_mut().map(mem::take).collect(), pos),
-            Stmt::Noop(pos) => Self(StaticVec::new_const(), (pos, pos)),
+            Stmt::Block(mut block, span) => Self(block.iter_mut().map(mem::take).collect(), span),
+            Stmt::Noop(pos) => Self(StaticVec::new_const(), Span::new(pos, pos)),
             _ => {
                 let pos = stmt.position();
-                Self(vec![stmt].into(), (pos, Position::NONE))
+                Self(vec![stmt].into(), Span::new(pos, Position::NONE))
             }
         }
     }
@@ -344,7 +338,7 @@ pub enum Stmt {
     ///        function call forming one statement.
     FnCall(Box<FnCallExpr>, Position),
     /// `{` stmt`;` ... `}`
-    Block(Box<[Stmt]>, (Position, Position)),
+    Block(Box<[Stmt]>, Span),
     /// `try` `{` stmt; ... `}` `catch` `(` var `)` `{` stmt; ... `}`
     TryCatch(Box<TryCatchBlock>, Position),
     /// [expression][Expr]
@@ -382,7 +376,7 @@ pub enum Stmt {
     /// This variant does not map to any language structure.  It is currently only used only to
     /// convert a normal variable into a shared variable when the variable is _captured_ by a closure.
     #[cfg(not(feature = "no_closure"))]
-    Share(crate::Identifier),
+    Share(crate::Identifier, Position),
 }
 
 impl Default for Stmt {
@@ -408,11 +402,10 @@ impl Stmt {
     }
     /// Get the [position][Position] of this statement.
     #[must_use]
-    pub const fn position(&self) -> Position {
+    pub fn position(&self) -> Position {
         match self {
             Self::Noop(pos)
             | Self::BreakLoop(.., pos)
-            | Self::Block(.., (pos, ..))
             | Self::Assignment(.., pos)
             | Self::FnCall(.., pos)
             | Self::If(.., pos)
@@ -424,6 +417,8 @@ impl Stmt {
             | Self::Var(.., pos)
             | Self::TryCatch(.., pos) => *pos,
 
+            Self::Block(.., span) => span.start(),
+
             Self::Expr(x) => x.start_position(),
 
             #[cfg(not(feature = "no_module"))]
@@ -432,7 +427,7 @@ impl Stmt {
             Self::Export(.., pos) => *pos,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(..) => Position::NONE,
+            Self::Share(.., pos) => *pos,
         }
     }
     /// Override the [position][Position] of this statement.
@@ -440,7 +435,6 @@ impl Stmt {
         match self {
             Self::Noop(pos)
             | Self::BreakLoop(.., pos)
-            | Self::Block(.., (pos, ..))
             | Self::Assignment(.., pos)
             | Self::FnCall(.., pos)
             | Self::If(.., pos)
@@ -452,6 +446,8 @@ impl Stmt {
             | Self::Var(.., pos)
             | Self::TryCatch(.., pos) => *pos = new_pos,
 
+            Self::Block(.., span) => *span = Span::new(new_pos, span.end()),
+
             Self::Expr(x) => {
                 x.set_position(new_pos);
             }
@@ -462,7 +458,7 @@ impl Stmt {
             Self::Export(.., pos) => *pos = new_pos,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(..) => (),
+            Self::Share(.., pos) => *pos = new_pos,
         }
 
         self

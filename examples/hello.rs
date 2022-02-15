@@ -1,3 +1,5 @@
+//! A simple example that evaluates an expression and prints the result.
+
 use rhai::{Engine, EvalAltResult};
 
 fn main() -> Result<(), Box<EvalAltResult>> {
@@ -7,7 +9,7 @@ fn main() -> Result<(), Box<EvalAltResult>> {
 
     let result = engine.eval::<i64>("40 + 2")?;
 
-    println!("Answer: {}", result); // prints 42
+    println!("The Answer: {}", result); // prints 42
 
     Ok(())
 }

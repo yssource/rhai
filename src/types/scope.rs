@@ -595,6 +595,16 @@ impl Scope<'_> {
             .zip(self.values.iter())
             .map(|((name, ..), value)| (name.as_ref(), value.is_read_only(), value))
     }
+    /// Get a reverse iterator to entries in the [`Scope`].
+    /// Shared values are not expanded.
+    #[inline]
+    pub(crate) fn iter_rev_raw(&self) -> impl Iterator<Item = (&str, bool, &Dynamic)> {
+        self.names
+            .iter()
+            .rev()
+            .zip(self.values.iter().rev())
+            .map(|((name, ..), value)| (name.as_ref(), value.is_read_only(), value))
+    }
     /// Remove a range of entries within the [`Scope`].
     ///
     /// # Panics

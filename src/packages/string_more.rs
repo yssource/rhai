@@ -6,9 +6,12 @@ use std::{any::TypeId, mem};
 
 use super::string_basic::{print_with_func, FUNC_TO_STRING};
 
+#[cfg(not(feature = "no_index"))]
+use crate::Blob;
+
 def_package! {
     /// Package of additional string utilities over [`BasicStringPackage`][super::BasicStringPackage]
-    crate::MoreStringPackage => |lib| {
+    pub MoreStringPackage(lib) {
         lib.standard = true;
 
         combine_with_exported_module!(lib, "string", string_functions);
@@ -19,7 +22,7 @@ def_package! {
 mod string_functions {
     use crate::{ImmutableString, SmartString};
 
-    #[rhai_fn(name = "+", name = "append")]
+    #[rhai_fn(name = "+")]
     pub fn add_append(
         ctx: NativeCallContext,
         string: ImmutableString,
@@ -31,6 +34,14 @@ mod string_functions {
             string
         } else {
             format!("{}{}", string, s).into()
+        }
+    }
+    #[rhai_fn(name = "+=", name = "append")]
+    pub fn add(ctx: NativeCallContext, string: &mut ImmutableString, mut item: Dynamic) {
+        let s = print_with_func(FUNC_TO_STRING, &ctx, &mut item);
+
+        if !s.is_empty() {
+            *string = format!("{}{}", string, s).into();
         }
     }
     #[rhai_fn(name = "+", pure)]
@@ -48,11 +59,13 @@ mod string_functions {
         s
     }
 
-    #[rhai_fn(name = "+", name = "append")]
+    // The following are needed in order to override the generic versions with `Dynamic` parameters.
+
+    #[rhai_fn(name = "+")]
     pub fn add_append_str(string1: ImmutableString, string2: ImmutableString) -> ImmutableString {
         string1 + string2
     }
-    #[rhai_fn(name = "+", name = "append")]
+    #[rhai_fn(name = "+")]
     pub fn add_append_char(string: ImmutableString, character: char) -> ImmutableString {
         string + character
     }
@@ -61,7 +74,7 @@ mod string_functions {
         format!("{}{}", character, string).into()
     }
 
-    #[rhai_fn(name = "+", name = "append")]
+    #[rhai_fn(name = "+")]
     pub fn add_append_unit(string: ImmutableString, item: ()) -> ImmutableString {
         let _item = item;
         string
@@ -69,6 +82,30 @@ mod string_functions {
     #[rhai_fn(name = "+")]
     pub fn add_prepend_unit(_item: (), string: ImmutableString) -> ImmutableString {
         string
+    }
+
+    #[cfg(not(feature = "no_index"))]
+    pub mod blob_functions {
+        #[rhai_fn(name = "+")]
+        pub fn add_append_blob(string: ImmutableString, utf8: Blob) -> ImmutableString {
+            if utf8.is_empty() {
+                string
+            } else if string.is_empty() {
+                String::from_utf8_lossy(&utf8).into_owned().into()
+            } else {
+                let mut s = crate::SmartString::from(string);
+                s.push_str(&String::from_utf8_lossy(&utf8));
+                s.into()
+            }
+        }
+        #[rhai_fn(name = "append")]
+        pub fn add_blob(string: &mut ImmutableString, utf8: Blob) {
+            let mut s = crate::SmartString::from(string.as_str());
+            if !utf8.is_empty() {
+                s.push_str(&String::from_utf8_lossy(&utf8));
+                *string = s.into();
+            }
+        }
     }
 
     /// Return the length of the string, in number of characters.
@@ -103,6 +140,25 @@ mod string_functions {
             0
         } else {
             string.len() as INT
+        }
+    }
+    /// Convert the string into an UTF-8 encoded byte-stream as a BLOB.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "朝には紅顔ありて夕べには白骨となる";
+    ///
+    /// let bytes = text.to_blob();
+    ///
+    /// print(bytes.len());     // prints 51
+    /// ```
+    #[cfg(not(feature = "no_index"))]
+    pub fn to_blob(string: &str) -> crate::Blob {
+        if string.is_empty() {
+            crate::Blob::new()
+        } else {
+            string.as_bytes().into()
         }
     }
     /// Remove all occurrences of a sub-string from the string.

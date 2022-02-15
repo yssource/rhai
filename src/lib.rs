@@ -147,6 +147,7 @@ type ExclusiveRange = std::ops::Range<INT>;
 type InclusiveRange = std::ops::RangeInclusive<INT>;
 
 pub use api::custom_syntax::Expression;
+pub use api::events::VarDefInfo;
 pub use ast::{FnAccess, AST};
 pub use engine::{Engine, OP_CONTAINS, OP_EQUALS};
 pub use eval::EvalContext;
@@ -247,7 +248,7 @@ pub use tokenizer::{get_next_token, parse_string_literal};
 
 #[cfg(feature = "internals")]
 pub use tokenizer::{
-    InputStream, MultiInputsStream, Token, TokenIterator, TokenizeState, TokenizerControl,
+    InputStream, MultiInputsStream, Span, Token, TokenIterator, TokenizeState, TokenizerControl,
     TokenizerControlBlock,
 };
 

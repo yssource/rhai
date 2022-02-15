@@ -17,7 +17,7 @@ def_package! {
     /// * [`BasicMapPackage`][super::BasicMapPackage]
     /// * [`BasicTimePackage`][super::BasicTimePackage]
     /// * [`MoreStringPackage`][super::MoreStringPackage]
-    crate::StandardPackage => |lib| {
+    pub StandardPackage(lib) {
         lib.standard = true;
 
         super::CorePackage::init(lib);

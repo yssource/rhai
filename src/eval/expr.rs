@@ -327,8 +327,7 @@ impl Engine {
             Expr::Unit(..) => Ok(Dynamic::UNIT),
 
             // `... ${...} ...`
-            Expr::InterpolatedString(x, pos) => {
-                let mut pos = *pos;
+            Expr::InterpolatedString(x, _) => {
                 let mut concat: Dynamic = self.const_empty_string().into();
                 let mut result = Ok(Dynamic::UNIT);
 
@@ -347,7 +346,7 @@ impl Engine {
                         state,
                         lib,
                         Some(OpAssignment::new(OP_CONCAT)),
-                        pos,
+                        expr.start_position(),
                         &mut (&mut concat).into(),
                         ("", Position::NONE),
                         item,
@@ -356,8 +355,6 @@ impl Engine {
                         result = Err(err.fill_position(expr.start_position()));
                         break;
                     }
-
-                    pos = expr.start_position();
                 }
 
                 result.map(|_| concat)

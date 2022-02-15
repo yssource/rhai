@@ -6,6 +6,12 @@ Version 1.5.0
 
 This version adds a debugging interface, which can be used to integrate a debugger.
 
+Based on popular demand, an option is added to throw exceptions when invalid properties are accessed
+on object maps (default is to return `()`).
+
+Also based on popular demand, the `REPL` tool now uses
+[`rustyline`](https://crates.io/crates/rustyline) for line editing and history.
+
 Bug fixes
 ---------
 
@@ -15,11 +21,14 @@ Bug fixes
 * Globally-defined constants are now encapsulated correctly inside a loaded module and no longer spill across call boundaries.
 * Type names display is fixed.
 * Exceptions thrown inside function calls now unwrap correctly when `catch`-ed.
+* Error messages for certain invalid property accesses are fixed.
 
 Script-breaking changes
 -----------------------
 
 * For consistency with the `import` statement, the `export` statement no longer exports multiple variables.
+* Appending a BLOB to a string (via `+`, `+=`, `append` or string interpolation) now treats the BLOB as a UTF-8 encoded string.
+* Appending a string/character to a BLOB (via `+=` or `append`) now adds the string/character as a UTF-8 encoded byte stream.
 
 New features
 ------------
@@ -27,8 +36,10 @@ New features
 * A debugging interface is added.
 * A new bin tool, `rhai-dbg` (aka _The Rhai Debugger_), is added to showcase the debugging interface.
 * A new package, `DebuggingPackage`, is added which contains the `back_trace` function to get the current call stack anywhere in a script.
+* `Engine::set_fail_on_invalid_map_property` is added to control whether to raise an error (new `EvalAltResult::ErrorPropertyNotFound`) when invalid properties are accessed on object maps.
 * `Engine::set_allow_shadowing` is added to allow/disallow variables _shadowing_, with new errors `EvalAltResult::ErrorVariableExists` and `ParseErrorType::VariableExists`.
-* `Engine::on_def_var` allows registering a closure which can decide whether a variable definition is allow to continue, or should fail with an error.
+* `Engine::on_def_var` allows registering a closure which can decide whether a variable definition is allow to continue, during compilation or runtime, or should fail with an error (`ParseErrorType::ForbiddenVariable` or `EvalAltResult::ErrorForbiddenVariable`).
+* A new syntax for defining custom packages is introduced that removes the need to specify the Rhai crate name (internally uses the `$crate` meta variable).
 
 Enhancements
 ------------
@@ -42,6 +53,9 @@ Enhancements
   * `Expr::start_position` is added to give the beginning of the expression (not the operator's position).
   * `StmtBlock` and `Stmt::Block` now keep the position of the closing `}` as well.
 * `EvalAltResult::unwrap_inner` is added to access the base error inside multiple layers of wrappings (e.g. `EvalAltResult::ErrorInFunction`).
+* Yet another new syntax is introduced for `def_package!` that further simplifies the old syntax.
+* A new method `to_blob` is added to convert a string into a BLOB as UTF-8 encoded bytes.
+* A new method `to_array` is added to convert a BLOB into array of integers.
 
 REPL tool changes
 -----------------

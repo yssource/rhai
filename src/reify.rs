@@ -1,12 +1,19 @@
-/// Runs `$code` if `$old` is of type `$t`.
+/// Macro to cast an identifier or expression to another type with type checks.
 ///
-/// This macro is primarily used for type casting between known types.
+/// Runs _code_ if _variable_ or _expression_ is of type _type_, otherwise run _fallback_.
+///
+/// # Syntax
+///
+/// * `reify!(`_variable_ or _expression_`,|`_temp-variable_`: `_type_`|` _code_`,` `||` _fallback_ `)`
+/// * `reify!(`_variable_ or _expression_`,|`_temp-variable_`: `_type_`|` _code_ `)`
+/// * `reify!(`_variable_ or _expression_ `=>` `Option<`_type_`>` `)`
+/// * `reify!(`_variable_ or _expression_ `=>` _type_ `)`
 #[macro_export]
 macro_rules! reify {
     ($old:ident, |$new:ident : $t:ty| $code:expr, || $fallback:expr) => {{
         if std::any::TypeId::of::<$t>() == std::any::Any::type_id(&$old) {
-            // SAFETY: This is safe because we check to make sure the two types are
-            // actually the same type.
+            // SAFETY: This is safe because we already checked to make sure the two types
+            // are actually the same.
             let $new: $t = unsafe { std::mem::transmute_copy(&std::mem::ManuallyDrop::new($old)) };
             $code
         } else {
@@ -17,6 +24,7 @@ macro_rules! reify {
         let old = $old;
         reify!(old, |$new: $t| $code, || $fallback)
     }};
+
     ($old:ident, |$new:ident : $t:ty| $code:expr) => {
         reify!($old, |$new: $t| $code, || ())
     };

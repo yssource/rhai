@@ -3,7 +3,7 @@
 
 use crate::ast::Ident;
 use crate::tokenizer::Token;
-use crate::StaticVec;
+use crate::{Position, StaticVec};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -12,7 +12,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-/// _(internals)_ A chain of [module][Module] names to namespace-qualify a variable or function call.
+/// _(internals)_ A chain of [module][crate::Module] names to namespace-qualify a variable or function call.
 /// Exported under the `internals` feature only.
 ///
 /// Not available under `no_module`.
@@ -113,5 +113,13 @@ impl Namespace {
     #[inline(always)]
     pub(crate) fn set_index(&mut self, index: Option<NonZeroUsize>) {
         self.index = index
+    }
+    /// Get the [position][Position] of this [`NameSpace`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the path is empty.
+    pub fn position(&self) -> Position {
+        self.path[0].pos
     }
 }

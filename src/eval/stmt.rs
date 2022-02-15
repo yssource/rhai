@@ -1,6 +1,7 @@
 //! Module defining functions for evaluating a statement.
 
 use super::{EvalContext, EvalState, GlobalRuntimeState, Target};
+use crate::api::events::VarDefInfo;
 use crate::ast::{
     BinaryExpr, Expr, Ident, OpAssignment, Stmt, SwitchCases, TryCatchBlock, AST_OPTION_FLAGS::*,
 };
@@ -818,9 +819,15 @@ impl Engine {
                 let export = options.contains(AST_OPTION_EXPORTED);
 
                 let result = if let Some(ref filter) = self.def_var_filter {
-                    let shadowing = scope.contains(var_name);
-                    let scope_level = state.scope_level;
+                    let will_shadow = scope.contains(var_name);
+                    let nesting_level = state.scope_level;
                     let is_const = entry_type == AccessMode::ReadOnly;
+                    let info = VarDefInfo {
+                        name: var_name,
+                        is_const,
+                        nesting_level,
+                        will_shadow,
+                    };
                     let context = EvalContext {
                         engine: self,
                         scope,
@@ -828,16 +835,16 @@ impl Engine {
                         state,
                         lib,
                         this_ptr,
-                        level: level,
+                        level,
                     };
 
-                    match filter(var_name, is_const, scope_level, shadowing, &context) {
+                    match filter(true, info, &context) {
                         Ok(true) => None,
-                        Ok(false) => Some(Err(ERR::ErrorRuntime(
-                            format!("Variable cannot be defined: {}", var_name).into(),
-                            *pos,
-                        )
-                        .into())),
+                        Ok(false) => {
+                            Some(Err(
+                                ERR::ErrorForbiddenVariable(var_name.to_string(), *pos).into()
+                            ))
+                        }
                         err @ Err(_) => Some(err),
                     }
                 } else {
@@ -977,7 +984,7 @@ impl Engine {
 
             // Share statement
             #[cfg(not(feature = "no_closure"))]
-            Stmt::Share(name) => {
+            Stmt::Share(name, ..) => {
                 if let Some((index, ..)) = scope.get_index(name) {
                     let val = scope.get_mut_by_index(index);
 
@@ -985,6 +992,8 @@ impl Engine {
                         // Replace the variable with a shared value.
                         *val = std::mem::take(val).into_shared();
                     }
+                } else {
+                    unreachable!("variable {} not found for sharing", name);
                 }
                 Ok(Dynamic::UNIT)
             }

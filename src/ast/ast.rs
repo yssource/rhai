@@ -879,7 +879,7 @@ impl Eq for ASTNode<'_> {}
 
 impl ASTNode<'_> {
     /// Get the [`Position`] of this [`ASTNode`].
-    pub const fn position(&self) -> Position {
+    pub fn position(&self) -> Position {
         match self {
             ASTNode::Stmt(stmt) => stmt.position(),
             ASTNode::Expr(expr) => expr.position(),

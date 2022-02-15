@@ -1,22 +1,25 @@
 //! Main module defining the lexer and parser.
 
 use crate::api::custom_syntax::{markers::*, CustomSyntax};
+use crate::api::events::VarDefInfo;
 use crate::api::options::LanguageOptions;
 use crate::ast::{
     BinaryExpr, ConditionalStmtBlock, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident,
     OpAssignment, ScriptFnDef, Stmt, SwitchCases, TryCatchBlock, AST_OPTION_FLAGS::*,
 };
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
+use crate::eval::{EvalState, GlobalRuntimeState};
 use crate::func::hashing::get_hasher;
 use crate::tokenizer::{
-    is_keyword_function, is_valid_function_name, is_valid_identifier, Token, TokenStream,
+    is_keyword_function, is_valid_function_name, is_valid_identifier, Span, Token, TokenStream,
     TokenizerControl,
 };
 use crate::types::dynamic::AccessMode;
 use crate::types::StringsInterner;
 use crate::{
-    calc_fn_hash, Dynamic, Engine, ExclusiveRange, Identifier, ImmutableString, InclusiveRange,
-    LexError, OptimizationLevel, ParseError, Position, Scope, Shared, StaticVec, AST, INT, PERR,
+    calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, ExclusiveRange, Identifier,
+    ImmutableString, InclusiveRange, LexError, OptimizationLevel, ParseError, Position, Scope,
+    Shared, StaticVec, AST, INT, PERR,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -47,7 +50,7 @@ pub struct ParseState<'e> {
     /// Interned strings.
     pub interned_strings: StringsInterner,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
-    pub stack: StaticVec<(Identifier, AccessMode)>,
+    pub stack: Scope<'e>,
     /// Size of the local variables stack upon entry of the current block scope.
     pub entry_stack_len: usize,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
@@ -89,7 +92,7 @@ impl<'e> ParseState<'e> {
             #[cfg(not(feature = "no_closure"))]
             allow_capture: true,
             interned_strings: StringsInterner::new(),
-            stack: StaticVec::new_const(),
+            stack: Scope::new(),
             entry_stack_len: 0,
             #[cfg(not(feature = "no_module"))]
             imports: StaticVec::new_const(),
@@ -107,18 +110,17 @@ impl<'e> ParseState<'e> {
     #[inline]
     #[must_use]
     pub fn access_var(&mut self, name: &str, pos: Position) -> Option<NonZeroUsize> {
-        let mut barrier = false;
+        let mut hit_barrier = false;
         let _pos = pos;
 
         let index = self
             .stack
-            .iter()
-            .rev()
+            .iter_rev_raw()
             .enumerate()
-            .find(|(.., (n, ..))| {
+            .find(|&(.., (n, ..))| {
                 if n == SCOPE_SEARCH_BARRIER_MARKER {
                     // Do not go beyond the barrier
-                    barrier = true;
+                    hit_barrier = true;
                     false
                 } else {
                     n == name
@@ -138,7 +140,7 @@ impl<'e> ParseState<'e> {
             self.allow_capture = true
         }
 
-        if barrier {
+        if hit_barrier {
             None
         } else {
             index
@@ -1291,8 +1293,9 @@ fn parse_primary(
             let mut segments = StaticVec::<Expr>::new();
 
             match input.next().expect(NEVER_ENDS) {
+                (Token::InterpolatedString(s), ..) if s.is_empty() => (),
                 (Token::InterpolatedString(s), pos) => {
-                    segments.push(Expr::StringConstant(s.into(), pos));
+                    segments.push(Expr::StringConstant(s.into(), pos))
                 }
                 token => unreachable!("Token::InterpolatedString expected but gets {:?}", token),
             }
@@ -1302,7 +1305,10 @@ fn parse_primary(
                     block @ Stmt::Block(..) => Expr::Stmt(Box::new(block.into())),
                     stmt => unreachable!("Stmt::Block expected but gets {:?}", stmt),
                 };
-                segments.push(expr);
+                match expr {
+                    Expr::StringConstant(s, ..) if s.is_empty() => (),
+                    _ => segments.push(expr),
+                }
 
                 // Make sure to parse the following as text
                 let mut control = state.tokenizer_control.get();
@@ -1332,8 +1338,12 @@ fn parse_primary(
                 }
             }
 
-            segments.shrink_to_fit();
-            Expr::InterpolatedString(segments.into(), settings.pos)
+            if segments.is_empty() {
+                Expr::StringConstant(state.get_interned_string("", ""), settings.pos)
+            } else {
+                segments.shrink_to_fit();
+                Expr::InterpolatedString(segments.into(), settings.pos)
+            }
         }
 
         // Array literal
@@ -1792,7 +1802,11 @@ fn make_assignment_stmt(
                 || index.expect("either long or short index is `None`").get(),
                 |n| n.get() as usize,
             );
-            match state.stack[state.stack.len() - index].1 {
+            match state
+                .stack
+                .get_mut_by_index(state.stack.len() - index)
+                .access_mode()
+            {
                 AccessMode::ReadWrite => Ok(Stmt::Assignment(
                     (op_info, (lhs, rhs).into()).into(),
                     op_pos,
@@ -2185,7 +2199,7 @@ fn parse_custom_syntax(
         // Add a barrier variable to the stack so earlier variables will not be matched.
         // Variable searches stop at the first barrier.
         let marker = state.get_identifier("", SCOPE_SEARCH_BARRIER_MARKER);
-        state.stack.push((marker, AccessMode::ReadWrite));
+        state.stack.push(marker, ());
     }
 
     let parse_func = syntax.parse.as_ref();
@@ -2552,12 +2566,12 @@ fn parse_for(
     let counter_var = counter_name.map(|name| {
         let name = state.get_identifier("", name);
         let pos = counter_pos.expect("`Some`");
-        state.stack.push((name.clone(), AccessMode::ReadWrite));
+        state.stack.push(name.clone(), ());
         Ident { name, pos }
     });
 
     let loop_var = state.get_identifier("", name);
-    state.stack.push((loop_var.clone(), AccessMode::ReadWrite));
+    state.stack.push(loop_var.clone(), ());
     let loop_var = Ident {
         name: loop_var,
         pos: name_pos,
@@ -2566,7 +2580,7 @@ fn parse_for(
     settings.is_breakable = true;
     let body = parse_block(input, state, lib, settings.level_up())?;
 
-    state.stack.truncate(prev_stack_len);
+    state.stack.rewind(prev_stack_len);
 
     Ok(Stmt::For(
         expr,
@@ -2600,6 +2614,36 @@ fn parse_let(
         return Err(PERR::VariableExists(name.to_string()).into_err(pos));
     }
 
+    if let Some(ref filter) = state.engine.def_var_filter {
+        let will_shadow = state.stack.iter().any(|(v, ..)| v == name.as_ref());
+        let level = settings.level;
+        let is_const = var_type == AccessMode::ReadOnly;
+        let info = VarDefInfo {
+            name: &name,
+            is_const,
+            nesting_level: level,
+            will_shadow,
+        };
+        let context = EvalContext {
+            engine: state.engine,
+            scope: &mut state.stack,
+            global: &mut GlobalRuntimeState::new(state.engine),
+            state: &mut EvalState::new(),
+            lib: &[],
+            this_ptr: &mut None,
+            level,
+        };
+
+        match filter(false, info, &context) {
+            Ok(true) => (),
+            Ok(false) => return Err(PERR::ForbiddenVariable(name.to_string()).into_err(pos)),
+            Err(err) => match *err {
+                EvalAltResult::ErrorParsing(perr, pos) => return Err(perr.into_err(pos)),
+                _ => return Err(PERR::ForbiddenVariable(name.to_string()).into_err(pos)),
+            },
+        }
+    }
+
     let name = state.get_identifier("", name);
     let var_def = Ident {
         name: name.clone(),
@@ -2614,8 +2658,6 @@ fn parse_let(
         Expr::Unit(Position::NONE)
     };
 
-    state.stack.push((name, var_type));
-
     let export = if is_export {
         AST_OPTION_EXPORTED
     } else {
@@ -2624,14 +2666,20 @@ fn parse_let(
 
     match var_type {
         // let name = expr
-        AccessMode::ReadWrite => Ok(Stmt::Var(expr, var_def.into(), export, settings.pos)),
+        AccessMode::ReadWrite => {
+            state.stack.push(name, ());
+            Ok(Stmt::Var(expr, var_def.into(), export, settings.pos))
+        }
         // const name = { expr:constant }
-        AccessMode::ReadOnly => Ok(Stmt::Var(
-            expr,
-            var_def.into(),
-            AST_OPTION_CONSTANT + export,
-            settings.pos,
-        )),
+        AccessMode::ReadOnly => {
+            state.stack.push_constant(name, ());
+            Ok(Stmt::Var(
+                expr,
+                var_def.into(),
+                AST_OPTION_CONSTANT + export,
+                settings.pos,
+            ))
+        }
     }
 }
 
@@ -2810,7 +2858,7 @@ fn parse_block(
         }
     };
 
-    state.stack.truncate(state.entry_stack_len);
+    state.stack.rewind(state.entry_stack_len);
     state.entry_stack_len = prev_entry_stack_len;
 
     #[cfg(not(feature = "no_module"))]
@@ -2818,7 +2866,7 @@ fn parse_block(
 
     Ok(Stmt::Block(
         statements.into_boxed_slice(),
-        (settings.pos, end_pos),
+        Span::new(settings.pos, end_pos),
     ))
 }
 
@@ -3096,7 +3144,7 @@ fn parse_try_catch(
         }
 
         let name = state.get_identifier("", name);
-        state.stack.push((name.clone(), AccessMode::ReadWrite));
+        state.stack.push(name.clone(), ());
         Some(Ident { name, pos })
     } else {
         None
@@ -3107,7 +3155,7 @@ fn parse_try_catch(
 
     if catch_var.is_some() {
         // Remove the error variable from the stack
-        state.stack.pop().unwrap();
+        state.stack.rewind(state.stack.len() - 1);
     }
 
     Ok(Stmt::TryCatch(
@@ -3166,7 +3214,7 @@ fn parse_fn(
                         );
                     }
                     let s = state.get_identifier("", s);
-                    state.stack.push((s.clone(), AccessMode::ReadWrite));
+                    state.stack.push(s.clone(), ());
                     params.push((s, pos))
                 }
                 (Token::LexError(err), pos) => return Err(err.into_err(pos)),
@@ -3226,7 +3274,7 @@ fn parse_fn(
 fn make_curry_from_externals(
     state: &mut ParseState,
     fn_expr: Expr,
-    externals: StaticVec<Identifier>,
+    externals: StaticVec<crate::ast::Ident>,
     pos: Position,
 ) -> Expr {
     // If there are no captured variables, no need to curry
@@ -3239,21 +3287,26 @@ fn make_curry_from_externals(
 
     args.push(fn_expr);
 
-    args.extend(externals.iter().cloned().map(|x| {
-        Expr::Variable(
-            None,
-            Position::NONE,
-            (
-                None,
-                #[cfg(not(feature = "no_module"))]
-                None,
-                #[cfg(feature = "no_module")]
-                (),
-                x,
-            )
-                .into(),
-        )
-    }));
+    args.extend(
+        externals
+            .iter()
+            .cloned()
+            .map(|crate::ast::Ident { name, pos }| {
+                Expr::Variable(
+                    None,
+                    pos,
+                    (
+                        None,
+                        #[cfg(not(feature = "no_module"))]
+                        None,
+                        #[cfg(feature = "no_module")]
+                        (),
+                        name,
+                    )
+                        .into(),
+                )
+            }),
+    );
 
     let expr = FnCallExpr {
         name: state.get_identifier("", crate::engine::KEYWORD_FN_PTR_CURRY),
@@ -3270,7 +3323,11 @@ fn make_curry_from_externals(
     // Convert the entire expression into a statement block, then insert the relevant
     // [`Share`][Stmt::Share] statements.
     let mut statements = StaticVec::with_capacity(externals.len() + 1);
-    statements.extend(externals.into_iter().map(Stmt::Share));
+    statements.extend(
+        externals
+            .into_iter()
+            .map(|crate::ast::Ident { name, pos }| Stmt::Share(name, pos)),
+    );
     statements.push(Stmt::Expr(expr));
     Expr::Stmt(crate::ast::StmtBlock::new(statements, pos, Position::NONE).into())
 }
@@ -3300,7 +3357,7 @@ fn parse_anon_fn(
                         );
                     }
                     let s = state.get_identifier("", s);
-                    state.stack.push((s.clone(), AccessMode::ReadWrite));
+                    state.stack.push(s.clone(), ());
                     params_list.push(s)
                 }
                 (Token::LexError(err), pos) => return Err(err.into_err(pos)),
@@ -3336,14 +3393,14 @@ fn parse_anon_fn(
     // so extract them into a list.
     #[cfg(not(feature = "no_closure"))]
     let (mut params, externals) = {
-        let externals: StaticVec<Identifier> = state
-            .external_vars
-            .iter()
-            .map(|crate::ast::Ident { name, .. }| name.clone())
-            .collect();
+        let externals: StaticVec<_> = state.external_vars.iter().cloned().collect();
 
         let mut params = StaticVec::with_capacity(params_list.len() + externals.len());
-        params.extend(externals.iter().cloned());
+        params.extend(
+            externals
+                .iter()
+                .map(|crate::ast::Ident { name, .. }| name.clone()),
+        );
 
         (params, externals)
     };

@@ -108,6 +108,23 @@ b`: 1}; y["a\nb"]
 }
 
 #[test]
+fn test_map_prop() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    assert_eq!(engine.eval::<()>("let x = #{a: 42}; x.b")?, ());
+
+    engine.set_fail_on_invalid_map_property(true);
+
+    assert!(
+        matches!(*engine.eval::<()>("let x = #{a: 42}; x.b").expect_err("should error"),
+            EvalAltResult::ErrorPropertyNotFound(prop, _) if prop == "b"
+        )
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_map_assign() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 

@@ -1,3 +1,5 @@
+//! An example to serialize and deserialize Rust types.
+
 #[cfg(any(not(feature = "serde"), feature = "no_object"))]
 fn main() {
     println!("This example requires the 'serde' feature to run.");

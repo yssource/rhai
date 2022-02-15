@@ -440,7 +440,7 @@ impl Default for Expr {
 
 impl fmt::Debug for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut display_pos = self.start_position();
+        let mut display_pos = format!(" @ {:?}", self.start_position());
 
         match self {
             Self::DynamicConstant(value, ..) => write!(f, "{:?}", value),
@@ -470,24 +470,34 @@ impl fmt::Debug for Expr {
                 f.write_str("Variable(")?;
 
                 #[cfg(not(feature = "no_module"))]
-                if let Some((.., ref namespace)) = x.1 {
-                    write!(f, "{}{}", namespace, Token::DoubleColon.literal_syntax())?
+                if let Some((ref namespace, ..)) = x.1 {
+                    write!(f, "{}{}", namespace, Token::DoubleColon.literal_syntax())?;
+                    let pos = namespace.position();
+                    if !pos.is_none() {
+                        display_pos = format!(" @ {:?}", pos);
+                    }
                 }
                 f.write_str(&x.2)?;
                 if let Some(n) = i.map_or_else(|| x.0, |n| NonZeroUsize::new(n.get() as usize)) {
-                    write!(f, " #{}", n)?
+                    write!(f, " #{}", n)?;
                 }
                 f.write_str(")")
             }
             Self::Property(x, ..) => write!(f, "Property({})", x.2),
-            Self::Stack(x, ..) => write!(f, "ConstantArg#{}", x),
+            Self::Stack(x, ..) => write!(f, "ConstantArg[{}]", x),
             Self::Stmt(x) => {
+                let pos = x.span();
+                if !pos.is_none() {
+                    display_pos = format!(" @ {:?}", pos);
+                }
                 f.write_str("ExprStmtBlock")?;
                 f.debug_list().entries(x.iter()).finish()
             }
             Self::FnCall(x, ..) => fmt::Debug::fmt(x, f),
             Self::Index(x, term, pos) => {
-                display_pos = *pos;
+                if !pos.is_none() {
+                    display_pos = format!(" @ {:?}", pos);
+                }
 
                 f.debug_struct("Index")
                     .field("lhs", &x.lhs)
@@ -506,7 +516,9 @@ impl fmt::Debug for Expr {
                     ),
                 };
 
-                display_pos = *pos;
+                if !pos.is_none() {
+                    display_pos = format!(" @ {:?}", pos);
+                }
 
                 f.debug_struct(op_name)
                     .field("lhs", &x.lhs)
@@ -516,7 +528,7 @@ impl fmt::Debug for Expr {
             Self::Custom(x, ..) => f.debug_tuple("Custom").field(x).finish(),
         }?;
 
-        display_pos.debug_print(f)
+        f.write_str(&display_pos)
     }
 }
 
@@ -708,8 +720,16 @@ impl Expr {
     /// For a binary expression, this will be the left-most LHS instead of the operator.
     #[inline]
     #[must_use]
-    pub const fn start_position(&self) -> Position {
+    pub fn start_position(&self) -> Position {
         match self {
+            #[cfg(not(feature = "no_module"))]
+            Self::Variable(.., x) => {
+                if let Some((ref namespace, ..)) = x.1 {
+                    namespace.position()
+                } else {
+                    self.position()
+                }
+            }
             Self::And(x, ..) | Self::Or(x, ..) | Self::Index(x, ..) | Self::Dot(x, ..) => {
                 x.lhs.start_position()
             }
