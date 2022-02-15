@@ -635,6 +635,7 @@ fn main() {
     // Hook up debugger
     let lines: Vec<_> = script.trim().split('\n').map(|s| s.to_string()).collect();
 
+    #[allow(deprecated)]
     engine.register_debugger(
         // Store the current source in the debugger state
         || "".into(),
