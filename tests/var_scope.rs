@@ -128,7 +128,7 @@ fn test_var_def_filter() -> Result<(), Box<EvalAltResult>> {
     let ast = engine.compile("let x = 42;")?;
     engine.run_ast(&ast)?;
 
-    engine.on_def_var(|name, _, _, scope_level, _, _| match (name, scope_level) {
+    engine.on_def_var(|_, info, _| match (info.name, info.nesting_level) {
         ("x", 0 | 1) => Ok(false),
         _ => Ok(true),
     });

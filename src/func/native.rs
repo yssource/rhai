@@ -1,6 +1,7 @@
 //! Module defining interfaces to native-Rust functions.
 
 use super::call::FnCallArgs;
+use crate::api::events::VarDefInfo;
 use crate::ast::FnCallHashes;
 use crate::eval::{EvalState, GlobalRuntimeState};
 use crate::plugin::PluginFunction;
@@ -447,9 +448,8 @@ pub type OnVarCallback =
 
 /// Callback function for variable definition.
 #[cfg(not(feature = "sync"))]
-pub type OnDefVarCallback =
-    dyn Fn(&str, bool, bool, usize, bool, &EvalContext) -> RhaiResultOf<bool>;
+pub type OnDefVarCallback = dyn Fn(bool, VarDefInfo, &EvalContext) -> RhaiResultOf<bool>;
 /// Callback function for variable definition.
 #[cfg(feature = "sync")]
 pub type OnDefVarCallback =
-    dyn Fn(&str, bool, bool, usize, bool, &EvalContext) -> RhaiResultOf<bool> + Send + Sync;
+    dyn Fn(bool, VarDefInfo, &EvalContext) -> RhaiResultOf<bool> + Send + Sync;

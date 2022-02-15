@@ -1,6 +1,7 @@
 //! Main module defining the lexer and parser.
 
 use crate::api::custom_syntax::{markers::*, CustomSyntax};
+use crate::api::events::VarDefInfo;
 use crate::api::options::LanguageOptions;
 use crate::ast::{
     BinaryExpr, ConditionalStmtBlock, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident,
@@ -109,7 +110,7 @@ impl<'e> ParseState<'e> {
     #[inline]
     #[must_use]
     pub fn access_var(&mut self, name: &str, pos: Position) -> Option<NonZeroUsize> {
-        let mut barrier = false;
+        let mut hit_barrier = false;
         let _pos = pos;
 
         let index = self
@@ -119,7 +120,7 @@ impl<'e> ParseState<'e> {
             .find(|&(.., (n, ..))| {
                 if n == SCOPE_SEARCH_BARRIER_MARKER {
                     // Do not go beyond the barrier
-                    barrier = true;
+                    hit_barrier = true;
                     false
                 } else {
                     n == name
@@ -139,7 +140,7 @@ impl<'e> ParseState<'e> {
             self.allow_capture = true
         }
 
-        if barrier {
+        if hit_barrier {
             None
         } else {
             index
@@ -2566,16 +2567,13 @@ fn parse_for(
         let name = state.get_identifier("", name);
         let pos = counter_pos.expect("`Some`");
         state.stack.push(name.clone(), ());
-        Ident {
-            name: name.clone(),
-            pos,
-        }
+        Ident { name, pos }
     });
 
     let loop_var = state.get_identifier("", name);
     state.stack.push(loop_var.clone(), ());
     let loop_var = Ident {
-        name: loop_var.clone(),
+        name: loop_var,
         pos: name_pos,
     };
 
@@ -2617,9 +2615,15 @@ fn parse_let(
     }
 
     if let Some(ref filter) = state.engine.def_var_filter {
-        let shadowing = state.stack.iter().any(|(v, ..)| v == name.as_ref());
+        let will_shadow = state.stack.iter().any(|(v, ..)| v == name.as_ref());
         let level = settings.level;
         let is_const = var_type == AccessMode::ReadOnly;
+        let info = VarDefInfo {
+            name: &name,
+            is_const,
+            nesting_level: level,
+            will_shadow,
+        };
         let context = EvalContext {
             engine: state.engine,
             scope: &mut state.stack,
@@ -2630,7 +2634,7 @@ fn parse_let(
             level,
         };
 
-        match filter(&name, false, is_const, level, shadowing, &context) {
+        match filter(false, info, &context) {
             Ok(true) => (),
             Ok(false) => return Err(PERR::ForbiddenVariable(name.to_string()).into_err(pos)),
             Err(err) => match *err {

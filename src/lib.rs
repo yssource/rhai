@@ -147,6 +147,7 @@ type ExclusiveRange = std::ops::Range<INT>;
 type InclusiveRange = std::ops::RangeInclusive<INT>;
 
 pub use api::custom_syntax::Expression;
+pub use api::events::VarDefInfo;
 pub use ast::{FnAccess, AST};
 pub use engine::{Engine, OP_CONTAINS, OP_EQUALS};
 pub use eval::EvalContext;
