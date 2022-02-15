@@ -6,11 +6,9 @@ Version 1.5.0
 
 This version adds a debugging interface, which can be used to integrate a debugger.
 
-Based on popular demand, an option is added to throw exceptions when invalid properties are accessed
-on object maps (default is to return `()`).
+Based on popular demand, an option is added to throw exceptions when invalid properties are accessed on object maps (default is to return `()`).
 
-Also based on popular demand, the `REPL` tool now uses
-[`rustyline`](https://crates.io/crates/rustyline) for line editing and history.
+Also based on popular demand, the `REPL` tool now uses a slightly-enhanced version of [`rustyline`](https://crates.io/crates/rustyline) for line editing and history.
 
 Bug fixes
 ---------
