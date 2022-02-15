@@ -13,8 +13,8 @@ pub enum FnAccess {
     Private,
 }
 
-/// A type that holds a configuration option with bit-flags. Exported under the `internals` feature
-/// only.
+/// _(internals)_ A type that holds a configuration option with bit-flags.
+/// Exported under the `internals` feature only.
 ///
 /// Functionality-wise, this type is a naive and simplistic implementation of
 /// [`bit_flags`](https://crates.io/crates/bitflags).  It is re-implemented to avoid pulling in yet
@@ -113,7 +113,8 @@ impl BitAndAssign for OptionFlags {
     }
 }
 
-/// Option bit-flags for [`AST`][super::AST] nodes.
+/// _(internals)_ Option bit-flags for [`AST`][super::AST] nodes.
+/// Exported under the `internals` feature only.
 #[allow(non_snake_case)]
 pub mod AST_OPTION_FLAGS {
     use super::OptionFlags;
