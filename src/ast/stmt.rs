@@ -114,9 +114,9 @@ pub struct SwitchCases {
     /// Dictionary mapping value hashes to [`ConditionalStmtBlock`]'s.
     pub cases: BTreeMap<u64, Box<ConditionalStmtBlock>>,
     /// Statements block for the default case (there can be no condition for the default case).
-    pub def_case: StmtBlock,
+    pub def_case: Box<StmtBlock>,
     /// List of range cases.
-    pub ranges: StaticVec<(INT, INT, bool, ConditionalStmtBlock)>,
+    pub ranges: StaticVec<(INT, INT, bool, Box<ConditionalStmtBlock>)>,
 }
 
 /// _(internals)_ A `try-catch` block.
@@ -131,7 +131,19 @@ pub struct TryCatchBlock {
     pub catch_block: StmtBlock,
 }
 
+/// _(internals)_ The underlying container type for [`StmtBlock`].
+/// Exported under the `internals` feature only.
+///
+/// A [`SmallVec`](https://crates.io/crates/smallvec) containing up to 8 items inline is used to
+/// hold a statements block, with the assumption that most program blocks would container fewer than
+/// 8 statements, and those that do have a lot more statements.
+#[cfg(not(feature = "no_std"))]
 pub type StmtBlockContainer = smallvec::SmallVec<[Stmt; 8]>;
+
+/// _(internals)_ The underlying container type for [`StmtBlock`].
+/// Exported under the `internals` feature only.
+#[cfg(feature = "no_std")]
+pub type StmtBlockContainer = StaticVec<Stmt>;
 
 /// _(internals)_ A scoped block of statements.
 /// Exported under the `internals` feature only.
@@ -143,21 +155,27 @@ impl StmtBlock {
     pub const NONE: Self = Self::empty(Position::NONE);
 
     /// Create a new [`StmtBlock`].
+    #[inline(always)]
     #[must_use]
     pub fn new(
         statements: impl IntoIterator<Item = Stmt>,
         start_pos: Position,
         end_pos: Position,
     ) -> Self {
+        Self::new_with_span(statements, Span::new(start_pos, end_pos))
+    }
+    /// Create a new [`StmtBlock`].
+    #[must_use]
+    pub fn new_with_span(statements: impl IntoIterator<Item = Stmt>, span: Span) -> Self {
         let mut statements: smallvec::SmallVec<_> = statements.into_iter().collect();
         statements.shrink_to_fit();
-        Self(statements, Span::new(start_pos, end_pos))
+        Self(statements, span)
     }
     /// Create an empty [`StmtBlock`].
     #[inline(always)]
     #[must_use]
     pub const fn empty(pos: Position) -> Self {
-        Self(smallvec::SmallVec::new_const(), Span::new(pos, pos))
+        Self(StmtBlockContainer::new_const(), Span::new(pos, pos))
     }
     /// Is this statements block empty?
     #[inline(always)]
@@ -269,8 +287,8 @@ impl From<Stmt> for StmtBlock {
     #[inline]
     fn from(stmt: Stmt) -> Self {
         match stmt {
-            Stmt::Block(mut block, span) => Self(block.iter_mut().map(mem::take).collect(), span),
-            Stmt::Noop(pos) => Self(smallvec::SmallVec::new_const(), Span::new(pos, pos)),
+            Stmt::Block(block) => *block,
+            Stmt::Noop(pos) => Self(StmtBlockContainer::new_const(), Span::new(pos, pos)),
             _ => {
                 let pos = stmt.position();
                 Self(vec![stmt].into(), Span::new(pos, Position::NONE))
@@ -303,7 +321,7 @@ pub enum Stmt {
     /// No-op.
     Noop(Position),
     /// `if` expr `{` stmt `}` `else` `{` stmt `}`
-    If(Expr, Box<(StmtBlock, StmtBlock)>, Position),
+    If(Box<(Expr, StmtBlock, StmtBlock)>, Position),
     /// `switch` expr `{` literal or range or _ `if` condition `=>` stmt `,` ... `}`
     ///
     /// ### Data Structure
@@ -311,27 +329,27 @@ pub enum Stmt {
     /// 0) Hash table for (condition, block)
     /// 1) Default block
     /// 2) List of ranges: (start, end, inclusive, condition, statement)
-    Switch(Expr, Box<SwitchCases>, Position),
+    Switch(Box<(Expr, SwitchCases)>, Position),
     /// `while` expr `{` stmt `}` | `loop` `{` stmt `}`
     ///
     /// If the guard expression is [`UNIT`][Expr::Unit], then it is a `loop` statement.
-    While(Expr, Box<StmtBlock>, Position),
+    While(Box<(Expr, StmtBlock)>, Position),
     /// `do` `{` stmt `}` `while`|`until` expr
     ///
     /// ### Option Flags
     ///
     /// * [`AST_OPTION_NONE`] = `while`
     /// * [`AST_OPTION_NEGATED`] = `until`
-    Do(Box<StmtBlock>, Expr, OptionFlags, Position),
+    Do(Box<(Expr, StmtBlock)>, OptionFlags, Position),
     /// `for` `(` id `,` counter `)` `in` expr `{` stmt `}`
-    For(Expr, Box<(Ident, Option<Ident>, StmtBlock)>, Position),
+    For(Box<(Ident, Expr, Option<Ident>, StmtBlock)>, Position),
     /// \[`export`\] `let`|`const` id `=` expr
     ///
     /// ### Option Flags
     ///
     /// * [`AST_OPTION_EXPORTED`] = `export`
     /// * [`AST_OPTION_CONSTANT`] = `const`
-    Var(Expr, Box<Ident>, OptionFlags, Position),
+    Var(Box<(Ident, Expr)>, OptionFlags, Position),
     /// expr op`=` expr
     Assignment(Box<(Option<OpAssignment<'static>>, BinaryExpr)>, Position),
     /// func `(` expr `,` ... `)`
@@ -340,11 +358,11 @@ pub enum Stmt {
     ///        function call forming one statement.
     FnCall(Box<FnCallExpr>, Position),
     /// `{` stmt`;` ... `}`
-    Block(Box<[Stmt]>, Span),
+    Block(Box<StmtBlock>),
     /// `try` `{` stmt; ... `}` `catch` `(` var `)` `{` stmt; ... `}`
     TryCatch(Box<TryCatchBlock>, Position),
     /// [expression][Expr]
-    Expr(Expr),
+    Expr(Box<Expr>),
     /// `continue`/`break`
     ///
     /// ### Option Flags
@@ -358,12 +376,12 @@ pub enum Stmt {
     ///
     /// * [`AST_OPTION_NONE`] = `return`
     /// * [`AST_OPTION_BREAK`] = `throw`
-    Return(OptionFlags, Option<Expr>, Position),
+    Return(Option<Box<Expr>>, OptionFlags, Position),
     /// `import` expr `as` var
     ///
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
-    Import(Expr, Option<Box<Ident>>, Position),
+    Import(Box<(Expr, Option<Ident>)>, Position),
     /// `export` var `as` var
     ///
     /// Not available under `no_module`.
@@ -378,7 +396,7 @@ pub enum Stmt {
     /// This variant does not map to any language structure.  It is currently only used only to
     /// convert a normal variable into a shared variable when the variable is _captured_ by a closure.
     #[cfg(not(feature = "no_closure"))]
-    Share(crate::Identifier, Position),
+    Share(Box<crate::Identifier>, Position),
 }
 
 impl Default for Stmt {
@@ -391,7 +409,21 @@ impl Default for Stmt {
 impl From<StmtBlock> for Stmt {
     #[inline(always)]
     fn from(block: StmtBlock) -> Self {
-        Self::Block(block.0.into_boxed_slice(), block.1)
+        Self::Block(block.into())
+    }
+}
+
+impl<T: IntoIterator<Item = Stmt>> From<(T, Position, Position)> for Stmt {
+    #[inline(always)]
+    fn from(value: (T, Position, Position)) -> Self {
+        StmtBlock::new(value.0, value.1, value.2).into()
+    }
+}
+
+impl<T: IntoIterator<Item = Stmt>> From<(T, Span)> for Stmt {
+    #[inline(always)]
+    fn from(value: (T, Span)) -> Self {
+        StmtBlock::new_with_span(value.0, value.1).into()
     }
 }
 
@@ -419,7 +451,7 @@ impl Stmt {
             | Self::Var(.., pos)
             | Self::TryCatch(.., pos) => *pos,
 
-            Self::Block(.., span) => span.start(),
+            Self::Block(x) => x.position(),
 
             Self::Expr(x) => x.start_position(),
 
@@ -448,7 +480,7 @@ impl Stmt {
             | Self::Var(.., pos)
             | Self::TryCatch(.., pos) => *pos = new_pos,
 
-            Self::Block(.., span) => *span = Span::new(new_pos, span.end()),
+            Self::Block(x) => x.set_position(new_pos, x.end_position()),
 
             Self::Expr(x) => {
                 x.set_position(new_pos);
@@ -504,11 +536,13 @@ impl Stmt {
             // A No-op requires a semicolon in order to know it is an empty statement!
             Self::Noop(..) => false,
 
-            Self::Expr(Expr::Custom(x, ..)) if x.is_self_terminated() => true,
+            Self::Expr(e) => match &**e {
+                Expr::Custom(x, ..) if x.is_self_terminated() => true,
+                _ => false,
+            },
 
             Self::Var(..)
             | Self::Assignment(..)
-            | Self::Expr(..)
             | Self::FnCall(..)
             | Self::Do(..)
             | Self::BreakLoop(..)
@@ -529,38 +563,37 @@ impl Stmt {
         match self {
             Self::Noop(..) => true,
             Self::Expr(expr) => expr.is_pure(),
-            Self::If(condition, x, ..) => {
-                condition.is_pure()
-                    && x.0.iter().all(Stmt::is_pure)
-                    && x.1.iter().all(Stmt::is_pure)
+            Self::If(x, ..) => {
+                x.0.is_pure() && x.1.iter().all(Stmt::is_pure) && x.2.iter().all(Stmt::is_pure)
             }
-            Self::Switch(expr, x, ..) => {
-                expr.is_pure()
-                    && x.cases.values().all(|block| {
+            Self::Switch(x, ..) => {
+                x.0.is_pure()
+                    && x.1.cases.values().all(|block| {
                         block.condition.as_ref().map(Expr::is_pure).unwrap_or(true)
                             && block.statements.iter().all(Stmt::is_pure)
                     })
-                    && x.ranges.iter().all(|(.., block)| {
+                    && x.1.ranges.iter().all(|(.., block)| {
                         block.condition.as_ref().map(Expr::is_pure).unwrap_or(true)
                             && block.statements.iter().all(Stmt::is_pure)
                     })
-                    && x.def_case.iter().all(Stmt::is_pure)
+                    && x.1.def_case.iter().all(Stmt::is_pure)
             }
 
             // Loops that exit can be pure because it can never be infinite.
-            Self::While(Expr::BoolConstant(false, ..), ..) => true,
-            Self::Do(body, Expr::BoolConstant(x, ..), options, ..)
-                if *x == options.contains(AST_OPTION_NEGATED) =>
-            {
-                body.iter().all(Stmt::is_pure)
-            }
+            Self::While(x, ..) if matches!(x.0, Expr::BoolConstant(false, ..)) => true,
+            Self::Do(x, options, ..) if matches!(x.0, Expr::BoolConstant(..)) => match x.0 {
+                Expr::BoolConstant(cond, ..) if cond == options.contains(AST_OPTION_NEGATED) => {
+                    x.1.iter().all(Stmt::is_pure)
+                }
+                _ => false,
+            },
 
             // Loops are never pure since they can be infinite - and that's a side effect.
             Self::While(..) | Self::Do(..) => false,
 
             // For loops can be pure because if the iterable is pure, it is finite,
             // so infinite loops can never occur.
-            Self::For(iterable, x, ..) => iterable.is_pure() && x.2.iter().all(Stmt::is_pure),
+            Self::For(x, ..) => x.1.is_pure() && x.3.iter().all(Stmt::is_pure),
 
             Self::Var(..) | Self::Assignment(..) | Self::FnCall(..) => false,
             Self::Block(block, ..) => block.iter().all(|stmt| stmt.is_pure()),
@@ -591,11 +624,13 @@ impl Stmt {
         match self {
             Self::Var(..) => true,
 
-            Self::Expr(Expr::Stmt(s)) => s.iter().all(Stmt::is_block_dependent),
+            Self::Expr(e) => match &**e {
+                Expr::Stmt(s) => s.iter().all(Stmt::is_block_dependent),
+                Expr::FnCall(x, ..) => !x.is_qualified() && x.name == KEYWORD_EVAL,
+                _ => false,
+            },
 
-            Self::FnCall(x, ..) | Self::Expr(Expr::FnCall(x, ..)) => {
-                !x.is_qualified() && x.name == KEYWORD_EVAL
-            }
+            Self::FnCall(x, ..) => !x.is_qualified() && x.name == KEYWORD_EVAL,
 
             #[cfg(not(feature = "no_module"))]
             Self::Import(..) | Self::Export(..) => true,
@@ -613,12 +648,15 @@ impl Stmt {
     #[must_use]
     pub fn is_internally_pure(&self) -> bool {
         match self {
-            Self::Var(expr, _, ..) => expr.is_pure(),
+            Self::Var(x, ..) => x.1.is_pure(),
 
-            Self::Expr(Expr::Stmt(s)) => s.iter().all(Stmt::is_internally_pure),
+            Self::Expr(e) => match e.as_ref() {
+                Expr::Stmt(s) => s.iter().all(Stmt::is_internally_pure),
+                _ => self.is_pure(),
+            },
 
             #[cfg(not(feature = "no_module"))]
-            Self::Import(expr, ..) => expr.is_pure(),
+            Self::Import(x, ..) => x.0.is_pure(),
             #[cfg(not(feature = "no_module"))]
             Self::Export(..) => true,
 
@@ -653,81 +691,81 @@ impl Stmt {
         }
 
         match self {
-            Self::Var(e, _, ..) => {
-                if !e.walk(path, on_node) {
+            Self::Var(x, ..) => {
+                if !x.1.walk(path, on_node) {
                     return false;
                 }
             }
-            Self::If(e, x, ..) => {
-                if !e.walk(path, on_node) {
+            Self::If(x, ..) => {
+                if !x.0.walk(path, on_node) {
                     return false;
-                }
-                for s in x.0.iter() {
-                    if !s.walk(path, on_node) {
-                        return false;
-                    }
                 }
                 for s in x.1.iter() {
                     if !s.walk(path, on_node) {
                         return false;
                     }
                 }
-            }
-            Self::Switch(e, x, ..) => {
-                if !e.walk(path, on_node) {
-                    return false;
-                }
-                for b in x.cases.values() {
-                    if !b
-                        .condition
-                        .as_ref()
-                        .map(|e| e.walk(path, on_node))
-                        .unwrap_or(true)
-                    {
-                        return false;
-                    }
-                    for s in b.statements.iter() {
-                        if !s.walk(path, on_node) {
-                            return false;
-                        }
-                    }
-                }
-                for (.., b) in &x.ranges {
-                    if !b
-                        .condition
-                        .as_ref()
-                        .map(|e| e.walk(path, on_node))
-                        .unwrap_or(true)
-                    {
-                        return false;
-                    }
-                    for s in b.statements.iter() {
-                        if !s.walk(path, on_node) {
-                            return false;
-                        }
-                    }
-                }
-                for s in x.def_case.iter() {
-                    if !s.walk(path, on_node) {
-                        return false;
-                    }
-                }
-            }
-            Self::While(e, s, ..) | Self::Do(s, e, ..) => {
-                if !e.walk(path, on_node) {
-                    return false;
-                }
-                for s in &s.0 {
-                    if !s.walk(path, on_node) {
-                        return false;
-                    }
-                }
-            }
-            Self::For(e, x, ..) => {
-                if !e.walk(path, on_node) {
-                    return false;
-                }
                 for s in x.2.iter() {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
+                }
+            }
+            Self::Switch(x, ..) => {
+                if !x.0.walk(path, on_node) {
+                    return false;
+                }
+                for b in x.1.cases.values() {
+                    if !b
+                        .condition
+                        .as_ref()
+                        .map(|e| e.walk(path, on_node))
+                        .unwrap_or(true)
+                    {
+                        return false;
+                    }
+                    for s in b.statements.iter() {
+                        if !s.walk(path, on_node) {
+                            return false;
+                        }
+                    }
+                }
+                for (.., b) in &x.1.ranges {
+                    if !b
+                        .condition
+                        .as_ref()
+                        .map(|e| e.walk(path, on_node))
+                        .unwrap_or(true)
+                    {
+                        return false;
+                    }
+                    for s in b.statements.iter() {
+                        if !s.walk(path, on_node) {
+                            return false;
+                        }
+                    }
+                }
+                for s in x.1.def_case.iter() {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
+                }
+            }
+            Self::While(x, ..) | Self::Do(x, ..) => {
+                if !x.0.walk(path, on_node) {
+                    return false;
+                }
+                for s in x.1.statements() {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
+                }
+            }
+            Self::For(x, ..) => {
+                if !x.1.walk(path, on_node) {
+                    return false;
+                }
+                for s in x.3.iter() {
                     if !s.walk(path, on_node) {
                         return false;
                     }
@@ -749,7 +787,7 @@ impl Stmt {
                 }
             }
             Self::Block(x, ..) => {
-                for s in x.iter() {
+                for s in x.statements() {
                     if !s.walk(path, on_node) {
                         return false;
                     }
@@ -767,14 +805,19 @@ impl Stmt {
                     }
                 }
             }
-            Self::Expr(e) | Self::Return(_, Some(e), _) => {
+            Self::Expr(e) => {
+                if !e.walk(path, on_node) {
+                    return false;
+                }
+            }
+            Self::Return(Some(e), ..) => {
                 if !e.walk(path, on_node) {
                     return false;
                 }
             }
             #[cfg(not(feature = "no_module"))]
-            Self::Import(e, ..) => {
-                if !e.walk(path, on_node) {
+            Self::Import(x, ..) => {
+                if !x.0.walk(path, on_node) {
                     return false;
                 }
             }

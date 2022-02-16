@@ -5,14 +5,14 @@ use crate::api::events::VarDefInfo;
 use crate::api::options::LanguageOptions;
 use crate::ast::{
     BinaryExpr, ConditionalStmtBlock, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident,
-    OpAssignment, ScriptFnDef, Stmt, StmtBlockContainer, SwitchCases, TryCatchBlock,
+    OpAssignment, ScriptFnDef, Stmt, StmtBlock, StmtBlockContainer, SwitchCases, TryCatchBlock,
     AST_OPTION_FLAGS::*,
 };
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::eval::{EvalState, GlobalRuntimeState};
 use crate::func::hashing::get_hasher;
 use crate::tokenizer::{
-    is_keyword_function, is_valid_function_name, is_valid_identifier, Span, Token, TokenStream,
+    is_keyword_function, is_valid_function_name, is_valid_identifier, Token, TokenStream,
     TokenizerControl,
 };
 use crate::types::dynamic::AccessMode;
@@ -1007,7 +1007,7 @@ fn parse_switch(
     }
 
     let mut cases = BTreeMap::<u64, Box<ConditionalStmtBlock>>::new();
-    let mut ranges = StaticVec::<(INT, INT, bool, ConditionalStmtBlock)>::new();
+    let mut ranges = StaticVec::<(INT, INT, bool, Box<ConditionalStmtBlock>)>::new();
     let mut def_pos = Position::NONE;
     let mut def_stmt = None;
 
@@ -1119,7 +1119,10 @@ fn parse_switch(
                             });
                         }
                         // Other range
-                        _ => ranges.push((range.0, range.1, range.2, (condition, stmt).into())),
+                        _ => {
+                            let block: ConditionalStmtBlock = (condition, stmt).into();
+                            ranges.push((range.0, range.1, range.2, block.into()))
+                        }
                     }
                 }
                 None
@@ -1129,7 +1132,7 @@ fn parse_switch(
                 cases.insert(hash, block.into());
                 None
             }
-            (None, None) => Some(stmt.into()),
+            (None, None) => Some(Box::new(stmt.into())),
             _ => unreachable!("both hash and range in switch statement case"),
         };
 
@@ -1156,18 +1159,13 @@ fn parse_switch(
         }
     }
 
-    let def_case = def_stmt.unwrap_or_else(|| Stmt::Noop(Position::NONE).into());
+    let cases = SwitchCases {
+        cases,
+        def_case: def_stmt.unwrap_or_else(|| StmtBlock::NONE.into()),
+        ranges,
+    };
 
-    Ok(Stmt::Switch(
-        item,
-        SwitchCases {
-            cases,
-            def_case,
-            ranges,
-        }
-        .into(),
-        settings.pos,
-    ))
+    Ok(Stmt::Switch((item, cases).into(), settings.pos))
 }
 
 /// Parse a primary expression.
@@ -1877,7 +1875,7 @@ fn parse_op_assignment_stmt(
             .map(|(op, pos)| (Some(op), pos))
             .expect(NEVER_ENDS),
         // Not op-assignment
-        _ => return Ok(Stmt::Expr(lhs)),
+        _ => return Ok(Stmt::Expr(lhs.into())),
     };
 
     let mut settings = settings;
@@ -2419,8 +2417,7 @@ fn parse_if(
     };
 
     Ok(Stmt::If(
-        guard,
-        (if_body.into(), else_body.into()).into(),
+        (guard, if_body.into(), else_body.into()).into(),
         settings.pos,
     ))
 }
@@ -2453,7 +2450,7 @@ fn parse_while_loop(
 
     let body = parse_block(input, state, lib, settings.level_up())?;
 
-    Ok(Stmt::While(guard, Box::new(body.into()), settings.pos))
+    Ok(Stmt::While((guard, body.into()).into(), settings.pos))
 }
 
 /// Parse a do loop.
@@ -2491,12 +2488,7 @@ fn parse_do(
     let guard = parse_expr(input, state, lib, settings.level_up())?.ensure_bool_expr()?;
     ensure_not_assignment(input)?;
 
-    Ok(Stmt::Do(
-        Box::new(body.into()),
-        guard,
-        negated,
-        settings.pos,
-    ))
+    Ok(Stmt::Do((guard, body.into()).into(), negated, settings.pos))
 }
 
 /// Parse a for loop.
@@ -2584,8 +2576,7 @@ fn parse_for(
     state.stack.rewind(prev_stack_len);
 
     Ok(Stmt::For(
-        expr,
-        Box::new((loop_var, counter_var, body.into())),
+        Box::new((loop_var, expr, counter_var, body.into())),
         settings.pos,
     ))
 }
@@ -2669,14 +2660,13 @@ fn parse_let(
         // let name = expr
         AccessMode::ReadWrite => {
             state.stack.push(name, ());
-            Ok(Stmt::Var(expr, var_def.into(), export, settings.pos))
+            Ok(Stmt::Var((var_def, expr).into(), export, settings.pos))
         }
         // const name = { expr:constant }
         AccessMode::ReadOnly => {
             state.stack.push_constant(name, ());
             Ok(Stmt::Var(
-                expr,
-                var_def.into(),
+                (var_def, expr).into(),
                 AST_OPTION_CONSTANT + export,
                 settings.pos,
             ))
@@ -2704,7 +2694,7 @@ fn parse_import(
 
     // import expr as ...
     if !match_token(input, Token::As).0 {
-        return Ok(Stmt::Import(expr, None, settings.pos));
+        return Ok(Stmt::Import((expr, None).into(), settings.pos));
     }
 
     // import expr as name ...
@@ -2713,8 +2703,7 @@ fn parse_import(
     state.imports.push(name.clone());
 
     Ok(Stmt::Import(
-        expr,
-        Some(Ident { name, pos }.into()),
+        (expr, Some(Ident { name, pos })).into(),
         settings.pos,
     ))
 }
@@ -2865,10 +2854,7 @@ fn parse_block(
     #[cfg(not(feature = "no_module"))]
     state.imports.truncate(orig_imports_len);
 
-    Ok(Stmt::Block(
-        statements.into_boxed_slice(),
-        Span::new(settings.pos, end_pos),
-    ))
+    Ok((statements, settings.pos, end_pos).into())
 }
 
 /// Parse an expression as a statement.
@@ -3071,17 +3057,17 @@ fn parse_stmt(
 
             match input.peek().expect(NEVER_ENDS) {
                 // `return`/`throw` at <EOF>
-                (Token::EOF, ..) => Ok(Stmt::Return(return_type, None, token_pos)),
+                (Token::EOF, ..) => Ok(Stmt::Return(None, return_type, token_pos)),
                 // `return`/`throw` at end of block
                 (Token::RightBrace, ..) if !settings.is_global => {
-                    Ok(Stmt::Return(return_type, None, token_pos))
+                    Ok(Stmt::Return(None, return_type, token_pos))
                 }
                 // `return;` or `throw;`
-                (Token::SemiColon, ..) => Ok(Stmt::Return(return_type, None, token_pos)),
+                (Token::SemiColon, ..) => Ok(Stmt::Return(None, return_type, token_pos)),
                 // `return` or `throw` with expression
                 _ => {
                     let expr = parse_expr(input, state, lib, settings.level_up())?;
-                    Ok(Stmt::Return(return_type, Some(expr), token_pos))
+                    Ok(Stmt::Return(Some(expr.into()), return_type, token_pos))
                 }
             }
         }
@@ -3327,9 +3313,9 @@ fn make_curry_from_externals(
     statements.extend(
         externals
             .into_iter()
-            .map(|crate::ast::Ident { name, pos }| Stmt::Share(name, pos)),
+            .map(|crate::ast::Ident { name, pos }| Stmt::Share(name.into(), pos)),
     );
-    statements.push(Stmt::Expr(expr));
+    statements.push(Stmt::Expr(expr.into()));
     Expr::Stmt(crate::ast::StmtBlock::new(statements, pos, Position::NONE).into())
 }
 
@@ -3482,8 +3468,8 @@ impl Engine {
             }
         }
 
-        let mut statements = smallvec::SmallVec::new_const();
-        statements.push(Stmt::Expr(expr));
+        let mut statements = StmtBlockContainer::new_const();
+        statements.push(Stmt::Expr(expr.into()));
 
         #[cfg(not(feature = "no_optimize"))]
         return Ok(crate::optimizer::optimize_into_ast(
@@ -3509,7 +3495,7 @@ impl Engine {
         input: &mut TokenStream,
         state: &mut ParseState,
     ) -> ParseResult<(StmtBlockContainer, StaticVec<Shared<ScriptFnDef>>)> {
-        let mut statements = smallvec::SmallVec::new_const();
+        let mut statements = StmtBlockContainer::new_const();
         let mut functions = BTreeMap::new();
 
         while !input.peek().expect(NEVER_ENDS).0.is_eof() {

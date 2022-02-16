@@ -744,10 +744,11 @@ impl AST {
         include_variables: bool,
     ) -> impl Iterator<Item = (&str, bool, Dynamic)> {
         self.statements().iter().filter_map(move |stmt| match stmt {
-            Stmt::Var(expr, name, options, ..)
+            Stmt::Var(x, options, ..)
                 if options.contains(AST_OPTION_CONSTANT) && include_constants
                     || !options.contains(AST_OPTION_CONSTANT) && include_variables =>
             {
+                let (name, expr) = x.as_ref();
                 if let Some(value) = expr.get_literal_value() {
                     Some((name.as_str(), options.contains(AST_OPTION_CONSTANT), value))
                 } else {
