@@ -299,7 +299,10 @@ impl From<Stmt> for StmtBlock {
 
 impl IntoIterator for StmtBlock {
     type Item = Stmt;
+    #[cfg(not(feature = "no_std"))]
     type IntoIter = smallvec::IntoIter<[Stmt; 8]>;
+    #[cfg(feature = "no_std")]
+    type IntoIter = smallvec::IntoIter<[Stmt; 3]>;
 
     #[inline(always)]
     fn into_iter(self) -> Self::IntoIter {
