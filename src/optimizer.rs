@@ -1,7 +1,7 @@
 //! Module implementing the [`AST`] optimizer.
 #![cfg(not(feature = "no_optimize"))]
 
-use crate::ast::{Expr, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
+use crate::ast::{Expr, OpAssignment, Stmt, StmtBlockContainer, AST_OPTION_FLAGS::*};
 use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::eval::{EvalState, GlobalRuntimeState};
 use crate::func::builtin::get_builtin_binary_op_fn;
@@ -184,12 +184,12 @@ fn has_native_fn_override(
 
 /// Optimize a block of [statements][Stmt].
 fn optimize_stmt_block(
-    mut statements: StaticVec<Stmt>,
+    mut statements: StmtBlockContainer,
     state: &mut OptimizerState,
     preserve_result: bool,
     is_internal: bool,
     reduce_return: bool,
-) -> StaticVec<Stmt> {
+) -> StmtBlockContainer {
     if statements.is_empty() {
         return statements;
     }
@@ -1155,12 +1155,12 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
 ///
 /// Constants and variables from the scope are added.
 fn optimize_top_level(
-    statements: StaticVec<Stmt>,
+    statements: StmtBlockContainer,
     engine: &Engine,
     scope: &Scope,
     #[cfg(not(feature = "no_function"))] lib: &[&crate::Module],
     optimization_level: OptimizationLevel,
-) -> StaticVec<Stmt> {
+) -> StmtBlockContainer {
     let mut statements = statements;
 
     // If optimization level is None then skip optimizing
@@ -1186,15 +1186,14 @@ fn optimize_top_level(
         }
     }
 
-    statements = optimize_stmt_block(statements, &mut state, true, false, true);
-    statements
+    optimize_stmt_block(statements, &mut state, true, false, true)
 }
 
 /// Optimize an [`AST`].
 pub fn optimize_into_ast(
     engine: &Engine,
     scope: &Scope,
-    statements: StaticVec<Stmt>,
+    statements: StmtBlockContainer,
     #[cfg(not(feature = "no_function"))] functions: StaticVec<
         crate::Shared<crate::ast::ScriptFnDef>,
     >,

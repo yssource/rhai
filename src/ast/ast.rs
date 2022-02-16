@@ -1,7 +1,7 @@
 //! Module defining the AST (abstract syntax tree).
 
-use super::{Expr, FnAccess, Stmt, StmtBlock, AST_OPTION_FLAGS::*};
-use crate::{Dynamic, FnNamespace, Identifier, Position, StaticVec};
+use super::{Expr, FnAccess, Stmt, StmtBlock, StmtBlockContainer, AST_OPTION_FLAGS::*};
+use crate::{Dynamic, FnNamespace, Identifier, Position};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -197,7 +197,7 @@ impl AST {
     #[allow(dead_code)]
     #[inline(always)]
     #[must_use]
-    pub(crate) fn take_statements(&mut self) -> StaticVec<Stmt> {
+    pub(crate) fn take_statements(&mut self) -> StmtBlockContainer {
         self.body.take_statements()
     }
     /// Does this [`AST`] contain script-defined functions?

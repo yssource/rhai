@@ -5,7 +5,8 @@ use crate::api::events::VarDefInfo;
 use crate::api::options::LanguageOptions;
 use crate::ast::{
     BinaryExpr, ConditionalStmtBlock, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident,
-    OpAssignment, ScriptFnDef, Stmt, SwitchCases, TryCatchBlock, AST_OPTION_FLAGS::*,
+    OpAssignment, ScriptFnDef, Stmt, StmtBlockContainer, SwitchCases, TryCatchBlock,
+    AST_OPTION_FLAGS::*,
 };
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::eval::{EvalState, GlobalRuntimeState};
@@ -3481,7 +3482,7 @@ impl Engine {
             }
         }
 
-        let mut statements = StaticVec::new_const();
+        let mut statements = smallvec::SmallVec::new_const();
         statements.push(Stmt::Expr(expr));
 
         #[cfg(not(feature = "no_optimize"))]
@@ -3507,8 +3508,8 @@ impl Engine {
         &self,
         input: &mut TokenStream,
         state: &mut ParseState,
-    ) -> ParseResult<(StaticVec<Stmt>, StaticVec<Shared<ScriptFnDef>>)> {
-        let mut statements = StaticVec::new_const();
+    ) -> ParseResult<(StmtBlockContainer, StaticVec<Shared<ScriptFnDef>>)> {
+        let mut statements = smallvec::SmallVec::new_const();
         let mut functions = BTreeMap::new();
 
         while !input.peek().expect(NEVER_ENDS).0.is_eof() {

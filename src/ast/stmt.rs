@@ -131,10 +131,12 @@ pub struct TryCatchBlock {
     pub catch_block: StmtBlock,
 }
 
+pub type StmtBlockContainer = smallvec::SmallVec<[Stmt; 8]>;
+
 /// _(internals)_ A scoped block of statements.
 /// Exported under the `internals` feature only.
 #[derive(Clone, Hash, Default)]
-pub struct StmtBlock(StaticVec<Stmt>, Span);
+pub struct StmtBlock(StmtBlockContainer, Span);
 
 impl StmtBlock {
     /// A [`StmtBlock`] that does not exist.
@@ -147,7 +149,7 @@ impl StmtBlock {
         start_pos: Position,
         end_pos: Position,
     ) -> Self {
-        let mut statements: StaticVec<_> = statements.into_iter().collect();
+        let mut statements: smallvec::SmallVec<_> = statements.into_iter().collect();
         statements.shrink_to_fit();
         Self(statements, Span::new(start_pos, end_pos))
     }
@@ -155,7 +157,7 @@ impl StmtBlock {
     #[inline(always)]
     #[must_use]
     pub const fn empty(pos: Position) -> Self {
-        Self(StaticVec::new_const(), Span::new(pos, pos))
+        Self(smallvec::SmallVec::new_const(), Span::new(pos, pos))
     }
     /// Is this statements block empty?
     #[inline(always)]
@@ -178,7 +180,7 @@ impl StmtBlock {
     /// Extract the statements.
     #[inline(always)]
     #[must_use]
-    pub(crate) fn take_statements(&mut self) -> StaticVec<Stmt> {
+    pub(crate) fn take_statements(&mut self) -> StmtBlockContainer {
         mem::take(&mut self.0)
     }
     /// Get an iterator over the statements of this statements block.
@@ -223,7 +225,7 @@ impl StmtBlock {
 }
 
 impl Deref for StmtBlock {
-    type Target = StaticVec<Stmt>;
+    type Target = StmtBlockContainer;
 
     #[inline(always)]
     fn deref(&self) -> &Self::Target {
@@ -268,7 +270,7 @@ impl From<Stmt> for StmtBlock {
     fn from(stmt: Stmt) -> Self {
         match stmt {
             Stmt::Block(mut block, span) => Self(block.iter_mut().map(mem::take).collect(), span),
-            Stmt::Noop(pos) => Self(StaticVec::new_const(), Span::new(pos, pos)),
+            Stmt::Noop(pos) => Self(smallvec::SmallVec::new_const(), Span::new(pos, pos)),
             _ => {
                 let pos = stmt.position();
                 Self(vec![stmt].into(), Span::new(pos, Position::NONE))
@@ -279,7 +281,7 @@ impl From<Stmt> for StmtBlock {
 
 impl IntoIterator for StmtBlock {
     type Item = Stmt;
-    type IntoIter = smallvec::IntoIter<[Stmt; 3]>;
+    type IntoIter = smallvec::IntoIter<[Stmt; 8]>;
 
     #[inline(always)]
     fn into_iter(self) -> Self::IntoIter {

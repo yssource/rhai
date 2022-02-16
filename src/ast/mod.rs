@@ -16,7 +16,10 @@ pub use ident::Ident;
 pub use script_fn::EncapsulatedEnviron;
 #[cfg(not(feature = "no_function"))]
 pub use script_fn::{ScriptFnDef, ScriptFnMetadata};
-pub use stmt::{ConditionalStmtBlock, OpAssignment, Stmt, StmtBlock, SwitchCases, TryCatchBlock};
+pub use stmt::{
+    ConditionalStmtBlock, OpAssignment, Stmt, StmtBlock, StmtBlockContainer, SwitchCases,
+    TryCatchBlock,
+};
 
 #[cfg(not(feature = "no_float"))]
 pub use expr::FloatWrapper;
