@@ -8,6 +8,7 @@ Bug fixes
 ---------
 
 * Invalid property or method access such as `a.b::c.d` or `a.b::func()` no longer panics but properly returns a syntax error.
+* `Scope::is_constant` now returns the correct value.
 
 Enhancements
 ------------

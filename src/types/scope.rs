@@ -375,9 +375,11 @@ impl Scope<'_> {
     /// ```
     #[inline]
     pub fn is_constant(&self, name: &str) -> Option<bool> {
-        self.get_index(name).and_then(|(.., access)| match access {
-            AccessMode::ReadWrite => None,
-            AccessMode::ReadOnly => Some(true),
+        self.get_index(name).and_then(|(.., access)| {
+            Some(match access {
+                AccessMode::ReadWrite => false,
+                AccessMode::ReadOnly => true,
+            })
         })
     }
     /// Update the value of the named entry in the [`Scope`] if it already exists and is not constant.
