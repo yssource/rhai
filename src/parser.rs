@@ -1908,7 +1908,7 @@ fn make_dot_expr(
         // lhs.module::id - syntax error
         #[cfg(not(feature = "no_module"))]
         (.., Expr::Variable(.., x)) => {
-            Err(PERR::PropertyExpected.into_err(x.1.expect("`Some`").0[0].pos))
+            Err(PERR::PropertyExpected.into_err(x.1.expect("`Some`").0.position()))
         }
         #[cfg(feature = "no_module")]
         (.., Expr::Variable(..)) => unreachable!("qualified property name"),
@@ -1918,6 +1918,41 @@ fn make_dot_expr(
             false,
             op_pos,
         )),
+        // lhs.nnn::func(...) - syntax error
+        (.., Expr::FnCall(func, ..)) if func.is_qualified() => {
+            Err(PERR::PropertyExpected.into_err(func.namespace.expect("`Some`").position()))
+        }
+        // lhs.Fn() or lhs.eval()
+        (.., Expr::FnCall(func, func_pos))
+            if func.args.is_empty()
+                && [crate::engine::KEYWORD_FN_PTR, crate::engine::KEYWORD_EVAL]
+                    .contains(&func.name.as_ref()) =>
+        {
+            let err_msg = format!(
+                "'{}' should not be called in method style. Try {}(...);",
+                func.name, func.name
+            );
+            Err(LexError::ImproperSymbol(func.name.to_string(), err_msg).into_err(func_pos))
+        }
+        // lhs.func!(...)
+        (.., Expr::FnCall(func, func_pos)) if func.capture_parent_scope => {
+            Err(PERR::MalformedCapture(
+                "method-call style does not support running within the caller's scope".into(),
+            )
+            .into_err(func_pos))
+        }
+        // lhs.func(...)
+        (lhs, Expr::FnCall(mut func, func_pos)) => {
+            // Recalculate hash
+            func.hashes = FnCallHashes::from_all(
+                #[cfg(not(feature = "no_function"))]
+                calc_fn_hash(&func.name, func.args.len()),
+                calc_fn_hash(&func.name, func.args.len() + 1),
+            );
+
+            let rhs = Expr::FnCall(func, func_pos);
+            Ok(Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos))
+        }
         // lhs.dot_lhs.dot_rhs or lhs.dot_lhs[idx_rhs]
         (lhs, rhs @ Expr::Dot(..)) | (lhs, rhs @ Expr::Index(..)) => {
             let (x, term, pos, is_dot) = match rhs {
@@ -1927,6 +1962,17 @@ fn make_dot_expr(
             };
 
             match x.lhs {
+                // lhs.module::id.dot_rhs or lhs.module::id[idx_rhs] - syntax error
+                #[cfg(not(feature = "no_module"))]
+                Expr::Variable(.., x) if x.1.is_some() => {
+                    Err(PERR::PropertyExpected.into_err(x.1.expect("`Some`").0.position()))
+                }
+                // lhs.module::func().dot_rhs or lhs.module::func()[idx_rhs] - syntax error
+                #[cfg(not(feature = "no_module"))]
+                Expr::FnCall(func, ..) if func.is_qualified() => {
+                    Err(PERR::PropertyExpected.into_err(func.namespace.expect("`Some`").position()))
+                }
+                // lhs.id.dot_rhs or lhs.id[idx_rhs]
                 Expr::Variable(..) | Expr::Property(..) => {
                     let new_lhs = BinaryExpr {
                         lhs: x.lhs.into_property(state),
@@ -1941,6 +1987,7 @@ fn make_dot_expr(
                     };
                     Ok(Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos))
                 }
+                // lhs.func().dot_rhs or lhs.func()[idx_rhs]
                 Expr::FnCall(mut func, func_pos) => {
                     // Recalculate hash
                     func.hashes = FnCallHashes::from_all(
@@ -1964,42 +2011,6 @@ fn make_dot_expr(
                 }
                 expr => unreachable!("invalid dot expression: {:?}", expr),
             }
-        }
-        // lhs.nnn::func(...)
-        (.., Expr::FnCall(x, ..)) if x.is_qualified() => {
-            unreachable!("method call should not be namespace-qualified")
-        }
-        // lhs.Fn() or lhs.eval()
-        (.., Expr::FnCall(x, pos))
-            if x.args.is_empty()
-                && [crate::engine::KEYWORD_FN_PTR, crate::engine::KEYWORD_EVAL]
-                    .contains(&x.name.as_ref()) =>
-        {
-            Err(LexError::ImproperSymbol(
-                x.name.to_string(),
-                format!(
-                    "'{}' should not be called in method style. Try {}(...);",
-                    x.name, x.name
-                ),
-            )
-            .into_err(pos))
-        }
-        // lhs.func!(...)
-        (.., Expr::FnCall(x, pos)) if x.capture_parent_scope => Err(PERR::MalformedCapture(
-            "method-call style does not support running within the caller's scope".into(),
-        )
-        .into_err(pos)),
-        // lhs.func(...)
-        (lhs, Expr::FnCall(mut func, func_pos)) => {
-            // Recalculate hash
-            func.hashes = FnCallHashes::from_all(
-                #[cfg(not(feature = "no_function"))]
-                calc_fn_hash(&func.name, func.args.len()),
-                calc_fn_hash(&func.name, func.args.len() + 1),
-            );
-
-            let rhs = Expr::FnCall(func, func_pos);
-            Ok(Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos))
         }
         // lhs.rhs
         (.., rhs) => Err(PERR::PropertyExpected.into_err(rhs.start_position())),

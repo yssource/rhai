@@ -1,6 +1,15 @@
 Rhai Release Notes
 ==================
 
+Version 1.6.0
+=============
+
+Bug fixes
+---------
+
+* Invalid property or method access such as `a.b::c.d` or `a.b::func()` no longer panics but properly returns a syntax error.
+
+
 Version 1.5.0
 =============
 
