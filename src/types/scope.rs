@@ -37,10 +37,11 @@ const SCOPE_ENTRIES_INLINED: usize = 8;
 ///
 /// my_scope.push("z", 40_i64);
 ///
-/// engine.run(&mut my_scope, "let x = z + 1; z = 0;")?;
+/// engine.run_with_scope(&mut my_scope, "let x = z + 1; z = 0;")?;
 ///
-/// assert_eq!(engine.eval_with_scope::<i64>(&mut my_scope, "x + 1")?, 42);
+/// let result: i64 = engine.eval_with_scope(&mut my_scope, "x + 1")?;
 ///
+/// assert_eq!(result, 42);
 /// assert_eq!(my_scope.get_value::<i64>("x").expect("x should exist"), 41);
 /// assert_eq!(my_scope.get_value::<i64>("z").expect("z should exist"), 0);
 /// # Ok(())
@@ -52,11 +53,11 @@ const SCOPE_ENTRIES_INLINED: usize = 8;
 //
 // # Implementation Notes
 //
-// [`Scope`] is implemented as two [`Vec`]'s of exactly the same length.  Variables data (name,
-// type, etc.) is manually split into two equal-length arrays.  That's because variable names take
-// up the most space, with [`Identifier`] being four words long, but in the vast majority of
-// cases the name is NOT used to look up a variable.  Variable lookup is usually via direct
-// indexing, by-passing the name altogether.
+// [`Scope`] is implemented as two arrays of exactly the same length.  Variables data (name, type,
+// etc.) is manually split into two equal-length arrays.  That's because variable names take up the
+// most space, with [`Identifier`] being three words long, but in the vast majority of cases the
+// name is NOT used to look up a variable.  Variable lookup is usually via direct indexing,
+// by-passing the name altogether.
 //
 // Since [`Dynamic`] is reasonably small, packing it tightly improves cache locality when variables
 // are accessed.
