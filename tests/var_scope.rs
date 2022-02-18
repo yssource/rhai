@@ -35,11 +35,24 @@ fn test_var_scope() -> Result<(), Box<EvalAltResult>> {
         scope.clear();
         engine.run_with_scope(
             &mut scope,
+            "const x = 3; let y = 0; let x = 42; let y = 999;",
+        )?;
+        assert_eq!(scope.len(), 2);
+        assert_eq!(scope.get_value::<INT>("x").unwrap(), 42);
+        assert_eq!(scope.get_value::<INT>("y").unwrap(), 999);
+        assert!(!scope.is_constant("x").unwrap());
+        assert!(!scope.is_constant("y").unwrap());
+
+        scope.clear();
+        engine.run_with_scope(
+            &mut scope,
             "const x = 3; let y = 0; let x = 42; let y = 999; const x = 123;",
         )?;
-        assert_eq!(scope.len(), 3);
+        assert_eq!(scope.len(), 2);
         assert_eq!(scope.get_value::<INT>("x").unwrap(), 123);
         assert_eq!(scope.get_value::<INT>("y").unwrap(), 999);
+        assert!(scope.is_constant("x").unwrap());
+        assert!(!scope.is_constant("y").unwrap());
 
         scope.clear();
         engine.run_with_scope(

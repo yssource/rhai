@@ -2663,12 +2663,9 @@ fn parse_let(
         AST_OPTION_NONE
     };
 
-    let existing = state.stack.get_index(&name).and_then(|(n, a)| {
+    let existing = state.stack.get_index(&name).and_then(|(n, ..)| {
         if n < state.block_stack_len {
             // Defined in parent block
-            None
-        } else if a == AccessMode::ReadOnly && access != AccessMode::ReadOnly {
-            // Overwrite constant
             None
         } else {
             Some(n)
