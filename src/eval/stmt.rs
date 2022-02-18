@@ -574,7 +574,7 @@ impl Engine {
 
             // For loop
             Stmt::For(x, ..) => {
-                let (Ident { name: var_name, .. }, expr, counter, statements) = x.as_ref();
+                let (Ident { name: var_name, .. }, counter, expr, statements) = x.as_ref();
 
                 let iter_result = self
                     .eval_expr(scope, global, state, lib, this_ptr, expr, level)
@@ -818,20 +818,20 @@ impl Engine {
             }
             // Let/const statement
             Stmt::Var(x, options, pos) => {
-                let var_name = &x.0.name;
-                let expr = &x.1;
+                let (Ident { name: var_name, .. }, expr, index) = x.as_ref();
 
-                let entry_type = if options.contains(AST_OPTION_CONSTANT) {
+                let access = if options.contains(AST_OPTION_CONSTANT) {
                     AccessMode::ReadOnly
                 } else {
                     AccessMode::ReadWrite
                 };
                 let export = options.contains(AST_OPTION_EXPORTED);
 
+                // Check variable definition filter
                 let result = if let Some(ref filter) = self.def_var_filter {
                     let will_shadow = scope.contains(var_name);
                     let nesting_level = state.scope_level;
-                    let is_const = entry_type == AccessMode::ReadOnly;
+                    let is_const = access == AccessMode::ReadOnly;
                     let info = VarDefInfo {
                         name: var_name,
                         is_const,
@@ -864,16 +864,18 @@ impl Engine {
                 if let Some(result) = result {
                     result.map(|_| Dynamic::UNIT)
                 } else {
+                    // Evaluate initial value
                     let value_result = self
                         .eval_expr(scope, global, state, lib, this_ptr, expr, level)
                         .map(Dynamic::flatten);
 
-                    if let Ok(value) = value_result {
+                    if let Ok(mut value) = value_result {
                         let _alias = if !rewind_scope {
+                            // Put global constants into global module
                             #[cfg(not(feature = "no_function"))]
                             #[cfg(not(feature = "no_module"))]
                             if state.scope_level == 0
-                                && entry_type == AccessMode::ReadOnly
+                                && access == AccessMode::ReadOnly
                                 && lib.iter().any(|&m| !m.is_empty())
                             {
                                 if global.constants.is_none() {
@@ -896,7 +898,12 @@ impl Engine {
                             None
                         };
 
-                        scope.push_dynamic_value(var_name.clone(), entry_type, value);
+                        if let Some(index) = index {
+                            value.set_access_mode(access);
+                            *scope.get_mut_by_index(scope.len() - index.get()) = value;
+                        } else {
+                            scope.push_entry(var_name.clone(), access, value);
+                        }
 
                         #[cfg(not(feature = "no_module"))]
                         if let Some(alias) = _alias {

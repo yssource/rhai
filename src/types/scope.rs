@@ -37,7 +37,7 @@ const SCOPE_ENTRIES_INLINED: usize = 8;
 ///
 /// my_scope.push("z", 40_i64);
 ///
-/// engine.eval_with_scope::<()>(&mut my_scope, "let x = z + 1; z = 0;")?;
+/// engine.run(&mut my_scope, "let x = z + 1; z = 0;")?;
 ///
 /// assert_eq!(engine.eval_with_scope::<i64>(&mut my_scope, "x + 1")?, 42);
 ///
@@ -185,7 +185,7 @@ impl Scope<'_> {
     /// ```
     #[inline(always)]
     pub fn push(&mut self, name: impl Into<Identifier>, value: impl Variant + Clone) -> &mut Self {
-        self.push_dynamic_value(name, AccessMode::ReadWrite, Dynamic::from(value))
+        self.push_entry(name, AccessMode::ReadWrite, Dynamic::from(value))
     }
     /// Add (push) a new [`Dynamic`] entry to the [`Scope`].
     ///
@@ -201,7 +201,7 @@ impl Scope<'_> {
     /// ```
     #[inline(always)]
     pub fn push_dynamic(&mut self, name: impl Into<Identifier>, value: Dynamic) -> &mut Self {
-        self.push_dynamic_value(name, value.access_mode(), value)
+        self.push_entry(name, value.access_mode(), value)
     }
     /// Add (push) a new constant to the [`Scope`].
     ///
@@ -224,7 +224,7 @@ impl Scope<'_> {
         name: impl Into<Identifier>,
         value: impl Variant + Clone,
     ) -> &mut Self {
-        self.push_dynamic_value(name, AccessMode::ReadOnly, Dynamic::from(value))
+        self.push_entry(name, AccessMode::ReadOnly, Dynamic::from(value))
     }
     /// Add (push) a new constant with a [`Dynamic`] value to the Scope.
     ///
@@ -247,11 +247,11 @@ impl Scope<'_> {
         name: impl Into<Identifier>,
         value: Dynamic,
     ) -> &mut Self {
-        self.push_dynamic_value(name, AccessMode::ReadOnly, value)
+        self.push_entry(name, AccessMode::ReadOnly, value)
     }
     /// Add (push) a new entry with a [`Dynamic`] value to the [`Scope`].
     #[inline]
-    pub(crate) fn push_dynamic_value(
+    pub(crate) fn push_entry(
         &mut self,
         name: impl Into<Identifier>,
         access: AccessMode,
@@ -622,7 +622,7 @@ impl<K: Into<Identifier>> Extend<(K, Dynamic)> for Scope<'_> {
     #[inline]
     fn extend<T: IntoIterator<Item = (K, Dynamic)>>(&mut self, iter: T) {
         for (name, value) in iter {
-            self.push_dynamic_value(name, AccessMode::ReadWrite, value);
+            self.push_entry(name, AccessMode::ReadWrite, value);
         }
     }
 }
@@ -640,7 +640,7 @@ impl<K: Into<Identifier>> Extend<(K, bool, Dynamic)> for Scope<'_> {
     #[inline]
     fn extend<T: IntoIterator<Item = (K, bool, Dynamic)>>(&mut self, iter: T) {
         for (name, is_constant, value) in iter {
-            self.push_dynamic_value(
+            self.push_entry(
                 name,
                 if is_constant {
                     AccessMode::ReadOnly

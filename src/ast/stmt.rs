@@ -11,6 +11,7 @@ use std::{
     fmt,
     hash::Hash,
     mem,
+    num::NonZeroUsize,
     ops::{Deref, DerefMut},
 };
 
@@ -345,14 +346,18 @@ pub enum Stmt {
     /// * [`AST_OPTION_NEGATED`] = `until`
     Do(Box<(Expr, StmtBlock)>, OptionFlags, Position),
     /// `for` `(` id `,` counter `)` `in` expr `{` stmt `}`
-    For(Box<(Ident, Expr, Option<Ident>, StmtBlock)>, Position),
+    For(Box<(Ident, Option<Ident>, Expr, StmtBlock)>, Position),
     /// \[`export`\] `let`|`const` id `=` expr
     ///
     /// ### Option Flags
     ///
     /// * [`AST_OPTION_EXPORTED`] = `export`
     /// * [`AST_OPTION_CONSTANT`] = `const`
-    Var(Box<(Ident, Expr)>, OptionFlags, Position),
+    Var(
+        Box<(Ident, Expr, Option<NonZeroUsize>)>,
+        OptionFlags,
+        Position,
+    ),
     /// expr op`=` expr
     Assignment(Box<(Option<OpAssignment<'static>>, BinaryExpr)>, Position),
     /// func `(` expr `,` ... `)`
@@ -380,12 +385,12 @@ pub enum Stmt {
     /// * [`AST_OPTION_NONE`] = `return`
     /// * [`AST_OPTION_BREAK`] = `throw`
     Return(Option<Box<Expr>>, OptionFlags, Position),
-    /// `import` expr `as` var
+    /// `import` expr `as` alias
     ///
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     Import(Box<(Expr, Option<Ident>)>, Position),
-    /// `export` var `as` var
+    /// `export` var `as` alias
     ///
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
@@ -596,7 +601,7 @@ impl Stmt {
 
             // For loops can be pure because if the iterable is pure, it is finite,
             // so infinite loops can never occur.
-            Self::For(x, ..) => x.1.is_pure() && x.3.iter().all(Stmt::is_pure),
+            Self::For(x, ..) => x.2.is_pure() && x.3.iter().all(Stmt::is_pure),
 
             Self::Var(..) | Self::Assignment(..) | Self::FnCall(..) => false,
             Self::Block(block, ..) => block.iter().all(|stmt| stmt.is_pure()),
@@ -765,7 +770,7 @@ impl Stmt {
                 }
             }
             Self::For(x, ..) => {
-                if !x.1.walk(path, on_node) {
+                if !x.2.walk(path, on_node) {
                     return false;
                 }
                 for s in x.3.iter() {

@@ -25,11 +25,15 @@ fn test_options_allow() -> Result<(), Box<EvalAltResult>> {
         assert!(engine.compile("let x = || 42;").is_err());
     }
 
-    engine.compile("while x > y { foo(z); }")?;
+    let ast = engine.compile("let x = 0; while x < 10 { x += 1; }")?;
 
     engine.set_allow_looping(false);
 
-    assert!(engine.compile("while x > y { foo(z); }").is_err());
+    engine.run_ast(&ast)?;
+
+    assert!(engine
+        .compile("let x = 0; while x < 10 { x += 1; }")
+        .is_err());
 
     engine.compile("let x = 42; let x = 123;")?;
 

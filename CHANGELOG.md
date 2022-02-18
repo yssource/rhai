@@ -9,6 +9,11 @@ Bug fixes
 
 * Invalid property or method access such as `a.b::c.d` or `a.b::func()` no longer panics but properly returns a syntax error.
 
+Enhancements
+------------
+
+* Variable definitions are optimized so that shadowed variables are reused as much as possible to reduce memory consumption.
+
 
 Version 1.5.0
 =============

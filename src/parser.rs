@@ -53,7 +53,7 @@ pub struct ParseState<'e> {
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     pub stack: Scope<'e>,
     /// Size of the local variables stack upon entry of the current block scope.
-    pub entry_stack_len: usize,
+    pub block_stack_len: usize,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
     #[cfg(not(feature = "no_closure"))]
     pub external_vars: Vec<crate::ast::Ident>,
@@ -94,7 +94,7 @@ impl<'e> ParseState<'e> {
             allow_capture: true,
             interned_strings: StringsInterner::new(),
             stack: Scope::new(),
-            entry_stack_len: 0,
+            block_stack_len: 0,
             #[cfg(not(feature = "no_module"))]
             imports: StaticVec::new_const(),
         }
@@ -2587,7 +2587,7 @@ fn parse_for(
     state.stack.rewind(prev_stack_len);
 
     Ok(Stmt::For(
-        Box::new((loop_var, expr, counter_var, body.into())),
+        Box::new((loop_var, counter_var, expr, body.into())),
         settings.pos,
     ))
 }
@@ -2597,7 +2597,7 @@ fn parse_let(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FnLib,
-    var_type: AccessMode,
+    access: AccessMode,
     is_export: bool,
     settings: ParseSettings,
 ) -> ParseResult<Stmt> {
@@ -2620,7 +2620,7 @@ fn parse_let(
     if let Some(ref filter) = state.engine.def_var_filter {
         let will_shadow = state.stack.iter().any(|(v, ..)| v == name.as_ref());
         let level = settings.level;
-        let is_const = var_type == AccessMode::ReadOnly;
+        let is_const = access == AccessMode::ReadOnly;
         let info = VarDefInfo {
             name: &name,
             is_const,
@@ -2648,10 +2648,6 @@ fn parse_let(
     }
 
     let name = state.get_identifier("", name);
-    let var_def = Ident {
-        name: name.clone(),
-        pos,
-    };
 
     // let name = ...
     let expr = if match_token(input, Token::Equals).0 {
@@ -2667,22 +2663,34 @@ fn parse_let(
         AST_OPTION_NONE
     };
 
-    match var_type {
+    let existing = state.stack.get_index(&name).and_then(|(n, a)| {
+        if n < state.block_stack_len {
+            // Defined in parent block
+            None
+        } else if a == AccessMode::ReadOnly && access != AccessMode::ReadOnly {
+            // Overwrite constant
+            None
+        } else {
+            Some(n)
+        }
+    });
+
+    let idx = if let Some(n) = existing {
+        state.stack.get_mut_by_index(n).set_access_mode(access);
+        Some(NonZeroUsize::new(state.stack.len() - n).unwrap())
+    } else {
+        state.stack.push_entry(name.as_str(), access, Dynamic::UNIT);
+        None
+    };
+
+    let var_def = (Ident { name, pos }, expr, idx).into();
+
+    Ok(match access {
         // let name = expr
-        AccessMode::ReadWrite => {
-            state.stack.push(name, ());
-            Ok(Stmt::Var((var_def, expr).into(), export, settings.pos))
-        }
+        AccessMode::ReadWrite => Stmt::Var(var_def, export, settings.pos),
         // const name = { expr:constant }
-        AccessMode::ReadOnly => {
-            state.stack.push_constant(name, ());
-            Ok(Stmt::Var(
-                (var_def, expr).into(),
-                AST_OPTION_CONSTANT + export,
-                settings.pos,
-            ))
-        }
-    }
+        AccessMode::ReadOnly => Stmt::Var(var_def, AST_OPTION_CONSTANT + export, settings.pos),
+    })
 }
 
 /// Parse an import statement.
@@ -2798,8 +2806,8 @@ fn parse_block(
 
     let mut statements = Vec::with_capacity(8);
 
-    let prev_entry_stack_len = state.entry_stack_len;
-    state.entry_stack_len = state.stack.len();
+    let prev_entry_stack_len = state.block_stack_len;
+    state.block_stack_len = state.stack.len();
 
     #[cfg(not(feature = "no_module"))]
     let orig_imports_len = state.imports.len();
@@ -2859,8 +2867,8 @@ fn parse_block(
         }
     };
 
-    state.stack.rewind(state.entry_stack_len);
-    state.entry_stack_len = prev_entry_stack_len;
+    state.stack.rewind(state.block_stack_len);
+    state.block_stack_len = prev_entry_stack_len;
 
     #[cfg(not(feature = "no_module"))]
     state.imports.truncate(orig_imports_len);

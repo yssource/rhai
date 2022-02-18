@@ -793,7 +793,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
         }
         // for id in expr { block }
         Stmt::For(x, ..) => {
-            optimize_expr(&mut x.1, state, false);
+            optimize_expr(&mut x.2, state, false);
             *x.3 = optimize_stmt_block(mem::take(&mut *x.3), state, false, true, false);
         }
         // let id = expr;

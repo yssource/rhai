@@ -748,7 +748,7 @@ impl AST {
                 if options.contains(AST_OPTION_CONSTANT) && include_constants
                     || !options.contains(AST_OPTION_CONSTANT) && include_variables =>
             {
-                let (name, expr) = x.as_ref();
+                let (name, expr, ..) = x.as_ref();
                 if let Some(value) = expr.get_literal_value() {
                     Some((name.as_str(), options.contains(AST_OPTION_CONSTANT), value))
                 } else {
