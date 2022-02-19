@@ -60,6 +60,10 @@ fn test_var_scope() -> Result<(), Box<EvalAltResult>> {
             "let x = 3; let y = 0; { let x = 42; let y = 999; } let x = 123;",
         )?;
 
+        assert_eq!(scope.len(), 2);
+        assert_eq!(scope.get_value::<INT>("x").unwrap(), 123);
+        assert_eq!(scope.get_value::<INT>("y").unwrap(), 0);
+
         assert_eq!(
             engine.eval::<INT>(
                 "
@@ -74,10 +78,6 @@ fn test_var_scope() -> Result<(), Box<EvalAltResult>> {
             420
         );
     }
-
-    assert_eq!(scope.len(), 2);
-    assert_eq!(scope.get_value::<INT>("x").unwrap(), 123);
-    assert_eq!(scope.get_value::<INT>("y").unwrap(), 0);
 
     Ok(())
 }

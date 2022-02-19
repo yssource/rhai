@@ -271,7 +271,7 @@ impl Expr {
     fn into_property(self, state: &mut ParseState) -> Self {
         match self {
             #[cfg(not(feature = "no_module"))]
-            Self::Variable(.., ref x) if x.1.is_some() => self,
+            Self::Variable(.., x) if x.1.is_some() => unreachable!("qualified property"),
             Self::Variable(.., pos, x) => {
                 let ident = x.2;
                 let getter = state.get_identifier(crate::engine::FN_GET, &ident);
@@ -1900,18 +1900,16 @@ fn make_dot_expr(
             x.rhs = make_dot_expr(state, x.rhs, term || terminate_chaining, rhs, op_pos)?;
             Ok(Expr::Index(x, false, pos))
         }
+        // lhs.module::id - syntax error
+        #[cfg(not(feature = "no_module"))]
+        (.., Expr::Variable(.., x)) if x.1.is_some() => {
+            Err(PERR::PropertyExpected.into_err(x.1.expect("`Some`").0.position()))
+        }
         // lhs.id
-        (lhs, var_expr @ Expr::Variable(..)) if var_expr.is_variable_access(true) => {
+        (lhs, var_expr @ Expr::Variable(..)) => {
             let rhs = var_expr.into_property(state);
             Ok(Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos))
         }
-        // lhs.module::id - syntax error
-        #[cfg(not(feature = "no_module"))]
-        (.., Expr::Variable(.., x)) => {
-            Err(PERR::PropertyExpected.into_err(x.1.expect("`Some`").0.position()))
-        }
-        #[cfg(feature = "no_module")]
-        (.., Expr::Variable(..)) => unreachable!("qualified property name"),
         // lhs.prop
         (lhs, prop @ Expr::Property(..)) => Ok(Expr::Dot(
             BinaryExpr { lhs, rhs: prop }.into(),
@@ -1919,6 +1917,7 @@ fn make_dot_expr(
             op_pos,
         )),
         // lhs.nnn::func(...) - syntax error
+        #[cfg(not(feature = "no_module"))]
         (.., Expr::FnCall(func, ..)) if func.is_qualified() => {
             Err(PERR::PropertyExpected.into_err(func.namespace.expect("`Some`").position()))
         }
