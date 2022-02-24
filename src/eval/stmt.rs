@@ -257,16 +257,11 @@ impl Engine {
                         #[cfg(not(feature = "unchecked"))]
                         self.inc_operations(&mut global.num_operations, pos)?;
 
+                        let root = (var_name, pos);
+                        let lhs_ptr = &mut lhs_ptr;
+
                         self.eval_op_assignment(
-                            global,
-                            state,
-                            lib,
-                            *op_info,
-                            *op_pos,
-                            &mut lhs_ptr,
-                            (var_name, pos),
-                            rhs_val,
-                            level,
+                            global, state, lib, *op_info, *op_pos, lhs_ptr, root, rhs_val, level,
                         )
                         .map_err(|err| err.fill_position(rhs.start_position()))
                         .map(|_| Dynamic::UNIT)
@@ -392,8 +387,8 @@ impl Engine {
                         let hash = hasher.finish();
 
                         // First check hashes
-                        if let Some(t) = cases.get(&hash) {
-                            let cond_result = t
+                        if let Some(case_block) = cases.get(&hash) {
+                            let cond_result = case_block
                                 .condition
                                 .as_ref()
                                 .map(|cond| {
@@ -410,7 +405,7 @@ impl Engine {
                                 .unwrap_or(Ok(true));
 
                             match cond_result {
-                                Ok(true) => Ok(Some(&t.statements)),
+                                Ok(true) => Ok(Some(&case_block.statements)),
                                 Ok(false) => Ok(None),
                                 _ => cond_result.map(|_| None),
                             }

@@ -621,8 +621,8 @@ impl Stmt {
     }
     /// Does this statement's behavior depend on its containing block?
     ///
-    /// A statement that depends on its containing block behaves differently when promoted
-    /// to an upper block.
+    /// A statement that depends on its containing block behaves differently when promoted to an
+    /// upper block.
     ///
     /// Currently only variable definitions (i.e. `let` and `const`), `import`/`export` statements,
     /// and `eval` calls (which may in turn call define variables) fall under this category.

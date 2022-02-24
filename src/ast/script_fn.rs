@@ -84,8 +84,8 @@ pub struct ScriptFnMetadata<'a> {
     ///
     /// Line doc-comments are kept in one string slice per line without the termination line-break.
     ///
-    /// Leading white-spaces are stripped, and each string slice always starts with the corresponding
-    /// doc-comment leader: `///` or `/**`.
+    /// Leading white-spaces are stripped, and each string slice always starts with the
+    /// corresponding doc-comment leader: `///` or `/**`.
     #[cfg(feature = "metadata")]
     pub comments: Vec<&'a str>,
     /// Function access mode.

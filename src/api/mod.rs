@@ -82,21 +82,26 @@ impl Engine {
     pub const fn optimization_level(&self) -> crate::OptimizationLevel {
         self.optimization_level
     }
-    /// Optimize the [`AST`][crate::AST] with constants defined in an external Scope. An optimized
-    /// copy of the [`AST`][crate::AST] is returned while the original [`AST`][crate::AST] is consumed.
+    /// Optimize the [`AST`][crate::AST] with constants defined in an external Scope.
+    /// An optimized copy of the [`AST`][crate::AST] is returned while the original [`AST`][crate::AST]
+    /// is consumed.
     ///
     /// Not available under `no_optimize`.
     ///
     /// Although optimization is performed by default during compilation, sometimes it is necessary
-    /// to _re_-optimize an [`AST`][crate::AST]. For example, when working with constants that are
-    /// passed in via an external scope, it will be more efficient to optimize the
-    /// [`AST`][crate::AST] once again to take advantage of the new constants.
+    /// to _re_-optimize an [`AST`][crate::AST].
+    ///
+    /// For example, when working with constants that are passed in via an external scope, it will
+    /// be more efficient to optimize the [`AST`][crate::AST] once again to take advantage of the
+    /// new constants.
     ///
     /// With this method, it is no longer necessary to recompile a large script. The script
-    /// [`AST`][crate::AST] can be compiled just once. Before evaluation, constants are passed into
-    /// the [`Engine`] via an external scope (i.e. with
-    /// [`Scope::push_constant`][crate::Scope::push_constant]). Then, the [`AST`][crate::AST] is
-    /// cloned and the copy re-optimized before running.
+    /// [`AST`][crate::AST] can be compiled just once.
+    ///
+    /// Before evaluation, constants are passed into the [`Engine`] via an external scope (i.e. with
+    /// [`Scope::push_constant`][crate::Scope::push_constant]).
+    ///
+    /// Then, the [`AST`][crate::AST] is cloned and the copy re-optimized before running.
     #[inline]
     #[must_use]
     pub fn optimize_ast(
@@ -148,8 +153,8 @@ impl Engine {
     ///
     /// # Examples
     ///
-    /// The following will raise an error during parsing because the `if` keyword is disabled
-    /// and is recognized as a reserved symbol!
+    /// The following will raise an error during parsing because the `if` keyword is disabled and is
+    /// recognized as a reserved symbol!
     ///
     /// ```rust,should_panic
     /// # fn main() -> Result<(), rhai::ParseError> {

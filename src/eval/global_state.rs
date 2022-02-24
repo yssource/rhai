@@ -17,8 +17,10 @@ pub type GlobalConstants =
 // # Implementation Notes
 //
 // This implementation for imported [modules][crate::Module] splits the module names from the shared
-// modules to improve data locality. Most usage will be looking up a particular key from the list
-// and then getting the module that corresponds to that key.
+// modules to improve data locality.
+//
+// Most usage will be looking up a particular key from the list and then getting the module that
+// corresponds to that key.
 #[derive(Clone)]
 pub struct GlobalRuntimeState<'a> {
     /// Stack of module names.
@@ -103,7 +105,8 @@ impl GlobalRuntimeState<'_> {
     pub fn get_shared_import(&self, index: usize) -> Option<crate::Shared<crate::Module>> {
         self.modules.get(index).cloned()
     }
-    /// Get a mutable reference to the globally-imported [crate::Module][crate::Module] at a particular index.
+    /// Get a mutable reference to the globally-imported [crate::Module][crate::Module] at a
+    /// particular index.
     ///
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
@@ -190,7 +193,8 @@ impl GlobalRuntimeState<'_> {
     ) -> impl Iterator<Item = (&Identifier, &crate::Shared<crate::Module>)> {
         self.keys.iter().zip(self.modules.iter())
     }
-    /// Does the specified function hash key exist in the stack of globally-imported [modules][crate::Module]?
+    /// Does the specified function hash key exist in the stack of globally-imported
+    /// [modules][crate::Module]?
     ///
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
@@ -200,7 +204,8 @@ impl GlobalRuntimeState<'_> {
     pub fn contains_qualified_fn(&self, hash: u64) -> bool {
         self.modules.iter().any(|m| m.contains_qualified_fn(hash))
     }
-    /// Get the specified function via its hash key from the stack of globally-imported [modules][crate::Module].
+    /// Get the specified function via its hash key from the stack of globally-imported
+    /// [modules][crate::Module].
     ///
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]

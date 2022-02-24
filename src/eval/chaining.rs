@@ -187,9 +187,9 @@ impl Engine {
                             self.call_indexer_set(
                                 global, state, lib, target, idx, new_val, is_ref_mut, level,
                             )
-                            .or_else(|idx_err| match *idx_err {
+                            .or_else(|e| match *e {
                                 ERR::ErrorIndexingType(..) => Ok((Dynamic::UNIT, false)),
-                                _ => Err(idx_err),
+                                _ => Err(e),
                             })?;
                         }
 
@@ -333,28 +333,25 @@ impl Engine {
                                         self.call_indexer_get(
                                             global, state, lib, target, &mut prop, level,
                                         )
-                                        .map_err(
-                                            |idx_err| match *idx_err {
+                                        .map_err(|e| {
+                                            match *e {
                                                 ERR::ErrorIndexingType(..) => err,
-                                                _ => idx_err,
-                                            },
-                                        )
+                                                _ => e,
+                                            }
+                                        })
                                     }
                                     _ => Err(err),
                                 })?;
 
-                            self.eval_op_assignment(
-                                global,
-                                state,
-                                lib,
-                                op_info,
-                                op_pos,
-                                &mut (&mut orig_val).into(),
-                                root,
-                                new_val,
-                                level,
-                            )
-                            .map_err(|err| err.fill_position(new_pos))?;
+                            {
+                                let orig_val = &mut (&mut orig_val).into();
+
+                                self.eval_op_assignment(
+                                    global, state, lib, op_info, op_pos, orig_val, root, new_val,
+                                    level,
+                                )
+                                .map_err(|err| err.fill_position(new_pos))?;
+                            }
 
                             new_val = orig_val;
                         }
@@ -373,12 +370,10 @@ impl Engine {
                                 self.call_indexer_set(
                                     global, state, lib, target, idx, new_val, is_ref_mut, level,
                                 )
-                                .map_err(
-                                    |idx_err| match *idx_err {
-                                        ERR::ErrorIndexingType(..) => err,
-                                        _ => idx_err,
-                                    },
-                                )
+                                .map_err(|e| match *e {
+                                    ERR::ErrorIndexingType(..) => err,
+                                    _ => e,
+                                })
                             }
                             _ => Err(err),
                         })
@@ -403,11 +398,9 @@ impl Engine {
                                     self.call_indexer_get(
                                         global, state, lib, target, &mut prop, level,
                                     )
-                                    .map_err(|idx_err| {
-                                        match *idx_err {
-                                            ERR::ErrorIndexingType(..) => err,
-                                            _ => idx_err,
-                                        }
+                                    .map_err(|e| match *e {
+                                        ERR::ErrorIndexingType(..) => err,
+                                        _ => e,
                                     })
                                 }
                                 _ => Err(err),
@@ -502,39 +495,28 @@ impl Engine {
                                                 global, state, lib, target, &mut prop, level,
                                             )
                                             .map_err(
-                                                |idx_err| match *idx_err {
+                                                |e| match *e {
                                                     ERR::ErrorIndexingType(..) => err,
-                                                    _ => idx_err,
+                                                    _ => e,
                                                 },
                                             )
                                         }
                                         _ => Err(err),
                                     })?;
 
-                                let val = &mut val;
+                                let val = &mut (&mut val).into();
 
                                 let (result, may_be_changed) = self
                                     .eval_dot_index_chain_helper(
-                                        global,
-                                        state,
-                                        lib,
-                                        this_ptr,
-                                        &mut val.into(),
-                                        root,
-                                        rhs,
-                                        &x.rhs,
-                                        *term,
-                                        idx_values,
-                                        rhs_chain,
-                                        level,
-                                        new_val,
+                                        global, state, lib, this_ptr, val, root, rhs, &x.rhs,
+                                        *term, idx_values, rhs_chain, level, new_val,
                                     )
                                     .map_err(|err| err.fill_position(*x_pos))?;
 
                                 // Feed the value back via a setter just in case it has been updated
                                 if may_be_changed {
                                     // Re-use args because the first &mut parameter will not be consumed
-                                    let mut arg_values = [target.as_mut(), val];
+                                    let mut arg_values = [target.as_mut(), val.as_mut()];
                                     let args = &mut arg_values;
                                     self.exec_fn_call(
                                         None, global, state, lib, setter, hash_set, args,
@@ -550,13 +532,13 @@ impl Engine {
                                                     global, state, lib, target, idx, new_val,
                                                     is_ref_mut, level,
                                                 )
-                                                .or_else(|idx_err| match *idx_err {
+                                                .or_else(|e| match *e {
                                                     // If there is no setter, no need to feed it
                                                     // back because the property is read-only
                                                     ERR::ErrorIndexingType(..) => {
                                                         Ok((Dynamic::UNIT, false))
                                                     }
-                                                    _ => Err(idx_err),
+                                                    _ => Err(e),
                                                 })
                                             }
                                             _ => Err(err),
@@ -584,11 +566,11 @@ impl Engine {
                                 #[cfg(feature = "debugging")]
                                 global.debugger.reset_status(reset_debugger);
 
-                                let val = &mut result?.0;
-                                let target = &mut val.into();
+                                let (val, _) = &mut result?;
+                                let val = &mut val.into();
 
                                 self.eval_dot_index_chain_helper(
-                                    global, state, lib, this_ptr, target, root, rhs, &x.rhs, *term,
+                                    global, state, lib, this_ptr, val, root, rhs, &x.rhs, *term,
                                     idx_values, rhs_chain, level, new_val,
                                 )
                                 .map_err(|err| err.fill_position(pos))
