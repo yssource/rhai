@@ -9,7 +9,8 @@ use std::prelude::v1::*;
 
 /// Trait that parses arguments to a function call.
 ///
-/// Any data type can implement this trait in order to pass arguments to [`Engine::call_fn`][crate::Engine::call_fn].
+/// Any data type can implement this trait in order to pass arguments to
+/// [`Engine::call_fn`][crate::Engine::call_fn].
 pub trait FuncArgs {
     /// Parse function call arguments into a container.
     ///
@@ -65,8 +66,7 @@ impl<T: Variant + Clone> FuncArgs for Vec<T> {
     }
 }
 
-/// Macro to implement [`FuncArgs`] for tuples of standard types (each can be
-/// converted into a [`Dynamic`]).
+/// Macro to implement [`FuncArgs`] for tuples of standard types (each can be converted into a [`Dynamic`]).
 macro_rules! impl_args {
     ($($p:ident),*) => {
         impl<$($p: Variant + Clone),*> FuncArgs for ($($p,)*)

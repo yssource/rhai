@@ -21,8 +21,8 @@ fn check_struct_sizes() {
     );
     assert_eq!(size_of::<ast::Expr>(), if PACKED { 12 } else { 16 });
     assert_eq!(size_of::<Option<ast::Expr>>(), if PACKED { 12 } else { 16 });
-    assert_eq!(size_of::<ast::Stmt>(), if PACKED { 24 } else { 32 });
-    assert_eq!(size_of::<Option<ast::Stmt>>(), if PACKED { 24 } else { 32 });
+    assert_eq!(size_of::<ast::Stmt>(), if PACKED { 12 } else { 16 });
+    assert_eq!(size_of::<Option<ast::Stmt>>(), if PACKED { 12 } else { 16 });
 
     #[cfg(target_pointer_width = "64")]
     {

@@ -340,7 +340,8 @@ impl Engine {
     /// Function call arguments be _consumed_ when the function requires them to be passed by value.
     /// All function arguments not in the first position are always passed by value and thus consumed.
     ///
-    /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
+    /// **DO NOT** reuse the argument values unless for the first `&mut` argument -
+    /// all others are silently replaced by `()`!
     pub(crate) fn call_native_fn(
         &self,
         global: &mut GlobalRuntimeState,
@@ -591,10 +592,11 @@ impl Engine {
     ///
     /// # WARNING
     ///
-    /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
-    /// All function arguments not in the first position are always passed by value and thus consumed.
+    /// Function call arguments may be _consumed_ when the function requires them to be passed by
+    /// value. All function arguments not in the first position are always passed by value and thus consumed.
     ///
-    /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
+    /// **DO NOT** reuse the argument values unless for the first `&mut` argument -
+    /// all others are silently replaced by `()`!
     pub(crate) fn exec_fn_call(
         &self,
         scope: Option<&mut Scope>,
@@ -1301,8 +1303,8 @@ impl Engine {
             // No arguments
         } else {
             // See if the first argument is a variable (not namespace-qualified).
-            // If so, convert to method-call style in order to leverage potential
-            // &mut first argument and avoid cloning the value
+            // If so, convert to method-call style in order to leverage potential &mut first argument
+            // and avoid cloning the value
             if !args_expr.is_empty() && args_expr[0].is_variable_access(true) {
                 #[cfg(feature = "debugging")]
                 self.run_debugger(scope, global, state, lib, this_ptr, &args_expr[0], level)?;

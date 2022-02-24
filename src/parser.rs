@@ -5,13 +5,14 @@ use crate::api::events::VarDefInfo;
 use crate::api::options::LanguageOptions;
 use crate::ast::{
     BinaryExpr, ConditionalStmtBlock, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident,
-    OpAssignment, ScriptFnDef, Stmt, SwitchCases, TryCatchBlock, AST_OPTION_FLAGS::*,
+    OpAssignment, ScriptFnDef, Stmt, StmtBlock, StmtBlockContainer, SwitchCases, TryCatchBlock,
+    AST_OPTION_FLAGS::*,
 };
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::eval::{EvalState, GlobalRuntimeState};
 use crate::func::hashing::get_hasher;
 use crate::tokenizer::{
-    is_keyword_function, is_valid_function_name, is_valid_identifier, Span, Token, TokenStream,
+    is_keyword_function, is_valid_function_name, is_valid_identifier, Token, TokenStream,
     TokenizerControl,
 };
 use crate::types::dynamic::AccessMode;
@@ -52,7 +53,7 @@ pub struct ParseState<'e> {
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     pub stack: Scope<'e>,
     /// Size of the local variables stack upon entry of the current block scope.
-    pub entry_stack_len: usize,
+    pub block_stack_len: usize,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
     #[cfg(not(feature = "no_closure"))]
     pub external_vars: Vec<crate::ast::Ident>,
@@ -93,7 +94,7 @@ impl<'e> ParseState<'e> {
             allow_capture: true,
             interned_strings: StringsInterner::new(),
             stack: Scope::new(),
-            entry_stack_len: 0,
+            block_stack_len: 0,
             #[cfg(not(feature = "no_module"))]
             imports: StaticVec::new_const(),
         }
@@ -270,7 +271,7 @@ impl Expr {
     fn into_property(self, state: &mut ParseState) -> Self {
         match self {
             #[cfg(not(feature = "no_module"))]
-            Self::Variable(.., ref x) if x.1.is_some() => self,
+            Self::Variable(.., x) if x.1.is_some() => unreachable!("qualified property"),
             Self::Variable(.., pos, x) => {
                 let ident = x.2;
                 let getter = state.get_identifier(crate::engine::FN_GET, &ident);
@@ -1006,7 +1007,7 @@ fn parse_switch(
     }
 
     let mut cases = BTreeMap::<u64, Box<ConditionalStmtBlock>>::new();
-    let mut ranges = StaticVec::<(INT, INT, bool, ConditionalStmtBlock)>::new();
+    let mut ranges = StaticVec::<(INT, INT, bool, Box<ConditionalStmtBlock>)>::new();
     let mut def_pos = Position::NONE;
     let mut def_stmt = None;
 
@@ -1118,7 +1119,10 @@ fn parse_switch(
                             });
                         }
                         // Other range
-                        _ => ranges.push((range.0, range.1, range.2, (condition, stmt).into())),
+                        _ => {
+                            let block: ConditionalStmtBlock = (condition, stmt).into();
+                            ranges.push((range.0, range.1, range.2, block.into()))
+                        }
                     }
                 }
                 None
@@ -1128,7 +1132,7 @@ fn parse_switch(
                 cases.insert(hash, block.into());
                 None
             }
-            (None, None) => Some(stmt.into()),
+            (None, None) => Some(Box::new(stmt.into())),
             _ => unreachable!("both hash and range in switch statement case"),
         };
 
@@ -1155,18 +1159,13 @@ fn parse_switch(
         }
     }
 
-    let def_case = def_stmt.unwrap_or_else(|| Stmt::Noop(Position::NONE).into());
+    let cases = SwitchCases {
+        cases,
+        def_case: def_stmt.unwrap_or_else(|| StmtBlock::NONE.into()),
+        ranges,
+    };
 
-    Ok(Stmt::Switch(
-        item,
-        SwitchCases {
-            cases,
-            def_case,
-            ranges,
-        }
-        .into(),
-        settings.pos,
-    ))
+    Ok(Stmt::Switch((item, cases).into(), settings.pos))
 }
 
 /// Parse a primary expression.
@@ -1876,7 +1875,7 @@ fn parse_op_assignment_stmt(
             .map(|(op, pos)| (Some(op), pos))
             .expect(NEVER_ENDS),
         // Not op-assignment
-        _ => return Ok(Stmt::Expr(lhs)),
+        _ => return Ok(Stmt::Expr(lhs.into())),
     };
 
     let mut settings = settings;
@@ -1901,24 +1900,58 @@ fn make_dot_expr(
             x.rhs = make_dot_expr(state, x.rhs, term || terminate_chaining, rhs, op_pos)?;
             Ok(Expr::Index(x, false, pos))
         }
+        // lhs.module::id - syntax error
+        #[cfg(not(feature = "no_module"))]
+        (.., Expr::Variable(.., x)) if x.1.is_some() => {
+            Err(PERR::PropertyExpected.into_err(x.1.expect("`Some`").0.position()))
+        }
         // lhs.id
-        (lhs, var_expr @ Expr::Variable(..)) if var_expr.is_variable_access(true) => {
+        (lhs, var_expr @ Expr::Variable(..)) => {
             let rhs = var_expr.into_property(state);
             Ok(Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos))
         }
-        // lhs.module::id - syntax error
-        #[cfg(not(feature = "no_module"))]
-        (.., Expr::Variable(.., x)) => {
-            Err(PERR::PropertyExpected.into_err(x.1.expect("`Some`").0[0].pos))
-        }
-        #[cfg(feature = "no_module")]
-        (.., Expr::Variable(..)) => unreachable!("qualified property name"),
         // lhs.prop
         (lhs, prop @ Expr::Property(..)) => Ok(Expr::Dot(
             BinaryExpr { lhs, rhs: prop }.into(),
             false,
             op_pos,
         )),
+        // lhs.nnn::func(...) - syntax error
+        #[cfg(not(feature = "no_module"))]
+        (.., Expr::FnCall(func, ..)) if func.is_qualified() => {
+            Err(PERR::PropertyExpected.into_err(func.namespace.expect("`Some`").position()))
+        }
+        // lhs.Fn() or lhs.eval()
+        (.., Expr::FnCall(func, func_pos))
+            if func.args.is_empty()
+                && [crate::engine::KEYWORD_FN_PTR, crate::engine::KEYWORD_EVAL]
+                    .contains(&func.name.as_ref()) =>
+        {
+            let err_msg = format!(
+                "'{}' should not be called in method style. Try {}(...);",
+                func.name, func.name
+            );
+            Err(LexError::ImproperSymbol(func.name.to_string(), err_msg).into_err(func_pos))
+        }
+        // lhs.func!(...)
+        (.., Expr::FnCall(func, func_pos)) if func.capture_parent_scope => {
+            Err(PERR::MalformedCapture(
+                "method-call style does not support running within the caller's scope".into(),
+            )
+            .into_err(func_pos))
+        }
+        // lhs.func(...)
+        (lhs, Expr::FnCall(mut func, func_pos)) => {
+            // Recalculate hash
+            func.hashes = FnCallHashes::from_all(
+                #[cfg(not(feature = "no_function"))]
+                calc_fn_hash(&func.name, func.args.len()),
+                calc_fn_hash(&func.name, func.args.len() + 1),
+            );
+
+            let rhs = Expr::FnCall(func, func_pos);
+            Ok(Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos))
+        }
         // lhs.dot_lhs.dot_rhs or lhs.dot_lhs[idx_rhs]
         (lhs, rhs @ Expr::Dot(..)) | (lhs, rhs @ Expr::Index(..)) => {
             let (x, term, pos, is_dot) = match rhs {
@@ -1928,6 +1961,17 @@ fn make_dot_expr(
             };
 
             match x.lhs {
+                // lhs.module::id.dot_rhs or lhs.module::id[idx_rhs] - syntax error
+                #[cfg(not(feature = "no_module"))]
+                Expr::Variable(.., x) if x.1.is_some() => {
+                    Err(PERR::PropertyExpected.into_err(x.1.expect("`Some`").0.position()))
+                }
+                // lhs.module::func().dot_rhs or lhs.module::func()[idx_rhs] - syntax error
+                #[cfg(not(feature = "no_module"))]
+                Expr::FnCall(func, ..) if func.is_qualified() => {
+                    Err(PERR::PropertyExpected.into_err(func.namespace.expect("`Some`").position()))
+                }
+                // lhs.id.dot_rhs or lhs.id[idx_rhs]
                 Expr::Variable(..) | Expr::Property(..) => {
                     let new_lhs = BinaryExpr {
                         lhs: x.lhs.into_property(state),
@@ -1942,6 +1986,7 @@ fn make_dot_expr(
                     };
                     Ok(Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos))
                 }
+                // lhs.func().dot_rhs or lhs.func()[idx_rhs]
                 Expr::FnCall(mut func, func_pos) => {
                     // Recalculate hash
                     func.hashes = FnCallHashes::from_all(
@@ -1965,42 +2010,6 @@ fn make_dot_expr(
                 }
                 expr => unreachable!("invalid dot expression: {:?}", expr),
             }
-        }
-        // lhs.nnn::func(...)
-        (.., Expr::FnCall(x, ..)) if x.is_qualified() => {
-            unreachable!("method call should not be namespace-qualified")
-        }
-        // lhs.Fn() or lhs.eval()
-        (.., Expr::FnCall(x, pos))
-            if x.args.is_empty()
-                && [crate::engine::KEYWORD_FN_PTR, crate::engine::KEYWORD_EVAL]
-                    .contains(&x.name.as_ref()) =>
-        {
-            Err(LexError::ImproperSymbol(
-                x.name.to_string(),
-                format!(
-                    "'{}' should not be called in method style. Try {}(...);",
-                    x.name, x.name
-                ),
-            )
-            .into_err(pos))
-        }
-        // lhs.func!(...)
-        (.., Expr::FnCall(x, pos)) if x.capture_parent_scope => Err(PERR::MalformedCapture(
-            "method-call style does not support running within the caller's scope".into(),
-        )
-        .into_err(pos)),
-        // lhs.func(...)
-        (lhs, Expr::FnCall(mut func, func_pos)) => {
-            // Recalculate hash
-            func.hashes = FnCallHashes::from_all(
-                #[cfg(not(feature = "no_function"))]
-                calc_fn_hash(&func.name, func.args.len()),
-                calc_fn_hash(&func.name, func.args.len() + 1),
-            );
-
-            let rhs = Expr::FnCall(func, func_pos);
-            Ok(Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos))
         }
         // lhs.rhs
         (.., rhs) => Err(PERR::PropertyExpected.into_err(rhs.start_position())),
@@ -2418,8 +2427,7 @@ fn parse_if(
     };
 
     Ok(Stmt::If(
-        guard,
-        (if_body.into(), else_body.into()).into(),
+        (guard, if_body.into(), else_body.into()).into(),
         settings.pos,
     ))
 }
@@ -2452,7 +2460,7 @@ fn parse_while_loop(
 
     let body = parse_block(input, state, lib, settings.level_up())?;
 
-    Ok(Stmt::While(guard, Box::new(body.into()), settings.pos))
+    Ok(Stmt::While((guard, body.into()).into(), settings.pos))
 }
 
 /// Parse a do loop.
@@ -2490,12 +2498,7 @@ fn parse_do(
     let guard = parse_expr(input, state, lib, settings.level_up())?.ensure_bool_expr()?;
     ensure_not_assignment(input)?;
 
-    Ok(Stmt::Do(
-        Box::new(body.into()),
-        guard,
-        negated,
-        settings.pos,
-    ))
+    Ok(Stmt::Do((guard, body.into()).into(), negated, settings.pos))
 }
 
 /// Parse a for loop.
@@ -2583,8 +2586,7 @@ fn parse_for(
     state.stack.rewind(prev_stack_len);
 
     Ok(Stmt::For(
-        expr,
-        Box::new((loop_var, counter_var, body.into())),
+        Box::new((loop_var, counter_var, expr, body.into())),
         settings.pos,
     ))
 }
@@ -2594,7 +2596,7 @@ fn parse_let(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FnLib,
-    var_type: AccessMode,
+    access: AccessMode,
     is_export: bool,
     settings: ParseSettings,
 ) -> ParseResult<Stmt> {
@@ -2617,7 +2619,7 @@ fn parse_let(
     if let Some(ref filter) = state.engine.def_var_filter {
         let will_shadow = state.stack.iter().any(|(v, ..)| v == name.as_ref());
         let level = settings.level;
-        let is_const = var_type == AccessMode::ReadOnly;
+        let is_const = access == AccessMode::ReadOnly;
         let info = VarDefInfo {
             name: &name,
             is_const,
@@ -2645,10 +2647,6 @@ fn parse_let(
     }
 
     let name = state.get_identifier("", name);
-    let var_def = Ident {
-        name: name.clone(),
-        pos,
-    };
 
     // let name = ...
     let expr = if match_token(input, Token::Equals).0 {
@@ -2664,23 +2662,31 @@ fn parse_let(
         AST_OPTION_NONE
     };
 
-    match var_type {
+    let existing = state.stack.get_index(&name).and_then(|(n, ..)| {
+        if n < state.block_stack_len {
+            // Defined in parent block
+            None
+        } else {
+            Some(n)
+        }
+    });
+
+    let idx = if let Some(n) = existing {
+        state.stack.get_mut_by_index(n).set_access_mode(access);
+        Some(NonZeroUsize::new(state.stack.len() - n).unwrap())
+    } else {
+        state.stack.push_entry(name.as_str(), access, Dynamic::UNIT);
+        None
+    };
+
+    let var_def = (Ident { name, pos }, expr, idx).into();
+
+    Ok(match access {
         // let name = expr
-        AccessMode::ReadWrite => {
-            state.stack.push(name, ());
-            Ok(Stmt::Var(expr, var_def.into(), export, settings.pos))
-        }
+        AccessMode::ReadWrite => Stmt::Var(var_def, export, settings.pos),
         // const name = { expr:constant }
-        AccessMode::ReadOnly => {
-            state.stack.push_constant(name, ());
-            Ok(Stmt::Var(
-                expr,
-                var_def.into(),
-                AST_OPTION_CONSTANT + export,
-                settings.pos,
-            ))
-        }
-    }
+        AccessMode::ReadOnly => Stmt::Var(var_def, AST_OPTION_CONSTANT + export, settings.pos),
+    })
 }
 
 /// Parse an import statement.
@@ -2703,7 +2709,7 @@ fn parse_import(
 
     // import expr as ...
     if !match_token(input, Token::As).0 {
-        return Ok(Stmt::Import(expr, None, settings.pos));
+        return Ok(Stmt::Import((expr, None).into(), settings.pos));
     }
 
     // import expr as name ...
@@ -2712,8 +2718,7 @@ fn parse_import(
     state.imports.push(name.clone());
 
     Ok(Stmt::Import(
-        expr,
-        Some(Ident { name, pos }.into()),
+        (expr, Some(Ident { name, pos })).into(),
         settings.pos,
     ))
 }
@@ -2797,8 +2802,8 @@ fn parse_block(
 
     let mut statements = Vec::with_capacity(8);
 
-    let prev_entry_stack_len = state.entry_stack_len;
-    state.entry_stack_len = state.stack.len();
+    let prev_entry_stack_len = state.block_stack_len;
+    state.block_stack_len = state.stack.len();
 
     #[cfg(not(feature = "no_module"))]
     let orig_imports_len = state.imports.len();
@@ -2858,16 +2863,13 @@ fn parse_block(
         }
     };
 
-    state.stack.rewind(state.entry_stack_len);
-    state.entry_stack_len = prev_entry_stack_len;
+    state.stack.rewind(state.block_stack_len);
+    state.block_stack_len = prev_entry_stack_len;
 
     #[cfg(not(feature = "no_module"))]
     state.imports.truncate(orig_imports_len);
 
-    Ok(Stmt::Block(
-        statements.into_boxed_slice(),
-        Span::new(settings.pos, end_pos),
-    ))
+    Ok((statements, settings.pos, end_pos).into())
 }
 
 /// Parse an expression as a statement.
@@ -3070,17 +3072,17 @@ fn parse_stmt(
 
             match input.peek().expect(NEVER_ENDS) {
                 // `return`/`throw` at <EOF>
-                (Token::EOF, ..) => Ok(Stmt::Return(return_type, None, token_pos)),
+                (Token::EOF, ..) => Ok(Stmt::Return(None, return_type, token_pos)),
                 // `return`/`throw` at end of block
                 (Token::RightBrace, ..) if !settings.is_global => {
-                    Ok(Stmt::Return(return_type, None, token_pos))
+                    Ok(Stmt::Return(None, return_type, token_pos))
                 }
                 // `return;` or `throw;`
-                (Token::SemiColon, ..) => Ok(Stmt::Return(return_type, None, token_pos)),
+                (Token::SemiColon, ..) => Ok(Stmt::Return(None, return_type, token_pos)),
                 // `return` or `throw` with expression
                 _ => {
                     let expr = parse_expr(input, state, lib, settings.level_up())?;
-                    Ok(Stmt::Return(return_type, Some(expr), token_pos))
+                    Ok(Stmt::Return(Some(expr.into()), return_type, token_pos))
                 }
             }
         }
@@ -3326,9 +3328,9 @@ fn make_curry_from_externals(
     statements.extend(
         externals
             .into_iter()
-            .map(|crate::ast::Ident { name, pos }| Stmt::Share(name, pos)),
+            .map(|crate::ast::Ident { name, pos }| Stmt::Share(name.into(), pos)),
     );
-    statements.push(Stmt::Expr(expr));
+    statements.push(Stmt::Expr(expr.into()));
     Expr::Stmt(crate::ast::StmtBlock::new(statements, pos, Position::NONE).into())
 }
 
@@ -3481,8 +3483,8 @@ impl Engine {
             }
         }
 
-        let mut statements = StaticVec::new_const();
-        statements.push(Stmt::Expr(expr));
+        let mut statements = StmtBlockContainer::new_const();
+        statements.push(Stmt::Expr(expr.into()));
 
         #[cfg(not(feature = "no_optimize"))]
         return Ok(crate::optimizer::optimize_into_ast(
@@ -3507,8 +3509,8 @@ impl Engine {
         &self,
         input: &mut TokenStream,
         state: &mut ParseState,
-    ) -> ParseResult<(StaticVec<Stmt>, StaticVec<Shared<ScriptFnDef>>)> {
-        let mut statements = StaticVec::new_const();
+    ) -> ParseResult<(StmtBlockContainer, StaticVec<Shared<ScriptFnDef>>)> {
+        let mut statements = StmtBlockContainer::new_const();
         let mut functions = BTreeMap::new();
 
         while !input.peek().expect(NEVER_ENDS).0.is_eof() {

@@ -1,7 +1,7 @@
 //! Module defining the AST (abstract syntax tree).
 
-use super::{Expr, FnAccess, Stmt, StmtBlock, AST_OPTION_FLAGS::*};
-use crate::{Dynamic, FnNamespace, Identifier, Position, StaticVec};
+use super::{Expr, FnAccess, Stmt, StmtBlock, StmtBlockContainer, AST_OPTION_FLAGS::*};
+use crate::{Dynamic, FnNamespace, Identifier, Position};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -197,7 +197,7 @@ impl AST {
     #[allow(dead_code)]
     #[inline(always)]
     #[must_use]
-    pub(crate) fn take_statements(&mut self) -> StaticVec<Stmt> {
+    pub(crate) fn take_statements(&mut self) -> StmtBlockContainer {
         self.body.take_statements()
     }
     /// Does this [`AST`] contain script-defined functions?
@@ -744,10 +744,11 @@ impl AST {
         include_variables: bool,
     ) -> impl Iterator<Item = (&str, bool, Dynamic)> {
         self.statements().iter().filter_map(move |stmt| match stmt {
-            Stmt::Var(expr, name, options, ..)
+            Stmt::Var(x, options, ..)
                 if options.contains(AST_OPTION_CONSTANT) && include_constants
                     || !options.contains(AST_OPTION_CONSTANT) && include_variables =>
             {
+                let (name, expr, ..) = x.as_ref();
                 if let Some(value) = expr.get_literal_value() {
                     Some((name.as_str(), options.contains(AST_OPTION_CONSTANT), value))
                 } else {

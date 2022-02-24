@@ -77,8 +77,8 @@ impl Engine {
             .into()
         })
     }
-    /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments
-    /// and the following options:
+    /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments and the
+    /// following options:
     ///
     /// * whether to evaluate the [`AST`] to load necessary modules before calling the function
     /// * whether to rewind the [`Scope`] after the function call
@@ -95,8 +95,8 @@ impl Engine {
     /// All the arguments are _consumed_, meaning that they're replaced by `()`.
     /// This is to avoid unnecessarily cloning the arguments.
     ///
-    /// Do not use the arguments after this call. If they are needed afterwards,
-    /// clone them _before_ calling this function.
+    /// Do not use the arguments after this call. If they are needed afterwards, clone them _before_
+    /// calling this function.
     ///
     /// # Example
     ///

@@ -1,16 +1,34 @@
 Rhai Release Notes
 ==================
 
+Version 1.6.0
+=============
+
+Compiler version
+----------------
+
+* Minimum compiler version is now `1.57` due to [`smartstring`](https://crates.io/crates/smartstring) dependency.
+
+Bug fixes
+---------
+
+* Invalid property or method access such as `a.b::c.d` or `a.b::func()` no longer panics but properly returns a syntax error.
+* `Scope::is_constant` now returns the correct value.
+
+Enhancements
+------------
+
+* Variable definitions are optimized so that shadowed variables are reused as much as possible to reduce memory consumption.
+
+
 Version 1.5.0
 =============
 
 This version adds a debugging interface, which can be used to integrate a debugger.
 
-Based on popular demand, an option is added to throw exceptions when invalid properties are accessed
-on object maps (default is to return `()`).
+Based on popular demand, an option is added to throw exceptions when invalid properties are accessed on object maps (default is to return `()`).
 
-Also based on popular demand, the `REPL` tool now uses
-[`rustyline`](https://crates.io/crates/rustyline) for line editing and history.
+Also based on popular demand, the `REPL` tool now uses a slightly-enhanced version of [`rustyline`](https://crates.io/crates/rustyline) for line editing and history.
 
 Bug fixes
 ---------

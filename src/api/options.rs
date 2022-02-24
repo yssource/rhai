@@ -57,7 +57,7 @@ impl Engine {
     /// Is `if`-expression allowed?
     /// Default is `true`.
     #[inline(always)]
-    pub fn allow_if_expression(&self) -> bool {
+    pub const fn allow_if_expression(&self) -> bool {
         self.options.allow_if_expr
     }
     /// Set whether `if`-expression is allowed.
@@ -68,7 +68,7 @@ impl Engine {
     /// Is `switch` expression allowed?
     /// Default is `true`.
     #[inline(always)]
-    pub fn allow_switch_expression(&self) -> bool {
+    pub const fn allow_switch_expression(&self) -> bool {
         self.options.allow_switch_expr
     }
     /// Set whether `switch` expression is allowed.
@@ -79,7 +79,7 @@ impl Engine {
     /// Is statement-expression allowed?
     /// Default is `true`.
     #[inline(always)]
-    pub fn allow_statement_expression(&self) -> bool {
+    pub const fn allow_statement_expression(&self) -> bool {
         self.options.allow_stmt_expr
     }
     /// Set whether statement-expression is allowed.
@@ -93,7 +93,7 @@ impl Engine {
     /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
-    pub fn allow_anonymous_fn(&self) -> bool {
+    pub const fn allow_anonymous_fn(&self) -> bool {
         self.options.allow_anonymous_fn
     }
     /// Set whether anonymous function is allowed.
@@ -107,7 +107,7 @@ impl Engine {
     /// Is looping allowed?
     /// Default is `true`.
     #[inline(always)]
-    pub fn allow_looping(&self) -> bool {
+    pub const fn allow_looping(&self) -> bool {
         self.options.allow_looping
     }
     /// Set whether looping is allowed.
@@ -118,7 +118,7 @@ impl Engine {
     /// Is variables shadowing allowed?
     /// Default is `true`.
     #[inline(always)]
-    pub fn allow_shadowing(&self) -> bool {
+    pub const fn allow_shadowing(&self) -> bool {
         self.options.allow_shadowing
     }
     /// Set whether variables shadowing is allowed.
@@ -129,7 +129,7 @@ impl Engine {
     /// Is strict variables mode enabled?
     /// Default is `false`.
     #[inline(always)]
-    pub fn strict_variables(&self) -> bool {
+    pub const fn strict_variables(&self) -> bool {
         self.options.strict_var
     }
     /// Set whether strict variables mode is enabled.
@@ -143,7 +143,7 @@ impl Engine {
     /// Not available under `no_object`.
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
-    pub fn fail_on_invalid_map_property(&self) -> bool {
+    pub const fn fail_on_invalid_map_property(&self) -> bool {
         self.options.fail_on_invalid_map_property
     }
     /// Set whether to raise error if an object map property does not exist.

@@ -85,6 +85,7 @@ impl Expression<'_> {
         self.0.position()
     }
     /// Get the value of this expression if it is a literal constant.
+    ///
     /// Supports [`INT`][crate::INT], [`FLOAT`][crate::FLOAT], `()`, `char`, `bool` and
     /// [`ImmutableString`][crate::ImmutableString].
     ///

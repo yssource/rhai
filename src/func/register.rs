@@ -85,21 +85,31 @@ pub trait RegisterNativeFunction<Args, Result> {
     fn return_type_name() -> &'static str;
 }
 
-#[inline]
-#[must_use]
-fn is_setter(_fn_name: &str) -> bool {
-    #[cfg(not(feature = "no_object"))]
-    if _fn_name.starts_with(crate::engine::FN_SET) {
-        return true;
-    }
-    #[cfg(not(feature = "no_index"))]
-    if _fn_name.starts_with(crate::engine::FN_IDX_SET) {
-        return true;
-    }
-    false
-}
-
 const EXPECT_ARGS: &str = "arguments";
+
+macro_rules! check_constant {
+    ($ctx:ident, $args:ident) => {
+        #[cfg(any(not(feature = "no_object"), not(feature = "no_index")))]
+        {
+            let args_len = $args.len();
+
+            if args_len > 0 && $args[0].is_read_only() {
+                let deny = match $ctx.fn_name() {
+                    #[cfg(not(feature = "no_object"))]
+                    f if args_len == 2 && f.starts_with(crate::engine::FN_SET) => true,
+                    #[cfg(not(feature = "no_index"))]
+                    crate::engine::FN_IDX_SET if args_len == 3 => true,
+                    _ => false,
+                };
+                if deny {
+                    return Err(
+                        ERR::ErrorAssignmentToConstant(String::new(), Position::NONE).into(),
+                    );
+                }
+            }
+        }
+    };
+}
 
 macro_rules! def_register {
     () => {
@@ -124,11 +134,9 @@ macro_rules! def_register {
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<RET>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
-                    if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {
-                        return Err(ERR::ErrorAssignmentToConstant(String::new(), Position::NONE).into());
-                    }
-
                     // The arguments are assumed to be of the correct number and types!
+                    check_constant!(ctx, args);
+
                     let mut _drain = args.iter_mut();
                     $($let $par = ($clone)(_drain.next().expect(EXPECT_ARGS)); )*
 
@@ -152,11 +160,9 @@ macro_rules! def_register {
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<RET>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
-                    if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {
-                        return Err(ERR::ErrorAssignmentToConstant(String::new(), Position::NONE).into());
-                    }
-
                     // The arguments are assumed to be of the correct number and types!
+                    check_constant!(ctx, args);
+
                     let mut _drain = args.iter_mut();
                     $($let $par = ($clone)(_drain.next().expect(EXPECT_ARGS)); )*
 
@@ -180,11 +186,9 @@ macro_rules! def_register {
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<RhaiResultOf<RET>>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
-                    if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {
-                        return Err(ERR::ErrorAssignmentToConstant(String::new(), Position::NONE).into());
-                    }
-
                     // The arguments are assumed to be of the correct number and types!
+                    check_constant!(ctx, args);
+
                     let mut _drain = args.iter_mut();
                     $($let $par = ($clone)(_drain.next().expect(EXPECT_ARGS)); )*
 
@@ -205,11 +209,9 @@ macro_rules! def_register {
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<RhaiResultOf<RET>>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
-                    if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {
-                        return Err(ERR::ErrorAssignmentToConstant(String::new(), Position::NONE).into());
-                    }
-
                     // The arguments are assumed to be of the correct number and types!
+                    check_constant!(ctx, args);
+
                     let mut _drain = args.iter_mut();
                     $($let $par = ($clone)(_drain.next().expect(EXPECT_ARGS)); )*
 

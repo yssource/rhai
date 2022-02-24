@@ -26,7 +26,7 @@ Targets and builds
 * All CPU and O/S targets supported by Rust, including:
   * WebAssembly (WASM)
   * `no-std`
-* Minimum Rust version 1.51
+* Minimum Rust version 1.57
 
 
 Standard features
@@ -36,7 +36,7 @@ Standard features
 * Fairly efficient evaluation (1 million iterations in 0.3 sec on a single-core, 2.3 GHz Linux VM).
 * Tight integration with native Rust [functions](https://rhai.rs/book/rust/functions.html) and [types]([#custom-types-and-methods](https://rhai.rs/book/rust/custom.html)), including [getters/setters](https://rhai.rs/book/rust/getters-setters.html), [methods](https://rhai.rs/book/rust/custom.html) and [indexers](https://rhai.rs/book/rust/indexers.html).
 * Freely pass Rust values into a script as [variables](https://rhai.rs/book/language/variables.html)/[constants](https://rhai.rs/book/language/constants.html) via an external [`Scope`](https://rhai.rs/book/rust/scope.html) - all clonable Rust types are supported; no need to implement any special trait. Or tap directly into the [variable resolution process](https://rhai.rs/book/engine/var.html).
-* Built-in support for most common [data types](https://rhai.rs/book/language/values-and-types.html) including booleans, [integers](https://rhai.rs/book/language/numbers.html), [floating-point numbers](https://rhai.rs/book/language/numbers.html) (including [`Decimal`](https://crates.io/crates/rust_decimal)), [strings](https://rhai.rs/book/language/strings-chars.html), [Unicode characters](https://rhai.rs/book/language/strings-chars.html), [arrays](https://rhai.rs/book/language/arrays.html) and [object maps](https://rhai.rs/book/language/object-maps.html).
+* Built-in support for most common [data types](https://rhai.rs/book/language/values-and-types.html) including booleans, [integers](https://rhai.rs/book/language/numbers.html), [floating-point numbers](https://rhai.rs/book/language/numbers.html) (including [`Decimal`](https://crates.io/crates/rust_decimal)), [strings](https://rhai.rs/book/language/strings-chars.html), [Unicode characters](https://rhai.rs/book/language/strings-chars.html), [arrays](https://rhai.rs/book/language/arrays.html) (including packed [byte arrays](https://rhai.rs/book/language/blobs.html)) and [object maps](https://rhai.rs/book/language/object-maps.html).
 * Easily [call a script-defined function](https://rhai.rs/book/engine/call-fn.html) from Rust.
 * Relatively little `unsafe` code (yes there are some for performance reasons).
 * Few dependencies - currently only [`smallvec`](https://crates.io/crates/smallvec), [`num-traits`](https://crates.io/crates/num-traits), [`ahash`](https://crates.io/crates/ahash) and [`smartstring`](https://crates.io/crates/smartstring).

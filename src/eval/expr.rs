@@ -419,17 +419,13 @@ impl Engine {
                     };
 
                     #[cfg(not(feature = "unchecked"))]
-                    let val_sizes = Self::calc_data_sizes(&value, true);
+                    let delta = Self::calc_data_sizes(&value, true);
 
                     *map.get_mut(key).unwrap() = value;
 
                     #[cfg(not(feature = "unchecked"))]
                     if self.has_data_size_limit() {
-                        sizes = (
-                            sizes.0 + val_sizes.0,
-                            sizes.1 + val_sizes.1,
-                            sizes.2 + val_sizes.2,
-                        );
+                        sizes = (sizes.0 + delta.0, sizes.1 + delta.1, sizes.2 + delta.2);
                         self.raise_err_if_over_data_size_limit(sizes, value_expr.position())?;
                     }
                 }

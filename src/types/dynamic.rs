@@ -339,8 +339,8 @@ impl Dynamic {
         }
         self
     }
-    /// Does this [`Dynamic`] hold a variant data type
-    /// instead of one of the supported system primitive types?
+    /// Does this [`Dynamic`] hold a variant data type instead of one of the supported system
+    /// primitive types?
     #[inline(always)]
     #[must_use]
     pub const fn is_variant(&self) -> bool {
@@ -360,8 +360,7 @@ impl Dynamic {
     }
     /// Is the value held by this [`Dynamic`] a particular type?
     ///
-    /// If the [`Dynamic`] is a shared variant checking is performed on
-    /// top of its internal value.
+    /// If the [`Dynamic`] is a shared variant checking is performed on top of its internal value.
     #[inline]
     #[must_use]
     pub fn is<T: Any + Clone>(&self) -> bool {
@@ -1072,11 +1071,14 @@ impl Dynamic {
     }
     /// Is this [`Dynamic`] read-only?
     ///
-    /// Constant [`Dynamic`] values are read-only. If a [`&mut Dynamic`][Dynamic] to such a constant
-    /// is passed to a Rust function, the function can use this information to return an error of
-    /// [`ErrorAssignmentToConstant`][crate::EvalAltResult::ErrorAssignmentToConstant]
-    /// if its value is going to be modified. This safe-guards constant values from being modified
-    /// from within Rust functions.
+    /// Constant [`Dynamic`] values are read-only.
+    ///
+    /// If a [`&mut Dynamic`][Dynamic] to such a constant is passed to a Rust function, the function
+    /// can use this information to return an error of
+    /// [`ErrorAssignmentToConstant`][crate::EvalAltResult::ErrorAssignmentToConstant] if its value
+    /// is going to be modified.
+    ///
+    /// This safe-guards constant values from being modified from within Rust functions.
     #[must_use]
     pub fn is_read_only(&self) -> bool {
         #[cfg(not(feature = "no_closure"))]
@@ -1138,15 +1140,16 @@ impl Dynamic {
     ///
     /// # Notes
     ///
-    /// Beware that you need to pass in an [`Array`][crate::Array] type for it to be recognized as an [`Array`][crate::Array].
-    /// A [`Vec<T>`][Vec] does not get automatically converted to an [`Array`][crate::Array], but
-    /// will be a custom type instead (stored as a trait object).  Use `Into<Dynamic>` to convert a
-    /// [`Vec<T>`][Vec] into a [`Dynamic`] as an [`Array`][crate::Array] value.
+    /// Beware that you need to pass in an [`Array`][crate::Array] type for it to be recognized as
+    /// an [`Array`][crate::Array]. A [`Vec<T>`][Vec] does not get automatically converted to an
+    /// [`Array`][crate::Array], but will be a custom type instead (stored as a trait object).  Use
+    /// `Into<Dynamic>` to convert a [`Vec<T>`][Vec] into a [`Dynamic`] as an
+    /// [`Array`][crate::Array] value.
     ///
     /// Similarly, passing in a [`HashMap<String, T>`][std::collections::HashMap] or
-    /// [`BTreeMap<String, T>`][std::collections::BTreeMap] will not get a [`Map`][crate::Map]
-    /// but a custom type. Again, use `Into<Dynamic>` to get a [`Dynamic`] with a
-    /// [`Map`][crate::Map] value.
+    /// [`BTreeMap<String, T>`][std::collections::BTreeMap] will not get a [`Map`][crate::Map] but a
+    /// custom type. Again, use `Into<Dynamic>` to get a [`Dynamic`] with a [`Map`][crate::Map]
+    /// value.
     ///
     /// # Examples
     ///

@@ -361,17 +361,23 @@ impl Debugger {
                     node.position() == *pos && _src == source
                 }
                 BreakPoint::AtFunctionName { name, .. } => match node {
-                    ASTNode::Expr(Expr::FnCall(x, ..))
-                    | ASTNode::Stmt(Stmt::FnCall(x, ..))
-                    | ASTNode::Stmt(Stmt::Expr(Expr::FnCall(x, ..))) => x.name == *name,
+                    ASTNode::Expr(Expr::FnCall(x, ..)) | ASTNode::Stmt(Stmt::FnCall(x, ..)) => {
+                        x.name == *name
+                    }
+                    ASTNode::Stmt(Stmt::Expr(e)) => match e.as_ref() {
+                        Expr::FnCall(x, ..) => x.name == *name,
+                        _ => false,
+                    },
                     _ => false,
                 },
                 BreakPoint::AtFunctionCall { name, args, .. } => match node {
-                    ASTNode::Expr(Expr::FnCall(x, ..))
-                    | ASTNode::Stmt(Stmt::FnCall(x, ..))
-                    | ASTNode::Stmt(Stmt::Expr(Expr::FnCall(x, ..))) => {
+                    ASTNode::Expr(Expr::FnCall(x, ..)) | ASTNode::Stmt(Stmt::FnCall(x, ..)) => {
                         x.args.len() == *args && x.name == *name
                     }
+                    ASTNode::Stmt(Stmt::Expr(e)) => match e.as_ref() {
+                        Expr::FnCall(x, ..) => x.args.len() == *args && x.name == *name,
+                        _ => false,
+                    },
                     _ => false,
                 },
                 #[cfg(not(feature = "no_object"))]
@@ -548,9 +554,12 @@ impl Engine {
                 DebuggerCommand::FunctionExit => {
                     // Bump a level if it is a function call
                     let level = match node {
-                        ASTNode::Expr(Expr::FnCall(..))
-                        | ASTNode::Stmt(Stmt::FnCall(..))
-                        | ASTNode::Stmt(Stmt::Expr(Expr::FnCall(..))) => context.call_level() + 1,
+                        ASTNode::Expr(Expr::FnCall(..)) | ASTNode::Stmt(Stmt::FnCall(..)) => {
+                            context.call_level() + 1
+                        }
+                        ASTNode::Stmt(Stmt::Expr(e)) if matches!(e.as_ref(), Expr::FnCall(..)) => {
+                            context.call_level() + 1
+                        }
                         _ => context.call_level(),
                     };
                     global.debugger.status = DebuggerStatus::FunctionExit(level);

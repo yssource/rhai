@@ -5,16 +5,79 @@ fn test_var_scope() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
     let mut scope = Scope::new();
 
-    engine.eval_with_scope::<()>(&mut scope, "let x = 4 + 5")?;
+    engine.run_with_scope(&mut scope, "let x = 4 + 5")?;
     assert_eq!(engine.eval_with_scope::<INT>(&mut scope, "x")?, 9);
-    engine.eval_with_scope::<()>(&mut scope, "x += 1; x += 2;")?;
+    engine.run_with_scope(&mut scope, "x += 1; x += 2;")?;
     assert_eq!(engine.eval_with_scope::<INT>(&mut scope, "x")?, 12);
 
     scope.set_value("x", 42 as INT);
     assert_eq!(engine.eval_with_scope::<INT>(&mut scope, "x")?, 42);
 
-    engine.eval_with_scope::<()>(&mut scope, "{let x = 3}")?;
+    engine.run_with_scope(&mut scope, "{ let x = 3 }")?;
     assert_eq!(engine.eval_with_scope::<INT>(&mut scope, "x")?, 42);
+
+    #[cfg(not(feature = "no_optimize"))]
+    if engine.optimization_level() != rhai::OptimizationLevel::None {
+        scope.clear();
+        engine.run_with_scope(&mut scope, "let x = 3; let x = 42; let x = 123;")?;
+        assert_eq!(scope.len(), 1);
+        assert_eq!(scope.get_value::<INT>("x").unwrap(), 123);
+
+        scope.clear();
+        engine.run_with_scope(
+            &mut scope,
+            "let x = 3; let y = 0; let x = 42; let y = 999; let x = 123;",
+        )?;
+        assert_eq!(scope.len(), 2);
+        assert_eq!(scope.get_value::<INT>("x").unwrap(), 123);
+        assert_eq!(scope.get_value::<INT>("y").unwrap(), 999);
+
+        scope.clear();
+        engine.run_with_scope(
+            &mut scope,
+            "const x = 3; let y = 0; let x = 42; let y = 999;",
+        )?;
+        assert_eq!(scope.len(), 2);
+        assert_eq!(scope.get_value::<INT>("x").unwrap(), 42);
+        assert_eq!(scope.get_value::<INT>("y").unwrap(), 999);
+        assert!(!scope.is_constant("x").unwrap());
+        assert!(!scope.is_constant("y").unwrap());
+
+        scope.clear();
+        engine.run_with_scope(
+            &mut scope,
+            "const x = 3; let y = 0; let x = 42; let y = 999; const x = 123;",
+        )?;
+        assert_eq!(scope.len(), 2);
+        assert_eq!(scope.get_value::<INT>("x").unwrap(), 123);
+        assert_eq!(scope.get_value::<INT>("y").unwrap(), 999);
+        assert!(scope.is_constant("x").unwrap());
+        assert!(!scope.is_constant("y").unwrap());
+
+        scope.clear();
+        engine.run_with_scope(
+            &mut scope,
+            "let x = 3; let y = 0; { let x = 42; let y = 999; } let x = 123;",
+        )?;
+
+        assert_eq!(scope.len(), 2);
+        assert_eq!(scope.get_value::<INT>("x").unwrap(), 123);
+        assert_eq!(scope.get_value::<INT>("y").unwrap(), 0);
+
+        assert_eq!(
+            engine.eval::<INT>(
+                "
+                    let sum = 0;
+                    for x in 0..10 {
+                        let x = 42;
+                        sum += x;
+                    }
+                    sum
+                ",
+            )?,
+            420
+        );
+    }
 
     Ok(())
 }
@@ -60,7 +123,7 @@ fn test_scope_eval() -> Result<(), Box<EvalAltResult>> {
 
     // First invocation
     engine
-        .eval_with_scope::<()>(&mut scope, " let x = 4 + 5 - y + z; y = 1;")
+        .run_with_scope(&mut scope, " let x = 4 + 5 - y + z; y = 1;")
         .expect("variables y and z should exist");
 
     // Second invocation using the same state

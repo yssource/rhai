@@ -257,16 +257,11 @@ impl Engine {
                         #[cfg(not(feature = "unchecked"))]
                         self.inc_operations(&mut global.num_operations, pos)?;
 
+                        let root = (var_name, pos);
+                        let lhs_ptr = &mut lhs_ptr;
+
                         self.eval_op_assignment(
-                            global,
-                            state,
-                            lib,
-                            *op_info,
-                            *op_pos,
-                            &mut lhs_ptr,
-                            (var_name, pos),
-                            rhs_val,
-                            level,
+                            global, state, lib, *op_info, *op_pos, lhs_ptr, root, rhs_val, level,
                         )
                         .map_err(|err| err.fill_position(rhs.start_position()))
                         .map(|_| Dynamic::UNIT)
@@ -338,7 +333,9 @@ impl Engine {
             }
 
             // If statement
-            Stmt::If(expr, x, ..) => {
+            Stmt::If(x, ..) => {
+                let (expr, if_block, else_block) = x.as_ref();
+
                 let guard_val = self
                     .eval_expr(scope, global, state, lib, this_ptr, expr, level)
                     .and_then(|v| {
@@ -349,18 +346,18 @@ impl Engine {
 
                 match guard_val {
                     Ok(true) => {
-                        if !x.0.is_empty() {
+                        if !if_block.is_empty() {
                             self.eval_stmt_block(
-                                scope, global, state, lib, this_ptr, &x.0, true, level,
+                                scope, global, state, lib, this_ptr, if_block, true, level,
                             )
                         } else {
                             Ok(Dynamic::UNIT)
                         }
                     }
                     Ok(false) => {
-                        if !x.1.is_empty() {
+                        if !else_block.is_empty() {
                             self.eval_stmt_block(
-                                scope, global, state, lib, this_ptr, &x.1, true, level,
+                                scope, global, state, lib, this_ptr, else_block, true, level,
                             )
                         } else {
                             Ok(Dynamic::UNIT)
@@ -371,15 +368,17 @@ impl Engine {
             }
 
             // Switch statement
-            Stmt::Switch(match_expr, x, ..) => {
-                let SwitchCases {
-                    cases,
-                    def_case,
-                    ranges,
-                } = x.as_ref();
+            Stmt::Switch(x, ..) => {
+                let (
+                    expr,
+                    SwitchCases {
+                        cases,
+                        def_case,
+                        ranges,
+                    },
+                ) = x.as_ref();
 
-                let value_result =
-                    self.eval_expr(scope, global, state, lib, this_ptr, match_expr, level);
+                let value_result = self.eval_expr(scope, global, state, lib, this_ptr, expr, level);
 
                 if let Ok(value) = value_result {
                     let stmt_block_result = if value.is_hashable() {
@@ -388,8 +387,8 @@ impl Engine {
                         let hash = hasher.finish();
 
                         // First check hashes
-                        if let Some(t) = cases.get(&hash) {
-                            let cond_result = t
+                        if let Some(case_block) = cases.get(&hash) {
+                            let cond_result = case_block
                                 .condition
                                 .as_ref()
                                 .map(|cond| {
@@ -406,7 +405,7 @@ impl Engine {
                                 .unwrap_or(Ok(true));
 
                             match cond_result {
-                                Ok(true) => Ok(Some(&t.statements)),
+                                Ok(true) => Ok(Some(&case_block.statements)),
                                 Ok(false) => Ok(None),
                                 _ => cond_result.map(|_| None),
                             }
@@ -484,7 +483,9 @@ impl Engine {
             }
 
             // Loop
-            Stmt::While(Expr::Unit(..), body, ..) => loop {
+            Stmt::While(x, ..) if matches!(x.0, Expr::Unit(..)) => loop {
+                let (.., body) = x.as_ref();
+
                 if !body.is_empty() {
                     match self
                         .eval_stmt_block(scope, global, state, lib, this_ptr, body, true, level)
@@ -503,7 +504,9 @@ impl Engine {
             },
 
             // While loop
-            Stmt::While(expr, body, ..) => loop {
+            Stmt::While(x, ..) => loop {
+                let (expr, body) = x.as_ref();
+
                 let condition = self
                     .eval_expr(scope, global, state, lib, this_ptr, expr, level)
                     .and_then(|v| {
@@ -532,7 +535,8 @@ impl Engine {
             },
 
             // Do loop
-            Stmt::Do(body, expr, options, ..) => loop {
+            Stmt::Do(x, options, ..) => loop {
+                let (expr, body) = x.as_ref();
                 let is_while = !options.contains(AST_OPTION_NEGATED);
 
                 if !body.is_empty() {
@@ -549,7 +553,7 @@ impl Engine {
                 }
 
                 let condition = self
-                    .eval_expr(scope, global, state, lib, this_ptr, expr, level)
+                    .eval_expr(scope, global, state, lib, this_ptr, &expr, level)
                     .and_then(|v| {
                         v.as_bool().map_err(|typ| {
                             self.make_type_mismatch_err::<bool>(typ, expr.position())
@@ -564,8 +568,8 @@ impl Engine {
             },
 
             // For loop
-            Stmt::For(expr, x, ..) => {
-                let (Ident { name: var_name, .. }, counter, statements) = x.as_ref();
+            Stmt::For(x, ..) => {
+                let (Ident { name: var_name, .. }, counter, expr, statements) = x.as_ref();
 
                 let iter_result = self
                     .eval_expr(scope, global, state, lib, this_ptr, expr, level)
@@ -786,42 +790,43 @@ impl Engine {
             }
 
             // Throw value
-            Stmt::Return(options, Some(expr), pos) if options.contains(AST_OPTION_BREAK) => self
+            Stmt::Return(Some(expr), options, pos) if options.contains(AST_OPTION_BREAK) => self
                 .eval_expr(scope, global, state, lib, this_ptr, expr, level)
                 .and_then(|v| Err(ERR::ErrorRuntime(v.flatten(), *pos).into())),
 
             // Empty throw
-            Stmt::Return(options, None, pos) if options.contains(AST_OPTION_BREAK) => {
+            Stmt::Return(None, options, pos) if options.contains(AST_OPTION_BREAK) => {
                 Err(ERR::ErrorRuntime(Dynamic::UNIT, *pos).into())
             }
 
             // Return value
-            Stmt::Return(.., Some(expr), pos) => self
+            Stmt::Return(Some(expr), .., pos) => self
                 .eval_expr(scope, global, state, lib, this_ptr, expr, level)
                 .and_then(|v| Err(ERR::Return(v.flatten(), *pos).into())),
 
             // Empty return
-            Stmt::Return(.., None, pos) => Err(ERR::Return(Dynamic::UNIT, *pos).into()),
+            Stmt::Return(None, .., pos) => Err(ERR::Return(Dynamic::UNIT, *pos).into()),
 
             // Let/const statement - shadowing disallowed
-            Stmt::Var(.., x, _, pos) if !self.allow_shadowing() && scope.contains(&x.name) => {
-                Err(ERR::ErrorVariableExists(x.name.to_string(), *pos).into())
+            Stmt::Var(x, .., pos) if !self.allow_shadowing() && scope.contains(&x.0.name) => {
+                Err(ERR::ErrorVariableExists(x.0.name.to_string(), *pos).into())
             }
             // Let/const statement
-            Stmt::Var(expr, x, options, pos) => {
-                let var_name = &x.name;
+            Stmt::Var(x, options, pos) => {
+                let (Ident { name: var_name, .. }, expr, index) = x.as_ref();
 
-                let entry_type = if options.contains(AST_OPTION_CONSTANT) {
+                let access = if options.contains(AST_OPTION_CONSTANT) {
                     AccessMode::ReadOnly
                 } else {
                     AccessMode::ReadWrite
                 };
                 let export = options.contains(AST_OPTION_EXPORTED);
 
+                // Check variable definition filter
                 let result = if let Some(ref filter) = self.def_var_filter {
                     let will_shadow = scope.contains(var_name);
                     let nesting_level = state.scope_level;
-                    let is_const = entry_type == AccessMode::ReadOnly;
+                    let is_const = access == AccessMode::ReadOnly;
                     let info = VarDefInfo {
                         name: var_name,
                         is_const,
@@ -854,16 +859,18 @@ impl Engine {
                 if let Some(result) = result {
                     result.map(|_| Dynamic::UNIT)
                 } else {
+                    // Evaluate initial value
                     let value_result = self
                         .eval_expr(scope, global, state, lib, this_ptr, expr, level)
                         .map(Dynamic::flatten);
 
-                    if let Ok(value) = value_result {
+                    if let Ok(mut value) = value_result {
                         let _alias = if !rewind_scope {
+                            // Put global constants into global module
                             #[cfg(not(feature = "no_function"))]
                             #[cfg(not(feature = "no_module"))]
                             if state.scope_level == 0
-                                && entry_type == AccessMode::ReadOnly
+                                && access == AccessMode::ReadOnly
                                 && lib.iter().any(|&m| !m.is_empty())
                             {
                                 if global.constants.is_none() {
@@ -886,7 +893,12 @@ impl Engine {
                             None
                         };
 
-                        scope.push_dynamic_value(var_name.clone(), entry_type, value);
+                        if let Some(index) = index {
+                            value.set_access_mode(access);
+                            *scope.get_mut_by_index(scope.len() - index.get()) = value;
+                        } else {
+                            scope.push_entry(var_name.clone(), access, value);
+                        }
 
                         #[cfg(not(feature = "no_module"))]
                         if let Some(alias) = _alias {
@@ -902,7 +914,9 @@ impl Engine {
 
             // Import statement
             #[cfg(not(feature = "no_module"))]
-            Stmt::Import(expr, export, _pos) => {
+            Stmt::Import(x, _pos) => {
+                let (expr, export) = x.as_ref();
+
                 // Guard against too many modules
                 #[cfg(not(feature = "unchecked"))]
                 if global.num_modules_loaded >= self.max_modules() {

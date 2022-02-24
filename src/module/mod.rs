@@ -1670,9 +1670,12 @@ impl Module {
     }
     /// Create a new [`Module`] by evaluating an [`AST`][crate::AST].
     ///
-    /// The entire [`AST`][crate::AST] is encapsulated into each function, allowing functions
-    /// to cross-call each other.  Functions in the global namespace, plus all functions
-    /// defined in the [`Module`], are _merged_ into a _unified_ namespace before each call.
+    /// The entire [`AST`][crate::AST] is encapsulated into each function, allowing functions to
+    /// cross-call each other.
+    ///
+    /// Functions in the global namespace, plus all functions defined in the [`Module`], are
+    /// _merged_ into a _unified_ namespace before each call.
+    ///
     /// Therefore, all functions will be found.
     #[cfg(not(feature = "no_module"))]
     pub(crate) fn eval_ast_as_new_raw(
