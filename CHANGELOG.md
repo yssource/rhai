@@ -4,6 +4,11 @@ Rhai Release Notes
 Version 1.6.0
 =============
 
+Compiler version
+----------------
+
+* Minimum compiler version is now `1.57` due to [`smartstring`](https://crates.io/crates/smartstring) dependency.
+
 Bug fixes
 ---------
 
