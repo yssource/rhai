@@ -2,7 +2,7 @@
 
 use crate::{
     Dynamic, Engine, EvalAltResult, Expression, FnPtr, ImmutableString, NativeCallContext,
-    RhaiResult, RhaiResultOf, Scope, AST,
+    Position, RhaiResult, RhaiResultOf, Scope, AST,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -312,5 +312,29 @@ impl Expression<'_> {
     #[must_use]
     pub fn get_variable_name(&self) -> Option<&str> {
         self.get_string_value()
+    }
+}
+
+impl Position {
+    /// Create a new [`Position`].
+    ///
+    /// If `line` is zero, then [`None`] is returned.
+    ///
+    /// If `position` is zero, then it is at the beginning of a line.
+    ///
+    /// # Deprecated
+    ///
+    /// This function is deprecated. Use [`new`][Position::new] (which panics when `line` is zero) instead.
+    ///
+    /// This method will be removed in the next major version.
+    #[deprecated(since = "1.6.0", note = "use `new` instead")]
+    #[inline(always)]
+    #[must_use]
+    pub const fn new_const(line: u16, position: u16) -> Option<Self> {
+        if line == 0 {
+            None
+        } else {
+            Some(Self::new(line, position))
+        }
     }
 }

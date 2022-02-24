@@ -94,7 +94,7 @@ impl Position {
     /// Panics if `line` is zero.
     #[inline(always)]
     #[must_use]
-    pub fn new(line: u16, position: u16) -> Self {
+    pub const fn new(line: u16, position: u16) -> Self {
         assert!(line != 0, "line cannot be zero");
 
         let _pos = position;
@@ -105,26 +105,6 @@ impl Position {
             #[cfg(not(feature = "no_position"))]
             pos: _pos,
         }
-    }
-    /// Create a new [`Position`].
-    ///
-    /// If `line` is zero, then [`None`] is returned.
-    ///
-    /// If `position` is zero, then it is at the beginning of a line.
-    #[inline]
-    #[must_use]
-    pub const fn new_const(line: u16, position: u16) -> Option<Self> {
-        if line == 0 {
-            return None;
-        }
-        let _pos = position;
-
-        Some(Self {
-            #[cfg(not(feature = "no_position"))]
-            line,
-            #[cfg(not(feature = "no_position"))]
-            pos: _pos,
-        })
     }
     /// Get the line number (1-based), or [`None`] if there is no position.
     #[inline]
