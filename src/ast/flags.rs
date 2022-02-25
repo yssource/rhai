@@ -5,12 +5,12 @@ use std::ops::{Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, Not, Su
 use std::prelude::v1::*;
 
 /// A type representing the access mode of a function.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum FnAccess {
-    /// Public function.
-    Public,
     /// Private function.
     Private,
+    /// Public function.
+    Public,
 }
 
 /// _(internals)_ A type that holds a configuration option with bit-flags.

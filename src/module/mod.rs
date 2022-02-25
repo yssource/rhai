@@ -22,14 +22,14 @@ use std::{
 };
 
 /// A type representing the namespace of a function.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum FnNamespace {
-    /// Expose to global namespace.
-    Global,
     /// Module namespace only.
     ///
     /// Ignored under `no_module`.
     Internal,
+    /// Expose to global namespace.
+    Global,
 }
 
 /// A type containing all metadata for a registered function.
