@@ -1,6 +1,6 @@
 //! Module defining script expressions.
 
-use super::{ASTNode, Ident, Stmt, StmtBlock};
+use super::{ASTFlags, ASTNode, Ident, Stmt, StmtBlock};
 use crate::engine::{KEYWORD_FN_PTR, OP_EXCLUSIVE_RANGE, OP_INCLUSIVE_RANGE};
 use crate::func::hashing::ALT_ZERO_HASH;
 use crate::tokenizer::Token;
@@ -419,10 +419,15 @@ pub enum Expr {
     Stmt(Box<StmtBlock>),
     /// func `(` expr `,` ... `)`
     FnCall(Box<FnCallExpr>, Position),
-    /// lhs `.` rhs - boolean variable is a dummy
-    Dot(Box<BinaryExpr>, bool, Position),
-    /// lhs `[` rhs `]` - boolean indicates whether the dotting/indexing chain stops
-    Index(Box<BinaryExpr>, bool, Position),
+    /// lhs `.` rhs
+    Dot(Box<BinaryExpr>, ASTFlags, Position),
+    /// lhs `[` rhs `]`
+    ///
+    /// ### Flags
+    ///
+    /// [`NONE`][ASTFlags::NONE] = recurse into the indexing chain
+    /// [`BREAK`][ASTFlags::BREAK] = terminate the indexing chain
+    Index(Box<BinaryExpr>, ASTFlags, Position),
     /// lhs `&&` rhs
     And(Box<BinaryExpr>, Position),
     /// lhs `||` rhs

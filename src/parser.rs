@@ -4,9 +4,8 @@ use crate::api::custom_syntax::{markers::*, CustomSyntax};
 use crate::api::events::VarDefInfo;
 use crate::api::options::LanguageOptions;
 use crate::ast::{
-    BinaryExpr, ConditionalStmtBlock, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident,
+    ASTFlags, BinaryExpr, ConditionalStmtBlock, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident,
     OpAssignment, ScriptFnDef, Stmt, StmtBlock, StmtBlockContainer, SwitchCases, TryCatchBlock,
-    AST_OPTION_FLAGS::*,
 };
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::eval::{EvalState, GlobalRuntimeState};
@@ -764,14 +763,14 @@ fn parse_index_chain(
                     // Indexing binds to right
                     Ok(Expr::Index(
                         BinaryExpr { lhs, rhs: idx_expr }.into(),
-                        false,
+                        ASTFlags::NONE,
                         prev_pos,
                     ))
                 }
                 // Otherwise terminate the indexing chain
                 _ => Ok(Expr::Index(
                     BinaryExpr { lhs, rhs: idx_expr }.into(),
-                    true,
+                    ASTFlags::BREAK,
                     settings.pos,
                 )),
             }
@@ -1599,7 +1598,7 @@ fn parse_postfix(
                 }
 
                 let rhs = parse_primary(input, state, lib, settings.level_up())?;
-                make_dot_expr(state, expr, false, rhs, tail_pos)?
+                make_dot_expr(state, expr, ASTFlags::NONE, rhs, tail_pos)?
             }
             // Unknown postfix operator
             (expr, token) => unreachable!(
@@ -1764,15 +1763,20 @@ fn make_assignment_stmt(
     #[must_use]
     fn check_lvalue(expr: &Expr, parent_is_dot: bool) -> Option<Position> {
         match expr {
-            Expr::Index(x, term, ..) | Expr::Dot(x, term, ..) if parent_is_dot => match x.lhs {
-                Expr::Property(..) if !term => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(..))),
+            Expr::Index(x, options, ..) | Expr::Dot(x, options, ..) if parent_is_dot => match x.lhs
+            {
+                Expr::Property(..) if !options.contains(ASTFlags::BREAK) => {
+                    check_lvalue(&x.rhs, matches!(expr, Expr::Dot(..)))
+                }
                 Expr::Property(..) => None,
                 // Anything other than a property after dotting (e.g. a method call) is not an l-value
                 ref e => Some(e.position()),
             },
-            Expr::Index(x, term, ..) | Expr::Dot(x, term, ..) => match x.lhs {
+            Expr::Index(x, options, ..) | Expr::Dot(x, options, ..) => match x.lhs {
                 Expr::Property(..) => unreachable!("unexpected Expr::Property in indexing"),
-                _ if !term => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(..))),
+                _ if !options.contains(ASTFlags::BREAK) => {
+                    check_lvalue(&x.rhs, matches!(expr, Expr::Dot(..)))
+                }
                 _ => None,
             },
             Expr::Property(..) if parent_is_dot => None,
@@ -1817,8 +1821,8 @@ fn make_assignment_stmt(
             }
         }
         // xxx[???]... = rhs, xxx.prop... = rhs
-        Expr::Index(ref x, term, ..) | Expr::Dot(ref x, term, ..) => {
-            let valid_lvalue = if term {
+        Expr::Index(ref x, options, ..) | Expr::Dot(ref x, options, ..) => {
+            let valid_lvalue = if options.contains(ASTFlags::BREAK) {
                 None
             } else {
                 check_lvalue(&x.rhs, matches!(lhs, Expr::Dot(..)))
@@ -1890,15 +1894,15 @@ fn parse_op_assignment_stmt(
 fn make_dot_expr(
     state: &mut ParseState,
     lhs: Expr,
-    terminate_chaining: bool,
+    parent_options: ASTFlags,
     rhs: Expr,
     op_pos: Position,
 ) -> ParseResult<Expr> {
     match (lhs, rhs) {
         // lhs[idx_expr].rhs
-        (Expr::Index(mut x, term, pos), rhs) => {
-            x.rhs = make_dot_expr(state, x.rhs, term || terminate_chaining, rhs, op_pos)?;
-            Ok(Expr::Index(x, false, pos))
+        (Expr::Index(mut x, options, pos), rhs) => {
+            x.rhs = make_dot_expr(state, x.rhs, options | parent_options, rhs, op_pos)?;
+            Ok(Expr::Index(x, ASTFlags::NONE, pos))
         }
         // lhs.module::id - syntax error
         #[cfg(not(feature = "no_module"))]
@@ -1908,12 +1912,16 @@ fn make_dot_expr(
         // lhs.id
         (lhs, var_expr @ Expr::Variable(..)) => {
             let rhs = var_expr.into_property(state);
-            Ok(Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos))
+            Ok(Expr::Dot(
+                BinaryExpr { lhs, rhs }.into(),
+                ASTFlags::NONE,
+                op_pos,
+            ))
         }
         // lhs.prop
         (lhs, prop @ Expr::Property(..)) => Ok(Expr::Dot(
             BinaryExpr { lhs, rhs: prop }.into(),
-            false,
+            ASTFlags::NONE,
             op_pos,
         )),
         // lhs.nnn::func(...) - syntax error
@@ -1950,7 +1958,11 @@ fn make_dot_expr(
             );
 
             let rhs = Expr::FnCall(func, func_pos);
-            Ok(Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos))
+            Ok(Expr::Dot(
+                BinaryExpr { lhs, rhs }.into(),
+                ASTFlags::NONE,
+                op_pos,
+            ))
         }
         // lhs.dot_lhs.dot_rhs or lhs.dot_lhs[idx_rhs]
         (lhs, rhs @ Expr::Dot(..)) | (lhs, rhs @ Expr::Index(..)) => {
@@ -1984,7 +1996,11 @@ fn make_dot_expr(
                     } else {
                         Expr::Index(new_lhs, term, pos)
                     };
-                    Ok(Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos))
+                    Ok(Expr::Dot(
+                        BinaryExpr { lhs, rhs }.into(),
+                        ASTFlags::NONE,
+                        op_pos,
+                    ))
                 }
                 // lhs.func().dot_rhs or lhs.func()[idx_rhs]
                 Expr::FnCall(mut func, func_pos) => {
@@ -2006,7 +2022,11 @@ fn make_dot_expr(
                     } else {
                         Expr::Index(new_lhs, term, pos)
                     };
-                    Ok(Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos))
+                    Ok(Expr::Dot(
+                        BinaryExpr { lhs, rhs }.into(),
+                        ASTFlags::NONE,
+                        op_pos,
+                    ))
                 }
                 expr => unreachable!("invalid dot expression: {:?}", expr),
             }
@@ -2482,8 +2502,8 @@ fn parse_do(
     let body = parse_block(input, state, lib, settings.level_up())?;
 
     let negated = match input.next().expect(NEVER_ENDS) {
-        (Token::While, ..) => AST_OPTION_NONE,
-        (Token::Until, ..) => AST_OPTION_NEGATED,
+        (Token::While, ..) => ASTFlags::NONE,
+        (Token::Until, ..) => ASTFlags::NEGATED,
         (.., pos) => {
             return Err(
                 PERR::MissingToken(Token::While.into(), "for the do statement".into())
@@ -2657,9 +2677,9 @@ fn parse_let(
     };
 
     let export = if is_export {
-        AST_OPTION_EXPORTED
+        ASTFlags::EXPORTED
     } else {
-        AST_OPTION_NONE
+        ASTFlags::NONE
     };
 
     let existing = state.stack.get_index(&name).and_then(|(n, ..)| {
@@ -2685,7 +2705,7 @@ fn parse_let(
         // let name = expr
         AccessMode::ReadWrite => Stmt::Var(var_def, export, settings.pos),
         // const name = { expr:constant }
-        AccessMode::ReadOnly => Stmt::Var(var_def, AST_OPTION_CONSTANT + export, settings.pos),
+        AccessMode::ReadOnly => Stmt::Var(var_def, ASTFlags::CONSTANT | export, settings.pos),
     })
 }
 
@@ -3044,11 +3064,11 @@ fn parse_stmt(
 
         Token::Continue if settings.default_options.allow_looping && settings.is_breakable => {
             let pos = eat_token(input, Token::Continue);
-            Ok(Stmt::BreakLoop(AST_OPTION_NONE, pos))
+            Ok(Stmt::BreakLoop(ASTFlags::NONE, pos))
         }
         Token::Break if settings.default_options.allow_looping && settings.is_breakable => {
             let pos = eat_token(input, Token::Break);
-            Ok(Stmt::BreakLoop(AST_OPTION_BREAK, pos))
+            Ok(Stmt::BreakLoop(ASTFlags::BREAK, pos))
         }
         Token::Continue | Token::Break if settings.default_options.allow_looping => {
             Err(PERR::LoopBreak.into_err(token_pos))
@@ -3059,8 +3079,8 @@ fn parse_stmt(
                 .next()
                 .map(|(token, pos)| {
                     let flags = match token {
-                        Token::Return => AST_OPTION_NONE,
-                        Token::Throw => AST_OPTION_BREAK,
+                        Token::Return => ASTFlags::NONE,
+                        Token::Throw => ASTFlags::BREAK,
                         token => unreachable!(
                             "Token::Return or Token::Throw expected but gets {:?}",
                             token

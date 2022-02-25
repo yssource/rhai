@@ -9,7 +9,7 @@ pub mod stmt;
 
 pub use ast::{ASTNode, AST};
 pub use expr::{BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes};
-pub use flags::{FnAccess, OptionFlags, AST_OPTION_FLAGS};
+pub use flags::{ASTFlags, FnAccess};
 pub use ident::Ident;
 #[cfg(not(feature = "no_module"))]
 #[cfg(not(feature = "no_function"))]

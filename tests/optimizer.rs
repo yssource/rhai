@@ -84,7 +84,7 @@ fn test_optimizer_parse() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         format!("{:?}", ast),
-        r#"AST { body: [Var(("DECISION" @ 1:7, false @ 1:18, None), (Constant), 1:1), Expr(123 @ 1:51)] }"#
+        r#"AST { body: [Var(("DECISION" @ 1:7, false @ 1:18, None), CONSTANT, 1:1), Expr(123 @ 1:51)] }"#
     );
 
     let ast = engine.compile("if 1 == 2 { 42 }")?;

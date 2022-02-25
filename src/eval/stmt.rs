@@ -3,7 +3,7 @@
 use super::{EvalContext, EvalState, GlobalRuntimeState, Target};
 use crate::api::events::VarDefInfo;
 use crate::ast::{
-    BinaryExpr, Expr, Ident, OpAssignment, Stmt, SwitchCases, TryCatchBlock, AST_OPTION_FLAGS::*,
+    ASTFlags, BinaryExpr, Expr, Ident, OpAssignment, Stmt, SwitchCases, TryCatchBlock,
 };
 use crate::func::get_hasher;
 use crate::types::dynamic::{AccessMode, Union};
@@ -537,7 +537,7 @@ impl Engine {
             // Do loop
             Stmt::Do(x, options, ..) => loop {
                 let (expr, body) = x.as_ref();
-                let is_while = !options.contains(AST_OPTION_NEGATED);
+                let is_while = !options.contains(ASTFlags::NEGATED);
 
                 if !body.is_empty() {
                     match self
@@ -700,7 +700,7 @@ impl Engine {
 
             // Continue/Break statement
             Stmt::BreakLoop(options, pos) => {
-                Err(ERR::LoopBreak(options.contains(AST_OPTION_BREAK), *pos).into())
+                Err(ERR::LoopBreak(options.contains(ASTFlags::BREAK), *pos).into())
             }
 
             // Try/Catch statement
@@ -790,12 +790,12 @@ impl Engine {
             }
 
             // Throw value
-            Stmt::Return(Some(expr), options, pos) if options.contains(AST_OPTION_BREAK) => self
+            Stmt::Return(Some(expr), options, pos) if options.contains(ASTFlags::BREAK) => self
                 .eval_expr(scope, global, state, lib, this_ptr, expr, level)
                 .and_then(|v| Err(ERR::ErrorRuntime(v.flatten(), *pos).into())),
 
             // Empty throw
-            Stmt::Return(None, options, pos) if options.contains(AST_OPTION_BREAK) => {
+            Stmt::Return(None, options, pos) if options.contains(ASTFlags::BREAK) => {
                 Err(ERR::ErrorRuntime(Dynamic::UNIT, *pos).into())
             }
 
@@ -815,12 +815,12 @@ impl Engine {
             Stmt::Var(x, options, pos) => {
                 let (Ident { name: var_name, .. }, expr, index) = x.as_ref();
 
-                let access = if options.contains(AST_OPTION_CONSTANT) {
+                let access = if options.contains(ASTFlags::CONSTANT) {
                     AccessMode::ReadOnly
                 } else {
                     AccessMode::ReadWrite
                 };
-                let export = options.contains(AST_OPTION_EXPORTED);
+                let export = options.contains(ASTFlags::EXPORTED);
 
                 // Check variable definition filter
                 let result = if let Some(ref filter) = self.def_var_filter {

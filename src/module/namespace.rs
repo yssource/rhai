@@ -114,7 +114,7 @@ impl Namespace {
     pub(crate) fn set_index(&mut self, index: Option<NonZeroUsize>) {
         self.index = index
     }
-    /// Get the [position][Position] of this [`NameSpace`].
+    /// Get the [position][Position] of this [`Namespace`].
     ///
     /// # Panics
     ///

@@ -2,7 +2,7 @@
 #![cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 
 use super::{EvalState, GlobalRuntimeState, Target};
-use crate::ast::{Expr, OpAssignment};
+use crate::ast::{ASTFlags, Expr, OpAssignment};
 use crate::types::dynamic::Union;
 use crate::{Dynamic, Engine, Module, Position, RhaiResult, RhaiResultOf, Scope, StaticVec, ERR};
 use std::hash::Hash;
@@ -127,15 +127,15 @@ impl Engine {
         root: (&str, Position),
         parent: &Expr,
         rhs: &Expr,
-        terminate_chaining: bool,
+        parent_options: ASTFlags,
         idx_values: &mut StaticVec<super::ChainArgument>,
         chain_type: ChainType,
         level: usize,
         new_val: Option<((Dynamic, Position), (Option<OpAssignment>, Position))>,
     ) -> RhaiResultOf<(Dynamic, bool)> {
         let _parent = parent;
+        let _parent_options = parent_options;
         let is_ref_mut = target.is_ref();
-        let _terminate_chaining = terminate_chaining;
 
         // Pop the last index value
         let idx_val = idx_values.pop().unwrap();
@@ -151,8 +151,8 @@ impl Engine {
 
                 match rhs {
                     // xxx[idx].expr... | xxx[idx][expr]...
-                    Expr::Dot(x, term, x_pos) | Expr::Index(x, term, x_pos)
-                        if !_terminate_chaining =>
+                    Expr::Dot(x, options, x_pos) | Expr::Index(x, options, x_pos)
+                        if !_parent_options.contains(ASTFlags::BREAK) =>
                     {
                         #[cfg(feature = "debugging")]
                         self.run_debugger(scope, global, state, lib, this_ptr, _parent, level)?;
@@ -169,7 +169,7 @@ impl Engine {
                             let obj_ptr = &mut obj;
 
                             match self.eval_dot_index_chain_helper(
-                                global, state, lib, this_ptr, obj_ptr, root, rhs, &x.rhs, *term,
+                                global, state, lib, this_ptr, obj_ptr, root, rhs, &x.rhs, *options,
                                 idx_values, rhs_chain, level, new_val,
                             ) {
                                 Ok((result, true)) if is_obj_temp_val => {
@@ -410,7 +410,7 @@ impl Engine {
                         )
                     }
                     // {xxx:map}.sub_lhs[expr] | {xxx:map}.sub_lhs.expr
-                    Expr::Index(x, term, x_pos) | Expr::Dot(x, term, x_pos)
+                    Expr::Index(x, options, x_pos) | Expr::Dot(x, options, x_pos)
                         if target.is::<crate::Map>() =>
                     {
                         let _node = &x.lhs;
@@ -457,13 +457,13 @@ impl Engine {
                         let rhs_chain = rhs.into();
 
                         self.eval_dot_index_chain_helper(
-                            global, state, lib, this_ptr, val_target, root, rhs, &x.rhs, *term,
+                            global, state, lib, this_ptr, val_target, root, rhs, &x.rhs, *options,
                             idx_values, rhs_chain, level, new_val,
                         )
                         .map_err(|err| err.fill_position(*x_pos))
                     }
                     // xxx.sub_lhs[expr] | xxx.sub_lhs.expr
-                    Expr::Index(x, term, x_pos) | Expr::Dot(x, term, x_pos) => {
+                    Expr::Index(x, options, x_pos) | Expr::Dot(x, options, x_pos) => {
                         let _node = &x.lhs;
 
                         match x.lhs {
@@ -509,7 +509,7 @@ impl Engine {
                                 let (result, may_be_changed) = self
                                     .eval_dot_index_chain_helper(
                                         global, state, lib, this_ptr, val, root, rhs, &x.rhs,
-                                        *term, idx_values, rhs_chain, level, new_val,
+                                        *options, idx_values, rhs_chain, level, new_val,
                                     )
                                     .map_err(|err| err.fill_position(*x_pos))?;
 
@@ -570,7 +570,7 @@ impl Engine {
                                 let val = &mut val.into();
 
                                 self.eval_dot_index_chain_helper(
-                                    global, state, lib, this_ptr, val, root, rhs, &x.rhs, *term,
+                                    global, state, lib, this_ptr, val, root, rhs, &x.rhs, *options,
                                     idx_values, rhs_chain, level, new_val,
                                 )
                                 .map_err(|err| err.fill_position(pos))
@@ -602,18 +602,18 @@ impl Engine {
         level: usize,
         new_val: Option<((Dynamic, Position), (Option<OpAssignment>, Position))>,
     ) -> RhaiResult {
-        let (crate::ast::BinaryExpr { lhs, rhs }, chain_type, term, op_pos) = match expr {
+        let (crate::ast::BinaryExpr { lhs, rhs }, chain_type, options, op_pos) = match expr {
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(x, term, pos) => (x.as_ref(), ChainType::Indexing, *term, *pos),
+            Expr::Index(x, options, pos) => (x.as_ref(), ChainType::Indexing, *options, *pos),
             #[cfg(not(feature = "no_object"))]
-            Expr::Dot(x, term, pos) => (x.as_ref(), ChainType::Dotting, *term, *pos),
+            Expr::Dot(x, options, pos) => (x.as_ref(), ChainType::Dotting, *options, *pos),
             expr => unreachable!("Expr::Index or Expr::Dot expected but gets {:?}", expr),
         };
 
         let idx_values = &mut StaticVec::new_const();
 
         self.eval_dot_index_chain_arguments(
-            scope, global, state, lib, this_ptr, rhs, term, chain_type, idx_values, 0, level,
+            scope, global, state, lib, this_ptr, rhs, options, chain_type, idx_values, 0, level,
         )?;
 
         let is_assignment = new_val.is_some();
@@ -634,7 +634,7 @@ impl Engine {
                 let root = (x.2.as_str(), *var_pos);
 
                 self.eval_dot_index_chain_helper(
-                    global, state, lib, &mut None, obj_ptr, root, expr, rhs, term, idx_values,
+                    global, state, lib, &mut None, obj_ptr, root, expr, rhs, options, idx_values,
                     chain_type, level, new_val,
                 )
                 .map(|(v, ..)| v)
@@ -648,7 +648,7 @@ impl Engine {
                 let obj_ptr = &mut value.into();
                 let root = ("", expr.start_position());
                 self.eval_dot_index_chain_helper(
-                    global, state, lib, this_ptr, obj_ptr, root, expr, rhs, term, idx_values,
+                    global, state, lib, this_ptr, obj_ptr, root, expr, rhs, options, idx_values,
                     chain_type, level, new_val,
                 )
                 .map(|(v, ..)| if is_assignment { Dynamic::UNIT } else { v })
@@ -668,7 +668,7 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
-        terminate_chaining: bool,
+        parent_options: ASTFlags,
         parent_chain_type: ChainType,
         idx_values: &mut StaticVec<super::ChainArgument>,
         size: usize,
@@ -715,7 +715,9 @@ impl Engine {
             }
             Expr::Property(..) => unreachable!("unexpected Expr::Property for indexing"),
 
-            Expr::Index(x, term, ..) | Expr::Dot(x, term, ..) if !terminate_chaining => {
+            Expr::Index(x, options, ..) | Expr::Dot(x, options, ..)
+                if !parent_options.contains(ASTFlags::BREAK) =>
+            {
                 let crate::ast::BinaryExpr { lhs, rhs, .. } = x.as_ref();
 
                 // Evaluate in left-to-right order
@@ -773,8 +775,8 @@ impl Engine {
                 let chain_type = expr.into();
 
                 self.eval_dot_index_chain_arguments(
-                    scope, global, state, lib, this_ptr, rhs, *term, chain_type, idx_values, size,
-                    level,
+                    scope, global, state, lib, this_ptr, rhs, *options, chain_type, idx_values,
+                    size, level,
                 )?;
 
                 idx_values.push(lhs_arg_val);

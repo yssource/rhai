@@ -1,6 +1,6 @@
 //! Module defining the AST (abstract syntax tree).
 
-use super::{Expr, FnAccess, Stmt, StmtBlock, StmtBlockContainer, AST_OPTION_FLAGS::*};
+use super::{ASTFlags, Expr, FnAccess, Stmt, StmtBlock, StmtBlockContainer};
 use crate::{Dynamic, FnNamespace, Identifier, Position};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -745,12 +745,12 @@ impl AST {
     ) -> impl Iterator<Item = (&str, bool, Dynamic)> {
         self.statements().iter().filter_map(move |stmt| match stmt {
             Stmt::Var(x, options, ..)
-                if options.contains(AST_OPTION_CONSTANT) && include_constants
-                    || !options.contains(AST_OPTION_CONSTANT) && include_variables =>
+                if options.contains(ASTFlags::CONSTANT) && include_constants
+                    || !options.contains(ASTFlags::CONSTANT) && include_variables =>
             {
                 let (name, expr, ..) = x.as_ref();
                 if let Some(value) = expr.get_literal_value() {
-                    Some((name.as_str(), options.contains(AST_OPTION_CONSTANT), value))
+                    Some((name.as_str(), options.contains(ASTFlags::CONSTANT), value))
                 } else {
                     None
                 }
