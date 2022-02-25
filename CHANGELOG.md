@@ -16,10 +16,16 @@ Bug fixes
 * `Scope::is_constant` now returns the correct value.
 * Exporting a variable that contains a local function pointer (including anonymous function or closure) now raises a runtime error.
 
+Breaking changes
+----------------
+
+* `ScriptFnMetadata` fields `params` and `comments` are changed to boxed slices instead of `Vec`. In the vast majority of cases this should not cause code breakage.
+
 Enhancements
 ------------
 
 * Variable definitions are optimized so that shadowed variables are reused as much as possible to reduce memory consumption.
+* `FnAccess` and `FnNamespace` now implement `Ord` and `PartialOrd`.
 
 
 Version 1.5.0
