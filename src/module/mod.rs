@@ -1720,7 +1720,7 @@ impl Module {
         result?;
 
         // Variables with an alias left in the scope become module variables
-        for (name, value, mut aliases) in scope {
+        for (_name, value, mut aliases) in scope {
             // It is an error to export function pointers that refer to encapsulated local functions
             #[cfg(not(feature = "no_function"))]
             if let Some(fn_ptr) = value.downcast_ref::<crate::FnPtr>() {
@@ -1728,12 +1728,12 @@ impl Module {
                     return Err(crate::ERR::ErrorMismatchDataType(
                         "".to_string(),
                         if fn_ptr.is_anonymous() {
-                            format!("cannot export closure in variable {}", name)
+                            format!("cannot export closure in variable {}", _name)
                         } else {
                             format!(
                                 "cannot export function pointer to local function '{}' in variable {}",
                                 fn_ptr.fn_name(),
-                                name
+                                _name
                             )
                         },
                         crate::Position::NONE,
