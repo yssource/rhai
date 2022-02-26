@@ -4,6 +4,15 @@ use bitflags::bitflags;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
+/// A type representing the access mode of a function.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub enum FnAccess {
+    /// Private function.
+    Private,
+    /// Public function.
+    Public,
+}
+
 bitflags! {
     /// _(internals)_ A type that holds a configuration option with bit-flags.
     /// Exported under the `internals` feature only.

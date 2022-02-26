@@ -7,15 +7,6 @@ use crate::{Identifier, StaticVec};
 use std::prelude::v1::*;
 use std::{fmt, hash::Hash};
 
-/// A type representing the access mode of a function.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub enum FnAccess {
-    /// Private function.
-    Private,
-    /// Public function.
-    Public,
-}
-
 /// _(internals)_ Encapsulated AST environment.
 /// Exported under the `internals` feature only.
 ///

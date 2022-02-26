@@ -9,13 +9,13 @@ pub mod stmt;
 
 pub use ast::{ASTNode, AST};
 pub use expr::{BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes};
-pub use flags::ASTFlags;
+pub use flags::{ASTFlags, FnAccess};
 pub use ident::Ident;
 #[cfg(not(feature = "no_module"))]
 #[cfg(not(feature = "no_function"))]
 pub use script_fn::EncapsulatedEnviron;
 #[cfg(not(feature = "no_function"))]
-pub use script_fn::{FnAccess, ScriptFnDef, ScriptFnMetadata};
+pub use script_fn::{ScriptFnDef, ScriptFnMetadata};
 pub use stmt::{
     ConditionalStmtBlock, OpAssignment, Stmt, StmtBlock, StmtBlockContainer, SwitchCases,
     TryCatchBlock,
