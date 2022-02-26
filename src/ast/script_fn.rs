@@ -1,7 +1,7 @@
 //! Module defining script-defined functions.
 #![cfg(not(feature = "no_function"))]
 
-use super::StmtBlock;
+use super::{FnAccess, StmtBlock};
 use crate::{Identifier, StaticVec};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
