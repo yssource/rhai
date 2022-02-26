@@ -1326,7 +1326,7 @@ fn parse_primary(
                             segments.push(Expr::StringConstant(s.into(), pos));
                         }
                     }
-                    (Token::LexError(err @ LexError::UnterminatedString), pos) => {
+                    (Token::LexError(err), pos) if matches!(*err, LexError::UnterminatedString) => {
                         return Err(err.into_err(pos))
                     }
                     (token, ..) => unreachable!(

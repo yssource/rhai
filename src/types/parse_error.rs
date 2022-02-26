@@ -267,7 +267,12 @@ impl From<LexError> for ParseErrorType {
 
 /// Error when parsing a script.
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
-pub struct ParseError(pub Box<ParseErrorType>, pub Position);
+pub struct ParseError(
+    /// Parse error type.
+    pub Box<ParseErrorType>,
+    /// [Position] of the parse error.
+    pub Position,
+);
 
 impl Error for ParseError {}
 

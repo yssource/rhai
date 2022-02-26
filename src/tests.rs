@@ -19,6 +19,7 @@ fn check_struct_sizes() {
         size_of::<Position>(),
         if cfg!(feature = "no_position") { 0 } else { 4 }
     );
+    assert_eq!(size_of::<tokenizer::Token>(), 32);
     assert_eq!(size_of::<ast::Expr>(), if PACKED { 12 } else { 16 });
     assert_eq!(size_of::<Option<ast::Expr>>(), if PACKED { 12 } else { 16 });
     assert_eq!(size_of::<ast::Stmt>(), if PACKED { 12 } else { 16 });
