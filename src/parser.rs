@@ -19,7 +19,7 @@ use crate::types::StringsInterner;
 use crate::{
     calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, ExclusiveRange, Identifier,
     ImmutableString, InclusiveRange, LexError, OptimizationLevel, ParseError, Position, Scope,
-    Shared, StaticVec, AST, INT, PERR,
+    Shared, SmartString, StaticVec, AST, INT, PERR,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -387,7 +387,7 @@ fn match_token(input: &mut TokenStream, token: Token) -> (bool, Position) {
 }
 
 /// Parse a variable name.
-fn parse_var_name(input: &mut TokenStream) -> ParseResult<(Box<str>, Position)> {
+fn parse_var_name(input: &mut TokenStream) -> ParseResult<(SmartString, Position)> {
     match input.next().expect(NEVER_ENDS) {
         // Variable name
         (Token::Identifier(s), pos) => Ok((s, pos)),
@@ -403,7 +403,7 @@ fn parse_var_name(input: &mut TokenStream) -> ParseResult<(Box<str>, Position)> 
 }
 
 /// Parse a symbol.
-fn parse_symbol(input: &mut TokenStream) -> ParseResult<(Box<str>, Position)> {
+fn parse_symbol(input: &mut TokenStream) -> ParseResult<(SmartString, Position)> {
     match input.next().expect(NEVER_ENDS) {
         // Symbol
         (token, pos) if token.is_standard_symbol() => Ok((token.literal_syntax().into(), pos)),
@@ -2059,7 +2059,7 @@ fn parse_binary_op(
             Token::Custom(c) => state
                 .engine
                 .custom_keywords
-                .get(c.as_ref())
+                .get(c)
                 .cloned()
                 .ok_or_else(|| PERR::Reserved(c.to_string()).into_err(*current_pos))?,
             Token::Reserved(c) if !is_valid_identifier(c.chars()) => {
@@ -2084,7 +2084,7 @@ fn parse_binary_op(
             Token::Custom(c) => state
                 .engine
                 .custom_keywords
-                .get(c.as_ref())
+                .get(c)
                 .cloned()
                 .ok_or_else(|| PERR::Reserved(c.to_string()).into_err(*next_pos))?,
             Token::Reserved(c) if !is_valid_identifier(c.chars()) => {
@@ -2182,7 +2182,7 @@ fn parse_binary_op(
                 if state
                     .engine
                     .custom_keywords
-                    .get(s.as_ref())
+                    .get(s.as_str())
                     .map_or(false, Option::is_some) =>
             {
                 let hash = calc_fn_hash(&s, 2);
@@ -2630,14 +2630,12 @@ fn parse_let(
     // let name ...
     let (name, pos) = parse_var_name(input)?;
 
-    if !settings.default_options.allow_shadowing
-        && state.stack.iter().any(|(v, ..)| v == name.as_ref())
-    {
+    if !settings.default_options.allow_shadowing && state.stack.iter().any(|(v, ..)| v == &name) {
         return Err(PERR::VariableExists(name.to_string()).into_err(pos));
     }
 
     if let Some(ref filter) = state.engine.def_var_filter {
-        let will_shadow = state.stack.iter().any(|(v, ..)| v == name.as_ref());
+        let will_shadow = state.stack.iter().any(|(v, ..)| v == &name);
         let level = settings.level;
         let is_const = access == AccessMode::ReadOnly;
         let info = VarDefInfo {
@@ -2820,7 +2818,7 @@ fn parse_block(
         }
     };
 
-    let mut statements = Vec::with_capacity(8);
+    let mut statements = StaticVec::new();
 
     let prev_entry_stack_len = state.block_stack_len;
     state.block_stack_len = state.stack.len();
@@ -2924,7 +2922,7 @@ fn parse_stmt(
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
     let comments = {
-        let mut comments = Vec::<Box<str>>::new();
+        let mut comments = StaticVec::<SmartString>::new();
         let mut comments_pos = Position::NONE;
 
         // Handle doc-comments.
@@ -3201,7 +3199,7 @@ fn parse_fn(
     settings: ParseSettings,
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
-    comments: Vec<Box<str>>,
+    comments: StaticVec<SmartString>,
 ) -> ParseResult<ScriptFnDef> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
@@ -3285,7 +3283,13 @@ fn parse_fn(
         comments: if comments.is_empty() {
             None
         } else {
-            Some(comments.into())
+            Some(
+                comments
+                    .into_iter()
+                    .map(|s| s.to_string().into_boxed_str())
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice(),
+            )
         },
     })
 }

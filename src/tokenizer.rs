@@ -5,7 +5,7 @@ use crate::engine::{
     KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
 use crate::func::native::OnParseTokenCallback;
-use crate::{Engine, LexError, StaticVec, INT, UNSIGNED_INT};
+use crate::{Engine, LexError, SmartString, StaticVec, INT, UNSIGNED_INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -363,13 +363,13 @@ pub enum Token {
     #[cfg(feature = "decimal")]
     DecimalConstant(rust_decimal::Decimal),
     /// An identifier.
-    Identifier(Box<str>),
+    Identifier(SmartString),
     /// A character constant.
     CharConstant(char),
     /// A string constant.
-    StringConstant(Box<str>),
+    StringConstant(SmartString),
     /// An interpolated string.
-    InterpolatedString(Box<str>),
+    InterpolatedString(SmartString),
     /// `{`
     LeftBrace,
     /// `}`
@@ -536,11 +536,11 @@ pub enum Token {
     /// A lexer error.
     LexError(LexError),
     /// A comment block.
-    Comment(Box<str>),
+    Comment(SmartString),
     /// A reserved symbol.
-    Reserved(Box<str>),
+    Reserved(SmartString),
     /// A custom keyword.
-    Custom(Box<str>),
+    Custom(SmartString),
     /// End of the input stream.
     EOF,
 }
@@ -1022,9 +1022,9 @@ impl Token {
     /// Convert a token into a function name, if possible.
     #[cfg(not(feature = "no_function"))]
     #[inline]
-    pub(crate) fn into_function_name_for_override(self) -> Result<Box<str>, Self> {
+    pub(crate) fn into_function_name_for_override(self) -> Result<SmartString, Self> {
         match self {
-            Self::Custom(s) | Self::Identifier(s) if is_valid_function_name(&*s) => Ok(s),
+            Self::Custom(s) | Self::Identifier(s) if is_valid_function_name(&s) => Ok(s),
             _ => Err(self),
         }
     }
@@ -1112,9 +1112,9 @@ pub fn parse_string_literal(
     verbatim: bool,
     allow_line_continuation: bool,
     allow_interpolation: bool,
-) -> Result<(Box<str>, bool, Position), (LexError, Position)> {
-    let mut result = String::with_capacity(12);
-    let mut escape = String::with_capacity(12);
+) -> Result<(SmartString, bool, Position), (LexError, Position)> {
+    let mut result = SmartString::new();
+    let mut escape = SmartString::new();
 
     let start = *pos;
     let mut first_char = Position::NONE;
@@ -1146,7 +1146,6 @@ pub fn parse_string_literal(
                 break;
             }
             None => {
-                result += &escape;
                 pos.advance();
                 state.is_within_text_terminated_by = None;
                 return Err((LERR::UnterminatedString, start));
@@ -1242,7 +1241,7 @@ pub fn parse_string_literal(
 
                 result.push(
                     char::from_u32(out_val)
-                        .ok_or_else(|| (LERR::MalformedEscapeSequence(seq), *pos))?,
+                        .ok_or_else(|| (LERR::MalformedEscapeSequence(seq.to_string()), *pos))?,
                 );
             }
 
@@ -1283,7 +1282,7 @@ pub fn parse_string_literal(
             _ if !escape.is_empty() => {
                 escape.push(next_char);
 
-                return Err((LERR::MalformedEscapeSequence(escape), *pos));
+                return Err((LERR::MalformedEscapeSequence(escape.to_string()), *pos));
             }
 
             // Whitespace to skip
@@ -1309,7 +1308,7 @@ pub fn parse_string_literal(
         }
     }
 
-    Ok((result.into(), interpolated, first_char))
+    Ok((result, interpolated, first_char))
 }
 
 /// Consume the next character.
@@ -2291,18 +2290,18 @@ impl<'a> Iterator for TokenIterator<'a> {
                 (Token::Custom(s), pos)
             }
             // Custom keyword/symbol - must be disabled
-            Some((token, pos)) if self.engine.custom_keywords.contains_key(&*token.syntax()) => {
-                if self.engine.disabled_symbols.contains(&*token.syntax()) {
+            Some((token, pos)) if self.engine.custom_keywords.contains_key(token.literal_syntax()) => {
+                if self.engine.disabled_symbols.contains(token.literal_syntax()) {
                     // Disabled standard keyword/symbol
-                    (Token::Custom(token.syntax().into()), pos)
+                    (Token::Custom(token.literal_syntax().into()), pos)
                 } else {
                     // Active standard keyword - should never be a custom keyword!
                     unreachable!("{:?} is an active keyword", token)
                 }
             }
             // Disabled symbol
-            Some((token, pos)) if self.engine.disabled_symbols.contains(&*token.syntax()) => {
-                (Token::Reserved(token.syntax().into()), pos)
+            Some((token, pos)) if self.engine.disabled_symbols.contains(token.literal_syntax()) => {
+                (Token::Reserved(token.literal_syntax().into()), pos)
             }
             // Normal symbol
             Some(r) => r,
