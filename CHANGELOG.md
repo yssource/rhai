@@ -26,6 +26,7 @@ Enhancements
 
 * Variable definitions are optimized so that shadowed variables are reused as much as possible to reduce memory consumption.
 * `FnAccess` and `FnNamespace` now implement `Ord` and `PartialOrd`.
+* The `event_handler_map` example is enhanced to prevent shadowing of the state object map.
 
 
 Version 1.5.0
