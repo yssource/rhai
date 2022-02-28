@@ -91,7 +91,36 @@ impl<'e> ParseState<'e> {
 
     /// Find explicitly declared variable by name in the [`ParseState`], searching in reverse order.
     ///
-    /// If the variable is not present in the scope adds it to the list of external variables
+    /// The first return value is the offset to be deducted from `ParseState::stack::len()`,
+    /// i.e. the top element of [`ParseState`]'s variables stack is offset 1.
+    ///
+    /// If the variable is not present in the scope, the first return value is zero.
+    ///
+    /// The second return value indicates whether the barrier has been hit before finding the variable.
+    pub fn find_var(&self, name: &str) -> (usize, bool) {
+        let mut hit_barrier = false;
+
+        (
+            self.stack
+                .iter_rev_raw()
+                .enumerate()
+                .find(|&(.., (n, ..))| {
+                    if n == SCOPE_SEARCH_BARRIER_MARKER {
+                        // Do not go beyond the barrier
+                        hit_barrier = true;
+                        false
+                    } else {
+                        n == name
+                    }
+                })
+                .map_or(0, |(i, ..)| i + 1),
+            hit_barrier,
+        )
+    }
+
+    /// Find explicitly declared variable by name in the [`ParseState`], searching in reverse order.
+    ///
+    /// If the variable is not present in the scope adds it to the list of external variables.
     ///
     /// The return value is the offset to be deducted from `ParseState::stack::len()`,
     /// i.e. the top element of [`ParseState`]'s variables stack is offset 1.
@@ -100,27 +129,13 @@ impl<'e> ParseState<'e> {
     #[inline]
     #[must_use]
     pub fn access_var(&mut self, name: &str, pos: Position) -> Option<NonZeroUsize> {
-        let mut hit_barrier = false;
         let _pos = pos;
 
-        let index = self
-            .stack
-            .iter_rev_raw()
-            .enumerate()
-            .find(|&(.., (n, ..))| {
-                if n == SCOPE_SEARCH_BARRIER_MARKER {
-                    // Do not go beyond the barrier
-                    hit_barrier = true;
-                    false
-                } else {
-                    n == name
-                }
-            })
-            .and_then(|(i, ..)| NonZeroUsize::new(i + 1));
+        let (index, hit_barrier) = self.find_var(name);
 
         #[cfg(not(feature = "no_closure"))]
         if self.allow_capture {
-            if index.is_none() && !self.external_vars.iter().any(|v| v.name == name) {
+            if index == 0 && !self.external_vars.iter().any(|v| v.name == name) {
                 self.external_vars.push(crate::ast::Ident {
                     name: name.into(),
                     pos: _pos,
@@ -133,7 +148,7 @@ impl<'e> ParseState<'e> {
         if hit_barrier {
             None
         } else {
-            index
+            NonZeroUsize::new(index)
         }
     }
 
@@ -2721,14 +2736,18 @@ impl Engine {
             ASTFlags::NONE
         };
 
-        let existing = state.stack.get_index(&name).and_then(|(n, ..)| {
-            if n < state.block_stack_len {
+        let (existing, hit_barrier) = state.find_var(&name);
+        let existing = if !hit_barrier && existing > 0 {
+            let offset = state.stack.len() - existing;
+            if offset < state.block_stack_len {
                 // Defined in parent block
                 None
             } else {
-                Some(n)
+                Some(offset)
             }
-        });
+        } else {
+            None
+        };
 
         let idx = if let Some(n) = existing {
             state.stack.get_mut_by_index(n).set_access_mode(access);
