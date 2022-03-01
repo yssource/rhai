@@ -168,8 +168,6 @@ impl FnCallHashes {
 #[derive(Clone, Default, Hash)]
 pub struct FnCallExpr {
     /// Namespace of the function, if any.
-    ///
-    /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     pub namespace: Option<crate::module::Namespace>,
     /// Function name.
@@ -369,8 +367,6 @@ pub enum Expr {
     /// Integer constant.
     IntegerConstant(INT, Position),
     /// Floating-point constant.
-    ///
-    /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     FloatConstant(FloatWrapper<crate::FLOAT>, Position),
     /// Character constant.
@@ -575,11 +571,7 @@ impl Expr {
                 if !x.is_qualified() && x.args.len() == 1 && x.name == KEYWORD_FN_PTR =>
             {
                 if let Expr::StringConstant(ref s, ..) = x.args[0] {
-                    if let Ok(fn_ptr) = FnPtr::new(s) {
-                        fn_ptr.into()
-                    } else {
-                        return None;
-                    }
+                    FnPtr::new(s).ok()?.into()
                 } else {
                     return None;
                 }

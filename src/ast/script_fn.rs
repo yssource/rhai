@@ -34,8 +34,6 @@ pub struct ScriptFnDef {
     /// Function body.
     pub body: StmtBlock,
     /// Encapsulated AST environment, if any.
-    ///
-    /// Not available under `no_module` or `no_function`.
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
     pub environ: Option<EncapsulatedEnviron>,

@@ -24,13 +24,9 @@ pub type GlobalConstants =
 #[derive(Clone)]
 pub struct GlobalRuntimeState<'a> {
     /// Stack of module names.
-    ///
-    /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     keys: crate::StaticVec<Identifier>,
     /// Stack of imported [modules][crate::Module].
-    ///
-    /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     modules: crate::StaticVec<crate::Shared<crate::Module>>,
     /// Source of the current context.
