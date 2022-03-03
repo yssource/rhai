@@ -208,7 +208,6 @@ enum DynamicReadLockInner<'d, T: Clone> {
 
     /// A read guard to a shared value.
     #[cfg(not(feature = "no_closure"))]
-    #[cfg(not(feature = "sync"))]
     Guard(crate::func::native::LockGuard<'d, Dynamic>),
 }
 
