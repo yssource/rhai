@@ -516,7 +516,7 @@ impl Scope<'_> {
     #[inline]
     pub(crate) fn add_entry_alias(&mut self, index: usize, alias: Identifier) -> &mut Self {
         let aliases = self.aliases.get_mut(index).unwrap();
-        if !aliases.contains(&alias) {
+        if aliases.is_empty() || !aliases.contains(&alias) {
             aliases.push(alias);
         }
         self
@@ -533,7 +533,7 @@ impl Scope<'_> {
             .rev()
             .enumerate()
             .fold(Self::new(), |mut entries, (index, name)| {
-                if !entries.names.contains(name) {
+                if entries.names.is_empty() || !entries.names.contains(name) {
                     let orig_value = &self.values[len - 1 - index];
                     let alias = &self.aliases[len - 1 - index];
                     let mut value = orig_value.clone();

@@ -41,20 +41,30 @@ pub use std::sync::Arc as Shared;
 #[allow(dead_code)]
 pub use std::cell::RefCell as Locked;
 
-/// Lock guard for synchronized shared object.
+/// Read-only lock guard for synchronized shared object.
 #[cfg(not(feature = "sync"))]
 #[allow(dead_code)]
-pub type LockGuard<'a, T> = std::cell::RefMut<'a, T>;
+pub type LockGuard<'a, T> = std::cell::Ref<'a, T>;
+
+/// Mutable lock guard for synchronized shared object.
+#[cfg(not(feature = "sync"))]
+#[allow(dead_code)]
+pub type LockGuardMut<'a, T> = std::cell::RefMut<'a, T>;
 
 /// Synchronized shared object.
 #[cfg(feature = "sync")]
 #[allow(dead_code)]
 pub use std::sync::RwLock as Locked;
 
-/// Lock guard for synchronized shared object.
+/// Read-only lock guard for synchronized shared object.
 #[cfg(feature = "sync")]
 #[allow(dead_code)]
-pub type LockGuard<'a, T> = std::sync::RwLockWriteGuard<'a, T>;
+pub type LockGuard<'a, T> = std::sync::RwLockReadGuard<'a, T>;
+
+/// Mutable lock guard for synchronized shared object.
+#[cfg(feature = "sync")]
+#[allow(dead_code)]
+pub type LockGuardMut<'a, T> = std::sync::RwLockWriteGuard<'a, T>;
 
 /// Context of a native Rust function call.
 #[derive(Debug)]
@@ -374,11 +384,23 @@ pub fn shared_take<T>(value: Shared<T>) -> T {
     shared_try_take(value).ok().expect("not shared")
 }
 
-/// Lock a [`Locked`] resource.
+/// Lock a [`Locked`] resource for mutable access.
 #[inline(always)]
 #[must_use]
 #[allow(dead_code)]
-pub fn locked_write<'a, T>(value: &'a Locked<T>) -> LockGuard<'a, T> {
+pub fn locked_read<'a, T>(value: &'a Locked<T>) -> LockGuard<'a, T> {
+    #[cfg(not(feature = "sync"))]
+    return value.borrow();
+
+    #[cfg(feature = "sync")]
+    return value.read().unwrap();
+}
+
+/// Lock a [`Locked`] resource for mutable access.
+#[inline(always)]
+#[must_use]
+#[allow(dead_code)]
+pub fn locked_write<'a, T>(value: &'a Locked<T>) -> LockGuardMut<'a, T> {
     #[cfg(not(feature = "sync"))]
     return value.borrow_mut();
 

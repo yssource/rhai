@@ -62,7 +62,11 @@ impl StaticModuleResolver {
     #[inline(always)]
     #[must_use]
     pub fn contains_path(&self, path: &str) -> bool {
-        self.0.contains_key(path)
+        if !self.0.is_empty() {
+            self.0.contains_key(path)
+        } else {
+            false
+        }
     }
     /// Get an iterator of all the [modules][Module].
     #[inline]

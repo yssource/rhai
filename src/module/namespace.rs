@@ -24,8 +24,8 @@ use std::{
 /// one level, and it is wasteful to always allocate a [`Vec`] with one element.
 #[derive(Clone, Eq, PartialEq, Default, Hash)]
 pub struct Namespace {
-    index: Option<NonZeroUsize>,
     path: StaticVec<Ident>,
+    index: Option<NonZeroUsize>,
 }
 
 impl fmt::Debug for Namespace {
@@ -119,7 +119,19 @@ impl Namespace {
     /// # Panics
     ///
     /// Panics if the path is empty.
+    #[inline(always)]
+    #[must_use]
     pub fn position(&self) -> Position {
         self.path[0].pos
+    }
+    /// Get the first path segment of this [`Namespace`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the path is empty.
+    #[inline(always)]
+    #[must_use]
+    pub fn root(&self) -> &str {
+        &self.path[0].name
     }
 }

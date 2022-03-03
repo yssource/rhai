@@ -1353,7 +1353,7 @@ impl Engine {
 
         let module = self
             .search_imports(global, state, namespace)
-            .ok_or_else(|| ERR::ErrorModuleNotFound(namespace.to_string(), namespace[0].pos))?;
+            .ok_or_else(|| ERR::ErrorModuleNotFound(namespace.to_string(), namespace.position()))?;
 
         // First search in script-defined functions (can override built-in)
         let func = match module.get_qualified_fn(hash) {

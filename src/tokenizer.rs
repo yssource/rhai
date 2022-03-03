@@ -2251,7 +2251,7 @@ impl<'a> Iterator for TokenIterator<'a> {
             }
             // Reserved keyword/symbol
             Some((Token::Reserved(s), pos)) => (match
-                (&*s, self.engine.custom_keywords.contains_key(&*s))
+                (&*s, !self.engine.custom_keywords.is_empty() && self.engine.custom_keywords.contains_key(&*s))
             {
                 ("===", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
                     "'===' is not a valid operator. This is not JavaScript! Should it be '=='?".to_string(),
@@ -2282,7 +2282,7 @@ impl<'a> Iterator for TokenIterator<'a> {
                 // Reserved keyword/operator that is custom.
                 (.., true) => Token::Custom(s),
                 // Reserved keyword that is not custom and disabled.
-                (token, false) if self.engine.disabled_symbols.contains(token) => {
+                (token, false) if !self.engine.disabled_symbols.is_empty() && self.engine.disabled_symbols.contains(token) => {
                     let msg = format!("reserved {} '{}' is disabled", if is_valid_identifier(token.chars()) { "keyword"} else {"symbol"}, token);
                     Token::LexError(LERR::ImproperSymbol(s.to_string(), msg).into())
                 },
@@ -2290,12 +2290,12 @@ impl<'a> Iterator for TokenIterator<'a> {
                 (.., false) => Token::Reserved(s),
             }, pos),
             // Custom keyword
-            Some((Token::Identifier(s), pos)) if self.engine.custom_keywords.contains_key(&*s) => {
+            Some((Token::Identifier(s), pos)) if !self.engine.custom_keywords.is_empty() && self.engine.custom_keywords.contains_key(&*s) => {
                 (Token::Custom(s), pos)
             }
             // Custom keyword/symbol - must be disabled
-            Some((token, pos)) if self.engine.custom_keywords.contains_key(token.literal_syntax()) => {
-                if self.engine.disabled_symbols.contains(token.literal_syntax()) {
+            Some((token, pos)) if !self.engine.custom_keywords.is_empty() && self.engine.custom_keywords.contains_key(token.literal_syntax()) => {
+                if !self.engine.disabled_symbols.is_empty() && self.engine.disabled_symbols.contains(token.literal_syntax()) {
                     // Disabled standard keyword/symbol
                     (Token::Custom(token.literal_syntax().into()), pos)
                 } else {
@@ -2304,7 +2304,7 @@ impl<'a> Iterator for TokenIterator<'a> {
                 }
             }
             // Disabled symbol
-            Some((token, pos)) if self.engine.disabled_symbols.contains(token.literal_syntax()) => {
+            Some((token, pos)) if !self.engine.disabled_symbols.is_empty() && self.engine.disabled_symbols.contains(token.literal_syntax()) => {
                 (Token::Reserved(token.literal_syntax().into()), pos)
             }
             // Normal symbol

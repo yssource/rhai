@@ -227,9 +227,10 @@ impl Engine {
                 // Standard or reserved keyword/symbol not in first position
                 _ if !segments.is_empty() && token.is_some() => {
                     // Make it a custom keyword/symbol if it is disabled or reserved
-                    if (self.disabled_symbols.contains(s)
+                    if ((!self.disabled_symbols.is_empty() && self.disabled_symbols.contains(s))
                         || token.map_or(false, |v| v.is_reserved()))
-                        && !self.custom_keywords.contains_key(s)
+                        && (self.custom_keywords.is_empty()
+                            || !self.custom_keywords.contains_key(s))
                     {
                         self.custom_keywords.insert(s.into(), None);
                     }
@@ -238,7 +239,7 @@ impl Engine {
                 // Standard keyword in first position but not disabled
                 _ if segments.is_empty()
                     && token.as_ref().map_or(false, |v| v.is_standard_keyword())
-                    && !self.disabled_symbols.contains(s) =>
+                    && (self.disabled_symbols.is_empty() || !self.disabled_symbols.contains(s)) =>
                 {
                     return Err(LexError::ImproperSymbol(
                         s.to_string(),
@@ -253,9 +254,11 @@ impl Engine {
                 // Identifier in first position
                 _ if segments.is_empty() && is_valid_identifier(s.chars()) => {
                     // Make it a custom keyword/symbol if it is disabled or reserved
-                    if self.disabled_symbols.contains(s) || token.map_or(false, |v| v.is_reserved())
+                    if (!self.disabled_symbols.is_empty() && self.disabled_symbols.contains(s))
+                        || token.map_or(false, |v| v.is_reserved())
                     {
-                        if !self.custom_keywords.contains_key(s) {
+                        if self.custom_keywords.is_empty() || !self.custom_keywords.contains_key(s)
+                        {
                             self.custom_keywords.insert(s.into(), None);
                         }
                     }

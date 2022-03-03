@@ -488,7 +488,11 @@ impl Module {
     #[inline(always)]
     #[must_use]
     pub fn contains_var(&self, name: &str) -> bool {
-        self.variables.contains_key(name)
+        if !self.variables.is_empty() {
+            self.variables.contains_key(name)
+        } else {
+            false
+        }
     }
 
     /// Get the value of a [`Module`] variable.
@@ -520,7 +524,11 @@ impl Module {
     #[inline(always)]
     #[must_use]
     pub fn get_var(&self, name: &str) -> Option<Dynamic> {
-        self.variables.get(name).cloned()
+        if !self.variables.is_empty() {
+            self.variables.get(name).cloned()
+        } else {
+            None
+        }
     }
 
     /// Set a variable into the [`Module`].
@@ -552,14 +560,15 @@ impl Module {
         self
     }
 
-    /// Get a reference to a namespace-qualified variable.
-    /// Name and Position in [`EvalAltResult`] are [`None`] and [`NONE`][Position::NONE] and must be set afterwards.
+    /// Get a namespace-qualified [`Module`] variable as a [`Dynamic`].
     #[cfg(not(feature = "no_module"))]
     #[inline]
-    pub(crate) fn get_qualified_var(&self, hash_var: u64) -> RhaiResultOf<&Dynamic> {
-        self.all_variables.get(&hash_var).ok_or_else(|| {
-            crate::ERR::ErrorVariableNotFound(String::new(), crate::Position::NONE).into()
-        })
+    pub(crate) fn get_qualified_var(&self, hash_var: u64) -> Option<Dynamic> {
+        if !self.all_variables.is_empty() {
+            self.all_variables.get(&hash_var).cloned()
+        } else {
+            None
+        }
     }
 
     /// Set a script-defined function into the [`Module`].
@@ -610,14 +619,14 @@ impl Module {
         name: impl AsRef<str>,
         num_params: usize,
     ) -> Option<&Shared<crate::ast::ScriptFnDef>> {
-        if self.functions.is_empty() {
-            None
-        } else {
+        if !self.functions.is_empty() {
             let name = name.as_ref();
 
             self.iter_fn()
                 .find(|f| f.metadata.params == num_params && f.metadata.name == name)
                 .and_then(|f| f.func.get_script_fn_def())
+        } else {
+            None
         }
     }
 
@@ -656,7 +665,11 @@ impl Module {
     #[inline(always)]
     #[must_use]
     pub fn contains_sub_module(&self, name: &str) -> bool {
-        self.modules.contains_key(name)
+        if !self.modules.is_empty() {
+            self.modules.contains_key(name)
+        } else {
+            false
+        }
     }
 
     /// Get a sub-module in the [`Module`].
@@ -673,7 +686,11 @@ impl Module {
     #[inline]
     #[must_use]
     pub fn get_sub_module(&self, name: &str) -> Option<&Module> {
-        self.modules.get(name).map(|m| m.as_ref())
+        if !self.modules.is_empty() {
+            self.modules.get(name).map(|m| m.as_ref())
+        } else {
+            None
+        }
     }
 
     /// Set a sub-module into the [`Module`].
@@ -716,7 +733,11 @@ impl Module {
     #[inline(always)]
     #[must_use]
     pub fn contains_fn(&self, hash_fn: u64) -> bool {
-        self.functions.contains_key(&hash_fn)
+        if !self.functions.is_empty() {
+            self.functions.contains_key(&hash_fn)
+        } else {
+            false
+        }
     }
 
     /// _(metadata)_ Update the metadata (parameter names/types and return type) of a registered function.
@@ -1357,7 +1378,11 @@ impl Module {
     #[inline]
     #[must_use]
     pub(crate) fn get_fn(&self, hash_fn: u64) -> Option<&CallableFunction> {
-        self.functions.get(&hash_fn).map(|f| f.func.as_ref())
+        if !self.functions.is_empty() {
+            self.functions.get(&hash_fn).map(|f| f.func.as_ref())
+        } else {
+            None
+        }
     }
 
     /// Does the particular namespace-qualified function exist in the [`Module`]?
@@ -1366,7 +1391,11 @@ impl Module {
     #[inline(always)]
     #[must_use]
     pub fn contains_qualified_fn(&self, hash_fn: u64) -> bool {
-        self.all_functions.contains_key(&hash_fn)
+        if !self.all_functions.is_empty() {
+            self.all_functions.contains_key(&hash_fn)
+        } else {
+            false
+        }
     }
 
     /// Get a namespace-qualified function.
@@ -1376,9 +1405,13 @@ impl Module {
     #[inline]
     #[must_use]
     pub(crate) fn get_qualified_fn(&self, hash_qualified_fn: u64) -> Option<&CallableFunction> {
-        self.all_functions
-            .get(&hash_qualified_fn)
-            .map(|f| f.as_ref())
+        if !self.all_functions.is_empty() {
+            self.all_functions
+                .get(&hash_qualified_fn)
+                .map(|f| f.as_ref())
+        } else {
+            None
+        }
     }
 
     /// Combine another [`Module`] into this [`Module`].
@@ -1906,14 +1939,22 @@ impl Module {
     #[inline(always)]
     #[must_use]
     pub fn contains_qualified_iter(&self, id: TypeId) -> bool {
-        self.all_type_iterators.contains_key(&id)
+        if !self.all_type_iterators.is_empty() {
+            self.all_type_iterators.contains_key(&id)
+        } else {
+            false
+        }
     }
 
     /// Does a type iterator exist in the module?
     #[inline(always)]
     #[must_use]
     pub fn contains_iter(&self, id: TypeId) -> bool {
-        self.type_iterators.contains_key(&id)
+        if !self.type_iterators.is_empty() {
+            self.type_iterators.contains_key(&id)
+        } else {
+            false
+        }
     }
 
     /// Set a type iterator into the [`Module`].
@@ -1979,14 +2020,22 @@ impl Module {
     #[inline]
     #[must_use]
     pub(crate) fn get_qualified_iter(&self, id: TypeId) -> Option<&IteratorFn> {
-        self.all_type_iterators.get(&id).map(|f| f.as_ref())
+        if !self.all_type_iterators.is_empty() {
+            self.all_type_iterators.get(&id).map(|f| f.as_ref())
+        } else {
+            None
+        }
     }
 
     /// Get the specified type iterator.
     #[inline]
     #[must_use]
     pub(crate) fn get_iter(&self, id: TypeId) -> Option<&IteratorFn> {
-        self.type_iterators.get(&id).map(|f| f.as_ref())
+        if !self.type_iterators.is_empty() {
+            self.type_iterators.get(&id).map(|f| f.as_ref())
+        } else {
+            None
+        }
     }
 }
 

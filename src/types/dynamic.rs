@@ -206,14 +206,10 @@ enum DynamicReadLockInner<'d, T: Clone> {
     /// A simple reference to a non-shared value.
     Reference(&'d T),
 
-    /// A read guard to a shared [`RefCell`][std::cell::RefCell].
+    /// A read guard to a shared value.
     #[cfg(not(feature = "no_closure"))]
     #[cfg(not(feature = "sync"))]
-    Guard(std::cell::Ref<'d, Dynamic>),
-    /// A read guard to a shared [`RwLock`][std::sync::RwLock].
-    #[cfg(not(feature = "no_closure"))]
-    #[cfg(feature = "sync")]
-    Guard(std::sync::RwLockReadGuard<'d, Dynamic>),
+    Guard(crate::func::native::LockGuard<'d, Dynamic>),
 }
 
 impl<'d, T: Any + Clone> Deref for DynamicReadLock<'d, T> {
@@ -245,7 +241,7 @@ enum DynamicWriteLockInner<'d, T: Clone> {
 
     /// A write guard to a shared value.
     #[cfg(not(feature = "no_closure"))]
-    Guard(crate::func::native::LockGuard<'d, Dynamic>),
+    Guard(crate::func::native::LockGuardMut<'d, Dynamic>),
 }
 
 impl<'d, T: Any + Clone> Deref for DynamicWriteLock<'d, T> {

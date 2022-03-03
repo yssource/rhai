@@ -907,7 +907,7 @@ impl Engine {
                     self.make_type_mismatch_err::<crate::ImmutableString>(idx.type_name(), idx_pos)
                 })?;
 
-                if _add_if_not_found && !map.contains_key(index.as_str()) {
+                if _add_if_not_found && (map.is_empty() || !map.contains_key(index.as_str())) {
                     map.insert(index.clone().into(), Dynamic::UNIT);
                 }
 

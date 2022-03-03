@@ -484,8 +484,8 @@ impl Engine {
                 eat_token(input, Token::RightParen);
 
                 #[cfg(not(feature = "no_module"))]
-                let hash = if let Some(modules) = namespace.as_mut() {
-                    let index = state.find_module(&modules[0].name);
+                let hash = if let Some(namespace) = namespace.as_mut() {
+                    let index = state.find_module(namespace.root());
 
                     #[cfg(not(feature = "no_function"))]
                     let relax = settings.is_function_scope;
@@ -493,13 +493,13 @@ impl Engine {
                     let relax = false;
 
                     if !relax && settings.options.strict_var && index.is_none() {
-                        return Err(PERR::ModuleUndefined(modules[0].name.to_string())
-                            .into_err(modules[0].pos));
+                        return Err(PERR::ModuleUndefined(namespace.root().to_string())
+                            .into_err(namespace.position()));
                     }
 
-                    modules.set_index(index);
+                    namespace.set_index(index);
 
-                    crate::calc_qualified_fn_hash(modules.iter().map(|m| m.name.as_str()), &id, 0)
+                    crate::calc_qualified_fn_hash(namespace.iter().map(|m| m.name.as_str()), &id, 0)
                 } else {
                     calc_fn_hash(&id, 0)
                 };
@@ -545,8 +545,8 @@ impl Engine {
                     eat_token(input, Token::RightParen);
 
                     #[cfg(not(feature = "no_module"))]
-                    let hash = if let Some(modules) = namespace.as_mut() {
-                        let index = state.find_module(&modules[0].name);
+                    let hash = if let Some(namespace) = namespace.as_mut() {
+                        let index = state.find_module(namespace.root());
 
                         #[cfg(not(feature = "no_function"))]
                         let relax = settings.is_function_scope;
@@ -554,14 +554,14 @@ impl Engine {
                         let relax = false;
 
                         if !relax && settings.options.strict_var && index.is_none() {
-                            return Err(PERR::ModuleUndefined(modules[0].name.to_string())
-                                .into_err(modules[0].pos));
+                            return Err(PERR::ModuleUndefined(namespace.root().to_string())
+                                .into_err(namespace.position()));
                         }
 
-                        modules.set_index(index);
+                        namespace.set_index(index);
 
                         crate::calc_qualified_fn_hash(
-                            modules.iter().map(|m| m.name.as_str()),
+                            namespace.iter().map(|m| m.name.as_str()),
                             &id,
                             args.len(),
                         )
@@ -1084,7 +1084,7 @@ impl Engine {
                     value.hash(hasher);
                     let hash = hasher.finish();
 
-                    if cases.contains_key(&hash) {
+                    if !cases.is_empty() && cases.contains_key(&hash) {
                         return Err(PERR::DuplicatedSwitchCase.into_err(expr.start_position()));
                     }
                     (Some(hash), None)
@@ -1378,7 +1378,7 @@ impl Engine {
 
             // Custom syntax.
             Token::Custom(key) | Token::Reserved(key) | Token::Identifier(key)
-                if self.custom_syntax.contains_key(&**key) =>
+                if !self.custom_syntax.is_empty() && self.custom_syntax.contains_key(&**key) =>
             {
                 let (key, syntax) = self.custom_syntax.get_key_value(&**key).unwrap();
                 let (.., pos) = input.next().expect(NEVER_ENDS);
@@ -1657,7 +1657,7 @@ impl Engine {
 
             #[cfg(not(feature = "no_module"))]
             {
-                let index = state.find_module(&namespace[0].name);
+                let index = state.find_module(namespace.root());
 
                 #[cfg(not(feature = "no_function"))]
                 let relax = settings.is_function_scope;
@@ -1665,8 +1665,8 @@ impl Engine {
                 let relax = false;
 
                 if !relax && settings.options.strict_var && index.is_none() {
-                    return Err(PERR::ModuleUndefined(namespace[0].name.to_string())
-                        .into_err(namespace[0].pos));
+                    return Err(PERR::ModuleUndefined(namespace.root().to_string())
+                        .into_err(namespace.position()));
                 }
 
                 namespace.set_index(index);
@@ -3092,7 +3092,7 @@ impl Engine {
 
                         let hash = calc_fn_hash(&func.name, func.params.len());
 
-                        if lib.contains_key(&hash) {
+                        if !lib.is_empty() && lib.contains_key(&hash) {
                             return Err(PERR::FnDuplicatedDefinition(
                                 func.name.to_string(),
                                 func.params.len(),

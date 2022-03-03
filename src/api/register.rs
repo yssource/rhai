@@ -1003,7 +1003,7 @@ impl Engine {
                 let sub_module = iter.next().expect("contains separator").trim();
                 let remainder = iter.next().expect("contains separator").trim();
 
-                if !root.contains_key(sub_module) {
+                if root.is_empty() || !root.contains_key(sub_module) {
                     let mut m = Module::new();
                     register_static_module_raw(m.sub_modules_mut(), remainder, module);
                     m.build_index();
