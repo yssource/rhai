@@ -197,15 +197,17 @@ impl fmt::Debug for FnCallExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut ff = f.debug_struct("FnCallExpr");
         #[cfg(not(feature = "no_module"))]
-        self.namespace.as_ref().map(|ns| ff.field("namespace", ns));
-        ff.field("name", &self.name)
-            .field("hash", &self.hashes)
-            .field("arg_exprs", &self.args);
-        if !self.constants.is_empty() {
-            ff.field("constant_args", &self.constants);
+        if let Some(ref ns) = self.namespace {
+            ff.field("namespace", ns);
         }
         if self.capture_parent_scope {
             ff.field("capture_parent_scope", &self.capture_parent_scope);
+        }
+        ff.field("hash", &self.hashes)
+            .field("name", &self.name)
+            .field("args", &self.args);
+        if !self.constants.is_empty() {
+            ff.field("constants", &self.constants);
         }
         ff.field("pos", &self.pos);
         ff.finish()
@@ -405,6 +407,8 @@ pub enum Expr {
         Box<((Identifier, u64), (Identifier, u64), ImmutableString)>,
         Position,
     ),
+    /// xxx `.` method `(` expr `,` ... `)`
+    MethodCall(Box<FnCallExpr>, Position),
     /// Stack slot for function calls.  See [`FnCallExpr`] for more details.
     ///
     /// This variant does not map to any language structure.  It is used in function calls with
@@ -485,6 +489,7 @@ impl fmt::Debug for Expr {
                 f.write_str(")")
             }
             Self::Property(x, ..) => write!(f, "Property({})", x.2),
+            Self::MethodCall(x, ..) => f.debug_tuple("MethodCall").field(x).finish(),
             Self::Stack(x, ..) => write!(f, "ConstantArg[{}]", x),
             Self::Stmt(x) => {
                 let pos = x.span();
@@ -708,7 +713,7 @@ impl Expr {
             | Self::InterpolatedString(.., pos)
             | Self::Property(.., pos) => *pos,
 
-            Self::FnCall(x, ..) => x.pos,
+            Self::FnCall(x, ..) | Self::MethodCall(x, ..) => x.pos,
 
             Self::Stmt(x) => x.position(),
         }
@@ -756,6 +761,7 @@ impl Expr {
             | Self::Variable(.., pos, _)
             | Self::Stack(.., pos)
             | Self::FnCall(.., pos)
+            | Self::MethodCall(.., pos)
             | Self::Custom(.., pos)
             | Self::InterpolatedString(.., pos)
             | Self::Property(.., pos) => *pos = new_pos,
@@ -839,6 +845,7 @@ impl Expr {
             | Self::StringConstant(..)
             | Self::InterpolatedString(..)
             | Self::FnCall(..)
+            | Self::MethodCall(..)
             | Self::Stmt(..)
             | Self::Dot(..)
             | Self::Index(..)

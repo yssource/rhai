@@ -252,7 +252,7 @@ impl Engine {
             ChainType::Dotting => {
                 match rhs {
                     // xxx.fn_name(arg_expr_list)
-                    Expr::FnCall(x, pos) if !x.is_qualified() && new_val.is_none() => {
+                    Expr::MethodCall(x, pos) if !x.is_qualified() && new_val.is_none() => {
                         let crate::ast::FnCallExpr { name, hashes, .. } = x.as_ref();
                         let call_args = &mut idx_val.into_fn_call_args();
 
@@ -271,11 +271,11 @@ impl Engine {
                         result
                     }
                     // xxx.fn_name(...) = ???
-                    Expr::FnCall(..) if new_val.is_some() => {
+                    Expr::MethodCall(..) if new_val.is_some() => {
                         unreachable!("method call cannot be assigned to")
                     }
                     // xxx.module::fn_name(...) - syntax error
-                    Expr::FnCall(..) => {
+                    Expr::MethodCall(..) => {
                         unreachable!("function call in dot chain should not be namespace-qualified")
                     }
                     // {xxx:map}.id op= ???
@@ -428,7 +428,7 @@ impl Engine {
                                 )?
                             }
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
-                            Expr::FnCall(ref x, pos) if !x.is_qualified() => {
+                            Expr::MethodCall(ref x, pos) if !x.is_qualified() => {
                                 let crate::ast::FnCallExpr { name, hashes, .. } = x.as_ref();
                                 let call_args = &mut idx_val.into_fn_call_args();
 
@@ -448,7 +448,7 @@ impl Engine {
                                 result?.0.into()
                             }
                             // {xxx:map}.module::fn_name(...) - syntax error
-                            Expr::FnCall(..) => unreachable!(
+                            Expr::MethodCall(..) => unreachable!(
                                 "function call in dot chain should not be namespace-qualified"
                             ),
                             // Others - syntax error
@@ -549,7 +549,7 @@ impl Engine {
                                 Ok((result, may_be_changed))
                             }
                             // xxx.fn_name(arg_expr_list)[expr] | xxx.fn_name(arg_expr_list).expr
-                            Expr::FnCall(ref f, pos) if !f.is_qualified() => {
+                            Expr::MethodCall(ref f, pos) if !f.is_qualified() => {
                                 let crate::ast::FnCallExpr { name, hashes, .. } = f.as_ref();
                                 let rhs_chain = rhs.into();
                                 let args = &mut idx_val.into_fn_call_args();
@@ -576,7 +576,7 @@ impl Engine {
                                 .map_err(|err| err.fill_position(pos))
                             }
                             // xxx.module::fn_name(...) - syntax error
-                            Expr::FnCall(..) => unreachable!(
+                            Expr::MethodCall(..) => unreachable!(
                                 "function call in dot chain should not be namespace-qualified"
                             ),
                             // Others - syntax error
@@ -681,7 +681,7 @@ impl Engine {
 
         match expr {
             #[cfg(not(feature = "no_object"))]
-            Expr::FnCall(x, ..)
+            Expr::MethodCall(x, ..)
                 if _parent_chain_type == ChainType::Dotting && !x.is_qualified() =>
             {
                 let crate::ast::FnCallExpr {
@@ -705,7 +705,7 @@ impl Engine {
                 idx_values.push(super::ChainArgument::from_fn_call_args(values, pos));
             }
             #[cfg(not(feature = "no_object"))]
-            Expr::FnCall(..) if _parent_chain_type == ChainType::Dotting => {
+            Expr::MethodCall(..) if _parent_chain_type == ChainType::Dotting => {
                 unreachable!("function call in dot chain should not be namespace-qualified")
             }
 
@@ -729,7 +729,7 @@ impl Engine {
                     Expr::Property(..) => unreachable!("unexpected Expr::Property for indexing"),
 
                     #[cfg(not(feature = "no_object"))]
-                    Expr::FnCall(x, ..)
+                    Expr::MethodCall(x, ..)
                         if _parent_chain_type == ChainType::Dotting && !x.is_qualified() =>
                     {
                         let crate::ast::FnCallExpr {
@@ -752,7 +752,7 @@ impl Engine {
                         super::ChainArgument::from_fn_call_args(values, pos)
                     }
                     #[cfg(not(feature = "no_object"))]
-                    Expr::FnCall(..) if _parent_chain_type == ChainType::Dotting => {
+                    Expr::MethodCall(..) if _parent_chain_type == ChainType::Dotting => {
                         unreachable!("function call in dot chain should not be namespace-qualified")
                     }
                     #[cfg(not(feature = "no_object"))]

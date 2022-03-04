@@ -1143,7 +1143,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
 
         // Eagerly call functions
         Expr::FnCall(x, pos)
-                if !x.is_qualified() // Non-qualified
+                if !x.is_qualified() // non-qualified
                 && state.optimization_level == OptimizationLevel::Full // full optimizations
                 && x.args.iter().all(Expr::is_constant) // all arguments are constants
         => {
@@ -1176,8 +1176,8 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
             x.args.iter_mut().for_each(|a| optimize_expr(a, state, false));
         }
 
-        // id(args ..) -> optimize function call arguments
-        Expr::FnCall(x, ..) => for arg in x.args.iter_mut() {
+        // id(args ..) or xxx.id(args ..) -> optimize function call arguments
+        Expr::FnCall(x, ..) | Expr::MethodCall(x, ..) => for arg in x.args.iter_mut() {
             optimize_expr(arg, state, false);
 
             // Move constant arguments

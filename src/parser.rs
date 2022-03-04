@@ -521,8 +521,8 @@ impl Engine {
                     namespace,
                     hashes,
                     args,
+                    constants: StaticVec::new_const(),
                     pos: settings.pos,
-                    ..Default::default()
                 }
                 .into_fn_call_expr(settings.pos));
             }
@@ -586,8 +586,8 @@ impl Engine {
                         namespace,
                         hashes,
                         args,
+                        constants: StaticVec::new_const(),
                         pos: settings.pos,
-                        ..Default::default()
                     }
                     .into_fn_call_expr(settings.pos));
                 }
@@ -1990,7 +1990,7 @@ impl Engine {
                     calc_fn_hash(&func.name, func.args.len() + 1),
                 );
 
-                let rhs = Expr::FnCall(func, func_pos);
+                let rhs = Expr::MethodCall(func, func_pos);
                 Ok(Expr::Dot(
                     BinaryExpr { lhs, rhs }.into(),
                     ASTFlags::NONE,
@@ -2046,7 +2046,7 @@ impl Engine {
                         );
 
                         let new_lhs = BinaryExpr {
-                            lhs: Expr::FnCall(func, func_pos),
+                            lhs: Expr::MethodCall(func, func_pos),
                             rhs: x.rhs,
                         }
                         .into();
