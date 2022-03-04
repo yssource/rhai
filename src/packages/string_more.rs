@@ -22,16 +22,16 @@ def_package! {
 mod string_functions {
     use crate::{ImmutableString, SmartString};
 
-    #[rhai_fn(name = "+")]
+    #[rhai_fn(name = "+", pure)]
     pub fn add_append(
         ctx: NativeCallContext,
-        string: ImmutableString,
+        string: &mut ImmutableString,
         mut item: Dynamic,
     ) -> ImmutableString {
         let s = print_with_func(FUNC_TO_STRING, &ctx, &mut item);
 
         if s.is_empty() {
-            string
+            string.clone()
         } else {
             format!("{}{}", string, s).into()
         }
@@ -61,16 +61,16 @@ mod string_functions {
 
     // The following are needed in order to override the generic versions with `Dynamic` parameters.
 
-    #[rhai_fn(name = "+")]
-    pub fn add_append_str(string1: ImmutableString, string2: ImmutableString) -> ImmutableString {
-        string1 + string2
+    #[rhai_fn(name = "+", pure)]
+    pub fn add_append_str(string1: &mut ImmutableString, string2: &str) -> ImmutableString {
+        &*string1 + string2
+    }
+    #[rhai_fn(name = "+", pure)]
+    pub fn add_append_char(string: &mut ImmutableString, character: char) -> ImmutableString {
+        &*string + character
     }
     #[rhai_fn(name = "+")]
-    pub fn add_append_char(string: ImmutableString, character: char) -> ImmutableString {
-        string + character
-    }
-    #[rhai_fn(name = "+")]
-    pub fn add_prepend_char(character: char, string: ImmutableString) -> ImmutableString {
+    pub fn add_prepend_char(character: char, string: &str) -> ImmutableString {
         format!("{}{}", character, string).into()
     }
 
@@ -86,14 +86,14 @@ mod string_functions {
 
     #[cfg(not(feature = "no_index"))]
     pub mod blob_functions {
-        #[rhai_fn(name = "+")]
-        pub fn add_append_blob(string: ImmutableString, utf8: Blob) -> ImmutableString {
+        #[rhai_fn(name = "+", pure)]
+        pub fn add_append_blob(string: &mut ImmutableString, utf8: Blob) -> ImmutableString {
             if utf8.is_empty() {
-                string
+                string.clone()
             } else if string.is_empty() {
                 String::from_utf8_lossy(&utf8).into_owned().into()
             } else {
-                let mut s = crate::SmartString::from(string);
+                let mut s = crate::SmartString::from(string.as_str());
                 s.push_str(&String::from_utf8_lossy(&utf8));
                 s.into()
             }
@@ -172,7 +172,7 @@ mod string_functions {
     ///
     /// print(text);        // prints ", world! , foobar!"
     /// ```
-    pub fn remove(string: &mut ImmutableString, sub_string: ImmutableString) {
+    pub fn remove(string: &mut ImmutableString, sub_string: &str) {
         *string -= sub_string;
     }
     /// Remove all occurrences of a character from the string.
@@ -263,7 +263,7 @@ mod string_functions {
             }
         }
     }
-    /// Remove the a specified number of characters from the end of the string and return it as a
+    /// Remove a specified number of characters from the end of the string and return it as a
     /// new string.
     ///
     /// * If `len` ≤ 0, the string is not modified and an empty string is returned.
@@ -311,9 +311,10 @@ mod string_functions {
     ///
     /// print(text);                // prints "hello, world!"
     /// ```
-    pub fn to_upper(string: ImmutableString) -> ImmutableString {
-        if string.is_empty() {
-            string
+    #[rhai_fn(pure)]
+    pub fn to_upper(string: &mut ImmutableString) -> ImmutableString {
+        if string.is_empty() || string.chars().all(char::is_uppercase) {
+            string.clone()
         } else {
             string.to_uppercase().into()
         }
@@ -330,7 +331,7 @@ mod string_functions {
     /// print(text);        // prints "HELLO, WORLD!";
     /// ```
     pub fn make_upper(string: &mut ImmutableString) {
-        if !string.is_empty() {
+        if !string.is_empty() && string.chars().any(|ch| !ch.is_uppercase()) {
             *string = string.to_uppercase().into();
         }
     }
@@ -345,9 +346,10 @@ mod string_functions {
     ///
     /// print(text);                // prints "HELLO, WORLD!"
     /// ```
-    pub fn to_lower(string: ImmutableString) -> ImmutableString {
-        if string.is_empty() {
-            string
+    #[rhai_fn(pure)]
+    pub fn to_lower(string: &mut ImmutableString) -> ImmutableString {
+        if string.is_empty() || string.chars().all(char::is_lowercase) {
+            string.clone()
         } else {
             string.to_lowercase().into()
         }
@@ -364,7 +366,7 @@ mod string_functions {
     /// print(text);        // prints "hello, world!";
     /// ```
     pub fn make_lower(string: &mut ImmutableString) {
-        if !string.is_empty() {
+        if !string.is_empty() && string.chars().any(|ch| !ch.is_lowercase()) {
             *string = string.to_lowercase().into();
         }
     }
@@ -1204,19 +1206,25 @@ mod string_functions {
         /// print(text.split(-99));     // prints ["", "hello, world!"]
         /// ```
         #[rhai_fn(name = "split")]
-        pub fn split_at(ctx: NativeCallContext, string: ImmutableString, index: INT) -> Array {
+        pub fn split_at(ctx: NativeCallContext, string: &mut ImmutableString, index: INT) -> Array {
             if index <= 0 {
                 if let Some(n) = index.checked_abs() {
                     let num_chars = string.chars().count();
                     if n as usize > num_chars {
-                        vec![ctx.engine().const_empty_string().into(), string.into()]
+                        vec![
+                            ctx.engine().const_empty_string().into(),
+                            string.as_str().into(),
+                        ]
                     } else {
                         let prefix: String = string.chars().take(num_chars - n as usize).collect();
                         let prefix_len = prefix.len();
                         vec![prefix.into(), string[prefix_len..].into()]
                     }
                 } else {
-                    vec![ctx.engine().const_empty_string().into(), string.into()]
+                    vec![
+                        ctx.engine().const_empty_string().into(),
+                        string.as_str().into(),
+                    ]
                 }
             } else {
                 let prefix: String = string.chars().take(index as usize).collect();

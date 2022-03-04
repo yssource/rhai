@@ -1,6 +1,6 @@
 //! Module defining script statements.
 
-use super::{ASTNode, BinaryExpr, Expr, FnCallExpr, Ident, OptionFlags, AST_OPTION_FLAGS::*};
+use super::{ASTFlags, ASTNode, BinaryExpr, Expr, FnCallExpr, Ident};
 use crate::engine::KEYWORD_EVAL;
 use crate::tokenizer::{Span, Token};
 use crate::{calc_fn_hash, Position, StaticVec, INT};
@@ -340,24 +340,20 @@ pub enum Stmt {
     While(Box<(Expr, StmtBlock)>, Position),
     /// `do` `{` stmt `}` `while`|`until` expr
     ///
-    /// ### Option Flags
+    /// ### Flags
     ///
-    /// * [`AST_OPTION_NONE`] = `while`
-    /// * [`AST_OPTION_NEGATED`] = `until`
-    Do(Box<(Expr, StmtBlock)>, OptionFlags, Position),
+    /// * [`NONE`][ASTFlags::NONE] = `while`
+    /// * [`NEGATED`][ASTFlags::NEGATED] = `until`
+    Do(Box<(Expr, StmtBlock)>, ASTFlags, Position),
     /// `for` `(` id `,` counter `)` `in` expr `{` stmt `}`
     For(Box<(Ident, Option<Ident>, Expr, StmtBlock)>, Position),
     /// \[`export`\] `let`|`const` id `=` expr
     ///
-    /// ### Option Flags
+    /// ### Flags
     ///
-    /// * [`AST_OPTION_EXPORTED`] = `export`
-    /// * [`AST_OPTION_CONSTANT`] = `const`
-    Var(
-        Box<(Ident, Expr, Option<NonZeroUsize>)>,
-        OptionFlags,
-        Position,
-    ),
+    /// * [`EXPORTED`][ASTFlags::EXPORTED] = `export`
+    /// * [`CONSTANT`][ASTFlags::CONSTANT] = `const`
+    Var(Box<(Ident, Expr, Option<NonZeroUsize>)>, ASTFlags, Position),
     /// expr op`=` expr
     Assignment(Box<(Option<OpAssignment<'static>>, BinaryExpr)>, Position),
     /// func `(` expr `,` ... `)`
@@ -373,18 +369,18 @@ pub enum Stmt {
     Expr(Box<Expr>),
     /// `continue`/`break`
     ///
-    /// ### Option Flags
+    /// ### Flags
     ///
-    /// * [`AST_OPTION_NONE`] = `continue`
-    /// * [`AST_OPTION_BREAK`] = `break`
-    BreakLoop(OptionFlags, Position),
+    /// * [`NONE`][ASTFlags::NONE] = `continue`
+    /// * [`BREAK`][ASTFlags::BREAK] = `break`
+    BreakLoop(ASTFlags, Position),
     /// `return`/`throw`
     ///
-    /// ### Option Flags
+    /// ### Flags
     ///
-    /// * [`AST_OPTION_NONE`] = `return`
-    /// * [`AST_OPTION_BREAK`] = `throw`
-    Return(Option<Box<Expr>>, OptionFlags, Position),
+    /// * [`NONE`][ASTFlags::NONE] = `return`
+    /// * [`BREAK`][ASTFlags::BREAK] = `throw`
+    Return(Option<Box<Expr>>, ASTFlags, Position),
     /// `import` expr `as` alias
     ///
     /// Not available under `no_module`.
@@ -590,7 +586,7 @@ impl Stmt {
             // Loops that exit can be pure because it can never be infinite.
             Self::While(x, ..) if matches!(x.0, Expr::BoolConstant(false, ..)) => true,
             Self::Do(x, options, ..) if matches!(x.0, Expr::BoolConstant(..)) => match x.0 {
-                Expr::BoolConstant(cond, ..) if cond == options.contains(AST_OPTION_NEGATED) => {
+                Expr::BoolConstant(cond, ..) if cond == options.contains(ASTFlags::NEGATED) => {
                     x.1.iter().all(Stmt::is_pure)
                 }
                 _ => false,

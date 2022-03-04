@@ -16,6 +16,8 @@ pub mod call_fn;
 
 pub mod options;
 
+pub mod optimize;
+
 pub mod limits;
 
 pub mod events;
@@ -59,83 +61,6 @@ pub mod default_limits {
     pub const MAX_DYNAMIC_PARAMETERS: usize = 16;
 }
 
-/// Script optimization API.
-#[cfg(not(feature = "no_optimize"))]
-impl Engine {
-    /// Control whether and how the [`Engine`] will optimize an [`AST`][crate::AST] after compilation.
-    ///
-    /// Not available under `no_optimize`.
-    #[inline(always)]
-    pub fn set_optimization_level(
-        &mut self,
-        optimization_level: crate::OptimizationLevel,
-    ) -> &mut Self {
-        self.optimization_level = optimization_level;
-        self
-    }
-    /// The current optimization level.
-    /// It controls whether and how the [`Engine`] will optimize an [`AST`][crate::AST] after compilation.
-    ///
-    /// Not available under `no_optimize`.
-    #[inline(always)]
-    #[must_use]
-    pub const fn optimization_level(&self) -> crate::OptimizationLevel {
-        self.optimization_level
-    }
-    /// Optimize the [`AST`][crate::AST] with constants defined in an external Scope.
-    /// An optimized copy of the [`AST`][crate::AST] is returned while the original [`AST`][crate::AST]
-    /// is consumed.
-    ///
-    /// Not available under `no_optimize`.
-    ///
-    /// Although optimization is performed by default during compilation, sometimes it is necessary
-    /// to _re_-optimize an [`AST`][crate::AST].
-    ///
-    /// For example, when working with constants that are passed in via an external scope, it will
-    /// be more efficient to optimize the [`AST`][crate::AST] once again to take advantage of the
-    /// new constants.
-    ///
-    /// With this method, it is no longer necessary to recompile a large script. The script
-    /// [`AST`][crate::AST] can be compiled just once.
-    ///
-    /// Before evaluation, constants are passed into the [`Engine`] via an external scope (i.e. with
-    /// [`Scope::push_constant`][crate::Scope::push_constant]).
-    ///
-    /// Then, the [`AST`][crate::AST] is cloned and the copy re-optimized before running.
-    #[inline]
-    #[must_use]
-    pub fn optimize_ast(
-        &self,
-        scope: &crate::Scope,
-        ast: crate::AST,
-        optimization_level: crate::OptimizationLevel,
-    ) -> crate::AST {
-        let mut ast = ast;
-
-        #[cfg(not(feature = "no_function"))]
-        let lib = ast
-            .shared_lib()
-            .iter_fn()
-            .filter(|f| f.func.is_script())
-            .map(|f| {
-                f.func
-                    .get_script_fn_def()
-                    .expect("script-defined function")
-                    .clone()
-            })
-            .collect();
-
-        crate::optimizer::optimize_into_ast(
-            self,
-            scope,
-            ast.take_statements(),
-            #[cfg(not(feature = "no_function"))]
-            lib,
-            optimization_level,
-        )
-    }
-}
-
 impl Engine {
     /// Set the module resolution service used by the [`Engine`].
     ///
@@ -149,6 +74,7 @@ impl Engine {
         self.module_resolver = Some(Box::new(resolver));
         self
     }
+
     /// Disable a particular keyword or operator in the language.
     ///
     /// # Examples
@@ -190,6 +116,7 @@ impl Engine {
         self.disabled_symbols.insert(symbol.into());
         self
     }
+
     /// Register a custom operator with a precedence into the language.
     ///
     /// The operator can be a valid identifier, a reserved symbol, a disabled operator or a disabled keyword.
@@ -235,18 +162,25 @@ impl Engine {
             // Active standard keywords cannot be made custom
             // Disabled keywords are OK
             Some(token) if token.is_standard_keyword() => {
-                if !self.disabled_symbols.contains(&*token.syntax()) {
+                if self.disabled_symbols.is_empty()
+                    || !self.disabled_symbols.contains(&*token.syntax())
+                {
                     return Err(format!("'{}' is a reserved keyword", keyword.as_ref()));
                 }
             }
             // Active standard symbols cannot be made custom
             Some(token) if token.is_standard_symbol() => {
-                if !self.disabled_symbols.contains(&*token.syntax()) {
+                if self.disabled_symbols.is_empty()
+                    || !self.disabled_symbols.contains(&*token.syntax())
+                {
                     return Err(format!("'{}' is a reserved operator", keyword.as_ref()));
                 }
             }
             // Active standard symbols cannot be made custom
-            Some(token) if !self.disabled_symbols.contains(&*token.syntax()) => {
+            Some(token)
+                if self.disabled_symbols.is_empty()
+                    || !self.disabled_symbols.contains(&*token.syntax()) =>
+            {
                 return Err(format!("'{}' is a reserved symbol", keyword.as_ref()))
             }
             // Disabled symbols are OK

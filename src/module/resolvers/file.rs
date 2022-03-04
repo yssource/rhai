@@ -2,7 +2,7 @@
 #![cfg(not(target_family = "wasm"))]
 
 use crate::eval::GlobalRuntimeState;
-use crate::func::native::locked_write;
+use crate::func::native::{locked_read, locked_write};
 use crate::{
     Engine, Identifier, Module, ModuleResolver, Position, RhaiResultOf, Scope, Shared, ERR,
 };
@@ -208,7 +208,13 @@ impl FileModuleResolver {
 
         let file_path = self.get_file_path(path.as_ref(), source_path);
 
-        locked_write(&self.cache).contains_key(&file_path)
+        let cache = locked_read(&self.cache);
+
+        if !cache.is_empty() {
+            cache.contains_key(&file_path)
+        } else {
+            false
+        }
     }
     /// Empty the internal cache.
     #[inline]

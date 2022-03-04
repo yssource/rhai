@@ -145,9 +145,9 @@ impl fmt::Display for EvalAltResult {
             }
 
             Self::ErrorInModule(s, err, ..) if s.is_empty() => {
-                write!(f, "Error in module: {}", err)?
+                write!(f, "Error in module > {}", err)?
             }
-            Self::ErrorInModule(s, err, ..) => write!(f, "Error in module {}: {}", s, err)?,
+            Self::ErrorInModule(s, err, ..) => write!(f, "Error in module '{}' > {}", s, err)?,
 
             Self::ErrorVariableExists(s, ..) => write!(f, "Variable is already defined: {}", s)?,
             Self::ErrorForbiddenVariable(s, ..) => write!(f, "Forbidden variable name: {}", s)?,
@@ -180,15 +180,15 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorRuntime(d, ..) => write!(f, "Runtime error: {}", d)?,
 
             Self::ErrorAssignmentToConstant(s, ..) => write!(f, "Cannot modify constant: {}", s)?,
-            Self::ErrorMismatchOutputType(s, r, ..) => match (r.as_str(), s.as_str()) {
-                ("", s) => write!(f, "Output type is incorrect, expecting {}", s),
-                (r, "") => write!(f, "Output type is incorrect: {}", r),
-                (r, s) => write!(f, "Output type is incorrect: {} (expecting {})", r, s),
+            Self::ErrorMismatchOutputType(e, a, ..) => match (a.as_str(), e.as_str()) {
+                ("", e) => write!(f, "Output type is incorrect, expecting {}", e),
+                (a, "") => write!(f, "Output type is incorrect: {}", a),
+                (a, e) => write!(f, "Output type is incorrect: {} (expecting {})", a, e),
             }?,
-            Self::ErrorMismatchDataType(s, r, ..) => match (r.as_str(), s.as_str()) {
-                ("", s) => write!(f, "Data type is incorrect, expecting {}", s),
-                (r, "") => write!(f, "Data type is incorrect: {}", r),
-                (r, s) => write!(f, "Data type is incorrect: {} (expecting {})", r, s),
+            Self::ErrorMismatchDataType(e, a, ..) => match (a.as_str(), e.as_str()) {
+                ("", e) => write!(f, "Data type is incorrect, expecting {}", e),
+                (a, "") => write!(f, "Data type is incorrect: {}", a),
+                (a, e) => write!(f, "Data type is incorrect: {} (expecting {})", a, e),
             }?,
             Self::ErrorArithmetic(s, ..) => match s.as_str() {
                 "" => f.write_str("Arithmetic error"),

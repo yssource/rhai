@@ -260,9 +260,8 @@ pub use parser::ParseState;
 
 #[cfg(feature = "internals")]
 pub use ast::{
-    ASTNode, BinaryExpr, ConditionalStmtBlock, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident,
-    OpAssignment, OptionFlags, ScriptFnDef, Stmt, StmtBlock, SwitchCases, TryCatchBlock,
-    AST_OPTION_FLAGS,
+    ASTFlags, ASTNode, BinaryExpr, ConditionalStmtBlock, CustomExpr, Expr, FnCallExpr,
+    FnCallHashes, Ident, OpAssignment, ScriptFnDef, Stmt, StmtBlock, SwitchCases, TryCatchBlock,
 };
 
 #[cfg(feature = "internals")]
@@ -366,7 +365,7 @@ pub type StaticVec<T> = smallvec::SmallVec<[T; 3]>;
 ///
 /// Under `no_closure`, this type aliases to [`StaticVec`][crate::StaticVec] instead.
 #[cfg(not(feature = "no_closure"))]
-type FnArgsVec<T> = smallvec::SmallVec<[T; 8]>;
+type FnArgsVec<T> = smallvec::SmallVec<[T; 5]>;
 
 /// Inline arguments storage for function calls.
 /// This type aliases to [`StaticVec`][crate::StaticVec].

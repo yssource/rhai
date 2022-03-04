@@ -1,7 +1,7 @@
 //! Module that defines the [`Scope`] type representing a function call-stack scope.
 
 use super::dynamic::{AccessMode, Variant};
-use crate::{Dynamic, Identifier, StaticVec};
+use crate::{Dynamic, Identifier};
 use smallvec::SmallVec;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -53,20 +53,20 @@ const SCOPE_ENTRIES_INLINED: usize = 8;
 //
 // # Implementation Notes
 //
-// [`Scope`] is implemented as two arrays of exactly the same length.  Variables data (name, type,
-// etc.) is manually split into two equal-length arrays.  That's because variable names take up the
-// most space, with [`Identifier`] being three words long, but in the vast majority of cases the
-// name is NOT used to look up a variable.  Variable lookup is usually via direct indexing,
-// by-passing the name altogether.
+// [`Scope`] is implemented as three arrays of exactly the same length. That's because variable
+// names take up the most space, with [`Identifier`] being three words long, but in the vast
+// majority of cases the name is NOT used to look up a variable.  Variable lookup is usually via
+// direct indexing, by-passing the name altogether.
 //
-// Since [`Dynamic`] is reasonably small, packing it tightly improves cache locality when variables
-// are accessed.
+// [`Dynamic`] is reasonably small so packing it tightly improves cache performance.
 #[derive(Debug, Clone, Hash, Default)]
 pub struct Scope<'a> {
     /// Current value of the entry.
     values: SmallVec<[Dynamic; SCOPE_ENTRIES_INLINED]>,
-    /// (Name, aliases) of the entry.
-    names: SmallVec<[(Identifier, Option<Box<StaticVec<Identifier>>>); SCOPE_ENTRIES_INLINED]>,
+    /// Name of the entry.
+    names: SmallVec<[Identifier; SCOPE_ENTRIES_INLINED]>,
+    /// Aliases of the entry.
+    aliases: SmallVec<[Vec<Identifier>; SCOPE_ENTRIES_INLINED]>,
     /// Phantom to keep the lifetime parameter in order not to break existing code.
     phantom: PhantomData<&'a ()>,
 }
@@ -77,15 +77,12 @@ impl IntoIterator for Scope<'_> {
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
-        Box::new(self.values.into_iter().zip(self.names.into_iter()).map(
-            |(value, (name, alias))| {
-                (
-                    name.into(),
-                    value,
-                    alias.map(|a| a.to_vec()).unwrap_or_default(),
-                )
-            },
-        ))
+        Box::new(
+            self.values
+                .into_iter()
+                .zip(self.names.into_iter().zip(self.aliases.into_iter()))
+                .map(|(value, (name, alias))| (name.into(), value, alias)),
+        )
     }
 }
 
@@ -108,6 +105,7 @@ impl Scope<'_> {
         Self {
             values: SmallVec::new_const(),
             names: SmallVec::new_const(),
+            aliases: SmallVec::new_const(),
             phantom: PhantomData,
         }
     }
@@ -134,6 +132,7 @@ impl Scope<'_> {
     pub fn clear(&mut self) -> &mut Self {
         self.names.clear();
         self.values.clear();
+        self.aliases.clear();
         self
     }
     /// Get the number of entries inside the [`Scope`].
@@ -258,7 +257,8 @@ impl Scope<'_> {
         access: AccessMode,
         mut value: Dynamic,
     ) -> &mut Self {
-        self.names.push((name.into(), None));
+        self.names.push(name.into());
+        self.aliases.push(Vec::new());
         value.set_access_mode(access);
         self.values.push(value);
         self
@@ -293,6 +293,7 @@ impl Scope<'_> {
     pub fn rewind(&mut self, size: usize) -> &mut Self {
         self.names.truncate(size);
         self.values.truncate(size);
+        self.aliases.truncate(size);
         self
     }
     /// Does the [`Scope`] contain the entry?
@@ -311,7 +312,7 @@ impl Scope<'_> {
     #[inline]
     #[must_use]
     pub fn contains(&self, name: &str) -> bool {
-        self.names.iter().any(|(key, ..)| name == key)
+        self.names.iter().any(|key| name == key)
     }
     /// Find an entry in the [`Scope`], starting from the last.
     #[inline]
@@ -323,7 +324,7 @@ impl Scope<'_> {
             .iter()
             .rev() // Always search a Scope in reverse order
             .enumerate()
-            .find_map(|(i, (key, ..))| {
+            .find_map(|(i, key)| {
                 if name == key {
                     let index = len - 1 - i;
                     Some((index, self.values[index].access_mode()))
@@ -353,7 +354,7 @@ impl Scope<'_> {
             .iter()
             .rev()
             .enumerate()
-            .find(|(.., (key, ..))| name == key)
+            .find(|(.., key)| &name == key)
             .and_then(|(index, ..)| self.values[len - 1 - index].flatten_clone().try_cast())
     }
     /// Check if the named entry in the [`Scope`] is constant.
@@ -514,15 +515,9 @@ impl Scope<'_> {
     #[cfg(not(feature = "no_module"))]
     #[inline]
     pub(crate) fn add_entry_alias(&mut self, index: usize, alias: Identifier) -> &mut Self {
-        let (.., aliases) = self.names.get_mut(index).unwrap();
-        match aliases {
-            None => {
-                let mut list = StaticVec::new_const();
-                list.push(alias);
-                *aliases = Some(list.into());
-            }
-            Some(aliases) if !aliases.iter().any(|a| a == &alias) => aliases.push(alias),
-            Some(_) => (),
+        let aliases = self.aliases.get_mut(index).unwrap();
+        if aliases.is_empty() || !aliases.contains(&alias) {
+            aliases.push(alias);
         }
         self
     }
@@ -533,20 +528,23 @@ impl Scope<'_> {
     pub fn clone_visible(&self) -> Self {
         let len = self.len();
 
-        self.names.iter().rev().enumerate().fold(
-            Self::new(),
-            |mut entries, (index, (name, alias))| {
-                if !entries.names.iter().any(|(key, ..)| key == name) {
+        self.names
+            .iter()
+            .rev()
+            .enumerate()
+            .fold(Self::new(), |mut entries, (index, name)| {
+                if entries.names.is_empty() || !entries.names.contains(name) {
                     let orig_value = &self.values[len - 1 - index];
+                    let alias = &self.aliases[len - 1 - index];
                     let mut value = orig_value.clone();
                     value.set_access_mode(orig_value.access_mode());
 
-                    entries.names.push((name.clone(), alias.clone()));
+                    entries.names.push(name.clone());
                     entries.values.push(value);
+                    entries.aliases.push(alias.clone());
                 }
                 entries
-            },
-        )
+            })
     }
     /// Get an iterator to entries in the [`Scope`].
     #[inline]
@@ -554,10 +552,8 @@ impl Scope<'_> {
     pub(crate) fn into_iter(self) -> impl Iterator<Item = (Identifier, Dynamic, Vec<Identifier>)> {
         self.names
             .into_iter()
-            .zip(self.values.into_iter())
-            .map(|((name, alias), value)| {
-                (name, value, alias.map(|a| a.to_vec()).unwrap_or_default())
-            })
+            .zip(self.values.into_iter().zip(self.aliases.into_iter()))
+            .map(|(name, (value, alias))| (name, value, alias))
     }
     /// Get an iterator to entries in the [`Scope`].
     /// Shared values are flatten-cloned.
@@ -596,7 +592,7 @@ impl Scope<'_> {
         self.names
             .iter()
             .zip(self.values.iter())
-            .map(|((name, ..), value)| (name.as_ref(), value.is_read_only(), value))
+            .map(|(name, value)| (name.as_ref(), value.is_read_only(), value))
     }
     /// Get a reverse iterator to entries in the [`Scope`].
     /// Shared values are not expanded.
@@ -606,7 +602,7 @@ impl Scope<'_> {
             .iter()
             .rev()
             .zip(self.values.iter().rev())
-            .map(|((name, ..), value)| (name.as_ref(), value.is_read_only(), value))
+            .map(|(name, value)| (name.as_ref(), value.is_read_only(), value))
     }
     /// Remove a range of entries within the [`Scope`].
     ///
@@ -618,6 +614,7 @@ impl Scope<'_> {
     pub(crate) fn remove_range(&mut self, start: usize, len: usize) {
         self.values.drain(start..start + len).for_each(|_| {});
         self.names.drain(start..start + len).for_each(|_| {});
+        self.aliases.drain(start..start + len).for_each(|_| {});
     }
 }
 

@@ -20,7 +20,7 @@ impl Engine {
         state: &mut EvalState,
         namespace: &crate::module::Namespace,
     ) -> Option<crate::Shared<Module>> {
-        let root = &namespace[0].name;
+        let root = namespace.root();
 
         // Qualified - check if the root module is directly indexed
         let index = if state.always_search_scope {
@@ -72,32 +72,24 @@ impl Engine {
                 (_, Some((namespace, hash_var)), var_name) => {
                     // foo:bar::baz::VARIABLE
                     if let Some(module) = self.search_imports(global, state, namespace) {
-                        return match module.get_qualified_var(*hash_var) {
-                            Ok(target) => {
-                                let mut target = target.clone();
-                                // Module variables are constant
-                                target.set_access_mode(AccessMode::ReadOnly);
-                                Ok((target.into(), *_var_pos))
-                            }
-                            Err(err) => Err(match *err {
-                                ERR::ErrorVariableNotFound(..) => ERR::ErrorVariableNotFound(
-                                    format!(
-                                        "{}{}{}",
-                                        namespace,
-                                        crate::tokenizer::Token::DoubleColon.literal_syntax(),
-                                        var_name
-                                    ),
-                                    namespace[0].pos,
-                                )
-                                .into(),
-                                _ => err.fill_position(*_var_pos),
-                            }),
+                        return if let Some(mut target) = module.get_qualified_var(*hash_var) {
+                            // Module variables are constant
+                            target.set_access_mode(AccessMode::ReadOnly);
+                            Ok((target.into(), *_var_pos))
+                        } else {
+                            let sep = crate::tokenizer::Token::DoubleColon.literal_syntax();
+
+                            Err(ERR::ErrorVariableNotFound(
+                                format!("{}{}{}", namespace, sep, var_name),
+                                namespace.position(),
+                            )
+                            .into())
                         };
                     }
 
                     // global::VARIABLE
                     #[cfg(not(feature = "no_function"))]
-                    if namespace.len() == 1 && namespace[0].name == crate::engine::KEYWORD_GLOBAL {
+                    if namespace.len() == 1 && namespace.root() == crate::engine::KEYWORD_GLOBAL {
                         if let Some(ref constants) = global.constants {
                             if let Some(value) =
                                 crate::func::locked_write(constants).get_mut(var_name)
@@ -109,19 +101,19 @@ impl Engine {
                             }
                         }
 
+                        let sep = crate::tokenizer::Token::DoubleColon.literal_syntax();
+
                         return Err(ERR::ErrorVariableNotFound(
-                            format!(
-                                "{}{}{}",
-                                namespace,
-                                crate::tokenizer::Token::DoubleColon.literal_syntax(),
-                                var_name
-                            ),
-                            namespace[0].pos,
+                            format!("{}{}{}", namespace, sep, var_name),
+                            namespace.position(),
                         )
                         .into());
                     }
 
-                    Err(ERR::ErrorModuleNotFound(namespace.to_string(), namespace[0].pos).into())
+                    Err(
+                        ERR::ErrorModuleNotFound(namespace.to_string(), namespace.position())
+                            .into(),
+                    )
                 }
             },
             _ => unreachable!("Expr::Variable expected but gets {:?}", expr),

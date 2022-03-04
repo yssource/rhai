@@ -1,9 +1,7 @@
 //! Module implementing the [`AST`] optimizer.
 #![cfg(not(feature = "no_optimize"))]
 
-use crate::ast::{
-    Expr, OpAssignment, Stmt, StmtBlock, StmtBlockContainer, SwitchCases, AST_OPTION_FLAGS::*,
-};
+use crate::ast::{ASTFlags, Expr, OpAssignment, Stmt, StmtBlock, StmtBlockContainer, SwitchCases};
 use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::eval::{EvalState, GlobalRuntimeState};
 use crate::func::builtin::get_builtin_binary_op_fn;
@@ -255,7 +253,7 @@ fn optimize_stmt_block(
         for stmt in statements.iter_mut() {
             match stmt {
                 Stmt::Var(x, options, ..) => {
-                    if options.contains(AST_OPTION_CONSTANT) {
+                    if options.contains(ASTFlags::CONSTANT) {
                         // Add constant literals into the state
                         optimize_expr(&mut x.1, state, false);
 
@@ -324,7 +322,7 @@ fn optimize_stmt_block(
                 match statements[..] {
                     // { return; } -> {}
                     [Stmt::Return(None, options, ..)]
-                        if reduce_return && !options.contains(AST_OPTION_BREAK) =>
+                        if reduce_return && !options.contains(ASTFlags::BREAK) =>
                     {
                         state.set_dirty();
                         statements.clear();
@@ -336,7 +334,7 @@ fn optimize_stmt_block(
                     // { ...; return; } -> { ... }
                     [.., ref last_stmt, Stmt::Return(None, options, ..)]
                         if reduce_return
-                            && !options.contains(AST_OPTION_BREAK)
+                            && !options.contains(ASTFlags::BREAK)
                             && !last_stmt.returns_value() =>
                     {
                         state.set_dirty();
@@ -344,7 +342,7 @@ fn optimize_stmt_block(
                     }
                     // { ...; return val; } -> { ...; val }
                     [.., Stmt::Return(ref mut expr, options, pos)]
-                        if reduce_return && !options.contains(AST_OPTION_BREAK) =>
+                        if reduce_return && !options.contains(ASTFlags::BREAK) =>
                     {
                         state.set_dirty();
                         *statements.last_mut().unwrap() = expr
@@ -381,7 +379,7 @@ fn optimize_stmt_block(
                     }
                     // { ...; return; } -> { ... }
                     [.., Stmt::Return(None, options, ..)]
-                        if reduce_return && !options.contains(AST_OPTION_BREAK) =>
+                        if reduce_return && !options.contains(ASTFlags::BREAK) =>
                     {
                         state.set_dirty();
                         statements.pop().unwrap();
@@ -389,7 +387,7 @@ fn optimize_stmt_block(
                     // { ...; return pure_val; } -> { ... }
                     [.., Stmt::Return(Some(ref expr), options, ..)]
                         if reduce_return
-                            && !options.contains(AST_OPTION_BREAK)
+                            && !options.contains(ASTFlags::BREAK)
                             && expr.is_pure() =>
                     {
                         state.set_dirty();
@@ -745,7 +743,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
             if body.len() == 1 {
                 match body[0] {
                     // while expr { break; } -> { expr; }
-                    Stmt::BreakLoop(options, pos) if options.contains(AST_OPTION_BREAK) => {
+                    Stmt::BreakLoop(options, pos) if options.contains(ASTFlags::BREAK) => {
                         // Only a single break statement - turn into running the guard expression once
                         state.set_dirty();
                         if !condition.is_unit() {
@@ -765,7 +763,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
         // do { block } until true -> { block }
         Stmt::Do(x, options, ..)
             if matches!(x.0, Expr::BoolConstant(true, ..))
-                && options.contains(AST_OPTION_NEGATED) =>
+                && options.contains(ASTFlags::NEGATED) =>
         {
             state.set_dirty();
             *stmt = (
@@ -777,7 +775,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
         // do { block } while false -> { block }
         Stmt::Do(x, options, ..)
             if matches!(x.0, Expr::BoolConstant(false, ..))
-                && !options.contains(AST_OPTION_NEGATED) =>
+                && !options.contains(ASTFlags::NEGATED) =>
         {
             state.set_dirty();
             *stmt = (
@@ -797,7 +795,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
             *x.3 = optimize_stmt_block(mem::take(&mut *x.3), state, false, true, false);
         }
         // let id = expr;
-        Stmt::Var(x, options, ..) if !options.contains(AST_OPTION_CONSTANT) => {
+        Stmt::Var(x, options, ..) if !options.contains(ASTFlags::CONSTANT) => {
             optimize_expr(&mut x.1, state, false)
         }
         // import expr as var;
@@ -1145,7 +1143,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
 
         // Eagerly call functions
         Expr::FnCall(x, pos)
-                if !x.is_qualified() // Non-qualified
+                if !x.is_qualified() // non-qualified
                 && state.optimization_level == OptimizationLevel::Full // full optimizations
                 && x.args.iter().all(Expr::is_constant) // all arguments are constants
         => {
@@ -1178,8 +1176,8 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
             x.args.iter_mut().for_each(|a| optimize_expr(a, state, false));
         }
 
-        // id(args ..) -> optimize function call arguments
-        Expr::FnCall(x, ..) => for arg in x.args.iter_mut() {
+        // id(args ..) or xxx.id(args ..) -> optimize function call arguments
+        Expr::FnCall(x, ..) | Expr::MethodCall(x, ..) => for arg in x.args.iter_mut() {
             optimize_expr(arg, state, false);
 
             // Move constant arguments

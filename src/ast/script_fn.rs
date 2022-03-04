@@ -34,8 +34,6 @@ pub struct ScriptFnDef {
     /// Function body.
     pub body: StmtBlock,
     /// Encapsulated AST environment, if any.
-    ///
-    /// Not available under `no_module` or `no_function`.
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
     pub environ: Option<EncapsulatedEnviron>,
@@ -75,8 +73,15 @@ impl fmt::Display for ScriptFnDef {
 /// Not available under `no_function`.
 ///
 /// Created by [`AST::iter_functions`][super::AST::iter_functions].
-#[derive(Debug, Eq, PartialEq, Clone, Hash)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Hash)]
+#[non_exhaustive]
 pub struct ScriptFnMetadata<'a> {
+    /// Function name.
+    pub name: &'a str,
+    /// Function parameters (if any).
+    pub params: Box<[&'a str]>,
+    /// Function access mode.
+    pub access: FnAccess,
     /// _(metadata)_ Function doc-comments (if any).
     /// Exported under the `metadata` feature only.
     ///
@@ -86,14 +91,9 @@ pub struct ScriptFnMetadata<'a> {
     ///
     /// Leading white-spaces are stripped, and each string slice always starts with the
     /// corresponding doc-comment leader: `///` or `/**`.
-    #[cfg(feature = "metadata")]
-    pub comments: Vec<&'a str>,
     /// Function access mode.
-    pub access: FnAccess,
-    /// Function name.
-    pub name: &'a str,
-    /// Function parameters (if any).
-    pub params: Vec<&'a str>,
+    #[cfg(feature = "metadata")]
+    pub comments: Box<[&'a str]>,
 }
 
 impl fmt::Display for ScriptFnMetadata<'_> {
@@ -119,29 +119,24 @@ impl<'a> From<&'a ScriptFnDef> for ScriptFnMetadata<'a> {
     #[inline]
     fn from(value: &'a ScriptFnDef) -> Self {
         Self {
-            #[cfg(feature = "metadata")]
-            comments: value
-                .comments
-                .as_ref()
-                .map_or_else(|| Vec::new(), |v| v.iter().map(Box::as_ref).collect()),
-            access: value.access,
             name: &value.name,
-            params: value.params.iter().map(|s| s.as_str()).collect(),
-        }
-    }
-}
-
-impl std::cmp::PartialOrd for ScriptFnMetadata<'_> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl std::cmp::Ord for ScriptFnMetadata<'_> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        match self.name.cmp(other.name) {
-            std::cmp::Ordering::Equal => self.params.len().cmp(&other.params.len()),
-            cmp => cmp,
+            params: value
+                .params
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+            access: value.access,
+            #[cfg(feature = "metadata")]
+            comments: value.comments.as_ref().map_or_else(
+                || Vec::new().into_boxed_slice(),
+                |v| {
+                    v.iter()
+                        .map(Box::as_ref)
+                        .collect::<Vec<_>>()
+                        .into_boxed_slice()
+                },
+            ),
         }
     }
 }

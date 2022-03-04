@@ -162,8 +162,6 @@ pub enum Union {
     /// An integer value.
     Int(INT, Tag, AccessMode),
     /// A floating-point value.
-    ///
-    /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     Float(crate::ast::FloatWrapper<crate::FLOAT>, Tag, AccessMode),
     /// _(decimal)_ A fixed-precision decimal value.
@@ -171,25 +169,17 @@ pub enum Union {
     #[cfg(feature = "decimal")]
     Decimal(Box<rust_decimal::Decimal>, Tag, AccessMode),
     /// An array value.
-    ///
-    /// Not available under `no_index`.
     #[cfg(not(feature = "no_index"))]
     Array(Box<crate::Array>, Tag, AccessMode),
     /// An blob (byte array).
-    ///
-    /// Not available under `no_index`.
     #[cfg(not(feature = "no_index"))]
     Blob(Box<crate::Blob>, Tag, AccessMode),
     /// An object map value.
-    ///
-    /// Not available under `no_object`.
     #[cfg(not(feature = "no_object"))]
     Map(Box<crate::Map>, Tag, AccessMode),
     /// A function pointer.
     FnPtr(Box<FnPtr>, Tag, AccessMode),
     /// A timestamp value.
-    ///
-    /// Not available under `no-std`.
     #[cfg(not(feature = "no_std"))]
     TimeStamp(Box<Instant>, Tag, AccessMode),
 
@@ -198,8 +188,6 @@ pub enum Union {
     Variant(Box<Box<dyn Variant>>, Tag, AccessMode),
 
     /// A _shared_ value of any type.
-    ///
-    /// Not available under `no_closure`.
     #[cfg(not(feature = "no_closure"))]
     Shared(crate::Shared<crate::Locked<Dynamic>>, Tag, AccessMode),
 }
@@ -218,14 +206,9 @@ enum DynamicReadLockInner<'d, T: Clone> {
     /// A simple reference to a non-shared value.
     Reference(&'d T),
 
-    /// A read guard to a shared [`RefCell`][std::cell::RefCell].
+    /// A read guard to a shared value.
     #[cfg(not(feature = "no_closure"))]
-    #[cfg(not(feature = "sync"))]
-    Guard(std::cell::Ref<'d, Dynamic>),
-    /// A read guard to a shared [`RwLock`][std::sync::RwLock].
-    #[cfg(not(feature = "no_closure"))]
-    #[cfg(feature = "sync")]
-    Guard(std::sync::RwLockReadGuard<'d, Dynamic>),
+    Guard(crate::func::native::LockGuard<'d, Dynamic>),
 }
 
 impl<'d, T: Any + Clone> Deref for DynamicReadLock<'d, T> {
@@ -256,10 +239,8 @@ enum DynamicWriteLockInner<'d, T: Clone> {
     Reference(&'d mut T),
 
     /// A write guard to a shared value.
-    ///
-    /// Not available under `no_closure`.
     #[cfg(not(feature = "no_closure"))]
-    Guard(crate::func::native::LockGuard<'d, Dynamic>),
+    Guard(crate::func::native::LockGuardMut<'d, Dynamic>),
 }
 
 impl<'d, T: Any + Clone> Deref for DynamicWriteLock<'d, T> {

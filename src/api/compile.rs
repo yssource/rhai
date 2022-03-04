@@ -101,7 +101,8 @@ impl Engine {
                 // Collect all `import` statements with a string constant path
                 ASTNode::Stmt(Stmt::Import(x, ..)) => match x.0 {
                     Expr::StringConstant(ref s, ..)
-                        if !resolver.contains_path(s) && !imports.contains(s.as_str()) =>
+                        if !resolver.contains_path(s)
+                            && (imports.is_empty() || !imports.contains(s.as_str())) =>
                     {
                         imports.insert(s.clone().into());
                         true

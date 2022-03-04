@@ -59,7 +59,7 @@ impl StringsInterner {
             _ => unreachable!("unsupported prefix {}", prefix.as_ref()),
         };
 
-        if dict.contains_key(text.as_ref()) {
+        if !dict.is_empty() && dict.contains_key(text.as_ref()) {
             dict.get(text.as_ref()).unwrap().clone()
         } else {
             let value: ImmutableString = mapper(text.as_ref()).into();

@@ -14,11 +14,20 @@ Bug fixes
 
 * Invalid property or method access such as `a.b::c.d` or `a.b::func()` no longer panics but properly returns a syntax error.
 * `Scope::is_constant` now returns the correct value.
+* Exporting a variable that contains a local function pointer (including anonymous function or closure) now raises a runtime error.
+* Full optimization is now skipped for method calls.
+
+Breaking changes
+----------------
+
+* `ScriptFnMetadata` fields `params` and `comments` are changed to boxed slices instead of `Vec`. In the vast majority of cases this should not cause code breakage.
 
 Enhancements
 ------------
 
 * Variable definitions are optimized so that shadowed variables are reused as much as possible to reduce memory consumption.
+* `FnAccess` and `FnNamespace` now implement `Ord` and `PartialOrd`.
+* The `event_handler_map` example is enhanced to prevent shadowing of the state object map.
 
 
 Version 1.5.0

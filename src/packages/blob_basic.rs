@@ -241,7 +241,7 @@ pub mod blob_functions {
     /// print(b);       // prints "[424242424268656c 6c6f]"
     /// ```
     #[rhai_fn(name = "+=", name = "append")]
-    pub fn append_str(blob: &mut Blob, string: ImmutableString) {
+    pub fn append_str(blob: &mut Blob, string: &str) {
         if !string.is_empty() {
             blob.extend(string.as_bytes());
         }

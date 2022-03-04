@@ -1,6 +1,6 @@
 //! Module defining script expressions.
 
-use super::{ASTNode, Ident, Stmt, StmtBlock};
+use super::{ASTFlags, ASTNode, Ident, Stmt, StmtBlock};
 use crate::engine::{KEYWORD_FN_PTR, OP_EXCLUSIVE_RANGE, OP_INCLUSIVE_RANGE};
 use crate::func::hashing::ALT_ZERO_HASH;
 use crate::tokenizer::Token;
@@ -168,8 +168,6 @@ impl FnCallHashes {
 #[derive(Clone, Default, Hash)]
 pub struct FnCallExpr {
     /// Namespace of the function, if any.
-    ///
-    /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     pub namespace: Option<crate::module::Namespace>,
     /// Function name.
@@ -199,15 +197,17 @@ impl fmt::Debug for FnCallExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut ff = f.debug_struct("FnCallExpr");
         #[cfg(not(feature = "no_module"))]
-        self.namespace.as_ref().map(|ns| ff.field("namespace", ns));
-        ff.field("name", &self.name)
-            .field("hash", &self.hashes)
-            .field("arg_exprs", &self.args);
-        if !self.constants.is_empty() {
-            ff.field("constant_args", &self.constants);
+        if let Some(ref ns) = self.namespace {
+            ff.field("namespace", ns);
         }
         if self.capture_parent_scope {
             ff.field("capture_parent_scope", &self.capture_parent_scope);
+        }
+        ff.field("hash", &self.hashes)
+            .field("name", &self.name)
+            .field("args", &self.args);
+        if !self.constants.is_empty() {
+            ff.field("constants", &self.constants);
         }
         ff.field("pos", &self.pos);
         ff.finish()
@@ -369,8 +369,6 @@ pub enum Expr {
     /// Integer constant.
     IntegerConstant(INT, Position),
     /// Floating-point constant.
-    ///
-    /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     FloatConstant(FloatWrapper<crate::FLOAT>, Position),
     /// Character constant.
@@ -409,6 +407,8 @@ pub enum Expr {
         Box<((Identifier, u64), (Identifier, u64), ImmutableString)>,
         Position,
     ),
+    /// xxx `.` method `(` expr `,` ... `)`
+    MethodCall(Box<FnCallExpr>, Position),
     /// Stack slot for function calls.  See [`FnCallExpr`] for more details.
     ///
     /// This variant does not map to any language structure.  It is used in function calls with
@@ -419,10 +419,15 @@ pub enum Expr {
     Stmt(Box<StmtBlock>),
     /// func `(` expr `,` ... `)`
     FnCall(Box<FnCallExpr>, Position),
-    /// lhs `.` rhs - boolean variable is a dummy
-    Dot(Box<BinaryExpr>, bool, Position),
-    /// lhs `[` rhs `]` - boolean indicates whether the dotting/indexing chain stops
-    Index(Box<BinaryExpr>, bool, Position),
+    /// lhs `.` rhs
+    Dot(Box<BinaryExpr>, ASTFlags, Position),
+    /// lhs `[` rhs `]`
+    ///
+    /// ### Flags
+    ///
+    /// [`NONE`][ASTFlags::NONE] = recurse into the indexing chain
+    /// [`BREAK`][ASTFlags::BREAK] = terminate the indexing chain
+    Index(Box<BinaryExpr>, ASTFlags, Position),
     /// lhs `&&` rhs
     And(Box<BinaryExpr>, Position),
     /// lhs `||` rhs
@@ -484,6 +489,7 @@ impl fmt::Debug for Expr {
                 f.write_str(")")
             }
             Self::Property(x, ..) => write!(f, "Property({})", x.2),
+            Self::MethodCall(x, ..) => f.debug_tuple("MethodCall").field(x).finish(),
             Self::Stack(x, ..) => write!(f, "ConstantArg[{}]", x),
             Self::Stmt(x) => {
                 let pos = x.span();
@@ -570,11 +576,7 @@ impl Expr {
                 if !x.is_qualified() && x.args.len() == 1 && x.name == KEYWORD_FN_PTR =>
             {
                 if let Expr::StringConstant(ref s, ..) = x.args[0] {
-                    if let Ok(fn_ptr) = FnPtr::new(s) {
-                        fn_ptr.into()
-                    } else {
-                        return None;
-                    }
+                    FnPtr::new(s).ok()?.into()
                 } else {
                     return None;
                 }
@@ -711,7 +713,7 @@ impl Expr {
             | Self::InterpolatedString(.., pos)
             | Self::Property(.., pos) => *pos,
 
-            Self::FnCall(x, ..) => x.pos,
+            Self::FnCall(x, ..) | Self::MethodCall(x, ..) => x.pos,
 
             Self::Stmt(x) => x.position(),
         }
@@ -759,6 +761,7 @@ impl Expr {
             | Self::Variable(.., pos, _)
             | Self::Stack(.., pos)
             | Self::FnCall(.., pos)
+            | Self::MethodCall(.., pos)
             | Self::Custom(.., pos)
             | Self::InterpolatedString(.., pos)
             | Self::Property(.., pos) => *pos = new_pos,
@@ -842,6 +845,7 @@ impl Expr {
             | Self::StringConstant(..)
             | Self::InterpolatedString(..)
             | Self::FnCall(..)
+            | Self::MethodCall(..)
             | Self::Stmt(..)
             | Self::Dot(..)
             | Self::Index(..)

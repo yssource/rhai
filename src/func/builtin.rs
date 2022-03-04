@@ -288,7 +288,7 @@ pub fn get_builtin_binary_op_fn(op: &str, x: &Dynamic, y: &Dynamic) -> Option<Fn
                 OP_CONTAINS => Some(|_, args| {
                     let blob = &*args[0].read_lock::<Blob>().expect(BUILTIN);
                     let x = (args[1].as_int().expect("`INT`") & 0x000000ff) as u8;
-                    Ok(blob.contains(&x).into())
+                    Ok((!blob.is_empty() && blob.contains(&x)).into())
                 }),
                 _ => None,
             };

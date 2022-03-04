@@ -459,8 +459,50 @@ impl Sub<String> for &ImmutableString {
 impl SubAssign<String> for ImmutableString {
     #[inline]
     fn sub_assign(&mut self, rhs: String) {
-        let rhs: SmartString = self.replace(&rhs, "").into();
-        self.0 = rhs.into();
+        if !rhs.is_empty() {
+            let rhs: SmartString = self.replace(&rhs, "").into();
+            self.0 = rhs.into();
+        }
+    }
+}
+
+impl Sub<&str> for ImmutableString {
+    type Output = Self;
+
+    #[inline]
+    fn sub(self, rhs: &str) -> Self::Output {
+        if rhs.is_empty() {
+            self
+        } else if self.is_empty() {
+            rhs.into()
+        } else {
+            self.replace(rhs, "").into()
+        }
+    }
+}
+
+impl Sub<&str> for &ImmutableString {
+    type Output = ImmutableString;
+
+    #[inline]
+    fn sub(self, rhs: &str) -> Self::Output {
+        if rhs.is_empty() {
+            self.clone()
+        } else if self.is_empty() {
+            rhs.into()
+        } else {
+            self.replace(rhs, "").into()
+        }
+    }
+}
+
+impl SubAssign<&str> for ImmutableString {
+    #[inline]
+    fn sub_assign(&mut self, rhs: &str) {
+        if !rhs.is_empty() {
+            let rhs: SmartString = self.replace(rhs, "").into();
+            self.0 = rhs.into();
+        }
     }
 }
 

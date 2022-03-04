@@ -21,8 +21,6 @@ pub enum CallableFunction {
     /// A plugin function,
     Plugin(Shared<FnPlugin>),
     /// A script-defined function.
-    ///
-    /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     Script(Shared<crate::ast::ScriptFnDef>),
 }
