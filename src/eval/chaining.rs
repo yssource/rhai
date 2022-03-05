@@ -684,16 +684,13 @@ impl Engine {
             Expr::MethodCall(x, ..)
                 if _parent_chain_type == ChainType::Dotting && !x.is_qualified() =>
             {
-                let crate::ast::FnCallExpr {
-                    args, constants, ..
-                } = x.as_ref();
+                let crate::ast::FnCallExpr { args, .. } = x.as_ref();
 
                 let (values, pos) = args.iter().try_fold(
                     (crate::FnArgsVec::with_capacity(args.len()), Position::NONE),
                     |(mut values, mut pos), expr| {
-                        let (value, arg_pos) = self.get_arg_value(
-                            scope, global, state, lib, this_ptr, expr, constants, level,
-                        )?;
+                        let (value, arg_pos) =
+                            self.get_arg_value(scope, global, state, lib, this_ptr, expr, level)?;
                         if values.is_empty() {
                             pos = arg_pos;
                         }
@@ -732,15 +729,13 @@ impl Engine {
                     Expr::MethodCall(x, ..)
                         if _parent_chain_type == ChainType::Dotting && !x.is_qualified() =>
                     {
-                        let crate::ast::FnCallExpr {
-                            args, constants, ..
-                        } = x.as_ref();
+                        let crate::ast::FnCallExpr { args, .. } = x.as_ref();
 
                         let (values, pos) = args.iter().try_fold(
                             (crate::FnArgsVec::with_capacity(args.len()), Position::NONE),
                             |(mut values, mut pos), expr| {
                                 let (value, arg_pos) = self.get_arg_value(
-                                    scope, global, state, lib, this_ptr, expr, constants, level,
+                                    scope, global, state, lib, this_ptr, expr, level,
                                 )?;
                                 if values.is_empty() {
                                     pos = arg_pos

@@ -521,7 +521,6 @@ impl Engine {
                     namespace,
                     hashes,
                     args,
-                    constants: StaticVec::new_const(),
                     pos: settings.pos,
                 }
                 .into_fn_call_expr(settings.pos));
@@ -586,7 +585,6 @@ impl Engine {
                         namespace,
                         hashes,
                         args,
-                        constants: StaticVec::new_const(),
                         pos: settings.pos,
                     }
                     .into_fn_call_expr(settings.pos));

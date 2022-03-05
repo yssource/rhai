@@ -176,17 +176,6 @@ pub struct FnCallExpr {
     pub hashes: FnCallHashes,
     /// List of function call argument expressions.
     pub args: StaticVec<Expr>,
-    /// List of function call arguments that are constants.
-    ///
-    /// Any arguments in `args` that is [`Expr::Stack`] indexes into this
-    /// array to find the constant for use as its argument value.
-    ///
-    /// # Notes
-    ///
-    /// Constant arguments are very common in function calls, and keeping each constant in
-    /// an [`Expr::DynamicConstant`] involves an additional allocation.  Keeping the constant
-    /// values in an inlined array avoids these extra allocations.
-    pub constants: StaticVec<Dynamic>,
     /// Does this function call capture the parent scope?
     pub capture_parent_scope: bool,
     /// [Position] of the function name.
@@ -206,9 +195,6 @@ impl fmt::Debug for FnCallExpr {
         ff.field("hash", &self.hashes)
             .field("name", &self.name)
             .field("args", &self.args);
-        if !self.constants.is_empty() {
-            ff.field("constants", &self.constants);
-        }
         ff.field("pos", &self.pos);
         ff.finish()
     }
@@ -409,12 +395,6 @@ pub enum Expr {
     ),
     /// xxx `.` method `(` expr `,` ... `)`
     MethodCall(Box<FnCallExpr>, Position),
-    /// Stack slot for function calls.  See [`FnCallExpr`] for more details.
-    ///
-    /// This variant does not map to any language structure.  It is used in function calls with
-    /// constant arguments where the `usize` number indexes into an array containing a list of
-    /// constant arguments for the function call.
-    Stack(usize, Position),
     /// { [statement][Stmt] ... }
     Stmt(Box<StmtBlock>),
     /// func `(` expr `,` ... `)`
@@ -490,7 +470,6 @@ impl fmt::Debug for Expr {
             }
             Self::Property(x, ..) => write!(f, "Property({})", x.2),
             Self::MethodCall(x, ..) => f.debug_tuple("MethodCall").field(x).finish(),
-            Self::Stack(x, ..) => write!(f, "ConstantArg[{}]", x),
             Self::Stmt(x) => {
                 let pos = x.span();
                 if !pos.is_none() {
@@ -645,8 +624,7 @@ impl Expr {
                     namespace: None,
                     name: KEYWORD_FN_PTR.into(),
                     hashes: calc_fn_hash(f.fn_name(), 1).into(),
-                    args: once(Self::Stack(0, pos)).collect(),
-                    constants: once(f.fn_name().into()).collect(),
+                    args: once(Self::StringConstant(f.fn_name().into(), pos)).collect(),
                     capture_parent_scope: false,
                     pos,
                 }
@@ -704,7 +682,6 @@ impl Expr {
             | Self::Array(.., pos)
             | Self::Map(.., pos)
             | Self::Variable(.., pos, _)
-            | Self::Stack(.., pos)
             | Self::And(.., pos)
             | Self::Or(.., pos)
             | Self::Index(.., pos)
@@ -759,7 +736,6 @@ impl Expr {
             | Self::Dot(.., pos)
             | Self::Index(.., pos)
             | Self::Variable(.., pos, _)
-            | Self::Stack(.., pos)
             | Self::FnCall(.., pos)
             | Self::MethodCall(.., pos)
             | Self::Custom(.., pos)
@@ -786,7 +762,7 @@ impl Expr {
 
             Self::Stmt(x) => x.iter().all(Stmt::is_pure),
 
-            Self::Variable(..) | Self::Stack(..) => true,
+            Self::Variable(..) => true,
 
             _ => self.is_constant(),
         }
@@ -810,8 +786,7 @@ impl Expr {
             | Self::IntegerConstant(..)
             | Self::CharConstant(..)
             | Self::StringConstant(..)
-            | Self::Unit(..)
-            | Self::Stack(..) => true,
+            | Self::Unit(..) => true,
 
             Self::InterpolatedString(x, ..) | Self::Array(x, ..) => x.iter().all(Self::is_constant),
 
@@ -872,8 +847,6 @@ impl Expr {
                 Token::LeftParen => true,
                 _ => false,
             },
-
-            Self::Stack(..) => false,
         }
     }
     /// Recursively walk this expression.

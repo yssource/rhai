@@ -212,7 +212,6 @@ impl Engine {
             capture_parent_scope: capture,
             hashes,
             args,
-            constants,
             ..
         } = expr;
 
@@ -222,8 +221,7 @@ impl Engine {
             let hash = hashes.native;
 
             return self.make_qualified_function_call(
-                scope, global, state, lib, this_ptr, namespace, name, args, constants, hash, pos,
-                level,
+                scope, global, state, lib, this_ptr, namespace, name, args, hash, pos, level,
             );
         }
 
@@ -234,8 +232,8 @@ impl Engine {
         );
 
         self.make_function_call(
-            scope, global, state, lib, this_ptr, name, first_arg, args, constants, *hashes,
-            *capture, pos, level,
+            scope, global, state, lib, this_ptr, name, first_arg, args, *hashes, *capture, pos,
+            level,
         )
     }
 

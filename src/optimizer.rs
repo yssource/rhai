@@ -438,15 +438,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                 Expr::FnCall(ref mut x2, ..) => {
                     state.set_dirty();
                     x.0 = Some(OpAssignment::new_from_base(&x2.name));
-
-                    let value = mem::take(&mut x2.args[1]);
-
-                    if let Expr::Stack(slot, pos) = value {
-                        x.1.rhs =
-                            Expr::from_dynamic(mem::take(x2.constants.get_mut(slot).unwrap()), pos);
-                    } else {
-                        x.1.rhs = value;
-                    }
+                    x.1.rhs = mem::take(&mut x2.args[1]);
                 }
                 ref expr => unreachable!("Expr::FnCall expected but gets {:?}", expr),
             }
@@ -1063,7 +1055,6 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
             && x.args[0].is_constant()
         => {
             let fn_name = match x.args[0] {
-                Expr::Stack(slot, ..) => x.constants[slot].clone(),
                 Expr::StringConstant(ref s, ..) => s.clone().into(),
                 _ => Dynamic::UNIT
             };
@@ -1088,11 +1079,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                 && x.args.iter().all(Expr::is_constant) // all arguments are constants
                 //&& !is_valid_identifier(x.name.chars()) // cannot be scripted
         => {
-            let arg_values = &mut x.args.iter().map(|e| match e {
-                                                            Expr::Stack(slot, ..) => x.constants[*slot].clone(),
-                                                            _ => e.get_literal_value().unwrap()
-                                                        }).collect::<StaticVec<_>>();
-
+            let arg_values = &mut x.args.iter().map(|e| e.get_literal_value().unwrap()).collect::<StaticVec<_>>();
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
 
             match x.name.as_str() {
@@ -1131,14 +1118,21 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
             x.args.iter_mut().for_each(|a| optimize_expr(a, state, false));
 
             // Move constant arguments
-            let constants = &mut x.constants;
-            x.args.iter_mut().for_each(|arg| {
-                if let Some(value) = arg.get_literal_value() {
-                    state.set_dirty();
-                    constants.push(value);
-                    *arg = Expr::Stack(constants.len()-1, arg.start_position());
+            for arg in x.args.iter_mut() {
+                match arg {
+                    Expr::DynamicConstant(..) | Expr::Unit(..)
+                    | Expr::StringConstant(..) | Expr::CharConstant(..)
+                    | Expr::BoolConstant(..) | Expr::IntegerConstant(..) => (),
+    
+                    #[cfg(not(feature = "no_float"))]
+                    Expr:: FloatConstant(..) => (),
+    
+                    _ => if let Some(value) = arg.get_literal_value() {
+                        state.set_dirty();
+                        *arg = Expr::DynamicConstant(value.into(), arg.start_position());
+                    },
                 }
-            });
+            }
         }
 
         // Eagerly call functions
@@ -1154,10 +1148,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
             let has_script_fn = false;
 
             if !has_script_fn {
-                let arg_values = &mut x.args.iter().map(|e| match e {
-                                                                Expr::Stack(slot, ..) => x.constants[*slot].clone(),
-                                                                _ => e.get_literal_value().unwrap()
-                                                            }).collect::<StaticVec<_>>();
+                let arg_values = &mut x.args.iter().map(|e| e.get_literal_value().unwrap()).collect::<StaticVec<_>>();
 
                 let result = match x.name.as_str() {
                     KEYWORD_TYPE_OF if arg_values.len() == 1 => Some(state.engine.map_type_name(arg_values[0].type_name()).into()),
@@ -1181,10 +1172,18 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
             optimize_expr(arg, state, false);
 
             // Move constant arguments
-            if let Some(value) = arg.get_literal_value() {
-                state.set_dirty();
-                x.constants.push(value);
-                *arg = Expr::Stack(x.constants.len()-1, arg.start_position());
+            match arg {
+                Expr::DynamicConstant(..) | Expr::Unit(..)
+                | Expr::StringConstant(..) | Expr::CharConstant(..)
+                | Expr::BoolConstant(..) | Expr::IntegerConstant(..) => (),
+
+                #[cfg(not(feature = "no_float"))]
+                Expr:: FloatConstant(..) => (),
+
+                _ => if let Some(value) = arg.get_literal_value() {
+                    state.set_dirty();
+                    *arg = Expr::DynamicConstant(value.into(), arg.start_position());
+                },
             }
         },
 
