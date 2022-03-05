@@ -380,8 +380,8 @@ pub enum Expr {
     Variable(
         #[cfg(not(feature = "no_module"))]
         Box<(Option<NonZeroUsize>, super::Namespace, u64, Identifier)>,
+        #[cfg(feature = "no_module")] Box<(Option<NonZeroUsize>, (), u64, Identifier)>,
         Option<NonZeroU8>,
-        #[cfg(feature = "no_module")] Box<(Option<NonZeroUsize>, (), Identifier)>,
         Position,
     ),
     /// Property access - ((getter, hash), (setter, hash), prop)
