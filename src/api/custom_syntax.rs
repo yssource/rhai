@@ -72,8 +72,8 @@ impl Expression<'_> {
     pub fn get_string_value(&self) -> Option<&str> {
         match self.0 {
             #[cfg(not(feature = "no_module"))]
-            Expr::Variable(.., x) if x.1.is_some() => None,
-            Expr::Variable(.., x) => Some(x.2.as_str()),
+            Expr::Variable(x, ..) if !x.1.is_empty() => None,
+            Expr::Variable(x, ..) => Some(x.3.as_str()),
             Expr::StringConstant(x, ..) => Some(x.as_str()),
             _ => None,
         }
@@ -102,8 +102,8 @@ impl Expression<'_> {
 
             Expr::CharConstant(x, ..) => reify!(*x => Option<T>),
             Expr::StringConstant(x, ..) => reify!(x.clone() => Option<T>),
-            Expr::Variable(.., x) => {
-                let x: ImmutableString = x.2.clone().into();
+            Expr::Variable(x, ..) => {
+                let x: ImmutableString = x.3.clone().into();
                 reify!(x => Option<T>)
             }
             Expr::BoolConstant(x, ..) => reify!(*x => Option<T>),

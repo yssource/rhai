@@ -569,7 +569,7 @@ impl Engine {
 
             // For loop
             Stmt::For(x, ..) => {
-                let (Ident { name: var_name, .. }, counter, expr, statements) = x.as_ref();
+                let (var_name, counter, expr, statements) = x.as_ref();
 
                 let iter_result = self
                     .eval_expr(scope, global, state, lib, this_ptr, expr, level)
@@ -600,14 +600,14 @@ impl Engine {
                     if let Some(func) = func {
                         // Add the loop variables
                         let orig_scope_len = scope.len();
-                        let counter_index = if let Some(counter) = counter {
+                        let counter_index = if !counter.is_empty() {
                             scope.push(counter.name.clone(), 0 as INT);
                             scope.len() - 1
                         } else {
                             usize::MAX
                         };
 
-                        scope.push(var_name.clone(), ());
+                        scope.push(var_name.name.clone(), ());
                         let index = scope.len() - 1;
 
                         let mut loop_result = Ok(Dynamic::UNIT);
@@ -619,7 +619,7 @@ impl Engine {
                                 if x > INT::MAX as usize {
                                     loop_result = Err(ERR::ErrorArithmetic(
                                         format!("for-loop counter overflow: {}", x),
-                                        counter.as_ref().expect("`Some`").pos,
+                                        counter.pos,
                                     )
                                     .into());
                                     break;
@@ -707,7 +707,10 @@ impl Engine {
             Stmt::TryCatch(x, ..) => {
                 let TryCatchBlock {
                     try_block,
-                    catch_var,
+                    catch_var:
+                        Ident {
+                            name: catch_var, ..
+                        },
                     catch_block,
                 } = x.as_ref();
 
@@ -757,9 +760,9 @@ impl Engine {
 
                         let orig_scope_len = scope.len();
 
-                        catch_var
-                            .as_ref()
-                            .map(|Ident { name, .. }| scope.push(name.clone(), err_value));
+                        if !catch_var.is_empty() {
+                            scope.push(catch_var.clone(), err_value);
+                        }
 
                         let result = self.eval_stmt_block(
                             scope,
@@ -808,12 +811,12 @@ impl Engine {
             Stmt::Return(None, .., pos) => Err(ERR::Return(Dynamic::UNIT, *pos).into()),
 
             // Let/const statement - shadowing disallowed
-            Stmt::Var(x, .., pos) if !self.allow_shadowing() && scope.contains(&x.0.name) => {
-                Err(ERR::ErrorVariableExists(x.0.name.to_string(), *pos).into())
+            Stmt::Var(x, .., pos) if !self.allow_shadowing() && scope.contains(&x.0) => {
+                Err(ERR::ErrorVariableExists(x.0.to_string(), *pos).into())
             }
             // Let/const statement
             Stmt::Var(x, options, pos) => {
-                let (Ident { name: var_name, .. }, expr, index) = x.as_ref();
+                let (var_name, expr, index) = x.as_ref();
 
                 let access = if options.contains(ASTFlags::CONSTANT) {
                     AccessMode::ReadOnly
@@ -879,7 +882,7 @@ impl Engine {
                                     ));
                                 }
                                 crate::func::locked_write(global.constants.as_ref().unwrap())
-                                    .insert(var_name.clone(), value.clone());
+                                    .insert(var_name.name.clone(), value.clone());
                             }
 
                             if export {
@@ -897,12 +900,12 @@ impl Engine {
                             value.set_access_mode(access);
                             *scope.get_mut_by_index(scope.len() - index.get()) = value;
                         } else {
-                            scope.push_entry(var_name.clone(), access, value);
+                            scope.push_entry(var_name.name.clone(), access, value);
                         }
 
                         #[cfg(not(feature = "no_module"))]
                         if let Some(alias) = _alias {
-                            scope.add_entry_alias(scope.len() - 1, alias.clone());
+                            scope.add_entry_alias(scope.len() - 1, alias.name.clone());
                         }
 
                         Ok(Dynamic::UNIT)
@@ -958,14 +961,14 @@ impl Engine {
                         });
 
                     if let Ok(module) = module_result {
-                        if let Some(name) = export.as_ref().map(|x| x.name.clone()) {
+                        if !export.is_empty() {
                             if !module.is_indexed() {
                                 // Index the module (making a clone copy if necessary) if it is not indexed
-                                let mut module = crate::func::native::shared_take_or_clone(module);
-                                module.build_index();
-                                global.push_import(name, module);
+                                let mut m = crate::func::native::shared_take_or_clone(module);
+                                m.build_index();
+                                global.push_import(export.name.clone(), m);
                             } else {
-                                global.push_import(name, module);
+                                global.push_import(export.name.clone(), module);
                             }
                         }
 
@@ -983,7 +986,7 @@ impl Engine {
             // Export statement
             #[cfg(not(feature = "no_module"))]
             Stmt::Export(x, ..) => {
-                let (Ident { name, pos, .. }, Ident { name: alias, .. }) = x.as_ref();
+                let (Ident { name, pos, .. }, alias) = x.as_ref();
                 // Mark scope variables as public
                 if let Some((index, ..)) = scope.get_index(name) {
                     scope.add_entry_alias(

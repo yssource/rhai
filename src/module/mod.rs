@@ -2039,14 +2039,9 @@ impl Module {
     }
 }
 
-mod namespace;
-
 /// Module containing all built-in [module resolvers][ModuleResolver].
 #[cfg(not(feature = "no_module"))]
 pub mod resolvers;
-
-#[cfg(not(feature = "no_module"))]
-pub use namespace::Namespace;
 
 #[cfg(not(feature = "no_module"))]
 pub use resolvers::ModuleResolver;

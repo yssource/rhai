@@ -92,7 +92,7 @@ fn collect_fn_metadata(
     // Create a metadata record for a function.
     fn make_metadata(
         dict: &BTreeSet<Identifier>,
-        #[cfg(not(feature = "no_module"))] namespace: Option<Identifier>,
+        #[cfg(not(feature = "no_module"))] namespace: Identifier,
         func: &ScriptFnDef,
     ) -> Map {
         const DICT: &str = "key exists";
@@ -100,8 +100,8 @@ fn collect_fn_metadata(
         let mut map = Map::new();
 
         #[cfg(not(feature = "no_module"))]
-        if let Some(ns) = namespace {
-            map.insert(dict.get("namespace").expect(DICT).clone(), ns.into());
+        if !namespace.is_empty() {
+            map.insert(dict.get("namespace").expect(DICT).clone(), namespace.into());
         }
         map.insert(
             dict.get("name").expect(DICT).clone(),
@@ -157,7 +157,7 @@ fn collect_fn_metadata(
                 make_metadata(
                     &dict,
                     #[cfg(not(feature = "no_module"))]
-                    None,
+                    Identifier::new_const(),
                     f,
                 )
                 .into(),
@@ -174,7 +174,7 @@ fn collect_fn_metadata(
                 make_metadata(
                     &dict,
                     #[cfg(not(feature = "no_module"))]
-                    None,
+                    Identifier::new_const(),
                     f,
                 )
                 .into(),
@@ -192,7 +192,7 @@ fn collect_fn_metadata(
                 make_metadata(
                     &dict,
                     #[cfg(not(feature = "no_module"))]
-                    None,
+                    Identifier::new_const(),
                     f,
                 )
                 .into(),
@@ -219,9 +219,7 @@ fn collect_fn_metadata(
             module
                 .iter_script_fn()
                 .filter(|(s, a, n, p, f)| filter(*s, *a, n, *p, f))
-                .for_each(|(.., f)| {
-                    list.push(make_metadata(dict, Some(namespace.clone()), f).into())
-                });
+                .for_each(|(.., f)| list.push(make_metadata(dict, namespace.clone(), f).into()));
             for (ns, m) in module.iter_sub_modules() {
                 let ns = format!(
                     "{}{}{}",

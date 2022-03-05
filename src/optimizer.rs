@@ -259,7 +259,7 @@ fn optimize_stmt_block(
 
                         if x.1.is_constant() {
                             state.push_var(
-                                x.0.name.as_str(),
+                                x.0.as_str(),
                                 AccessMode::ReadOnly,
                                 x.1.get_literal_value(),
                             );
@@ -267,7 +267,7 @@ fn optimize_stmt_block(
                     } else {
                         // Add variables into the state
                         optimize_expr(&mut x.1, state, false);
-                        state.push_var(x.0.name.as_str(), AccessMode::ReadWrite, None);
+                        state.push_var(x.0.as_str(), AccessMode::ReadWrite, None);
                     }
                 }
                 // Optimize the statement
@@ -895,7 +895,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                *expr = mem::take(&mut m.0).into_iter().find(|(x, ..)| x.name == prop)
+                *expr = mem::take(&mut m.0).into_iter().find(|(x, ..)| x.as_str() == prop)
                             .map(|(.., mut expr)| { expr.set_position(*pos); expr })
                             .unwrap_or_else(|| Expr::Unit(*pos));
             }
@@ -935,7 +935,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                *expr = mem::take(&mut m.0).into_iter().find(|(x, ..)| x.name.as_str() == s.as_str())
+                *expr = mem::take(&mut m.0).into_iter().find(|(x, ..)| x.as_str() == s.as_str())
                             .map(|(.., mut expr)| { expr.set_position(*pos); expr })
                             .unwrap_or_else(|| Expr::Unit(*pos));
             }
@@ -1068,7 +1068,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
         }
 
         // Do not call some special keywords
-        Expr::FnCall(x, ..) if DONT_EVAL_KEYWORDS.contains(&x.name.as_ref()) => {
+        Expr::FnCall(x, ..) if DONT_EVAL_KEYWORDS.contains(&x.name.as_str()) => {
             x.args.iter_mut().for_each(|a| optimize_expr(a, state, false));
         }
 
@@ -1077,7 +1077,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                 if !x.is_qualified() // Non-qualified
                 && state.optimization_level == OptimizationLevel::Simple // simple optimizations
                 && x.args.iter().all(Expr::is_constant) // all arguments are constants
-                //&& !is_valid_identifier(x.name.chars()) // cannot be scripted
+                //&& !is_valid_identifier(x.chars()) // cannot be scripted
         => {
             let arg_values = &mut x.args.iter().map(|e| e.get_literal_value().unwrap()).collect::<StaticVec<_>>();
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
@@ -1096,14 +1096,14 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                 }
                 // Overloaded operators can override built-in.
                 _ if x.args.len() == 2 && !has_native_fn_override(state.engine, x.hashes.native, arg_types.as_ref()) => {
-                    if let Some(result) = get_builtin_binary_op_fn(x.name.as_ref(), &arg_values[0], &arg_values[1])
+                    if let Some(result) = get_builtin_binary_op_fn(&x.name, &arg_values[0], &arg_values[1])
                         .and_then(|f| {
                             #[cfg(not(feature = "no_function"))]
                             let lib = state.lib;
                             #[cfg(feature = "no_function")]
                             let lib = &[];
 
-                            let context = (state.engine, x.name.as_str(), lib).into();
+                            let context = (state.engine, &x.name, lib).into();
                             let (first, second) = arg_values.split_first_mut().unwrap();
                             (f)(context, &mut [ first, &mut second[0] ]).ok()
                         }) {
@@ -1123,10 +1123,10 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                     Expr::DynamicConstant(..) | Expr::Unit(..)
                     | Expr::StringConstant(..) | Expr::CharConstant(..)
                     | Expr::BoolConstant(..) | Expr::IntegerConstant(..) => (),
-    
+
                     #[cfg(not(feature = "no_float"))]
                     Expr:: FloatConstant(..) => (),
-    
+
                     _ => if let Some(value) = arg.get_literal_value() {
                         state.set_dirty();
                         *arg = Expr::DynamicConstant(value.into(), arg.start_position());
@@ -1189,10 +1189,10 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
 
         // constant-name
         #[cfg(not(feature = "no_module"))]
-        Expr::Variable(.., x) if x.1.is_some() => (),
-        Expr::Variable(.., pos, x) if state.find_constant(&x.2).is_some() => {
+        Expr::Variable(x, ..) if !x.1.is_empty() => (),
+        Expr::Variable(x, .., pos) if state.find_constant(&x.3).is_some() => {
             // Replace constant with value
-            *expr = Expr::from_dynamic(state.find_constant(&x.2).unwrap().clone(), *pos);
+            *expr = Expr::from_dynamic(state.find_constant(&x.3).unwrap().clone(), *pos);
             state.set_dirty();
         }
 

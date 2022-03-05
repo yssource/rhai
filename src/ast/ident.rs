@@ -3,7 +3,11 @@
 use crate::{Identifier, Position};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-use std::{fmt, hash::Hash};
+use std::{
+    fmt,
+    hash::Hash,
+    ops::{Deref, DerefMut},
+};
 
 /// _(internals)_ An identifier containing a name and a [position][Position].
 /// Exported under the `internals` feature only.
@@ -29,7 +33,30 @@ impl AsRef<str> for Ident {
     }
 }
 
+impl Deref for Ident {
+    type Target = Identifier;
+
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        &self.name
+    }
+}
+
+impl DerefMut for Ident {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.name
+    }
+}
+
 impl Ident {
+    /// An empty [`Ident`].
+    pub const EMPTY: Self = Self {
+        name: Identifier::new_const(),
+        pos: Position::NONE,
+    };
+
+    /// Get the name of the identifier as a string slice.
     #[inline(always)]
     pub fn as_str(&self) -> &str {
         self.name.as_str()

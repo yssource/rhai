@@ -169,7 +169,7 @@ impl FnCallHashes {
 pub struct FnCallExpr {
     /// Namespace of the function, if any.
     #[cfg(not(feature = "no_module"))]
-    pub namespace: Option<crate::module::Namespace>,
+    pub namespace: super::Namespace,
     /// Function name.
     pub name: Identifier,
     /// Pre-calculated hashes.
@@ -186,8 +186,8 @@ impl fmt::Debug for FnCallExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut ff = f.debug_struct("FnCallExpr");
         #[cfg(not(feature = "no_module"))]
-        if let Some(ref ns) = self.namespace {
-            ff.field("namespace", ns);
+        if !self.namespace.is_empty() {
+            ff.field("namespace", &self.namespace);
         }
         if self.capture_parent_scope {
             ff.field("capture_parent_scope", &self.capture_parent_scope);
@@ -206,9 +206,9 @@ impl FnCallExpr {
     /// Always `false` under `no_module`.
     #[inline(always)]
     #[must_use]
-    pub const fn is_qualified(&self) -> bool {
+    pub fn is_qualified(&self) -> bool {
         #[cfg(not(feature = "no_module"))]
-        return self.namespace.is_some();
+        return !self.namespace.is_empty();
         #[cfg(feature = "no_module")]
         return false;
     }
@@ -372,21 +372,17 @@ pub enum Expr {
     ),
     /// ()
     Unit(Position),
-    /// Variable access - optional short index, position, (optional index, optional (hash, modules), variable name)
+    /// Variable access - (optional long index, namespace, namespace hash, variable name), optional short index, position
     ///
     /// The short index is [`u8`] which is used when the index is <= 255, which should be the vast
     /// majority of cases (unless there are more than 255 variables defined!).
     /// This is to avoid reading a pointer redirection during each variable access.
     Variable(
-        Option<NonZeroU8>,
-        Position,
         #[cfg(not(feature = "no_module"))]
-        Box<(
-            Option<NonZeroUsize>,
-            Option<(crate::module::Namespace, u64)>,
-            Identifier,
-        )>,
+        Box<(Option<NonZeroUsize>, super::Namespace, u64, Identifier)>,
+        Option<NonZeroU8>,
         #[cfg(feature = "no_module")] Box<(Option<NonZeroUsize>, (), Identifier)>,
+        Position,
     ),
     /// Property access - ((getter, hash), (setter, hash), prop)
     Property(
@@ -451,18 +447,18 @@ impl fmt::Debug for Expr {
                     .entries(x.0.iter().map(|(k, v)| (k, v)))
                     .finish()
             }
-            Self::Variable(i, _, x) => {
+            Self::Variable(x, i, ..) => {
                 f.write_str("Variable(")?;
 
                 #[cfg(not(feature = "no_module"))]
-                if let Some((ref namespace, ..)) = x.1 {
-                    write!(f, "{}{}", namespace, Token::DoubleColon.literal_syntax())?;
-                    let pos = namespace.position();
+                if !x.1.is_empty() {
+                    write!(f, "{}{}", x.1, Token::DoubleColon.literal_syntax())?;
+                    let pos = x.1.position();
                     if !pos.is_none() {
                         display_pos = format!(" @ {:?}", pos);
                     }
                 }
-                f.write_str(&x.2)?;
+                f.write_str(&x.3)?;
                 if let Some(n) = i.map_or_else(|| x.0, |n| NonZeroUsize::new(n.get() as usize)) {
                     write!(f, " #{}", n)?;
                 }
@@ -621,7 +617,7 @@ impl Expr {
             Union::FnPtr(f, ..) if !f.is_curried() => Self::FnCall(
                 FnCallExpr {
                     #[cfg(not(feature = "no_module"))]
-                    namespace: None,
+                    namespace: super::Namespace::NONE,
                     name: KEYWORD_FN_PTR.into(),
                     hashes: calc_fn_hash(f.fn_name(), 1).into(),
                     args: once(Self::StringConstant(f.fn_name().into(), pos)).collect(),
@@ -640,12 +636,12 @@ impl Expr {
     /// `non_qualified` is ignored under `no_module`.
     #[inline]
     #[must_use]
-    pub(crate) const fn is_variable_access(&self, non_qualified: bool) -> bool {
+    pub(crate) fn is_variable_access(&self, non_qualified: bool) -> bool {
         let _non_qualified = non_qualified;
 
         match self {
             #[cfg(not(feature = "no_module"))]
-            Self::Variable(.., x) if _non_qualified && x.1.is_some() => false,
+            Self::Variable(x, ..) if _non_qualified && !x.1.is_empty() => false,
             Self::Variable(..) => true,
             _ => false,
         }
@@ -660,8 +656,8 @@ impl Expr {
 
         match self {
             #[cfg(not(feature = "no_module"))]
-            Self::Variable(.., x) if _non_qualified && x.1.is_some() => None,
-            Self::Variable(.., x) => Some(x.2.as_str()),
+            Self::Variable(x, ..) if _non_qualified && !x.1.is_empty() => None,
+            Self::Variable(x, ..) => Some(x.3.as_str()),
             _ => None,
         }
     }
@@ -681,7 +677,7 @@ impl Expr {
             | Self::StringConstant(.., pos)
             | Self::Array(.., pos)
             | Self::Map(.., pos)
-            | Self::Variable(.., pos, _)
+            | Self::Variable(.., pos)
             | Self::And(.., pos)
             | Self::Or(.., pos)
             | Self::Index(.., pos)
@@ -702,9 +698,9 @@ impl Expr {
     pub fn start_position(&self) -> Position {
         match self {
             #[cfg(not(feature = "no_module"))]
-            Self::Variable(.., x) => {
-                if let Some((ref namespace, ..)) = x.1 {
-                    namespace.position()
+            Self::Variable(x, ..) => {
+                if !x.1.is_empty() {
+                    x.1.position()
                 } else {
                     self.position()
                 }
@@ -735,7 +731,7 @@ impl Expr {
             | Self::Or(.., pos)
             | Self::Dot(.., pos)
             | Self::Index(.., pos)
-            | Self::Variable(.., pos, _)
+            | Self::Variable(.., pos)
             | Self::FnCall(.., pos)
             | Self::MethodCall(.., pos)
             | Self::Custom(.., pos)

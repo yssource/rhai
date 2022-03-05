@@ -151,14 +151,14 @@ impl Engine {
     #[must_use]
     fn gen_call_signature(
         &self,
-        #[cfg(not(feature = "no_module"))] namespace: Option<&crate::module::Namespace>,
+        #[cfg(not(feature = "no_module"))] namespace: &crate::ast::Namespace,
         fn_name: &str,
         args: &[&mut Dynamic],
     ) -> String {
         #[cfg(not(feature = "no_module"))]
         let (ns, sep) = (
-            namespace.map_or_else(|| String::new(), |ns| ns.to_string()),
-            if namespace.is_some() {
+            namespace.to_string(),
+            if !namespace.is_empty() {
                 crate::tokenizer::Token::DoubleColon.literal_syntax()
             } else {
                 ""
@@ -576,7 +576,7 @@ impl Engine {
             _ => Err(ERR::ErrorFunctionNotFound(
                 self.gen_call_signature(
                     #[cfg(not(feature = "no_module"))]
-                    None,
+                    &crate::ast::Namespace::NONE,
                     name,
                     args,
                 ),
@@ -1277,7 +1277,7 @@ impl Engine {
         state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
-        namespace: &crate::module::Namespace,
+        namespace: &crate::ast::Namespace,
         fn_name: &str,
         args_expr: &[Expr],
         hash: u64,
@@ -1406,7 +1406,7 @@ impl Engine {
             Some(f) => unreachable!("unknown function type: {:?}", f),
 
             None => Err(ERR::ErrorFunctionNotFound(
-                self.gen_call_signature(Some(namespace), fn_name, &args),
+                self.gen_call_signature(namespace, fn_name, &args),
                 pos,
             )
             .into()),

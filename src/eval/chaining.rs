@@ -620,7 +620,7 @@ impl Engine {
 
         match lhs {
             // id.??? or id[???]
-            Expr::Variable(.., var_pos, x) => {
+            Expr::Variable(x, .., var_pos) => {
                 #[cfg(feature = "debugging")]
                 self.run_debugger(scope, global, state, lib, this_ptr, lhs, level)?;
 
@@ -631,7 +631,7 @@ impl Engine {
                     self.search_namespace(scope, global, state, lib, this_ptr, lhs, level)?;
 
                 let obj_ptr = &mut target;
-                let root = (x.2.as_str(), *var_pos);
+                let root = (x.3.as_str(), *var_pos);
 
                 self.eval_dot_index_chain_helper(
                     global, state, lib, &mut None, obj_ptr, root, expr, rhs, options, idx_values,

@@ -18,8 +18,10 @@ impl Engine {
         &self,
         global: &GlobalRuntimeState,
         state: &mut EvalState,
-        namespace: &crate::module::Namespace,
+        namespace: &crate::ast::Namespace,
     ) -> Option<crate::Shared<Module>> {
+        assert!(!namespace.is_empty());
+
         let root = namespace.root();
 
         // Qualified - check if the root module is directly indexed
@@ -53,23 +55,23 @@ impl Engine {
         level: usize,
     ) -> RhaiResultOf<(Target<'s>, Position)> {
         match expr {
-            Expr::Variable(Some(_), ..) => {
+            Expr::Variable(_, Some(_), _) => {
                 self.search_scope_only(scope, global, state, lib, this_ptr, expr, level)
             }
-            Expr::Variable(None, _var_pos, v) => match v.as_ref() {
+            Expr::Variable(v, None, _var_pos) => match v.as_ref() {
                 // Normal variable access
                 #[cfg(not(feature = "no_module"))]
-                (_, None, _) => {
+                (_, ns, ..) if ns.is_empty() => {
                     self.search_scope_only(scope, global, state, lib, this_ptr, expr, level)
                 }
                 #[cfg(feature = "no_module")]
-                (_, (), _) => {
+                (_, (), ..) => {
                     self.search_scope_only(scope, global, state, lib, this_ptr, expr, level)
                 }
 
                 // Qualified variable access
                 #[cfg(not(feature = "no_module"))]
-                (_, Some((namespace, hash_var)), var_name) => {
+                (_, namespace, hash_var, var_name) => {
                     // foo:bar::baz::VARIABLE
                     if let Some(module) = self.search_imports(global, state, namespace) {
                         return if let Some(mut target) = module.get_qualified_var(*hash_var) {
@@ -139,7 +141,7 @@ impl Engine {
 
         let (index, var_pos) = match expr {
             // Check if the variable is `this`
-            Expr::Variable(None, pos, v) if v.0.is_none() && v.2 == KEYWORD_THIS => {
+            Expr::Variable(v, None, pos) if v.0.is_none() && v.3 == KEYWORD_THIS => {
                 return if let Some(val) = this_ptr {
                     Ok(((*val).into(), *pos))
                 } else {
@@ -147,8 +149,8 @@ impl Engine {
                 }
             }
             _ if state.always_search_scope => (0, expr.start_position()),
-            Expr::Variable(Some(i), pos, ..) => (i.get() as usize, *pos),
-            Expr::Variable(None, pos, v) => (v.0.map(NonZeroUsize::get).unwrap_or(0), *pos),
+            Expr::Variable(.., Some(i), pos) => (i.get() as usize, *pos),
+            Expr::Variable(v, None, pos) => (v.0.map(NonZeroUsize::get).unwrap_or(0), *pos),
             _ => unreachable!("Expr::Variable expected but gets {:?}", expr),
         };
 
@@ -216,7 +218,7 @@ impl Engine {
         } = expr;
 
         #[cfg(not(feature = "no_module"))]
-        if let Some(namespace) = namespace.as_ref() {
+        if !namespace.is_empty() {
             // Qualified function call
             let hash = hashes.native;
 
@@ -280,14 +282,14 @@ impl Engine {
         // Then variable access.
         // We shouldn't do this for too many variants because, soon or later, the added comparisons
         // will cost more than the mis-predicted `match` branch.
-        if let Expr::Variable(index, var_pos, x) = expr {
+        if let Expr::Variable(x, index, var_pos) = expr {
             #[cfg(feature = "debugging")]
             self.run_debugger(scope, global, state, lib, this_ptr, expr, level)?;
 
             #[cfg(not(feature = "unchecked"))]
             self.inc_operations(&mut global.num_operations, expr.position())?;
 
-            return if index.is_none() && x.0.is_none() && x.2 == KEYWORD_THIS {
+            return if index.is_none() && x.0.is_none() && x.3 == KEYWORD_THIS {
                 this_ptr
                     .as_deref()
                     .cloned()
@@ -396,8 +398,7 @@ impl Engine {
                 #[cfg(not(feature = "unchecked"))]
                 let mut sizes = (0, 0, 0);
 
-                for (crate::ast::Ident { name, .. }, value_expr) in x.0.iter() {
-                    let key = name.as_str();
+                for (key, value_expr) in x.0.iter() {
                     let value = match self
                         .eval_expr(scope, global, state, lib, this_ptr, value_expr, level)
                     {
@@ -411,7 +412,7 @@ impl Engine {
                     #[cfg(not(feature = "unchecked"))]
                     let delta = Self::calc_data_sizes(&value, true);
 
-                    *map.get_mut(key).unwrap() = value;
+                    *map.get_mut(key.as_str()).unwrap() = value;
 
                     #[cfg(not(feature = "unchecked"))]
                     if self.has_data_size_limit() {
