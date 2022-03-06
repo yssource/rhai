@@ -45,7 +45,7 @@ pub enum ChainArgument {
     /// Since many dotted function calls have no arguments (e.g. `string.len()`), it is better to
     /// reduce the size of [`ChainArgument`] by using a boxed slice.
     #[cfg(not(feature = "no_object"))]
-    MethodCallArgs(Option<Box<[Dynamic]>>, Position),
+    MethodCallArgs(Box<[Dynamic]>, Position),
     /// Index value and [position][Position].
     #[cfg(not(feature = "no_index"))]
     IndexValue(Dynamic, Position),
@@ -73,8 +73,10 @@ impl ChainArgument {
     #[must_use]
     pub fn into_fn_call_args(self) -> (crate::FnArgsVec<Dynamic>, Position) {
         match self {
-            Self::MethodCallArgs(None, pos) => (crate::FnArgsVec::new_const(), pos),
-            Self::MethodCallArgs(Some(mut values), pos) => {
+            Self::MethodCallArgs(values, pos) if values.is_empty() => {
+                (crate::FnArgsVec::new_const(), pos)
+            }
+            Self::MethodCallArgs(mut values, pos) => {
                 (values.iter_mut().map(std::mem::take).collect(), pos)
             }
             x => unreachable!("ChainArgument::MethodCallArgs expected but gets {:?}", x),
@@ -100,9 +102,9 @@ impl ChainArgument {
     #[must_use]
     pub fn from_fn_call_args(values: crate::FnArgsVec<Dynamic>, pos: Position) -> Self {
         if values.is_empty() {
-            Self::MethodCallArgs(None, pos)
+            Self::MethodCallArgs(Box::default(), pos)
         } else {
-            Self::MethodCallArgs(Some(values.into_vec().into()), pos)
+            Self::MethodCallArgs(values.into_boxed_slice(), pos)
         }
     }
     /// Create an [`IndexValue`][ChainArgument::IndexValue].

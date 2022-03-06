@@ -51,7 +51,7 @@ pub struct FnMetadata {
     pub return_type: Identifier,
     /// Comments.
     #[cfg(feature = "metadata")]
-    pub comments: Option<Box<[Box<str>]>>,
+    pub comments: Box<[Box<str>]>,
 }
 
 impl PartialOrd for FnMetadata {
@@ -597,7 +597,7 @@ impl Module {
                     #[cfg(feature = "metadata")]
                     return_type: "".into(),
                     #[cfg(feature = "metadata")]
-                    comments: None,
+                    comments: Box::default(),
                 },
                 func: Into::<CallableFunction>::into(fn_def).into(),
                 param_types: StaticVec::new_const(),
@@ -816,7 +816,7 @@ impl Module {
 
         if !comments.is_empty() {
             let f = self.functions.get_mut(&hash_fn).unwrap();
-            f.metadata.comments = Some(comments.iter().map(|s| s.as_ref().into()).collect());
+            f.metadata.comments = comments.iter().map(|s| s.as_ref().into()).collect();
         }
 
         self
@@ -923,7 +923,7 @@ impl Module {
                     #[cfg(feature = "metadata")]
                     return_type: return_type_name,
                     #[cfg(feature = "metadata")]
-                    comments: None,
+                    comments: Box::default(),
                 },
                 func: func.into(),
                 param_types,
@@ -981,7 +981,7 @@ impl Module {
 
         if !comments.is_empty() {
             let f = self.functions.get_mut(&hash).unwrap();
-            f.metadata.comments = Some(comments.iter().map(|s| s.as_ref().into()).collect());
+            f.metadata.comments = comments.iter().map(|s| s.as_ref().into()).collect();
         }
 
         hash

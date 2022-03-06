@@ -17,11 +17,6 @@ Bug fixes
 * Exporting a variable that contains a local function pointer (including anonymous function or closure) now raises a runtime error.
 * Full optimization is now skipped for method calls.
 
-Breaking changes
-----------------
-
-* `ScriptFnMetadata` fields `params` and `comments` are changed to boxed slices instead of `Vec`. In the vast majority of cases this should not cause code breakage.
-
 Enhancements
 ------------
 

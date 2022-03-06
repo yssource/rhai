@@ -1277,7 +1277,7 @@ pub fn optimize_into_ast(
                     environ: None,
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(feature = "metadata")]
-                    comments: None,
+                    comments: Box::default(),
                 });
             }
 

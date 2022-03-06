@@ -3330,17 +3330,11 @@ impl Engine {
             environ: None,
             #[cfg(not(feature = "no_function"))]
             #[cfg(feature = "metadata")]
-            comments: if comments.is_empty() {
-                None
-            } else {
-                Some(
-                    comments
-                        .into_iter()
-                        .map(|s| s.to_string().into_boxed_str())
-                        .collect::<Vec<_>>()
-                        .into_boxed_slice(),
-                )
-            },
+            comments: comments
+                .into_iter()
+                .map(|s| s.to_string().into_boxed_str())
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
         })
     }
 
@@ -3495,7 +3489,7 @@ impl Engine {
             environ: None,
             #[cfg(not(feature = "no_function"))]
             #[cfg(feature = "metadata")]
-            comments: None,
+            comments: Box::default(),
         };
 
         let fn_ptr = crate::FnPtr::new_unchecked(fn_name, StaticVec::new_const());

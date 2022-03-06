@@ -145,13 +145,11 @@ impl<'a> From<&'a FuncInfo> for FnMetadata<'a> {
                     .get_script_fn_def()
                     .expect("script-defined function")
                     .comments
-                    .as_ref()
-                    .map_or_else(|| Vec::new(), |v| v.iter().map(|s| &**s).collect())
+                    .iter()
+                    .map(Box::as_ref)
+                    .collect()
             } else {
-                info.metadata
-                    .comments
-                    .as_ref()
-                    .map_or_else(|| Vec::new(), |v| v.iter().map(|s| &**s).collect())
+                info.metadata.comments.iter().map(Box::as_ref).collect()
             },
         }
     }
