@@ -5,6 +5,9 @@ use crate::{Dynamic, RhaiResultOf, ERR, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
+#[cfg(not(feature = "no_float"))]
+use crate::FLOAT;
+
 def_package! {
     /// Package of core language features.
     pub LanguageCorePackage(lib) {
@@ -21,10 +24,32 @@ def_package! {
 
 #[export_module]
 mod core_functions {
+    /// Return the _tag_ of a `Dynamic` value.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let x = "hello, world!";
+    ///
+    /// x.tag = 42;
+    ///
+    /// print(x.tag);           // prints 42
+    /// ```
     #[rhai_fn(name = "tag", get = "tag", pure)]
     pub fn get_tag(value: &mut Dynamic) -> INT {
         value.tag() as INT
     }
+    /// Set the _tag_ of a `Dynamic` value.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let x = "hello, world!";
+    ///
+    /// x.tag = 42;
+    ///
+    /// print(x.tag);           // prints 42
+    /// ```
     #[rhai_fn(name = "set_tag", set = "tag", return_raw)]
     pub fn set_tag(value: &mut Dynamic, tag: INT) -> RhaiResultOf<()> {
         if tag < Tag::MIN as INT {
@@ -53,6 +78,28 @@ mod core_functions {
             value.set_tag(tag as Tag);
             Ok(())
         }
+    }
+
+    /// Block the current thread for a particular number of `seconds`.
+    #[cfg(not(feature = "no_float"))]
+    #[rhai_fn(name = "float")]
+    pub fn sleep_float(seconds: FLOAT) {
+        if seconds <= 0.0 {
+            return;
+        }
+
+        #[cfg(not(feature = "f32_float"))]
+        std::thread::sleep(std::time::Duration::from_secs_f64(seconds));
+        #[cfg(feature = "f32_float")]
+        std::thread::sleep(std::time::Duration::from_secs_f32(seconds));
+    }
+
+    /// Block the current thread for a particular number of `seconds`.
+    pub fn sleep(seconds: INT) {
+        if seconds <= 0 {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_secs(seconds as u64));
     }
 }
 
