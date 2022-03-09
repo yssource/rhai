@@ -82,7 +82,8 @@ mod core_functions {
 
     /// Block the current thread for a particular number of `seconds`.
     #[cfg(not(feature = "no_float"))]
-    #[rhai_fn(name = "float")]
+    #[cfg(not(feature = "no_std"))]
+    #[rhai_fn(name = "sleep")]
     pub fn sleep_float(seconds: FLOAT) {
         if seconds <= 0.0 {
             return;
@@ -95,6 +96,7 @@ mod core_functions {
     }
 
     /// Block the current thread for a particular number of `seconds`.
+    #[cfg(not(feature = "no_std"))]
     pub fn sleep(seconds: INT) {
         if seconds <= 0 {
             return;
