@@ -121,6 +121,16 @@ type UNSIGNED_INT = u64;
 #[allow(non_camel_case_types)]
 type UNSIGNED_INT = u32;
 
+/// Number of bits in [`INT`].
+///
+/// It is 64 unless the `only_i32` feature is enabled when it will be 32.
+const INT_BITS: usize = std::mem::size_of::<INT>() * 8;
+
+/// Number of bytes that make up an [`INT`].
+///
+/// It is 8 unless the `only_i32` feature is enabled when it will be 4.
+const INT_BYTES: usize = std::mem::size_of::<INT>();
+
 /// The system floating-point type. It is defined as [`f64`].
 ///
 /// Not available under `no_float`.
@@ -139,6 +149,12 @@ pub type FLOAT = f64;
 #[cfg(not(feature = "no_float"))]
 #[cfg(feature = "f32_float")]
 pub type FLOAT = f32;
+
+/// Number of bytes that make up a [`FLOAT`].
+///
+/// It is 8 unless the `f32_float` feature is enabled when it will be 4.
+#[cfg(not(feature = "no_float"))]
+const FLOAT_BYTES: usize = std::mem::size_of::<FLOAT>();
 
 /// An exclusive integer range.
 type ExclusiveRange = std::ops::Range<INT>;

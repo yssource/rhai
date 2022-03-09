@@ -293,7 +293,7 @@ impl Engine {
         self
     }
     /// Register an type iterator for an iterable type with the [`Engine`].
-    /// This is an advanced feature.
+    /// This is an advanced API.
     #[inline(always)]
     pub fn register_iterator<T>(&mut self) -> &mut Self
     where

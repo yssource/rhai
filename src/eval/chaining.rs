@@ -922,22 +922,20 @@ impl Engine {
                 if idx.is::<crate::ExclusiveRange>() || idx.is::<crate::InclusiveRange>() =>
             {
                 // val_int[range]
-                const BITS: usize = std::mem::size_of::<crate::INT>() * 8;
-
                 let (shift, mask) = if let Some(range) = idx.read_lock::<crate::ExclusiveRange>() {
                     let start = range.start;
                     let end = range.end;
 
-                    let start = super::calc_index(BITS, start, false, || {
-                        ERR::ErrorBitFieldBounds(BITS, start, idx_pos).into()
+                    let start = super::calc_index(crate::INT_BITS, start, false, || {
+                        ERR::ErrorBitFieldBounds(crate::INT_BITS, start, idx_pos).into()
                     })?;
-                    let end = super::calc_index(BITS, end, false, || {
-                        ERR::ErrorBitFieldBounds(BITS, end, idx_pos).into()
+                    let end = super::calc_index(crate::INT_BITS, end, false, || {
+                        ERR::ErrorBitFieldBounds(crate::INT_BITS, end, idx_pos).into()
                     })?;
 
                     if end <= start {
                         (0, 0)
-                    } else if end == BITS && start == 0 {
+                    } else if end == crate::INT_BITS && start == 0 {
                         // -1 = all bits set
                         (0, -1)
                     } else {
@@ -953,16 +951,16 @@ impl Engine {
                     let start = *range.start();
                     let end = *range.end();
 
-                    let start = super::calc_index(BITS, start, false, || {
-                        ERR::ErrorBitFieldBounds(BITS, start, idx_pos).into()
+                    let start = super::calc_index(crate::INT_BITS, start, false, || {
+                        ERR::ErrorBitFieldBounds(crate::INT_BITS, start, idx_pos).into()
                     })?;
-                    let end = super::calc_index(BITS, end, false, || {
-                        ERR::ErrorBitFieldBounds(BITS, end, idx_pos).into()
+                    let end = super::calc_index(crate::INT_BITS, end, false, || {
+                        ERR::ErrorBitFieldBounds(crate::INT_BITS, end, idx_pos).into()
                     })?;
 
                     if end < start {
                         (0, 0)
-                    } else if end == BITS - 1 && start == 0 {
+                    } else if end == crate::INT_BITS - 1 && start == 0 {
                         // -1 = all bits set
                         (0, -1)
                     } else {
@@ -995,10 +993,8 @@ impl Engine {
                     .as_int()
                     .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, idx_pos))?;
 
-                const BITS: usize = std::mem::size_of::<crate::INT>() * 8;
-
-                let bit = super::calc_index(BITS, index, true, || {
-                    ERR::ErrorBitFieldBounds(BITS, index, idx_pos).into()
+                let bit = super::calc_index(crate::INT_BITS, index, true, || {
+                    ERR::ErrorBitFieldBounds(crate::INT_BITS, index, idx_pos).into()
                 })?;
 
                 let bit_value = (*value & (1 << bit)) != 0;

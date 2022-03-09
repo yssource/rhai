@@ -10,7 +10,7 @@ use crate::tokenizer::{Span, Token};
 use crate::types::dynamic::AccessMode;
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnPtr, Position, Scope,
-    StaticVec, AST, INT,
+    StaticVec, AST, INT, INT_BITS,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -940,16 +940,16 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                             .unwrap_or_else(|| Expr::Unit(*pos));
             }
             // int[int]
-            (Expr::IntegerConstant(n, pos), Expr::IntegerConstant(i, ..)) if *i >= 0 && (*i as usize) < (std::mem::size_of_val(n) * 8) => {
+            (Expr::IntegerConstant(n, pos), Expr::IntegerConstant(i, ..)) if *i >= 0 && (*i as usize) < INT_BITS => {
                 // Bit-field literal indexing - get the bit
                 state.set_dirty();
                 *expr = Expr::BoolConstant((*n & (1 << (*i as usize))) != 0, *pos);
             }
             // int[-int]
-            (Expr::IntegerConstant(n, pos), Expr::IntegerConstant(i, ..)) if *i < 0 && i.checked_abs().map(|i| i as usize <= (std::mem::size_of_val(n) * 8)).unwrap_or(false) => {
+            (Expr::IntegerConstant(n, pos), Expr::IntegerConstant(i, ..)) if *i < 0 && i.checked_abs().map(|i| i as usize <= INT_BITS).unwrap_or(false) => {
                 // Bit-field literal indexing - get the bit
                 state.set_dirty();
-                *expr = Expr::BoolConstant((*n & (1 << (std::mem::size_of_val(n) * 8 - i.abs() as usize))) != 0, *pos);
+                *expr = Expr::BoolConstant((*n & (1 << (INT_BITS - i.abs() as usize))) != 0, *pos);
             }
             // string[int]
             (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, ..)) if *i >= 0 && (*i as usize) < s.chars().count() => {

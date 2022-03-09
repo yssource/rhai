@@ -621,7 +621,7 @@ impl Stmt {
     /// upper block.
     ///
     /// Currently only variable definitions (i.e. `let` and `const`), `import`/`export` statements,
-    /// and `eval` calls (which may in turn call define variables) fall under this category.
+    /// and `eval` calls (which may in turn define variables) fall under this category.
     #[inline]
     #[must_use]
     pub fn is_block_dependent(&self) -> bool {

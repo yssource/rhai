@@ -1,7 +1,8 @@
 use crate::eval::calc_index;
 use crate::plugin::*;
 use crate::{
-    def_package, ExclusiveRange, InclusiveRange, Position, RhaiResultOf, ERR, INT, UNSIGNED_INT,
+    def_package, ExclusiveRange, InclusiveRange, Position, RhaiResultOf, ERR, INT, INT_BITS,
+    UNSIGNED_INT,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -17,8 +18,6 @@ def_package! {
 
 #[export_module]
 mod bit_field_functions {
-    const BITS: usize = std::mem::size_of::<INT>() * 8;
-
     /// Return `true` if the specified `bit` in the number is set.
     ///
     /// If `bit` < 0, position counts from the MSB (Most Significant Bit).
@@ -36,8 +35,8 @@ mod bit_field_functions {
     /// ```
     #[rhai_fn(return_raw)]
     pub fn get_bit(value: INT, bit: INT) -> RhaiResultOf<bool> {
-        let bit = calc_index(BITS, bit, true, || {
-            ERR::ErrorBitFieldBounds(BITS, bit, Position::NONE).into()
+        let bit = calc_index(INT_BITS, bit, true, || {
+            ERR::ErrorBitFieldBounds(INT_BITS, bit, Position::NONE).into()
         })?;
 
         Ok((value & (1 << bit)) != 0)
@@ -66,8 +65,8 @@ mod bit_field_functions {
     /// ```
     #[rhai_fn(return_raw)]
     pub fn set_bit(value: &mut INT, bit: INT, new_value: bool) -> RhaiResultOf<()> {
-        let bit = calc_index(BITS, bit, true, || {
-            ERR::ErrorBitFieldBounds(BITS, bit, Position::NONE).into()
+        let bit = calc_index(INT_BITS, bit, true, || {
+            ERR::ErrorBitFieldBounds(INT_BITS, bit, Position::NONE).into()
         })?;
 
         let mask = 1 << bit;
@@ -128,17 +127,17 @@ mod bit_field_functions {
             return Ok(0);
         }
 
-        let bit = calc_index(BITS, start, true, || {
-            ERR::ErrorBitFieldBounds(BITS, start, Position::NONE).into()
+        let bit = calc_index(INT_BITS, start, true, || {
+            ERR::ErrorBitFieldBounds(INT_BITS, start, Position::NONE).into()
         })?;
 
-        let bits = if bit + bits as usize > BITS {
-            BITS - bit
+        let bits = if bit + bits as usize > INT_BITS {
+            INT_BITS - bit
         } else {
             bits as usize
         };
 
-        if bit == 0 && bits == BITS {
+        if bit == 0 && bits == INT_BITS {
             return Ok(value);
         }
 
@@ -214,17 +213,17 @@ mod bit_field_functions {
             return Ok(());
         }
 
-        let bit = calc_index(BITS, bit, true, || {
-            ERR::ErrorBitFieldBounds(BITS, bit, Position::NONE).into()
+        let bit = calc_index(INT_BITS, bit, true, || {
+            ERR::ErrorBitFieldBounds(INT_BITS, bit, Position::NONE).into()
         })?;
 
-        let bits = if bit + bits as usize > BITS {
-            BITS - bit
+        let bits = if bit + bits as usize > INT_BITS {
+            INT_BITS - bit
         } else {
             bits as usize
         };
 
-        if bit == 0 && bits == BITS {
+        if bit == 0 && bits == INT_BITS {
             *value = new_value;
             return Ok(());
         }
