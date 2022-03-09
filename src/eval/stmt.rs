@@ -905,7 +905,7 @@ impl Engine {
 
                         #[cfg(not(feature = "no_module"))]
                         if let Some(alias) = _alias {
-                            scope.add_entry_alias(scope.len() - 1, alias.name.clone());
+                            scope.add_alias_by_index(scope.len() - 1, alias.name.clone());
                         }
 
                         Ok(Dynamic::UNIT)
@@ -989,10 +989,8 @@ impl Engine {
                 let (Ident { name, pos, .. }, alias) = x.as_ref();
                 // Mark scope variables as public
                 if let Some((index, ..)) = scope.get_index(name) {
-                    scope.add_entry_alias(
-                        index,
-                        if alias.is_empty() { name } else { alias }.clone(),
-                    );
+                    let alias = if alias.is_empty() { name } else { alias }.clone();
+                    scope.add_alias_by_index(index, alias);
                     Ok(Dynamic::UNIT)
                 } else {
                     Err(ERR::ErrorVariableNotFound(name.to_string(), *pos).into())

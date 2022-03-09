@@ -514,12 +514,36 @@ impl Scope<'_> {
     /// Panics if the index is out of bounds.
     #[cfg(not(feature = "no_module"))]
     #[inline]
-    pub(crate) fn add_entry_alias(&mut self, index: usize, alias: Identifier) -> &mut Self {
+    pub(crate) fn add_alias_by_index(&mut self, index: usize, alias: Identifier) -> &mut Self {
         let aliases = self.aliases.get_mut(index).unwrap();
         if aliases.is_empty() || !aliases.contains(&alias) {
             aliases.push(alias);
         }
         self
+    }
+    /// Add an alias to a variable in the [`Scope`] so that it is exported under that name.
+    /// This is an advanced API.
+    ///
+    /// If the alias is empty, then the variable is exported under its original name.
+    ///
+    /// Multiple aliases can be added to any variable.
+    ///
+    /// Only the last variable matching the name (and not other shadowed versions) is aliased by
+    /// this call.
+    #[cfg(not(feature = "no_module"))]
+    #[inline]
+    pub fn set_alias(
+        &mut self,
+        name: impl AsRef<str> + Into<Identifier>,
+        alias: impl Into<Identifier>,
+    ) {
+        if let Some((index, ..)) = self.get_index(name.as_ref()) {
+            let alias = match alias.into() {
+                x if x.is_empty() => name.into(),
+                x => x,
+            };
+            self.add_alias_by_index(index, alias);
+        }
     }
     /// Clone the [`Scope`], keeping only the last instances of each variable name.
     /// Shadowed variables are omitted in the copy.

@@ -25,6 +25,7 @@ Enhancements
 * The `event_handler_map` example is enhanced to prevent shadowing of the state object map.
 * Separation of constants in function calls is removed as its performance benefit is dubious.
 * A function `sleep` is added to block the current thread by a specified number of seconds.
+* `Scope::set_alias` is added to export a variable under a particular alias name.
 
 
 Version 1.5.0
