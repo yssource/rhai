@@ -127,7 +127,7 @@ pub struct TryCatchBlock {
     /// `try` block.
     pub try_block: StmtBlock,
     /// `catch` variable, if any.
-    pub catch_var: Option<Ident>,
+    pub catch_var: Ident,
     /// `catch` block.
     pub catch_block: StmtBlock,
 }
@@ -346,7 +346,7 @@ pub enum Stmt {
     /// * [`NEGATED`][ASTFlags::NEGATED] = `until`
     Do(Box<(Expr, StmtBlock)>, ASTFlags, Position),
     /// `for` `(` id `,` counter `)` `in` expr `{` stmt `}`
-    For(Box<(Ident, Option<Ident>, Expr, StmtBlock)>, Position),
+    For(Box<(Ident, Ident, Expr, StmtBlock)>, Position),
     /// \[`export`\] `let`|`const` id `=` expr
     ///
     /// ### Flags
@@ -385,7 +385,7 @@ pub enum Stmt {
     ///
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
-    Import(Box<(Expr, Option<Ident>)>, Position),
+    Import(Box<(Expr, Ident)>, Position),
     /// `export` var `as` alias
     ///
     /// Not available under `no_module`.
@@ -621,7 +621,7 @@ impl Stmt {
     /// upper block.
     ///
     /// Currently only variable definitions (i.e. `let` and `const`), `import`/`export` statements,
-    /// and `eval` calls (which may in turn call define variables) fall under this category.
+    /// and `eval` calls (which may in turn define variables) fall under this category.
     #[inline]
     #[must_use]
     pub fn is_block_dependent(&self) -> bool {

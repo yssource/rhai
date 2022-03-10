@@ -151,14 +151,14 @@ impl Engine {
     #[must_use]
     fn gen_call_signature(
         &self,
-        #[cfg(not(feature = "no_module"))] namespace: Option<&crate::module::Namespace>,
+        #[cfg(not(feature = "no_module"))] namespace: &crate::ast::Namespace,
         fn_name: &str,
         args: &[&mut Dynamic],
     ) -> String {
         #[cfg(not(feature = "no_module"))]
         let (ns, sep) = (
-            namespace.map_or_else(|| String::new(), |ns| ns.to_string()),
-            if namespace.is_some() {
+            namespace.to_string(),
+            if !namespace.is_empty() {
                 crate::tokenizer::Token::DoubleColon.literal_syntax()
             } else {
                 ""
@@ -576,7 +576,7 @@ impl Engine {
             _ => Err(ERR::ErrorFunctionNotFound(
                 self.gen_call_signature(
                     #[cfg(not(feature = "no_module"))]
-                    None,
+                    &crate::ast::Namespace::NONE,
                     name,
                     args,
                 ),
@@ -958,35 +958,30 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         arg_expr: &Expr,
-        constants: &[Dynamic],
         level: usize,
     ) -> RhaiResultOf<(Dynamic, Position)> {
-        Ok((
-            if let Expr::Stack(slot, ..) = arg_expr {
+        #[cfg(feature = "debugging")]
+        if self.debugger.is_some() {
+            if let Some(value) = arg_expr.get_literal_value() {
                 #[cfg(feature = "debugging")]
                 self.run_debugger(scope, global, state, lib, this_ptr, arg_expr, level)?;
-                constants[*slot].clone()
-            } else if let Some(value) = arg_expr.get_literal_value() {
-                #[cfg(feature = "debugging")]
-                self.run_debugger(scope, global, state, lib, this_ptr, arg_expr, level)?;
-                value
-            } else {
-                // Do not match function exit for arguments
-                #[cfg(feature = "debugging")]
-                let reset_debugger = global.debugger.clear_status_if(|status| {
-                    matches!(status, crate::eval::DebuggerStatus::FunctionExit(..))
-                });
+                return Ok((value, arg_expr.start_position()));
+            }
+        }
 
-                let result = self.eval_expr(scope, global, state, lib, this_ptr, arg_expr, level);
+        // Do not match function exit for arguments
+        #[cfg(feature = "debugging")]
+        let reset_debugger = global.debugger.clear_status_if(|status| {
+            matches!(status, crate::eval::DebuggerStatus::FunctionExit(..))
+        });
 
-                // Restore function exit status
-                #[cfg(feature = "debugging")]
-                global.debugger.reset_status(reset_debugger);
+        let result = self.eval_expr(scope, global, state, lib, this_ptr, arg_expr, level);
 
-                result?
-            },
-            arg_expr.start_position(),
-        ))
+        // Restore function exit status
+        #[cfg(feature = "debugging")]
+        global.debugger.reset_status(reset_debugger);
+
+        Ok((result?, arg_expr.start_position()))
     }
 
     /// Call a function in normal function-call style.
@@ -1000,7 +995,6 @@ impl Engine {
         fn_name: &str,
         first_arg: Option<&Expr>,
         args_expr: &[Expr],
-        constants: &[Dynamic],
         hashes: FnCallHashes,
         capture_scope: bool,
         pos: Position,
@@ -1019,7 +1013,7 @@ impl Engine {
             KEYWORD_FN_PTR_CALL if total_args >= 1 => {
                 let arg = first_arg.unwrap();
                 let (arg_value, arg_pos) =
-                    self.get_arg_value(scope, global, state, lib, this_ptr, arg, constants, level)?;
+                    self.get_arg_value(scope, global, state, lib, this_ptr, arg, level)?;
 
                 if !arg_value.is::<FnPtr>() {
                     return Err(self.make_type_mismatch_err::<FnPtr>(
@@ -1054,7 +1048,7 @@ impl Engine {
             KEYWORD_FN_PTR if total_args == 1 => {
                 let arg = first_arg.unwrap();
                 let (arg_value, arg_pos) =
-                    self.get_arg_value(scope, global, state, lib, this_ptr, arg, constants, level)?;
+                    self.get_arg_value(scope, global, state, lib, this_ptr, arg, level)?;
 
                 // Fn - only in function call style
                 return arg_value
@@ -1068,8 +1062,8 @@ impl Engine {
             // Handle curry()
             KEYWORD_FN_PTR_CURRY if total_args > 1 => {
                 let first = first_arg.unwrap();
-                let (arg_value, arg_pos) = self
-                    .get_arg_value(scope, global, state, lib, this_ptr, first, constants, level)?;
+                let (arg_value, arg_pos) =
+                    self.get_arg_value(scope, global, state, lib, this_ptr, first, level)?;
 
                 if !arg_value.is::<FnPtr>() {
                     return Err(self.make_type_mismatch_err::<FnPtr>(
@@ -1082,9 +1076,8 @@ impl Engine {
 
                 // Append the new curried arguments to the existing list.
                 let fn_curry = a_expr.iter().try_fold(fn_curry, |mut curried, expr| {
-                    let (value, ..) = self.get_arg_value(
-                        scope, global, state, lib, this_ptr, expr, constants, level,
-                    )?;
+                    let (value, ..) =
+                        self.get_arg_value(scope, global, state, lib, this_ptr, expr, level)?;
                     curried.push(value);
                     Ok::<_, RhaiError>(curried)
                 })?;
@@ -1097,7 +1090,7 @@ impl Engine {
             crate::engine::KEYWORD_IS_SHARED if total_args == 1 => {
                 let arg = first_arg.unwrap();
                 let (arg_value, ..) =
-                    self.get_arg_value(scope, global, state, lib, this_ptr, arg, constants, level)?;
+                    self.get_arg_value(scope, global, state, lib, this_ptr, arg, level)?;
                 return Ok(arg_value.is_shared().into());
             }
 
@@ -1105,16 +1098,15 @@ impl Engine {
             #[cfg(not(feature = "no_function"))]
             crate::engine::KEYWORD_IS_DEF_FN if total_args == 2 => {
                 let first = first_arg.unwrap();
-                let (arg_value, arg_pos) = self
-                    .get_arg_value(scope, global, state, lib, this_ptr, first, constants, level)?;
+                let (arg_value, arg_pos) =
+                    self.get_arg_value(scope, global, state, lib, this_ptr, first, level)?;
 
                 let fn_name = arg_value
                     .into_immutable_string()
                     .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, arg_pos))?;
 
-                let (arg_value, arg_pos) = self.get_arg_value(
-                    scope, global, state, lib, this_ptr, &a_expr[0], constants, level,
-                )?;
+                let (arg_value, arg_pos) =
+                    self.get_arg_value(scope, global, state, lib, this_ptr, &a_expr[0], level)?;
 
                 let num_params = arg_value
                     .as_int()
@@ -1133,7 +1125,7 @@ impl Engine {
             KEYWORD_IS_DEF_VAR if total_args == 1 => {
                 let arg = first_arg.unwrap();
                 let (arg_value, arg_pos) =
-                    self.get_arg_value(scope, global, state, lib, this_ptr, arg, constants, level)?;
+                    self.get_arg_value(scope, global, state, lib, this_ptr, arg, level)?;
                 let var_name = arg_value
                     .into_immutable_string()
                     .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, arg_pos))?;
@@ -1146,7 +1138,7 @@ impl Engine {
                 let orig_scope_len = scope.len();
                 let arg = first_arg.unwrap();
                 let (arg_value, pos) =
-                    self.get_arg_value(scope, global, state, lib, this_ptr, arg, constants, level)?;
+                    self.get_arg_value(scope, global, state, lib, this_ptr, arg, level)?;
                 let script = &arg_value
                     .into_immutable_string()
                     .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, pos))?;
@@ -1195,7 +1187,7 @@ impl Engine {
                 .map(|&v| v)
                 .chain(a_expr.iter())
                 .try_for_each(|expr| {
-                    self.get_arg_value(scope, global, state, lib, this_ptr, expr, constants, level)
+                    self.get_arg_value(scope, global, state, lib, this_ptr, expr, level)
                         .map(|(value, ..)| arg_values.push(value.flatten()))
                 })?;
             args.extend(curry.iter_mut());
@@ -1227,7 +1219,7 @@ impl Engine {
 
                 // func(x, ...) -> x.func(...)
                 a_expr.iter().try_for_each(|expr| {
-                    self.get_arg_value(scope, global, state, lib, this_ptr, expr, constants, level)
+                    self.get_arg_value(scope, global, state, lib, this_ptr, expr, level)
                         .map(|(value, ..)| arg_values.push(value.flatten()))
                 })?;
 
@@ -1262,10 +1254,8 @@ impl Engine {
                     .into_iter()
                     .chain(a_expr.iter())
                     .try_for_each(|expr| {
-                        self.get_arg_value(
-                            scope, global, state, lib, this_ptr, expr, constants, level,
-                        )
-                        .map(|(value, ..)| arg_values.push(value.flatten()))
+                        self.get_arg_value(scope, global, state, lib, this_ptr, expr, level)
+                            .map(|(value, ..)| arg_values.push(value.flatten()))
                     })?;
                 args.extend(curry.iter_mut());
                 args.extend(arg_values.iter_mut());
@@ -1287,10 +1277,9 @@ impl Engine {
         state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
-        namespace: &crate::module::Namespace,
+        namespace: &crate::ast::Namespace,
         fn_name: &str,
         args_expr: &[Expr],
-        constants: &[Dynamic],
         hash: u64,
         pos: Position,
         level: usize,
@@ -1313,7 +1302,7 @@ impl Engine {
                 arg_values.push(Dynamic::UNIT);
 
                 args_expr.iter().skip(1).try_for_each(|expr| {
-                    self.get_arg_value(scope, global, state, lib, this_ptr, expr, constants, level)
+                    self.get_arg_value(scope, global, state, lib, this_ptr, expr, level)
                         .map(|(value, ..)| arg_values.push(value.flatten()))
                 })?;
 
@@ -1344,7 +1333,7 @@ impl Engine {
             } else {
                 // func(..., ...) or func(mod::x, ...)
                 args_expr.iter().try_for_each(|expr| {
-                    self.get_arg_value(scope, global, state, lib, this_ptr, expr, constants, level)
+                    self.get_arg_value(scope, global, state, lib, this_ptr, expr, level)
                         .map(|(value, ..)| arg_values.push(value.flatten()))
                 })?;
                 args.extend(arg_values.iter_mut());
@@ -1417,7 +1406,7 @@ impl Engine {
             Some(f) => unreachable!("unknown function type: {:?}", f),
 
             None => Err(ERR::ErrorFunctionNotFound(
-                self.gen_call_signature(Some(namespace), fn_name, &args),
+                self.gen_call_signature(namespace, fn_name, &args),
                 pos,
             )
             .into()),

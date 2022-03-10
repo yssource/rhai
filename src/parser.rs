@@ -135,7 +135,7 @@ impl<'e> ParseState<'e> {
 
         #[cfg(not(feature = "no_closure"))]
         if self.allow_capture {
-            if index == 0 && !self.external_vars.iter().any(|v| v.name == name) {
+            if index == 0 && !self.external_vars.iter().any(|v| v.as_str() == name) {
                 self.external_vars.push(crate::ast::Ident {
                     name: name.into(),
                     pos: _pos,
@@ -266,9 +266,9 @@ impl Expr {
     fn into_property(self, state: &mut ParseState) -> Self {
         match self {
             #[cfg(not(feature = "no_module"))]
-            Self::Variable(.., x) if x.1.is_some() => unreachable!("qualified property"),
-            Self::Variable(.., pos, x) => {
-                let ident = x.2;
+            Self::Variable(x, ..) if !x.1.is_empty() => unreachable!("qualified property"),
+            Self::Variable(x, .., pos) => {
+                let ident = x.3;
                 let getter = state.get_identifier(crate::engine::FN_GET, &ident);
                 let hash_get = calc_fn_hash(&getter, 1);
                 let setter = state.get_identifier(crate::engine::FN_SET, &ident);
@@ -456,7 +456,7 @@ impl Engine {
         lib: &mut FnLib,
         id: Identifier,
         capture_parent_scope: bool,
-        #[cfg(not(feature = "no_module"))] namespace: Option<crate::module::Namespace>,
+        #[cfg(not(feature = "no_module"))] namespace: crate::ast::Namespace,
         settings: ParseSettings,
     ) -> ParseResult<Expr> {
         #[cfg(not(feature = "unchecked"))]
@@ -484,7 +484,7 @@ impl Engine {
                 eat_token(input, Token::RightParen);
 
                 #[cfg(not(feature = "no_module"))]
-                let hash = if let Some(namespace) = namespace.as_mut() {
+                let hash = if !namespace.is_empty() {
                     let index = state.find_module(namespace.root());
 
                     #[cfg(not(feature = "no_function"))]
@@ -499,7 +499,7 @@ impl Engine {
 
                     namespace.set_index(index);
 
-                    crate::calc_qualified_fn_hash(namespace.iter().map(|m| m.name.as_str()), &id, 0)
+                    crate::calc_qualified_fn_hash(namespace.iter().map(|m| m.as_str()), &id, 0)
                 } else {
                     calc_fn_hash(&id, 0)
                 };
@@ -521,7 +521,6 @@ impl Engine {
                     namespace,
                     hashes,
                     args,
-                    constants: StaticVec::new_const(),
                     pos: settings.pos,
                 }
                 .into_fn_call_expr(settings.pos));
@@ -545,7 +544,7 @@ impl Engine {
                     eat_token(input, Token::RightParen);
 
                     #[cfg(not(feature = "no_module"))]
-                    let hash = if let Some(namespace) = namespace.as_mut() {
+                    let hash = if !namespace.is_empty() {
                         let index = state.find_module(namespace.root());
 
                         #[cfg(not(feature = "no_function"))]
@@ -561,7 +560,7 @@ impl Engine {
                         namespace.set_index(index);
 
                         crate::calc_qualified_fn_hash(
-                            namespace.iter().map(|m| m.name.as_str()),
+                            namespace.iter().map(|m| m.as_str()),
                             &id,
                             args.len(),
                         )
@@ -586,7 +585,6 @@ impl Engine {
                         namespace,
                         hashes,
                         args,
-                        constants: StaticVec::new_const(),
                         pos: settings.pos,
                     }
                     .into_fn_call_expr(settings.pos));
@@ -902,7 +900,7 @@ impl Engine {
 
             let (name, pos) = match input.next().expect(NEVER_ENDS) {
                 (Token::Identifier(s), pos) | (Token::StringConstant(s), pos) => {
-                    if map.iter().any(|(p, ..)| p.name == &*s) {
+                    if map.iter().any(|(p, ..)| **p == s) {
                         return Err(PERR::DuplicatedProperty(s.to_string()).into_err(pos));
                     }
                     (s, pos)
@@ -1389,9 +1387,9 @@ impl Engine {
             // Identifier
             Token::Identifier(..) => {
                 #[cfg(not(feature = "no_module"))]
-                let none = None;
+                let ns = crate::ast::Namespace::NONE;
                 #[cfg(feature = "no_module")]
-                let none = ();
+                let ns = ();
 
                 let s = match input.next().expect(NEVER_ENDS) {
                     (Token::Identifier(s), ..) => s,
@@ -1407,9 +1405,9 @@ impl Engine {
                             state.allow_capture = true;
                         }
                         Expr::Variable(
+                            (None, ns, 0, state.get_identifier("", s)).into(),
                             None,
                             settings.pos,
-                            (None, none, state.get_identifier("", s)).into(),
                         )
                     }
                     // Namespace qualification
@@ -1421,9 +1419,9 @@ impl Engine {
                             state.allow_capture = true;
                         }
                         Expr::Variable(
+                            (None, ns, 0, state.get_identifier("", s)).into(),
                             None,
                             settings.pos,
-                            (None, none, state.get_identifier("", s)).into(),
                         )
                     }
                     // Normal variable access
@@ -1444,9 +1442,9 @@ impl Engine {
                             }
                         });
                         Expr::Variable(
+                            (index, ns, 0, state.get_identifier("", s)).into(),
                             short_index,
                             settings.pos,
-                            (index, none, state.get_identifier("", s)).into(),
                         )
                     }
                 }
@@ -1455,9 +1453,9 @@ impl Engine {
             // Reserved keyword or symbol
             Token::Reserved(..) => {
                 #[cfg(not(feature = "no_module"))]
-                let none = None;
+                let ns = crate::ast::Namespace::NONE;
                 #[cfg(feature = "no_module")]
-                let none = ();
+                let ns = ();
 
                 let s = match input.next().expect(NEVER_ENDS) {
                     (Token::Reserved(s), ..) => s,
@@ -1467,16 +1465,16 @@ impl Engine {
                 match input.peek().expect(NEVER_ENDS).0 {
                     // Function call is allowed to have reserved keyword
                     Token::LeftParen | Token::Bang if is_keyword_function(&s) => Expr::Variable(
+                        (None, ns, 0, state.get_identifier("", s)).into(),
                         None,
                         settings.pos,
-                        (None, none, state.get_identifier("", s)).into(),
                     ),
                     // Access to `this` as a variable is OK within a function scope
                     #[cfg(not(feature = "no_function"))]
                     _ if &*s == KEYWORD_THIS && settings.is_function_scope => Expr::Variable(
+                        (None, ns, 0, state.get_identifier("", s)).into(),
                         None,
                         settings.pos,
-                        (None, none, state.get_identifier("", s)).into(),
                     ),
                     // Cannot access to `this` as a variable not in a function scope
                     _ if &*s == KEYWORD_THIS => {
@@ -1529,7 +1527,7 @@ impl Engine {
             lhs = match (lhs, tail_token) {
                 // Qualified function call with !
                 #[cfg(not(feature = "no_module"))]
-                (Expr::Variable(.., x), Token::Bang) if x.1.is_some() => {
+                (Expr::Variable(x, ..), Token::Bang) if !x.1.is_empty() => {
                     return if !match_token(input, Token::LeftParen).0 {
                         Err(LexError::UnexpectedInput(Token::Bang.syntax().to_string())
                             .into_err(tail_pos))
@@ -1542,7 +1540,7 @@ impl Engine {
                     };
                 }
                 // Function call with !
-                (Expr::Variable(.., pos, x), Token::Bang) => {
+                (Expr::Variable(x, .., pos), Token::Bang) => {
                     match match_token(input, Token::LeftParen) {
                         (false, pos) => {
                             return Err(PERR::MissingToken(
@@ -1554,10 +1552,8 @@ impl Engine {
                         _ => (),
                     }
 
-                    let (.., _ns, name) = *x;
+                    let (.., _ns, _, name) = *x;
                     settings.pos = pos;
-                    #[cfg(not(feature = "no_module"))]
-                    let _ns = _ns.map(|(ns, ..)| ns);
                     self.parse_fn_call(
                         input,
                         state,
@@ -1570,10 +1566,8 @@ impl Engine {
                     )?
                 }
                 // Function call
-                (Expr::Variable(.., pos, x), Token::LeftParen) => {
-                    let (.., _ns, name) = *x;
-                    #[cfg(not(feature = "no_module"))]
-                    let _ns = _ns.map(|(ns, ..)| ns);
+                (Expr::Variable(x, .., pos), Token::LeftParen) => {
+                    let (.., _ns, _, name) = *x;
                     settings.pos = pos;
                     self.parse_fn_call(
                         input,
@@ -1588,23 +1582,17 @@ impl Engine {
                 }
                 // module access
                 #[cfg(not(feature = "no_module"))]
-                (Expr::Variable(.., pos, x), Token::DoubleColon) => {
+                (Expr::Variable(x, .., pos), Token::DoubleColon) => {
                     let (id2, pos2) = parse_var_name(input)?;
-                    let (.., mut namespace, name) = *x;
+                    let (.., mut namespace, _, name) = *x;
                     let var_name_def = Ident { name, pos };
 
-                    if let Some((ref mut namespace, ..)) = namespace {
-                        namespace.push(var_name_def);
-                    } else {
-                        let mut ns = crate::module::Namespace::new();
-                        ns.push(var_name_def);
-                        namespace = Some((ns, 42));
-                    }
+                    namespace.push(var_name_def);
 
                     Expr::Variable(
+                        (None, namespace, 0, state.get_identifier("", id2)).into(),
                         None,
                         pos2,
-                        (None, namespace, state.get_identifier("", id2)).into(),
                     )
                 }
                 // Indexing
@@ -1643,33 +1631,35 @@ impl Engine {
         // Cache the hash key for namespace-qualified variables
         #[cfg(not(feature = "no_module"))]
         let namespaced_variable = match lhs {
-            Expr::Variable(.., ref mut x) if x.1.is_some() => Some(x.as_mut()),
+            Expr::Variable(ref mut x, ..) if !x.1.is_empty() => Some(x.as_mut()),
             Expr::Index(ref mut x, ..) | Expr::Dot(ref mut x, ..) => match x.lhs {
-                Expr::Variable(.., ref mut x) if x.1.is_some() => Some(x.as_mut()),
+                Expr::Variable(ref mut x, ..) if !x.1.is_empty() => Some(x.as_mut()),
                 _ => None,
             },
             _ => None,
         };
 
         #[cfg(not(feature = "no_module"))]
-        if let Some((.., Some((namespace, hash)), name)) = namespaced_variable {
-            *hash = crate::calc_qualified_var_hash(namespace.iter().map(|v| v.name.as_str()), name);
+        if let Some((.., namespace, hash, name)) = namespaced_variable {
+            if !namespace.is_empty() {
+                *hash = crate::calc_qualified_var_hash(namespace.iter().map(|v| v.as_str()), name);
 
-            #[cfg(not(feature = "no_module"))]
-            {
-                let index = state.find_module(namespace.root());
+                #[cfg(not(feature = "no_module"))]
+                {
+                    let index = state.find_module(namespace.root());
 
-                #[cfg(not(feature = "no_function"))]
-                let relax = settings.is_function_scope;
-                #[cfg(feature = "no_function")]
-                let relax = false;
+                    #[cfg(not(feature = "no_function"))]
+                    let relax = settings.is_function_scope;
+                    #[cfg(feature = "no_function")]
+                    let relax = false;
 
-                if !relax && settings.options.strict_var && index.is_none() {
-                    return Err(PERR::ModuleUndefined(namespace.root().to_string())
-                        .into_err(namespace.position()));
+                    if !relax && settings.options.strict_var && index.is_none() {
+                        return Err(PERR::ModuleUndefined(namespace.root().to_string())
+                            .into_err(namespace.position()));
+                    }
+
+                    namespace.set_index(index);
                 }
-
-                namespace.set_index(index);
             }
         }
 
@@ -1828,13 +1818,13 @@ impl Engine {
                 Err(PERR::AssignmentToConstant("".into()).into_err(lhs.start_position()))
             }
             // var (non-indexed) = rhs
-            Expr::Variable(None, _, ref x) if x.0.is_none() => Ok(Stmt::Assignment(
+            Expr::Variable(ref x, None, _) if x.0.is_none() => Ok(Stmt::Assignment(
                 (op_info, (lhs, rhs).into()).into(),
                 op_pos,
             )),
             // var (indexed) = rhs
-            Expr::Variable(i, var_pos, ref x) => {
-                let (index, _, name) = x.as_ref();
+            Expr::Variable(ref x, i, var_pos) => {
+                let (index, .., name) = x.as_ref();
                 let index = i.map_or_else(
                     || index.expect("either long or short index is `None`").get(),
                     |n| n.get() as usize,
@@ -1939,8 +1929,8 @@ impl Engine {
             }
             // lhs.module::id - syntax error
             #[cfg(not(feature = "no_module"))]
-            (.., Expr::Variable(.., x)) if x.1.is_some() => {
-                Err(PERR::PropertyExpected.into_err(x.1.expect("`Some`").0.position()))
+            (.., Expr::Variable(x, ..)) if !x.1.is_empty() => {
+                Err(PERR::PropertyExpected.into_err(x.1.position()))
             }
             // lhs.id
             (lhs, var_expr @ Expr::Variable(..)) => {
@@ -1960,7 +1950,7 @@ impl Engine {
             // lhs.nnn::func(...) - syntax error
             #[cfg(not(feature = "no_module"))]
             (.., Expr::FnCall(func, ..)) if func.is_qualified() => {
-                Err(PERR::PropertyExpected.into_err(func.namespace.expect("`Some`").position()))
+                Err(PERR::PropertyExpected.into_err(func.namespace.position()))
             }
             // lhs.Fn() or lhs.eval()
             (.., Expr::FnCall(func, func_pos))
@@ -2008,14 +1998,13 @@ impl Engine {
                 match x.lhs {
                     // lhs.module::id.dot_rhs or lhs.module::id[idx_rhs] - syntax error
                     #[cfg(not(feature = "no_module"))]
-                    Expr::Variable(.., x) if x.1.is_some() => {
-                        Err(PERR::PropertyExpected.into_err(x.1.expect("`Some`").0.position()))
+                    Expr::Variable(x, ..) if !x.1.is_empty() => {
+                        Err(PERR::PropertyExpected.into_err(x.1.position()))
                     }
                     // lhs.module::func().dot_rhs or lhs.module::func()[idx_rhs] - syntax error
                     #[cfg(not(feature = "no_module"))]
                     Expr::FnCall(func, ..) if func.is_qualified() => {
-                        Err(PERR::PropertyExpected
-                            .into_err(func.namespace.expect("`Some`").position()))
+                        Err(PERR::PropertyExpected.into_err(func.namespace.position()))
                     }
                     // lhs.id.dot_rhs or lhs.id[idx_rhs]
                     Expr::Variable(..) | Expr::Property(..) => {
@@ -2296,21 +2285,15 @@ impl Engine {
                 CUSTOM_SYNTAX_MARKER_IDENT => {
                     let (name, pos) = parse_var_name(input)?;
                     let name = state.get_identifier("", name);
+
+                    #[cfg(not(feature = "no_module"))]
+                    let ns = crate::ast::Namespace::NONE;
+                    #[cfg(feature = "no_module")]
+                    let ns = ();
+
                     segments.push(name.clone().into());
                     tokens.push(state.get_identifier("", CUSTOM_SYNTAX_MARKER_IDENT));
-                    inputs.push(Expr::Variable(
-                        None,
-                        pos,
-                        (
-                            None,
-                            #[cfg(not(feature = "no_module"))]
-                            None,
-                            #[cfg(feature = "no_module")]
-                            (),
-                            name,
-                        )
-                            .into(),
-                    ));
+                    inputs.push(Expr::Variable((None, ns, 0, name).into(), None, pos));
                 }
                 CUSTOM_SYNTAX_MARKER_SYMBOL => {
                     let (symbol, pos) = parse_symbol(input)?;
@@ -2613,11 +2596,11 @@ impl Engine {
                 )
                 .into_err(pos));
             }
-            (name, name_pos, Some(counter_name), Some(counter_pos))
+            (name, name_pos, counter_name, counter_pos)
         } else {
             // name
             let (name, name_pos) = parse_var_name(input)?;
-            (name, name_pos, None, None)
+            (name, name_pos, Identifier::new_const(), Position::NONE)
         };
 
         // for name in ...
@@ -2641,12 +2624,13 @@ impl Engine {
 
         let prev_stack_len = state.stack.len();
 
-        let counter_var = counter_name.map(|name| {
-            let name = state.get_identifier("", name);
-            let pos = counter_pos.expect("`Some`");
+        if !counter_name.is_empty() {
             state.stack.push(name.clone(), ());
-            Ident { name, pos }
-        });
+        }
+        let counter_var = Ident {
+            name: state.get_identifier("", counter_name),
+            pos: counter_pos,
+        };
 
         let loop_var = state.get_identifier("", name);
         state.stack.push(loop_var.clone(), ());
@@ -2788,7 +2772,7 @@ impl Engine {
 
         // import expr as ...
         if !match_token(input, Token::As).0 {
-            return Ok(Stmt::Import((expr, None).into(), settings.pos));
+            return Ok(Stmt::Import((expr, Ident::EMPTY).into(), settings.pos));
         }
 
         // import expr as name ...
@@ -2797,7 +2781,7 @@ impl Engine {
         state.imports.push(name.clone());
 
         Ok(Stmt::Import(
-            (expr, Some(Ident { name, pos })).into(),
+            (expr, Ident { name, pos }).into(),
             settings.pos,
         ))
     }
@@ -3231,15 +3215,15 @@ impl Engine {
 
             let name = state.get_identifier("", name);
             state.stack.push(name.clone(), ());
-            Some(Ident { name, pos })
+            Ident { name, pos }
         } else {
-            None
+            Ident::EMPTY
         };
 
         // try { try_block } catch ( var ) { catch_block }
         let catch_block = self.parse_block(input, state, lib, settings.level_up())?;
 
-        if catch_var.is_some() {
+        if !catch_var.is_empty() {
             // Remove the error variable from the stack
             state.stack.rewind(state.stack.len() - 1);
         }
@@ -3346,17 +3330,11 @@ impl Engine {
             environ: None,
             #[cfg(not(feature = "no_function"))]
             #[cfg(feature = "metadata")]
-            comments: if comments.is_empty() {
-                None
-            } else {
-                Some(
-                    comments
-                        .into_iter()
-                        .map(|s| s.to_string().into_boxed_str())
-                        .collect::<Vec<_>>()
-                        .into_boxed_slice(),
-                )
-            },
+            comments: comments
+                .into_iter()
+                .map(|s| s.to_string().into_boxed_str())
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
         })
     }
 
@@ -3384,19 +3362,12 @@ impl Engine {
                 .iter()
                 .cloned()
                 .map(|crate::ast::Ident { name, pos }| {
-                    Expr::Variable(
-                        None,
-                        pos,
-                        (
-                            None,
-                            #[cfg(not(feature = "no_module"))]
-                            None,
-                            #[cfg(feature = "no_module")]
-                            (),
-                            name,
-                        )
-                            .into(),
-                    )
+                    #[cfg(not(feature = "no_module"))]
+                    let ns = crate::ast::Namespace::NONE;
+                    #[cfg(feature = "no_module")]
+                    let ns = ();
+
+                    Expr::Variable((None, ns, 0, name).into(), None, pos)
                 }),
         );
 
@@ -3518,7 +3489,7 @@ impl Engine {
             environ: None,
             #[cfg(not(feature = "no_function"))]
             #[cfg(feature = "metadata")]
-            comments: None,
+            comments: Box::default(),
         };
 
         let fn_ptr = crate::FnPtr::new_unchecked(fn_name, StaticVec::new_const());

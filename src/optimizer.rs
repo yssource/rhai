@@ -10,7 +10,7 @@ use crate::tokenizer::{Span, Token};
 use crate::types::dynamic::AccessMode;
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnPtr, Position, Scope,
-    StaticVec, AST, INT,
+    StaticVec, AST, INT, INT_BITS,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -259,7 +259,7 @@ fn optimize_stmt_block(
 
                         if x.1.is_constant() {
                             state.push_var(
-                                x.0.name.as_str(),
+                                x.0.as_str(),
                                 AccessMode::ReadOnly,
                                 x.1.get_literal_value(),
                             );
@@ -267,7 +267,7 @@ fn optimize_stmt_block(
                     } else {
                         // Add variables into the state
                         optimize_expr(&mut x.1, state, false);
-                        state.push_var(x.0.name.as_str(), AccessMode::ReadWrite, None);
+                        state.push_var(x.0.as_str(), AccessMode::ReadWrite, None);
                     }
                 }
                 // Optimize the statement
@@ -438,15 +438,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                 Expr::FnCall(ref mut x2, ..) => {
                     state.set_dirty();
                     x.0 = Some(OpAssignment::new_from_base(&x2.name));
-
-                    let value = mem::take(&mut x2.args[1]);
-
-                    if let Expr::Stack(slot, pos) = value {
-                        x.1.rhs =
-                            Expr::from_dynamic(mem::take(x2.constants.get_mut(slot).unwrap()), pos);
-                    } else {
-                        x.1.rhs = value;
-                    }
+                    x.1.rhs = mem::take(&mut x2.args[1]);
                 }
                 ref expr => unreachable!("Expr::FnCall expected but gets {:?}", expr),
             }
@@ -903,7 +895,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                *expr = mem::take(&mut m.0).into_iter().find(|(x, ..)| x.name == prop)
+                *expr = mem::take(&mut m.0).into_iter().find(|(x, ..)| x.as_str() == prop)
                             .map(|(.., mut expr)| { expr.set_position(*pos); expr })
                             .unwrap_or_else(|| Expr::Unit(*pos));
             }
@@ -943,21 +935,21 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                *expr = mem::take(&mut m.0).into_iter().find(|(x, ..)| x.name.as_str() == s.as_str())
+                *expr = mem::take(&mut m.0).into_iter().find(|(x, ..)| x.as_str() == s.as_str())
                             .map(|(.., mut expr)| { expr.set_position(*pos); expr })
                             .unwrap_or_else(|| Expr::Unit(*pos));
             }
             // int[int]
-            (Expr::IntegerConstant(n, pos), Expr::IntegerConstant(i, ..)) if *i >= 0 && (*i as usize) < (std::mem::size_of_val(n) * 8) => {
+            (Expr::IntegerConstant(n, pos), Expr::IntegerConstant(i, ..)) if *i >= 0 && (*i as usize) < INT_BITS => {
                 // Bit-field literal indexing - get the bit
                 state.set_dirty();
                 *expr = Expr::BoolConstant((*n & (1 << (*i as usize))) != 0, *pos);
             }
             // int[-int]
-            (Expr::IntegerConstant(n, pos), Expr::IntegerConstant(i, ..)) if *i < 0 && i.checked_abs().map(|i| i as usize <= (std::mem::size_of_val(n) * 8)).unwrap_or(false) => {
+            (Expr::IntegerConstant(n, pos), Expr::IntegerConstant(i, ..)) if *i < 0 && i.checked_abs().map(|i| i as usize <= INT_BITS).unwrap_or(false) => {
                 // Bit-field literal indexing - get the bit
                 state.set_dirty();
-                *expr = Expr::BoolConstant((*n & (1 << (std::mem::size_of_val(n) * 8 - i.abs() as usize))) != 0, *pos);
+                *expr = Expr::BoolConstant((*n & (1 << (INT_BITS - i.abs() as usize))) != 0, *pos);
             }
             // string[int]
             (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, ..)) if *i >= 0 && (*i as usize) < s.chars().count() => {
@@ -1063,7 +1055,6 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
             && x.args[0].is_constant()
         => {
             let fn_name = match x.args[0] {
-                Expr::Stack(slot, ..) => x.constants[slot].clone(),
                 Expr::StringConstant(ref s, ..) => s.clone().into(),
                 _ => Dynamic::UNIT
             };
@@ -1077,7 +1068,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
         }
 
         // Do not call some special keywords
-        Expr::FnCall(x, ..) if DONT_EVAL_KEYWORDS.contains(&x.name.as_ref()) => {
+        Expr::FnCall(x, ..) if DONT_EVAL_KEYWORDS.contains(&x.name.as_str()) => {
             x.args.iter_mut().for_each(|a| optimize_expr(a, state, false));
         }
 
@@ -1086,13 +1077,9 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                 if !x.is_qualified() // Non-qualified
                 && state.optimization_level == OptimizationLevel::Simple // simple optimizations
                 && x.args.iter().all(Expr::is_constant) // all arguments are constants
-                //&& !is_valid_identifier(x.name.chars()) // cannot be scripted
+                //&& !is_valid_identifier(x.chars()) // cannot be scripted
         => {
-            let arg_values = &mut x.args.iter().map(|e| match e {
-                                                            Expr::Stack(slot, ..) => x.constants[*slot].clone(),
-                                                            _ => e.get_literal_value().unwrap()
-                                                        }).collect::<StaticVec<_>>();
-
+            let arg_values = &mut x.args.iter().map(|e| e.get_literal_value().unwrap()).collect::<StaticVec<_>>();
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
 
             match x.name.as_str() {
@@ -1109,14 +1096,14 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                 }
                 // Overloaded operators can override built-in.
                 _ if x.args.len() == 2 && !has_native_fn_override(state.engine, x.hashes.native, arg_types.as_ref()) => {
-                    if let Some(result) = get_builtin_binary_op_fn(x.name.as_ref(), &arg_values[0], &arg_values[1])
+                    if let Some(result) = get_builtin_binary_op_fn(&x.name, &arg_values[0], &arg_values[1])
                         .and_then(|f| {
                             #[cfg(not(feature = "no_function"))]
                             let lib = state.lib;
                             #[cfg(feature = "no_function")]
                             let lib = &[];
 
-                            let context = (state.engine, x.name.as_str(), lib).into();
+                            let context = (state.engine, &x.name, lib).into();
                             let (first, second) = arg_values.split_first_mut().unwrap();
                             (f)(context, &mut [ first, &mut second[0] ]).ok()
                         }) {
@@ -1131,14 +1118,21 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
             x.args.iter_mut().for_each(|a| optimize_expr(a, state, false));
 
             // Move constant arguments
-            let constants = &mut x.constants;
-            x.args.iter_mut().for_each(|arg| {
-                if let Some(value) = arg.get_literal_value() {
-                    state.set_dirty();
-                    constants.push(value);
-                    *arg = Expr::Stack(constants.len()-1, arg.start_position());
+            for arg in x.args.iter_mut() {
+                match arg {
+                    Expr::DynamicConstant(..) | Expr::Unit(..)
+                    | Expr::StringConstant(..) | Expr::CharConstant(..)
+                    | Expr::BoolConstant(..) | Expr::IntegerConstant(..) => (),
+
+                    #[cfg(not(feature = "no_float"))]
+                    Expr:: FloatConstant(..) => (),
+
+                    _ => if let Some(value) = arg.get_literal_value() {
+                        state.set_dirty();
+                        *arg = Expr::DynamicConstant(value.into(), arg.start_position());
+                    },
                 }
-            });
+            }
         }
 
         // Eagerly call functions
@@ -1154,10 +1148,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
             let has_script_fn = false;
 
             if !has_script_fn {
-                let arg_values = &mut x.args.iter().map(|e| match e {
-                                                                Expr::Stack(slot, ..) => x.constants[*slot].clone(),
-                                                                _ => e.get_literal_value().unwrap()
-                                                            }).collect::<StaticVec<_>>();
+                let arg_values = &mut x.args.iter().map(|e| e.get_literal_value().unwrap()).collect::<StaticVec<_>>();
 
                 let result = match x.name.as_str() {
                     KEYWORD_TYPE_OF if arg_values.len() == 1 => Some(state.engine.map_type_name(arg_values[0].type_name()).into()),
@@ -1181,19 +1172,27 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
             optimize_expr(arg, state, false);
 
             // Move constant arguments
-            if let Some(value) = arg.get_literal_value() {
-                state.set_dirty();
-                x.constants.push(value);
-                *arg = Expr::Stack(x.constants.len()-1, arg.start_position());
+            match arg {
+                Expr::DynamicConstant(..) | Expr::Unit(..)
+                | Expr::StringConstant(..) | Expr::CharConstant(..)
+                | Expr::BoolConstant(..) | Expr::IntegerConstant(..) => (),
+
+                #[cfg(not(feature = "no_float"))]
+                Expr:: FloatConstant(..) => (),
+
+                _ => if let Some(value) = arg.get_literal_value() {
+                    state.set_dirty();
+                    *arg = Expr::DynamicConstant(value.into(), arg.start_position());
+                },
             }
         },
 
         // constant-name
         #[cfg(not(feature = "no_module"))]
-        Expr::Variable(.., x) if x.1.is_some() => (),
-        Expr::Variable(.., pos, x) if state.find_constant(&x.2).is_some() => {
+        Expr::Variable(x, ..) if !x.1.is_empty() => (),
+        Expr::Variable(x, .., pos) if state.find_constant(&x.3).is_some() => {
             // Replace constant with value
-            *expr = Expr::from_dynamic(state.find_constant(&x.2).unwrap().clone(), *pos);
+            *expr = Expr::from_dynamic(state.find_constant(&x.3).unwrap().clone(), *pos);
             state.set_dirty();
         }
 
@@ -1278,7 +1277,7 @@ pub fn optimize_into_ast(
                     environ: None,
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(feature = "metadata")]
-                    comments: None,
+                    comments: Box::default(),
                 });
             }
 

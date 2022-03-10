@@ -1,7 +1,7 @@
 use crate::eval::calc_index;
 use crate::plugin::*;
 use crate::types::dynamic::Variant;
-use crate::{def_package, ExclusiveRange, InclusiveRange, RhaiResultOf, INT};
+use crate::{def_package, ExclusiveRange, InclusiveRange, RhaiResultOf, INT, INT_BITS};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -117,18 +117,16 @@ impl<T> FusedIterator for StepRange<T> where
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 struct BitRange(INT, INT, usize);
 
-const BITS: usize = std::mem::size_of::<INT>() * 8;
-
 impl BitRange {
     pub fn new(value: INT, from: INT, len: INT) -> RhaiResultOf<Self> {
-        let from = calc_index(BITS, from, true, || {
-            crate::ERR::ErrorBitFieldBounds(BITS, from, Position::NONE).into()
+        let from = calc_index(INT_BITS, from, true, || {
+            crate::ERR::ErrorBitFieldBounds(INT_BITS, from, Position::NONE).into()
         })?;
 
         let len = if len < 0 {
             0
-        } else if from + (len as usize) > BITS {
-            BITS - from
+        } else if from + (len as usize) > INT_BITS {
+            INT_BITS - from
         } else {
             len as usize
         };

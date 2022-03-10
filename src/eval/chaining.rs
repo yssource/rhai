@@ -45,7 +45,7 @@ pub enum ChainArgument {
     /// Since many dotted function calls have no arguments (e.g. `string.len()`), it is better to
     /// reduce the size of [`ChainArgument`] by using a boxed slice.
     #[cfg(not(feature = "no_object"))]
-    MethodCallArgs(Option<Box<[Dynamic]>>, Position),
+    MethodCallArgs(Box<[Dynamic]>, Position),
     /// Index value and [position][Position].
     #[cfg(not(feature = "no_index"))]
     IndexValue(Dynamic, Position),
@@ -73,8 +73,10 @@ impl ChainArgument {
     #[must_use]
     pub fn into_fn_call_args(self) -> (crate::FnArgsVec<Dynamic>, Position) {
         match self {
-            Self::MethodCallArgs(None, pos) => (crate::FnArgsVec::new_const(), pos),
-            Self::MethodCallArgs(Some(mut values), pos) => {
+            Self::MethodCallArgs(values, pos) if values.is_empty() => {
+                (crate::FnArgsVec::new_const(), pos)
+            }
+            Self::MethodCallArgs(mut values, pos) => {
                 (values.iter_mut().map(std::mem::take).collect(), pos)
             }
             x => unreachable!("ChainArgument::MethodCallArgs expected but gets {:?}", x),
@@ -100,9 +102,9 @@ impl ChainArgument {
     #[must_use]
     pub fn from_fn_call_args(values: crate::FnArgsVec<Dynamic>, pos: Position) -> Self {
         if values.is_empty() {
-            Self::MethodCallArgs(None, pos)
+            Self::MethodCallArgs(Box::default(), pos)
         } else {
-            Self::MethodCallArgs(Some(values.into_vec().into()), pos)
+            Self::MethodCallArgs(values.into_boxed_slice(), pos)
         }
     }
     /// Create an [`IndexValue`][ChainArgument::IndexValue].
@@ -620,7 +622,7 @@ impl Engine {
 
         match lhs {
             // id.??? or id[???]
-            Expr::Variable(.., var_pos, x) => {
+            Expr::Variable(x, .., var_pos) => {
                 #[cfg(feature = "debugging")]
                 self.run_debugger(scope, global, state, lib, this_ptr, lhs, level)?;
 
@@ -631,7 +633,7 @@ impl Engine {
                     self.search_namespace(scope, global, state, lib, this_ptr, lhs, level)?;
 
                 let obj_ptr = &mut target;
-                let root = (x.2.as_str(), *var_pos);
+                let root = (x.3.as_str(), *var_pos);
 
                 self.eval_dot_index_chain_helper(
                     global, state, lib, &mut None, obj_ptr, root, expr, rhs, options, idx_values,
@@ -684,16 +686,13 @@ impl Engine {
             Expr::MethodCall(x, ..)
                 if _parent_chain_type == ChainType::Dotting && !x.is_qualified() =>
             {
-                let crate::ast::FnCallExpr {
-                    args, constants, ..
-                } = x.as_ref();
+                let crate::ast::FnCallExpr { args, .. } = x.as_ref();
 
                 let (values, pos) = args.iter().try_fold(
                     (crate::FnArgsVec::with_capacity(args.len()), Position::NONE),
                     |(mut values, mut pos), expr| {
-                        let (value, arg_pos) = self.get_arg_value(
-                            scope, global, state, lib, this_ptr, expr, constants, level,
-                        )?;
+                        let (value, arg_pos) =
+                            self.get_arg_value(scope, global, state, lib, this_ptr, expr, level)?;
                         if values.is_empty() {
                             pos = arg_pos;
                         }
@@ -732,15 +731,13 @@ impl Engine {
                     Expr::MethodCall(x, ..)
                         if _parent_chain_type == ChainType::Dotting && !x.is_qualified() =>
                     {
-                        let crate::ast::FnCallExpr {
-                            args, constants, ..
-                        } = x.as_ref();
+                        let crate::ast::FnCallExpr { args, .. } = x.as_ref();
 
                         let (values, pos) = args.iter().try_fold(
                             (crate::FnArgsVec::with_capacity(args.len()), Position::NONE),
                             |(mut values, mut pos), expr| {
                                 let (value, arg_pos) = self.get_arg_value(
-                                    scope, global, state, lib, this_ptr, expr, constants, level,
+                                    scope, global, state, lib, this_ptr, expr, level,
                                 )?;
                                 if values.is_empty() {
                                     pos = arg_pos
@@ -925,22 +922,20 @@ impl Engine {
                 if idx.is::<crate::ExclusiveRange>() || idx.is::<crate::InclusiveRange>() =>
             {
                 // val_int[range]
-                const BITS: usize = std::mem::size_of::<crate::INT>() * 8;
-
                 let (shift, mask) = if let Some(range) = idx.read_lock::<crate::ExclusiveRange>() {
                     let start = range.start;
                     let end = range.end;
 
-                    let start = super::calc_index(BITS, start, false, || {
-                        ERR::ErrorBitFieldBounds(BITS, start, idx_pos).into()
+                    let start = super::calc_index(crate::INT_BITS, start, false, || {
+                        ERR::ErrorBitFieldBounds(crate::INT_BITS, start, idx_pos).into()
                     })?;
-                    let end = super::calc_index(BITS, end, false, || {
-                        ERR::ErrorBitFieldBounds(BITS, end, idx_pos).into()
+                    let end = super::calc_index(crate::INT_BITS, end, false, || {
+                        ERR::ErrorBitFieldBounds(crate::INT_BITS, end, idx_pos).into()
                     })?;
 
                     if end <= start {
                         (0, 0)
-                    } else if end == BITS && start == 0 {
+                    } else if end == crate::INT_BITS && start == 0 {
                         // -1 = all bits set
                         (0, -1)
                     } else {
@@ -956,16 +951,16 @@ impl Engine {
                     let start = *range.start();
                     let end = *range.end();
 
-                    let start = super::calc_index(BITS, start, false, || {
-                        ERR::ErrorBitFieldBounds(BITS, start, idx_pos).into()
+                    let start = super::calc_index(crate::INT_BITS, start, false, || {
+                        ERR::ErrorBitFieldBounds(crate::INT_BITS, start, idx_pos).into()
                     })?;
-                    let end = super::calc_index(BITS, end, false, || {
-                        ERR::ErrorBitFieldBounds(BITS, end, idx_pos).into()
+                    let end = super::calc_index(crate::INT_BITS, end, false, || {
+                        ERR::ErrorBitFieldBounds(crate::INT_BITS, end, idx_pos).into()
                     })?;
 
                     if end < start {
                         (0, 0)
-                    } else if end == BITS - 1 && start == 0 {
+                    } else if end == crate::INT_BITS - 1 && start == 0 {
                         // -1 = all bits set
                         (0, -1)
                     } else {
@@ -998,10 +993,8 @@ impl Engine {
                     .as_int()
                     .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, idx_pos))?;
 
-                const BITS: usize = std::mem::size_of::<crate::INT>() * 8;
-
-                let bit = super::calc_index(BITS, index, true, || {
-                    ERR::ErrorBitFieldBounds(BITS, index, idx_pos).into()
+                let bit = super::calc_index(crate::INT_BITS, index, true, || {
+                    ERR::ErrorBitFieldBounds(crate::INT_BITS, index, idx_pos).into()
                 })?;
 
                 let bit_value = (*value & (1 << bit)) != 0;

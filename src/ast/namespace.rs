@@ -30,6 +30,10 @@ pub struct Namespace {
 
 impl fmt::Debug for Namespace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_empty() {
+            return f.write_str("NONE");
+        }
+
         if let Some(index) = self.index {
             write!(f, "{} -> ", index)?;
         }
@@ -38,7 +42,7 @@ impl fmt::Debug for Namespace {
             &self
                 .path
                 .iter()
-                .map(|Ident { name, .. }| name.as_str())
+                .map(|m| m.as_str())
                 .collect::<StaticVec<_>>()
                 .join(Token::DoubleColon.literal_syntax()),
         )
@@ -47,11 +51,15 @@ impl fmt::Debug for Namespace {
 
 impl fmt::Display for Namespace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_empty() {
+            return Ok(());
+        }
+
         f.write_str(
             &self
                 .path
                 .iter()
-                .map(|Ident { name, .. }| name.as_str())
+                .map(|m| m.as_str())
                 .collect::<StaticVec<_>>()
                 .join(Token::DoubleColon.literal_syntax()),
         )
@@ -94,14 +102,20 @@ impl From<StaticVec<Ident>> for Namespace {
 }
 
 impl Namespace {
+    /// Constant for no namespace.
+    pub const NONE: Self = Self {
+        index: None,
+        path: StaticVec::new_const(),
+    };
+
     /// Create a new [`Namespace`].
     #[inline(always)]
     #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            index: None,
-            path: StaticVec::new_const(),
-        }
+    pub fn new(root: impl Into<Ident>) -> Self {
+        let mut path = StaticVec::new_const();
+        path.push(root.into());
+
+        Self { index: None, path }
     }
     /// Get the [`Scope`][crate::Scope] index offset.
     #[inline(always)]

@@ -5,6 +5,9 @@ use crate::{Dynamic, RhaiResultOf, ERR, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
+#[cfg(not(feature = "no_float"))]
+use crate::FLOAT;
+
 def_package! {
     /// Package of core language features.
     pub LanguageCorePackage(lib) {
@@ -21,10 +24,32 @@ def_package! {
 
 #[export_module]
 mod core_functions {
+    /// Return the _tag_ of a `Dynamic` value.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let x = "hello, world!";
+    ///
+    /// x.tag = 42;
+    ///
+    /// print(x.tag);           // prints 42
+    /// ```
     #[rhai_fn(name = "tag", get = "tag", pure)]
     pub fn get_tag(value: &mut Dynamic) -> INT {
         value.tag() as INT
     }
+    /// Set the _tag_ of a `Dynamic` value.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let x = "hello, world!";
+    ///
+    /// x.tag = 42;
+    ///
+    /// print(x.tag);           // prints 42
+    /// ```
     #[rhai_fn(name = "set_tag", set = "tag", return_raw)]
     pub fn set_tag(value: &mut Dynamic, tag: INT) -> RhaiResultOf<()> {
         if tag < Tag::MIN as INT {
@@ -53,6 +78,30 @@ mod core_functions {
             value.set_tag(tag as Tag);
             Ok(())
         }
+    }
+
+    /// Block the current thread for a particular number of `seconds`.
+    #[cfg(not(feature = "no_float"))]
+    #[cfg(not(feature = "no_std"))]
+    #[rhai_fn(name = "sleep")]
+    pub fn sleep_float(seconds: FLOAT) {
+        if seconds <= 0.0 {
+            return;
+        }
+
+        #[cfg(not(feature = "f32_float"))]
+        std::thread::sleep(std::time::Duration::from_secs_f64(seconds));
+        #[cfg(feature = "f32_float")]
+        std::thread::sleep(std::time::Duration::from_secs_f32(seconds));
+    }
+
+    /// Block the current thread for a particular number of `seconds`.
+    #[cfg(not(feature = "no_std"))]
+    pub fn sleep(seconds: INT) {
+        if seconds <= 0 {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_secs(seconds as u64));
     }
 }
 
@@ -92,7 +141,7 @@ fn collect_fn_metadata(
     // Create a metadata record for a function.
     fn make_metadata(
         dict: &BTreeSet<Identifier>,
-        #[cfg(not(feature = "no_module"))] namespace: Option<Identifier>,
+        #[cfg(not(feature = "no_module"))] namespace: Identifier,
         func: &ScriptFnDef,
     ) -> Map {
         const DICT: &str = "key exists";
@@ -100,8 +149,8 @@ fn collect_fn_metadata(
         let mut map = Map::new();
 
         #[cfg(not(feature = "no_module"))]
-        if let Some(ns) = namespace {
-            map.insert(dict.get("namespace").expect(DICT).clone(), ns.into());
+        if !namespace.is_empty() {
+            map.insert(dict.get("namespace").expect(DICT).clone(), namespace.into());
         }
         map.insert(
             dict.get("name").expect(DICT).clone(),
@@ -157,7 +206,7 @@ fn collect_fn_metadata(
                 make_metadata(
                     &dict,
                     #[cfg(not(feature = "no_module"))]
-                    None,
+                    Identifier::new_const(),
                     f,
                 )
                 .into(),
@@ -174,7 +223,7 @@ fn collect_fn_metadata(
                 make_metadata(
                     &dict,
                     #[cfg(not(feature = "no_module"))]
-                    None,
+                    Identifier::new_const(),
                     f,
                 )
                 .into(),
@@ -192,7 +241,7 @@ fn collect_fn_metadata(
                 make_metadata(
                     &dict,
                     #[cfg(not(feature = "no_module"))]
-                    None,
+                    Identifier::new_const(),
                     f,
                 )
                 .into(),
@@ -219,9 +268,7 @@ fn collect_fn_metadata(
             module
                 .iter_script_fn()
                 .filter(|(s, a, n, p, f)| filter(*s, *a, n, *p, f))
-                .for_each(|(.., f)| {
-                    list.push(make_metadata(dict, Some(namespace.clone()), f).into())
-                });
+                .for_each(|(.., f)| list.push(make_metadata(dict, namespace.clone(), f).into()));
             for (ns, m) in module.iter_sub_modules() {
                 let ns = format!(
                     "{}{}{}",

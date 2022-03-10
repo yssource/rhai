@@ -46,7 +46,7 @@ pub struct ScriptFnDef {
     /// _(metadata)_ Function doc-comments (if any).
     /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
-    pub comments: Option<Box<[Box<str>]>>,
+    pub comments: Box<[Box<str>]>,
 }
 
 impl fmt::Display for ScriptFnDef {
@@ -79,7 +79,7 @@ pub struct ScriptFnMetadata<'a> {
     /// Function name.
     pub name: &'a str,
     /// Function parameters (if any).
-    pub params: Box<[&'a str]>,
+    pub params: Vec<&'a str>,
     /// Function access mode.
     pub access: FnAccess,
     /// _(metadata)_ Function doc-comments (if any).
@@ -93,7 +93,7 @@ pub struct ScriptFnMetadata<'a> {
     /// corresponding doc-comment leader: `///` or `/**`.
     /// Function access mode.
     #[cfg(feature = "metadata")]
-    pub comments: Box<[&'a str]>,
+    pub comments: Vec<&'a str>,
 }
 
 impl fmt::Display for ScriptFnMetadata<'_> {
@@ -120,23 +120,10 @@ impl<'a> From<&'a ScriptFnDef> for ScriptFnMetadata<'a> {
     fn from(value: &'a ScriptFnDef) -> Self {
         Self {
             name: &value.name,
-            params: value
-                .params
-                .iter()
-                .map(|s| s.as_str())
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
+            params: value.params.iter().map(|s| s.as_str()).collect(),
             access: value.access,
             #[cfg(feature = "metadata")]
-            comments: value.comments.as_ref().map_or_else(
-                || Vec::new().into_boxed_slice(),
-                |v| {
-                    v.iter()
-                        .map(Box::as_ref)
-                        .collect::<Vec<_>>()
-                        .into_boxed_slice()
-                },
-            ),
+            comments: value.comments.iter().map(Box::as_ref).collect(),
         }
     }
 }

@@ -31,6 +31,16 @@ mod time_functions {
     }
 
     /// Return the number of seconds between the current system time and the timestamp.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let now = timestamp();
+    ///
+    /// sleep(10.0);            // sleep for 10 seconds
+    ///
+    /// print(now.elapsed);     // prints 10.???
+    /// ```
     #[rhai_fn(name = "elapsed", get = "elapsed", return_raw)]
     pub fn elapsed(timestamp: Instant) -> RhaiResult {
         #[cfg(not(feature = "no_float"))]

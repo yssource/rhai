@@ -4,19 +4,14 @@ use crate::eval::{calc_index, calc_offset_len};
 use crate::plugin::*;
 use crate::{
     def_package, Array, Blob, Dynamic, ExclusiveRange, InclusiveRange, NativeCallContext, Position,
-    RhaiResultOf, INT,
+    RhaiResultOf, INT, INT_BYTES,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{any::TypeId, mem};
 
 #[cfg(not(feature = "no_float"))]
-use crate::FLOAT;
-
-const INT_BYTES: usize = mem::size_of::<INT>();
-
-#[cfg(not(feature = "no_float"))]
-const FLOAT_BYTES: usize = mem::size_of::<FLOAT>();
+use crate::{FLOAT, FLOAT_BYTES};
 
 def_package! {
     /// Package of basic BLOB utilities.
