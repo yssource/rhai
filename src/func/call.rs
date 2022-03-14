@@ -37,6 +37,7 @@ struct ArgBackup<'a> {
 
 impl<'a> ArgBackup<'a> {
     /// Create a new `ArgBackup`.
+    #[inline(always)]
     pub fn new() -> Self {
         Self {
             orig_mut: None,
@@ -60,8 +61,8 @@ impl<'a> ArgBackup<'a> {
     /// # Panics
     ///
     /// Panics when `args` is empty.
-    #[inline]
-    fn change_first_arg_to_copy(&mut self, args: &mut FnCallArgs<'a>) {
+    #[inline(always)]
+    pub fn change_first_arg_to_copy(&mut self, args: &mut FnCallArgs<'a>) {
         // Clone the original value.
         self.value_copy = args[0].clone();
 
@@ -86,7 +87,7 @@ impl<'a> ArgBackup<'a> {
     /// If `change_first_arg_to_copy` has been called, this function **MUST** be called _BEFORE_
     /// exiting the current scope.  Otherwise it is undefined behavior as the shorter lifetime will leak.
     #[inline(always)]
-    fn restore_first_arg(mut self, args: &mut FnCallArgs<'a>) {
+    pub fn restore_first_arg(mut self, args: &mut FnCallArgs<'a>) {
         if let Some(p) = self.orig_mut.take() {
             args[0] = p;
         }
@@ -94,7 +95,7 @@ impl<'a> ArgBackup<'a> {
 }
 
 impl Drop for ArgBackup<'_> {
-    #[inline]
+    #[inline(always)]
     fn drop(&mut self) {
         // Panic if the shorter lifetime leaks.
         assert!(
@@ -382,15 +383,12 @@ impl Engine {
             let mut _result = if let Some(FnResolutionCacheEntry { func, source }) = func {
                 assert!(func.is_native());
 
+                let mut backup = ArgBackup::new();
+
                 // Calling pure function but the first argument is a reference?
-                let mut backup: Option<ArgBackup> = None;
                 if is_ref_mut && func.is_pure() && !args.is_empty() {
                     // Clone the first argument
-                    backup = Some(ArgBackup::new());
-                    backup
-                        .as_mut()
-                        .expect("`Some`")
-                        .change_first_arg_to_copy(args);
+                    backup.change_first_arg_to_copy(args);
                 }
 
                 let source = match (source.as_str(), parent_source.as_str()) {
@@ -420,9 +418,7 @@ impl Engine {
                 };
 
                 // Restore the original reference
-                if let Some(bk) = backup {
-                    bk.restore_first_arg(args)
-                }
+                backup.restore_first_arg(args);
 
                 result
             } else {
@@ -711,7 +707,7 @@ impl Engine {
                 // Method call of script function - map first argument to `this`
                 let (first_arg, rest_args) = args.split_first_mut().unwrap();
 
-                let result = self.call_script_fn(
+                self.call_script_fn(
                     scope,
                     global,
                     state,
@@ -722,19 +718,14 @@ impl Engine {
                     true,
                     pos,
                     level,
-                );
-
-                result?
+                )
             } else {
                 // Normal call of script function
+                let mut backup = ArgBackup::new();
+
                 // The first argument is a reference?
-                let mut backup: Option<ArgBackup> = None;
                 if is_ref_mut && !args.is_empty() {
-                    backup = Some(ArgBackup::new());
-                    backup
-                        .as_mut()
-                        .expect("`Some`")
-                        .change_first_arg_to_copy(args);
+                    backup.change_first_arg_to_copy(args);
                 }
 
                 let result = self.call_script_fn(
@@ -742,17 +733,15 @@ impl Engine {
                 );
 
                 // Restore the original reference
-                if let Some(bk) = backup {
-                    bk.restore_first_arg(args)
-                }
+                backup.restore_first_arg(args);
 
-                result?
+                result
             };
 
             // Restore the original source
             mem::swap(&mut global.source, &mut source);
 
-            return Ok((result, false));
+            return Ok((result?, false));
         }
 
         // Native function call
