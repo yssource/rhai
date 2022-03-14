@@ -514,7 +514,7 @@ impl Engine {
 
                 let t0 = self.map_type_name(args[0].type_name());
                 let t1 = self.map_type_name(args[1].type_name());
-                let t2 = self.map_type_name(args[3].type_name());
+                let t2 = self.map_type_name(args[2].type_name());
 
                 Err(ERR::ErrorIndexingType(format!("{} [{}] = {}", t0, t1, t2), pos).into())
             }
