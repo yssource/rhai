@@ -1085,7 +1085,8 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
             match x.name.as_str() {
                 KEYWORD_TYPE_OF if arg_values.len() == 1 => {
                     state.set_dirty();
-                    *expr = Expr::from_dynamic(state.engine.map_type_name(arg_values[0].type_name()).into(), *pos);
+                    let typ = state.engine.map_type_name(arg_values[0].type_name()).into();
+                    *expr = Expr::from_dynamic(typ, *pos);
                     return;
                 }
                 #[cfg(not(feature = "no_closure"))]

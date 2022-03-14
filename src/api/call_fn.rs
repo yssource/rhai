@@ -69,12 +69,8 @@ impl Engine {
         let typ = self.map_type_name(result.type_name());
 
         result.try_cast().ok_or_else(|| {
-            ERR::ErrorMismatchOutputType(
-                self.map_type_name(type_name::<T>()).into(),
-                typ.into(),
-                Position::NONE,
-            )
-            .into()
+            let t = self.map_type_name(type_name::<T>()).into();
+            ERR::ErrorMismatchOutputType(t, typ.into(), Position::NONE).into()
         })
     }
     /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments and the

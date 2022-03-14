@@ -466,11 +466,8 @@ impl Engine {
                 KEYWORD_PRINT => {
                     if let Some(ref print) = self.print {
                         let text = result.into_immutable_string().map_err(|typ| {
-                            ERR::ErrorMismatchOutputType(
-                                self.map_type_name(type_name::<ImmutableString>()).into(),
-                                typ.into(),
-                                pos,
-                            )
+                            let t = self.map_type_name(type_name::<ImmutableString>()).into();
+                            ERR::ErrorMismatchOutputType(t, typ.into(), pos)
                         })?;
                         (print(&text).into(), false)
                     } else {
@@ -480,11 +477,8 @@ impl Engine {
                 KEYWORD_DEBUG => {
                     if let Some(ref debug) = self.debug {
                         let text = result.into_immutable_string().map_err(|typ| {
-                            ERR::ErrorMismatchOutputType(
-                                self.map_type_name(type_name::<ImmutableString>()).into(),
-                                typ.into(),
-                                pos,
-                            )
+                            let t = self.map_type_name(type_name::<ImmutableString>()).into();
+                            ERR::ErrorMismatchOutputType(t, typ.into(), pos)
                         })?;
                         let source = match global.source.as_str() {
                             "" => None,
@@ -507,15 +501,10 @@ impl Engine {
             crate::engine::FN_IDX_GET => {
                 assert!(args.len() == 2);
 
-                Err(ERR::ErrorIndexingType(
-                    format!(
-                        "{} [{}]",
-                        self.map_type_name(args[0].type_name()),
-                        self.map_type_name(args[1].type_name())
-                    ),
-                    pos,
-                )
-                .into())
+                let t0 = self.map_type_name(args[0].type_name());
+                let t1 = self.map_type_name(args[1].type_name());
+
+                Err(ERR::ErrorIndexingType(format!("{} [{}]", t0, t1), pos).into())
             }
 
             // index setter function not found?
@@ -523,16 +512,11 @@ impl Engine {
             crate::engine::FN_IDX_SET => {
                 assert!(args.len() == 3);
 
-                Err(ERR::ErrorIndexingType(
-                    format!(
-                        "{} [{}] = {}",
-                        self.map_type_name(args[0].type_name()),
-                        self.map_type_name(args[1].type_name()),
-                        self.map_type_name(args[2].type_name())
-                    ),
-                    pos,
-                )
-                .into())
+                let t0 = self.map_type_name(args[0].type_name());
+                let t1 = self.map_type_name(args[1].type_name());
+                let t2 = self.map_type_name(args[3].type_name());
+
+                Err(ERR::ErrorIndexingType(format!("{} [{}] = {}", t0, t1, t2), pos).into())
             }
 
             // Getter function not found?
@@ -540,11 +524,13 @@ impl Engine {
             _ if name.starts_with(crate::engine::FN_GET) => {
                 assert!(args.len() == 1);
 
+                let prop = &name[crate::engine::FN_GET.len()..];
+                let t0 = self.map_type_name(args[0].type_name());
+
                 Err(ERR::ErrorDotExpr(
                     format!(
                         "Unknown property '{}' - a getter is not registered for type '{}'",
-                        &name[crate::engine::FN_GET.len()..],
-                        self.map_type_name(args[0].type_name())
+                        prop, t0
                     ),
                     pos,
                 )
@@ -556,12 +542,14 @@ impl Engine {
             _ if name.starts_with(crate::engine::FN_SET) => {
                 assert!(args.len() == 2);
 
+                let prop = &name[crate::engine::FN_SET.len()..];
+                let t0 = self.map_type_name(args[0].type_name());
+                let t1 = self.map_type_name(args[1].type_name());
+
                 Err(ERR::ErrorDotExpr(
                     format!(
                         "No writable property '{}' - a setter is not registered for type '{}' to handle '{}'",
-                        &name[crate::engine::FN_SET.len()..],
-                        self.map_type_name(args[0].type_name()),
-                        self.map_type_name(args[1].type_name()),
+                        prop, t0, t1
                     ),
                     pos,
                 )
@@ -608,8 +596,11 @@ impl Engine {
         level: usize,
     ) -> RhaiResultOf<(Dynamic, bool)> {
         fn no_method_err(name: &str, pos: Position) -> RhaiResultOf<(Dynamic, bool)> {
-            let msg = format!("'{0}' should not be called this way. Try {0}(...);", name);
-            Err(ERR::ErrorRuntime(msg.into(), pos).into())
+            Err(ERR::ErrorRuntime(
+                (format!("'{0}' should not be called this way. Try {0}(...);", name)).into(),
+                pos,
+            )
+            .into())
         }
 
         // Check for data race.
@@ -623,10 +614,8 @@ impl Engine {
         match fn_name {
             // Handle type_of()
             KEYWORD_TYPE_OF if args.len() == 1 => {
-                return Ok((
-                    self.map_type_name(args[0].type_name()).to_string().into(),
-                    false,
-                ))
+                let typ = self.map_type_name(args[0].type_name()).to_string().into();
+                return Ok((typ, false));
             }
 
             // Handle is_def_fn()
@@ -816,16 +805,12 @@ impl Engine {
             KEYWORD_FN_PTR_CALL => {
                 if !call_args.is_empty() {
                     if !call_args[0].is::<FnPtr>() {
-                        return Err(self.make_type_mismatch_err::<FnPtr>(
-                            self.map_type_name(call_args[0].type_name()),
-                            *call_arg_pos,
-                        ));
+                        let typ = self.map_type_name(call_args[0].type_name());
+                        return Err(self.make_type_mismatch_err::<FnPtr>(typ, *call_arg_pos));
                     }
                 } else {
-                    return Err(self.make_type_mismatch_err::<FnPtr>(
-                        self.map_type_name(target.type_name()),
-                        pos,
-                    ));
+                    let typ = self.map_type_name(target.type_name());
+                    return Err(self.make_type_mismatch_err::<FnPtr>(typ, pos));
                 }
 
                 // FnPtr call on object
@@ -855,10 +840,8 @@ impl Engine {
             }
             KEYWORD_FN_PTR_CURRY => {
                 if !target.is::<FnPtr>() {
-                    return Err(self.make_type_mismatch_err::<FnPtr>(
-                        self.map_type_name(target.type_name()),
-                        pos,
-                    ));
+                    let typ = self.map_type_name(target.type_name());
+                    return Err(self.make_type_mismatch_err::<FnPtr>(typ, pos));
                 }
 
                 let fn_ptr = target.read_lock::<FnPtr>().expect("`FnPtr`");
@@ -1005,10 +988,8 @@ impl Engine {
                     self.get_arg_value(scope, global, state, lib, this_ptr, arg, level)?;
 
                 if !arg_value.is::<FnPtr>() {
-                    return Err(self.make_type_mismatch_err::<FnPtr>(
-                        self.map_type_name(arg_value.type_name()),
-                        arg_pos,
-                    ));
+                    let typ = self.map_type_name(arg_value.type_name());
+                    return Err(self.make_type_mismatch_err::<FnPtr>(typ, arg_pos));
                 }
 
                 let fn_ptr = arg_value.cast::<FnPtr>();
@@ -1055,10 +1036,8 @@ impl Engine {
                     self.get_arg_value(scope, global, state, lib, this_ptr, first, level)?;
 
                 if !arg_value.is::<FnPtr>() {
-                    return Err(self.make_type_mismatch_err::<FnPtr>(
-                        self.map_type_name(arg_value.type_name()),
-                        arg_pos,
-                    ));
+                    let typ = self.map_type_name(arg_value.type_name());
+                    return Err(self.make_type_mismatch_err::<FnPtr>(typ, arg_pos));
                 }
 
                 let (name, fn_curry) = arg_value.cast::<FnPtr>().take_data();
