@@ -1,6 +1,6 @@
 //! The `ImmutableString` type.
 
-use crate::func::native::{shared_make_mut, shared_take};
+use crate::func::native::{shared_get_mut, shared_make_mut, shared_take};
 use crate::{Shared, SmartString};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -580,6 +580,7 @@ impl ImmutableString {
         Self(SmartString::new_const().into())
     }
     /// Consume the [`ImmutableString`] and convert it into a [`String`].
+    ///
     /// If there are other references to the same string, a cloned copy is returned.
     #[inline]
     pub fn into_owned(mut self) -> String {
@@ -588,9 +589,16 @@ impl ImmutableString {
     }
     /// Make sure that the [`ImmutableString`] is unique (i.e. no other outstanding references).
     /// Then return a mutable reference to the [`SmartString`].
+    ///
+    /// If there are other references to the same string, a cloned copy is used.
     #[inline(always)]
     pub(crate) fn make_mut(&mut self) -> &mut SmartString {
         shared_make_mut(&mut self.0)
+    }
+    /// Return a mutable reference to the [`SmartString`] wrapped by the [`ImmutableString`].
+    #[inline(always)]
+    pub(crate) fn get_mut(&mut self) -> Option<&mut SmartString> {
+        shared_get_mut(&mut self.0)
     }
     /// Returns `true` if the two [`ImmutableString`]'s point to the same allocation.
     ///

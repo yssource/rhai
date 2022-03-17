@@ -344,13 +344,21 @@ impl<'a> NativeCallContext<'a> {
     }
 }
 
-/// Consume a [`Shared`] resource and return a mutable reference to the wrapped value.
+/// Return a mutable reference to the wrapped value of a [`Shared`] resource.
 /// If the resource is shared (i.e. has other outstanding references), a cloned copy is used.
 #[inline(always)]
 #[must_use]
 #[allow(dead_code)]
 pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
     Shared::make_mut(value)
+}
+
+/// Return a mutable reference to the wrapped value of a [`Shared`] resource.
+#[inline(always)]
+#[must_use]
+#[allow(dead_code)]
+pub fn shared_get_mut<T: Clone>(value: &mut Shared<T>) -> Option<&mut T> {
+    Shared::get_mut(value)
 }
 
 /// Consume a [`Shared`] resource if is unique (i.e. not shared), or clone it otherwise.
