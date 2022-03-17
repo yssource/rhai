@@ -774,14 +774,14 @@ impl ExportedFn {
                         syn::Type::Path(ref p) if p.path == string_type_path => {
                             is_string = true;
                             is_ref = false;
-                            quote_spanned!(arg_type.span() =>
+                            quote_spanned!(arg_type.span().resolved_at(Span::call_site()) =>
                                 mem::take(args[#i]).into_string().unwrap()
                             )
                         }
                         _ => {
                             is_string = false;
                             is_ref = false;
-                            quote_spanned!(arg_type.span() =>
+                            quote_spanned!(arg_type.span().resolved_at(Span::call_site()) =>
                                 mem::take(args[#i]).cast::<#arg_type>()
                             )
                         }
