@@ -193,7 +193,11 @@ mod string_functions {
     /// Clear the string, making it empty.
     pub fn clear(string: &mut ImmutableString) {
         if !string.is_empty() {
-            string.make_mut().clear();
+            if let Some(s) = string.get_mut() {
+                s.clear();
+            } else {
+                *string = ImmutableString::new();
+            }
         }
     }
     /// Cut off the string at the specified number of characters.
@@ -220,8 +224,8 @@ mod string_functions {
             let copy = string.make_mut();
             copy.clear();
             copy.extend(chars.into_iter().take(len as usize));
-        } else if !string.is_empty() {
-            string.make_mut().clear();
+        } else {
+            clear(string);
         }
     }
     /// Remove whitespace characters from both ends of the string.
@@ -231,13 +235,23 @@ mod string_functions {
     /// ```rhai
     /// let text = "   hello     ";
     ///
-    /// print(text.trim());     // prints "hello"
+    /// text.trim();
+    ///
+    /// print(text);    // prints "hello"
     /// ```
     pub fn trim(string: &mut ImmutableString) {
-        let trimmed = string.trim();
+        if let Some(s) = string.get_mut() {
+            let trimmed = s.trim();
 
-        if trimmed.len() < string.len() {
-            *string = trimmed.to_string().into();
+            if trimmed != s {
+                *s = trimmed.into();
+            }
+        } else {
+            let trimmed = string.trim();
+
+            if trimmed != string {
+                *string = trimmed.into();
+            }
         }
     }
     /// Remove the last character from the string and return it.
@@ -313,7 +327,7 @@ mod string_functions {
     /// ```
     #[rhai_fn(pure)]
     pub fn to_upper(string: &mut ImmutableString) -> ImmutableString {
-        if string.is_empty() || string.chars().all(char::is_uppercase) {
+        if string.chars().all(char::is_uppercase) {
             string.clone()
         } else {
             string.to_uppercase().into()
@@ -366,7 +380,7 @@ mod string_functions {
     /// print(text);        // prints "hello, world!";
     /// ```
     pub fn make_lower(string: &mut ImmutableString) {
-        if !string.is_empty() && string.chars().any(|ch| !ch.is_lowercase()) {
+        if string.chars().any(|ch| !ch.is_lowercase()) {
             *string = string.to_lowercase().into();
         }
     }

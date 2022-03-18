@@ -37,6 +37,7 @@ struct ArgBackup<'a> {
 
 impl<'a> ArgBackup<'a> {
     /// Create a new `ArgBackup`.
+    #[inline(always)]
     pub fn new() -> Self {
         Self {
             orig_mut: None,
@@ -60,8 +61,8 @@ impl<'a> ArgBackup<'a> {
     /// # Panics
     ///
     /// Panics when `args` is empty.
-    #[inline]
-    fn change_first_arg_to_copy(&mut self, args: &mut FnCallArgs<'a>) {
+    #[inline(always)]
+    pub fn change_first_arg_to_copy(&mut self, args: &mut FnCallArgs<'a>) {
         // Clone the original value.
         self.value_copy = args[0].clone();
 
@@ -86,7 +87,7 @@ impl<'a> ArgBackup<'a> {
     /// If `change_first_arg_to_copy` has been called, this function **MUST** be called _BEFORE_
     /// exiting the current scope.  Otherwise it is undefined behavior as the shorter lifetime will leak.
     #[inline(always)]
-    fn restore_first_arg(mut self, args: &mut FnCallArgs<'a>) {
+    pub fn restore_first_arg(mut self, args: &mut FnCallArgs<'a>) {
         if let Some(p) = self.orig_mut.take() {
             args[0] = p;
         }
@@ -94,7 +95,7 @@ impl<'a> ArgBackup<'a> {
 }
 
 impl Drop for ArgBackup<'_> {
-    #[inline]
+    #[inline(always)]
     fn drop(&mut self) {
         // Panic if the shorter lifetime leaks.
         assert!(
@@ -382,15 +383,12 @@ impl Engine {
             let mut _result = if let Some(FnResolutionCacheEntry { func, source }) = func {
                 assert!(func.is_native());
 
+                let mut backup = ArgBackup::new();
+
                 // Calling pure function but the first argument is a reference?
-                let mut backup: Option<ArgBackup> = None;
                 if is_ref_mut && func.is_pure() && !args.is_empty() {
                     // Clone the first argument
-                    backup = Some(ArgBackup::new());
-                    backup
-                        .as_mut()
-                        .expect("`Some`")
-                        .change_first_arg_to_copy(args);
+                    backup.change_first_arg_to_copy(args);
                 }
 
                 let source = match (source.as_str(), parent_source.as_str()) {
@@ -420,9 +418,7 @@ impl Engine {
                 };
 
                 // Restore the original reference
-                if let Some(bk) = backup {
-                    bk.restore_first_arg(args)
-                }
+                backup.restore_first_arg(args);
 
                 result
             } else {
@@ -470,11 +466,8 @@ impl Engine {
                 KEYWORD_PRINT => {
                     if let Some(ref print) = self.print {
                         let text = result.into_immutable_string().map_err(|typ| {
-                            ERR::ErrorMismatchOutputType(
-                                self.map_type_name(type_name::<ImmutableString>()).into(),
-                                typ.into(),
-                                pos,
-                            )
+                            let t = self.map_type_name(type_name::<ImmutableString>()).into();
+                            ERR::ErrorMismatchOutputType(t, typ.into(), pos)
                         })?;
                         (print(&text).into(), false)
                     } else {
@@ -484,11 +477,8 @@ impl Engine {
                 KEYWORD_DEBUG => {
                     if let Some(ref debug) = self.debug {
                         let text = result.into_immutable_string().map_err(|typ| {
-                            ERR::ErrorMismatchOutputType(
-                                self.map_type_name(type_name::<ImmutableString>()).into(),
-                                typ.into(),
-                                pos,
-                            )
+                            let t = self.map_type_name(type_name::<ImmutableString>()).into();
+                            ERR::ErrorMismatchOutputType(t, typ.into(), pos)
                         })?;
                         let source = match global.source.as_str() {
                             "" => None,
@@ -511,15 +501,10 @@ impl Engine {
             crate::engine::FN_IDX_GET => {
                 assert!(args.len() == 2);
 
-                Err(ERR::ErrorIndexingType(
-                    format!(
-                        "{} [{}]",
-                        self.map_type_name(args[0].type_name()),
-                        self.map_type_name(args[1].type_name())
-                    ),
-                    pos,
-                )
-                .into())
+                let t0 = self.map_type_name(args[0].type_name());
+                let t1 = self.map_type_name(args[1].type_name());
+
+                Err(ERR::ErrorIndexingType(format!("{} [{}]", t0, t1), pos).into())
             }
 
             // index setter function not found?
@@ -527,16 +512,11 @@ impl Engine {
             crate::engine::FN_IDX_SET => {
                 assert!(args.len() == 3);
 
-                Err(ERR::ErrorIndexingType(
-                    format!(
-                        "{} [{}] = {}",
-                        self.map_type_name(args[0].type_name()),
-                        self.map_type_name(args[1].type_name()),
-                        self.map_type_name(args[2].type_name())
-                    ),
-                    pos,
-                )
-                .into())
+                let t0 = self.map_type_name(args[0].type_name());
+                let t1 = self.map_type_name(args[1].type_name());
+                let t2 = self.map_type_name(args[2].type_name());
+
+                Err(ERR::ErrorIndexingType(format!("{} [{}] = {}", t0, t1, t2), pos).into())
             }
 
             // Getter function not found?
@@ -544,11 +524,13 @@ impl Engine {
             _ if name.starts_with(crate::engine::FN_GET) => {
                 assert!(args.len() == 1);
 
+                let prop = &name[crate::engine::FN_GET.len()..];
+                let t0 = self.map_type_name(args[0].type_name());
+
                 Err(ERR::ErrorDotExpr(
                     format!(
                         "Unknown property '{}' - a getter is not registered for type '{}'",
-                        &name[crate::engine::FN_GET.len()..],
-                        self.map_type_name(args[0].type_name())
+                        prop, t0
                     ),
                     pos,
                 )
@@ -560,12 +542,14 @@ impl Engine {
             _ if name.starts_with(crate::engine::FN_SET) => {
                 assert!(args.len() == 2);
 
+                let prop = &name[crate::engine::FN_SET.len()..];
+                let t0 = self.map_type_name(args[0].type_name());
+                let t1 = self.map_type_name(args[1].type_name());
+
                 Err(ERR::ErrorDotExpr(
                     format!(
                         "No writable property '{}' - a setter is not registered for type '{}' to handle '{}'",
-                        &name[crate::engine::FN_SET.len()..],
-                        self.map_type_name(args[0].type_name()),
-                        self.map_type_name(args[1].type_name()),
+                        prop, t0, t1
                     ),
                     pos,
                 )
@@ -612,8 +596,11 @@ impl Engine {
         level: usize,
     ) -> RhaiResultOf<(Dynamic, bool)> {
         fn no_method_err(name: &str, pos: Position) -> RhaiResultOf<(Dynamic, bool)> {
-            let msg = format!("'{0}' should not be called this way. Try {0}(...);", name);
-            Err(ERR::ErrorRuntime(msg.into(), pos).into())
+            Err(ERR::ErrorRuntime(
+                (format!("'{0}' should not be called this way. Try {0}(...);", name)).into(),
+                pos,
+            )
+            .into())
         }
 
         // Check for data race.
@@ -627,10 +614,8 @@ impl Engine {
         match fn_name {
             // Handle type_of()
             KEYWORD_TYPE_OF if args.len() == 1 => {
-                return Ok((
-                    self.map_type_name(args[0].type_name()).to_string().into(),
-                    false,
-                ))
+                let typ = self.map_type_name(args[0].type_name()).to_string().into();
+                return Ok((typ, false));
             }
 
             // Handle is_def_fn()
@@ -711,7 +696,7 @@ impl Engine {
                 // Method call of script function - map first argument to `this`
                 let (first_arg, rest_args) = args.split_first_mut().unwrap();
 
-                let result = self.call_script_fn(
+                self.call_script_fn(
                     scope,
                     global,
                     state,
@@ -722,19 +707,14 @@ impl Engine {
                     true,
                     pos,
                     level,
-                );
-
-                result?
+                )
             } else {
                 // Normal call of script function
+                let mut backup = ArgBackup::new();
+
                 // The first argument is a reference?
-                let mut backup: Option<ArgBackup> = None;
                 if is_ref_mut && !args.is_empty() {
-                    backup = Some(ArgBackup::new());
-                    backup
-                        .as_mut()
-                        .expect("`Some`")
-                        .change_first_arg_to_copy(args);
+                    backup.change_first_arg_to_copy(args);
                 }
 
                 let result = self.call_script_fn(
@@ -742,17 +722,15 @@ impl Engine {
                 );
 
                 // Restore the original reference
-                if let Some(bk) = backup {
-                    bk.restore_first_arg(args)
-                }
+                backup.restore_first_arg(args);
 
-                result?
+                result
             };
 
             // Restore the original source
             mem::swap(&mut global.source, &mut source);
 
-            return Ok((result, false));
+            return Ok((result?, false));
         }
 
         // Native function call
@@ -827,16 +805,12 @@ impl Engine {
             KEYWORD_FN_PTR_CALL => {
                 if !call_args.is_empty() {
                     if !call_args[0].is::<FnPtr>() {
-                        return Err(self.make_type_mismatch_err::<FnPtr>(
-                            self.map_type_name(call_args[0].type_name()),
-                            *call_arg_pos,
-                        ));
+                        let typ = self.map_type_name(call_args[0].type_name());
+                        return Err(self.make_type_mismatch_err::<FnPtr>(typ, *call_arg_pos));
                     }
                 } else {
-                    return Err(self.make_type_mismatch_err::<FnPtr>(
-                        self.map_type_name(target.type_name()),
-                        pos,
-                    ));
+                    let typ = self.map_type_name(target.type_name());
+                    return Err(self.make_type_mismatch_err::<FnPtr>(typ, pos));
                 }
 
                 // FnPtr call on object
@@ -866,10 +840,8 @@ impl Engine {
             }
             KEYWORD_FN_PTR_CURRY => {
                 if !target.is::<FnPtr>() {
-                    return Err(self.make_type_mismatch_err::<FnPtr>(
-                        self.map_type_name(target.type_name()),
-                        pos,
-                    ));
+                    let typ = self.map_type_name(target.type_name());
+                    return Err(self.make_type_mismatch_err::<FnPtr>(typ, pos));
                 }
 
                 let fn_ptr = target.read_lock::<FnPtr>().expect("`FnPtr`");
@@ -1016,10 +988,8 @@ impl Engine {
                     self.get_arg_value(scope, global, state, lib, this_ptr, arg, level)?;
 
                 if !arg_value.is::<FnPtr>() {
-                    return Err(self.make_type_mismatch_err::<FnPtr>(
-                        self.map_type_name(arg_value.type_name()),
-                        arg_pos,
-                    ));
+                    let typ = self.map_type_name(arg_value.type_name());
+                    return Err(self.make_type_mismatch_err::<FnPtr>(typ, arg_pos));
                 }
 
                 let fn_ptr = arg_value.cast::<FnPtr>();
@@ -1066,10 +1036,8 @@ impl Engine {
                     self.get_arg_value(scope, global, state, lib, this_ptr, first, level)?;
 
                 if !arg_value.is::<FnPtr>() {
-                    return Err(self.make_type_mismatch_err::<FnPtr>(
-                        self.map_type_name(arg_value.type_name()),
-                        arg_pos,
-                    ));
+                    let typ = self.map_type_name(arg_value.type_name());
+                    return Err(self.make_type_mismatch_err::<FnPtr>(typ, arg_pos));
                 }
 
                 let (name, fn_curry) = arg_value.cast::<FnPtr>().take_data();

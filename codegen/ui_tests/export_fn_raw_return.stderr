@@ -1,8 +1,8 @@
-error[E0599]: the method `map` exists for type `bool`, but its trait bounds were not satisfied
+error[E0599]: `bool` is not an iterator
   --> ui_tests/export_fn_raw_return.rs:10:33
    |
 10 | pub fn test_fn(input: Point) -> bool {
-   |                                 ^^^^ method cannot be called on `bool` due to unsatisfied trait bounds
+   |                                 ^^^^ `bool` is not an iterator
    |
    = note: the following trait bounds were not satisfied:
            `bool: std::iter::Iterator`

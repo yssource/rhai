@@ -277,12 +277,8 @@ impl<'a> NativeCallContext<'a> {
         let typ = self.engine().map_type_name(result.type_name());
 
         result.try_cast().ok_or_else(|| {
-            ERR::ErrorMismatchOutputType(
-                self.engine().map_type_name(type_name::<T>()).into(),
-                typ.into(),
-                Position::NONE,
-            )
-            .into()
+            let t = self.engine().map_type_name(type_name::<T>()).into();
+            ERR::ErrorMismatchOutputType(t, typ.into(), Position::NONE).into()
         })
     }
     /// Call a function inside the call context.
@@ -348,13 +344,21 @@ impl<'a> NativeCallContext<'a> {
     }
 }
 
-/// Consume a [`Shared`] resource and return a mutable reference to the wrapped value.
+/// Return a mutable reference to the wrapped value of a [`Shared`] resource.
 /// If the resource is shared (i.e. has other outstanding references), a cloned copy is used.
 #[inline(always)]
 #[must_use]
 #[allow(dead_code)]
 pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
     Shared::make_mut(value)
+}
+
+/// Return a mutable reference to the wrapped value of a [`Shared`] resource.
+#[inline(always)]
+#[must_use]
+#[allow(dead_code)]
+pub fn shared_get_mut<T: Clone>(value: &mut Shared<T>) -> Option<&mut T> {
+    Shared::get_mut(value)
 }
 
 /// Consume a [`Shared`] resource if is unique (i.e. not shared), or clone it otherwise.

@@ -264,7 +264,7 @@ impl Module {
             // NB: sub-modules must have their new items for exporting generated in depth-first order
             // to avoid issues caused by re-parsing them
             let inner_modules = sub_modules
-                .drain(..)
+                .into_iter()
                 .try_fold::<_, _, Result<_, syn::Error>>(Vec::new(), |mut acc, m| {
                     acc.push(m.generate_inner()?);
                     Ok(acc)

@@ -162,12 +162,8 @@ impl FnPtr {
         let typ = engine.map_type_name(result.type_name());
 
         result.try_cast().ok_or_else(|| {
-            ERR::ErrorMismatchOutputType(
-                engine.map_type_name(type_name::<T>()).into(),
-                typ.into(),
-                Position::NONE,
-            )
-            .into()
+            let t = engine.map_type_name(type_name::<T>()).into();
+            ERR::ErrorMismatchOutputType(t, typ.into(), Position::NONE).into()
         })
     }
     /// Call the function pointer with curried arguments (if any).
@@ -190,12 +186,8 @@ impl FnPtr {
         let typ = context.engine().map_type_name(result.type_name());
 
         result.try_cast().ok_or_else(|| {
-            ERR::ErrorMismatchOutputType(
-                context.engine().map_type_name(type_name::<T>()).into(),
-                typ.into(),
-                Position::NONE,
-            )
-            .into()
+            let t = context.engine().map_type_name(type_name::<T>()).into();
+            ERR::ErrorMismatchOutputType(t, typ.into(), Position::NONE).into()
         })
     }
     /// Call the function pointer with curried arguments (if any).
