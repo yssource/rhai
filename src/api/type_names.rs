@@ -85,9 +85,15 @@ impl Engine {
     #[inline]
     #[must_use]
     pub fn map_type_name<'a>(&'a self, name: &'a str) -> &'a str {
-        self.type_names
-            .get(name)
-            .map(|s| s.as_str())
+        self.global_modules
+            .iter()
+            .find_map(|m| m.get_custom_type(name))
+            .or_else(|| {
+                self.global_sub_modules
+                    .iter()
+                    .find_map(|(_, m)| m.get_custom_type(name))
+            })
+            .or_else(|| self.custom_types.get(name))
             .unwrap_or_else(|| map_std_type_name(name, true))
     }
 
@@ -109,9 +115,8 @@ impl Engine {
             };
         }
 
-        self.type_names
+        self.custom_types
             .get(name)
-            .map(|s| s.as_str())
             .unwrap_or_else(|| match name {
                 "INT" => return type_name::<crate::INT>(),
                 #[cfg(not(feature = "no_float"))]

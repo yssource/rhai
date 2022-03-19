@@ -1,5 +1,6 @@
 //! Module defining Rhai data types.
 
+pub mod custom_types;
 pub mod dynamic;
 pub mod error;
 pub mod fn_ptr;
@@ -8,6 +9,7 @@ pub mod interner;
 pub mod parse_error;
 pub mod scope;
 
+pub use custom_types::{CustomType, CustomTypesCollection};
 pub use dynamic::Dynamic;
 #[cfg(not(feature = "no_std"))]
 pub use dynamic::Instant;

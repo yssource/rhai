@@ -10,7 +10,7 @@ use std::borrow::Cow;
 
 use crate::attrs::{AttrItem, ExportInfo, ExportScope, ExportedParams};
 use crate::function::ExportedFn;
-use crate::rhai_module::ExportedConst;
+use crate::rhai_module::{ExportedConst, ExportedType};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Default)]
 pub struct ExportedModParams {
@@ -89,8 +89,9 @@ impl ExportedParams for ExportedModParams {
 #[derive(Debug)]
 pub struct Module {
     mod_all: syn::ItemMod,
-    fns: Vec<ExportedFn>,
     consts: Vec<ExportedConst>,
+    custom_types: Vec<ExportedType>,
+    fns: Vec<ExportedFn>,
     sub_modules: Vec<Module>,
     params: ExportedModParams,
 }
@@ -107,6 +108,7 @@ impl Parse for Module {
         let mut mod_all: syn::ItemMod = input.parse()?;
         let fns: Vec<_>;
         let mut consts = Vec::new();
+        let mut custom_types = Vec::new();
         let mut sub_modules = Vec::new();
 
         if let Some((.., ref mut content)) = mod_all.content {
@@ -155,6 +157,25 @@ impl Parse for Module {
                     _ => {}
                 }
             }
+            // Gather and parse type definitions.
+            for item in content.iter() {
+                match item {
+                    syn::Item::Type(syn::ItemType {
+                        vis,
+                        ident,
+                        attrs,
+                        ty,
+                        ..
+                    }) if matches!(vis, syn::Visibility::Public(..)) => {
+                        custom_types.push(ExportedType {
+                            name: ident.to_string(),
+                            typ: ty.clone(),
+                            cfg_attrs: crate::attrs::collect_cfg_attr(&attrs),
+                        })
+                    }
+                    _ => {}
+                }
+            }
             // Gather and parse sub-module definitions.
             //
             // They are actually removed from the module's body, because they will need
@@ -188,6 +209,7 @@ impl Parse for Module {
             mod_all,
             fns,
             consts,
+            custom_types,
             sub_modules,
             params: ExportedModParams::default(),
         })
@@ -241,6 +263,7 @@ impl Module {
             mut mod_all,
             mut fns,
             consts,
+            custom_types,
             mut sub_modules,
             params,
             ..
@@ -257,6 +280,7 @@ impl Module {
             let mod_gen = crate::rhai_module::generate_body(
                 &mut fns,
                 &consts,
+                &custom_types,
                 &mut sub_modules,
                 &params.scope,
             );
@@ -298,6 +322,11 @@ impl Module {
     #[allow(dead_code)]
     pub fn consts(&self) -> &[ExportedConst] {
         &self.consts
+    }
+
+    #[allow(dead_code)]
+    pub fn custom_types(&self) -> &[ExportedType] {
+        &self.custom_types
     }
 
     #[allow(dead_code)]

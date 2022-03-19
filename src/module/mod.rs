@@ -5,7 +5,7 @@ use crate::func::{
     shared_take_or_clone, CallableFunction, FnCallArgs, IteratorFn, RegisterNativeFunction,
     SendSync,
 };
-use crate::types::dynamic::Variant;
+use crate::types::{dynamic::Variant, CustomTypesCollection};
 use crate::{
     calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes, Dynamic, Identifier,
     ImmutableString, NativeCallContext, RhaiResultOf, Shared, StaticVec,
@@ -232,6 +232,8 @@ pub struct Module {
     pub(crate) internal: bool,
     /// Is this module part of a standard library?
     pub(crate) standard: bool,
+    /// Custom types.
+    custom_types: CustomTypesCollection,
     /// Sub-modules.
     modules: BTreeMap<Identifier, Shared<Module>>,
     /// [`Module`] variables.
@@ -339,6 +341,7 @@ impl Module {
             id: Identifier::new_const(),
             internal: false,
             standard: false,
+            custom_types: CustomTypesCollection::new(),
             modules: BTreeMap::new(),
             variables: BTreeMap::new(),
             all_variables: BTreeMap::new(),
@@ -411,6 +414,17 @@ impl Module {
     pub fn clear_id(&mut self) -> &mut Self {
         self.id.clear();
         self
+    }
+
+    /// Map a custom type to a friendly display name.
+    #[inline(always)]
+    pub fn set_custom_type<T>(&mut self, name: &str) {
+        self.custom_types.add_type::<T>(name)
+    }
+    /// Get the display name of a registered custom type.
+    #[inline(always)]
+    pub fn get_custom_type(&self, key: &str) -> Option<&str> {
+        self.custom_types.get(key)
     }
 
     /// Is the [`Module`] empty?

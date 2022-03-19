@@ -18,9 +18,17 @@ pub struct ExportedConst {
     pub cfg_attrs: Vec<syn::Attribute>,
 }
 
+#[derive(Debug)]
+pub struct ExportedType {
+    pub name: String,
+    pub typ: Box<syn::Type>,
+    pub cfg_attrs: Vec<syn::Attribute>,
+}
+
 pub fn generate_body(
     fns: &mut [ExportedFn],
     consts: &[ExportedConst],
+    custom_types: &[ExportedType],
     sub_modules: &mut [Module],
     parent_scope: &ExportScope,
 ) -> TokenStream {
@@ -49,6 +57,29 @@ pub fn generate_body(
             syn::parse2::<syn::Stmt>(quote! {
                 #(#cfg_attrs)*
                 m.set_var(#const_literal, #const_ref);
+            })
+            .unwrap(),
+        );
+    }
+
+    for ExportedType {
+        name,
+        typ,
+        cfg_attrs,
+        ..
+    } in custom_types
+    {
+        let const_literal = syn::LitStr::new(&name, Span::call_site());
+
+        let cfg_attrs: Vec<_> = cfg_attrs
+            .iter()
+            .map(syn::Attribute::to_token_stream)
+            .collect();
+
+        set_const_statements.push(
+            syn::parse2::<syn::Stmt>(quote! {
+                #(#cfg_attrs)*
+                m.set_custom_type::<#typ>(#const_literal);
             })
             .unwrap(),
         );

@@ -1,4 +1,5 @@
-//! Helper module which defines the [`Any`] trait to to allow dynamic value handling.
+//! Helper module which defines the [`Dynamic`] data type and the
+//! [`Any`] trait to to allow custom type handling.
 
 use crate::func::native::SendSync;
 use crate::{reify, ExclusiveRange, FnPtr, ImmutableString, InclusiveRange, INT};
