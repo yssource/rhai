@@ -89,9 +89,13 @@ impl Engine {
             .iter()
             .find_map(|m| m.get_custom_type(name))
             .or_else(|| {
-                self.global_sub_modules
+                #[cfg(not(feature = "no_module"))]
+                return self
+                    .global_sub_modules
                     .iter()
-                    .find_map(|(_, m)| m.get_custom_type(name))
+                    .find_map(|(_, m)| m.get_custom_type(name));
+                #[cfg(feature = "no_module")]
+                return None;
             })
             .or_else(|| self.custom_types.get(name))
             .unwrap_or_else(|| map_std_type_name(name, true))
