@@ -38,6 +38,31 @@ mod module_tests {
     }
 
     #[test]
+    fn one_factory_fn_with_custom_type_module() {
+        let input_tokens: TokenStream = quote! {
+            pub mod one_fn {
+                pub type Hello = ();
+
+                pub fn get_mystic_number() -> INT {
+                    42
+                }
+            }
+        };
+
+        let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
+        assert!(item_mod.consts().is_empty());
+        assert_eq!(item_mod.custom_types().len(), 1);
+        assert_eq!(item_mod.custom_types()[0].name.to_string(), "Hello");
+        assert_eq!(item_mod.fns().len(), 1);
+        assert_eq!(item_mod.fns()[0].name().to_string(), "get_mystic_number");
+        assert_eq!(item_mod.fns()[0].arg_count(), 0);
+        assert_eq!(
+            item_mod.fns()[0].return_type().unwrap(),
+            &syn::parse2::<syn::Type>(quote! { INT }).unwrap()
+        );
+    }
+
+    #[test]
     #[cfg(feature = "metadata")]
     fn one_factory_fn_with_comments_module() {
         let input_tokens: TokenStream = quote! {
@@ -753,7 +778,13 @@ mod generate_tests {
                 #[derive(Debug, Clone)]
                 pub struct Foo(pub INT);
 
+                pub type Hello = Foo;
+
                 pub const MYSTIC_NUMBER: Foo = Foo(42);
+
+                pub fn get_mystic_number(x: &mut Hello) -> INT {
+                    x.0
+                }
             }
         };
 
@@ -762,7 +793,13 @@ mod generate_tests {
                 #[derive(Debug, Clone)]
                 pub struct Foo(pub INT);
 
+                pub type Hello = Foo;
+
                 pub const MYSTIC_NUMBER: Foo = Foo(42);
+
+                pub fn get_mystic_number(x: &mut Hello) -> INT {
+                    x.0
+                }
                 #[allow(unused_imports)]
                 use super::*;
 
@@ -774,8 +811,31 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                    m.set_fn("get_mystic_number", FnNamespace::Internal, FnAccess::Public,
+                             Some(get_mystic_number_token::PARAM_NAMES), &[TypeId::of::<Hello>()],
+                             get_mystic_number_token().into());
                     m.set_var("MYSTIC_NUMBER", MYSTIC_NUMBER);
+                    m.set_custom_type::<Foo>("Hello");
                     if flatten {} else {}
+                }
+
+                #[allow(non_camel_case_types)]
+                pub struct get_mystic_number_token();
+                impl get_mystic_number_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut Hello", "INT"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<Hello>()] }
+                }
+                impl PluginFunction for get_mystic_number_token {
+                    #[inline(always)]
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
+                        if args[0usize].is_read_only() {
+                            return Err(EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into());
+                        }
+                        let arg0 = &mut args[0usize].write_lock::<Hello>().unwrap();
+                        Ok(Dynamic::from(get_mystic_number(arg0)))
+                    }
+
+                    #[inline(always)] fn is_method_call(&self) -> bool { true }
                 }
             }
         };

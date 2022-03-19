@@ -10,7 +10,7 @@ use std::any::{type_name, TypeId};
 use std::prelude::v1::*;
 
 impl Engine {
-    /// Get the global namespace module (which is the last module in `global_modules`).
+    /// Get the global namespace module (which is the fist module in `global_modules`).
     #[inline(always)]
     #[allow(dead_code)]
     pub(crate) fn global_namespace(&self) -> &Module {
@@ -273,7 +273,8 @@ impl Engine {
     /// ```
     #[inline(always)]
     pub fn register_type_with_name<T: Variant + Clone>(&mut self, name: &str) -> &mut Self {
-        self.register_type_with_name_raw(type_name::<T>(), name)
+        self.custom_types.add_type::<T>(name);
+        self
     }
     /// Register a custom type for use with the [`Engine`], with a pretty-print name
     /// for the `type_of` function. The type must implement [`Clone`].
@@ -288,8 +289,7 @@ impl Engine {
         name: impl Into<Identifier>,
     ) -> &mut Self {
         // Add the pretty-print type name into the map
-        self.type_names
-            .insert(fully_qualified_type_path.into(), name.into());
+        self.custom_types.add(fully_qualified_type_path, name);
         self
     }
     /// Register an type iterator for an iterable type with the [`Engine`].

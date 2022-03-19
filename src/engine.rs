@@ -6,7 +6,7 @@ use crate::func::native::{
 };
 use crate::packages::{Package, StandardPackage};
 use crate::tokenizer::Token;
-use crate::types::dynamic::Union;
+use crate::types::{dynamic::Union, CustomTypesCollection};
 use crate::{
     Dynamic, Identifier, ImmutableString, Module, OptimizationLevel, Position, RhaiResult, Shared,
     StaticVec,
@@ -105,7 +105,7 @@ pub struct Engine {
     pub(crate) module_resolver: Option<Box<dyn crate::ModuleResolver>>,
 
     /// A map mapping type names to pretty-print names.
-    pub(crate) type_names: BTreeMap<Identifier, Identifier>,
+    pub(crate) custom_types: CustomTypesCollection,
 
     /// An empty [`ImmutableString`] for cloning purposes.
     pub(crate) empty_string: ImmutableString,
@@ -160,7 +160,7 @@ impl fmt::Debug for Engine {
         f.field("global_sub_modules", &self.global_sub_modules)
             .field("module_resolver", &self.module_resolver.is_some());
 
-        f.field("type_names", &self.type_names)
+        f.field("type_names", &self.custom_types)
             .field("disabled_symbols", &self.disabled_symbols)
             .field("custom_keywords", &self.custom_keywords)
             .field("custom_syntax", &(!self.custom_syntax.is_empty()))
@@ -271,7 +271,7 @@ impl Engine {
             #[cfg(not(feature = "no_module"))]
             module_resolver: None,
 
-            type_names: BTreeMap::new(),
+            custom_types: CustomTypesCollection::new(),
             empty_string: ImmutableString::new(),
             disabled_symbols: BTreeSet::new(),
             custom_keywords: BTreeMap::new(),

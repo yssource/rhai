@@ -53,8 +53,12 @@ fn test_module_sub_module() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(m2.get_var_value::<INT>("answer").unwrap(), 41);
 
+    module.set_custom_type::<()>("Don't Panic");
+
     let mut engine = Engine::new();
     engine.register_static_module("question", module.into());
+
+    assert_eq!(engine.eval::<String>("type_of(())")?, "Don't Panic");
 
     assert_eq!(engine.eval::<INT>("question::MYSTIC_NUMBER")?, 42);
     assert!(engine.eval::<INT>("MYSTIC_NUMBER").is_err());
