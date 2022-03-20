@@ -952,9 +952,10 @@ impl Engine {
                             result => Some(result),
                         })
                         .or_else(|| {
-                            self.module_resolver
-                                .as_ref()
-                                .map(|r| r.resolve_raw(self, global, &path, path_pos))
+                            Some(
+                                self.module_resolver
+                                    .resolve_raw(self, global, &path, path_pos),
+                            )
                         })
                         .unwrap_or_else(|| {
                             Err(ERR::ErrorModuleNotFound(path.to_string(), path_pos).into())

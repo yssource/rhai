@@ -115,33 +115,34 @@ impl Engine {
 
         let mut ast = self.compile_scripts_with_scope(scope, &[script])?;
 
-        if let Some(ref module_resolver) = self.module_resolver {
-            let mut resolver = StaticModuleResolver::new();
-            let mut imports = BTreeSet::new();
+        let mut resolver = StaticModuleResolver::new();
+        let mut imports = BTreeSet::new();
 
-            collect_imports(&ast, &resolver, &mut imports);
+        collect_imports(&ast, &resolver, &mut imports);
 
-            if !imports.is_empty() {
-                while let Some(path) = imports.iter().next() {
-                    let path = path.clone();
+        if !imports.is_empty() {
+            while let Some(path) = imports.iter().next() {
+                let path = path.clone();
 
-                    match module_resolver.resolve_ast(self, None, &path, crate::Position::NONE) {
-                        Some(Ok(module_ast)) => {
-                            collect_imports(&module_ast, &resolver, &mut imports)
-                        }
-                        Some(err) => return err,
-                        None => (),
-                    }
-
-                    let module =
-                        module_resolver.resolve(self, None, &path, crate::Position::NONE)?;
-                    let module = shared_take_or_clone(module);
-
-                    imports.remove(&path);
-                    resolver.insert(path, module);
+                match self
+                    .module_resolver
+                    .resolve_ast(self, None, &path, crate::Position::NONE)
+                {
+                    Some(Ok(module_ast)) => collect_imports(&module_ast, &resolver, &mut imports),
+                    Some(err) => return err,
+                    None => (),
                 }
-                ast.set_resolver(resolver);
+
+                let module =
+                    self.module_resolver
+                        .resolve(self, None, &path, crate::Position::NONE)?;
+
+                let module = shared_take_or_clone(module);
+
+                imports.remove(&path);
+                resolver.insert(path, module);
             }
+            ast.set_resolver(resolver);
         }
 
         Ok(ast)

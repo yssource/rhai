@@ -244,9 +244,10 @@ impl GlobalRuntimeState<'_> {
     #[inline]
     #[must_use]
     pub fn source(&self) -> Option<&str> {
-        match self.source.as_str() {
-            "" => None,
-            s => Some(s),
+        if self.source.is_empty() {
+            None
+        } else {
+            Some(self.source.as_str())
         }
     }
     /// Get the pre-calculated index getter hash.

@@ -1,6 +1,7 @@
 //! Main module defining the script evaluation [`Engine`].
 
 use crate::api::custom_syntax::CustomSyntax;
+use crate::api::options::LanguageOptions;
 use crate::func::native::{
     OnDebugCallback, OnDefVarCallback, OnParseTokenCallback, OnPrintCallback, OnVarCallback,
 };
@@ -102,7 +103,7 @@ pub struct Engine {
 
     /// A module resolution service.
     #[cfg(not(feature = "no_module"))]
-    pub(crate) module_resolver: Option<Box<dyn crate::ModuleResolver>>,
+    pub(crate) module_resolver: Box<dyn crate::ModuleResolver>,
 
     /// A map mapping type names to pretty-print names.
     pub(crate) custom_types: CustomTypesCollection,
@@ -124,9 +125,9 @@ pub struct Engine {
     pub(crate) token_mapper: Option<Box<OnParseTokenCallback>>,
 
     /// Callback closure for implementing the `print` command.
-    pub(crate) print: Option<Box<OnPrintCallback>>,
+    pub(crate) print: Box<OnPrintCallback>,
     /// Callback closure for implementing the `debug` command.
-    pub(crate) debug: Option<Box<OnDebugCallback>>,
+    pub(crate) debug: Box<OnDebugCallback>,
     /// Callback closure for progress reporting.
     #[cfg(not(feature = "unchecked"))]
     pub(crate) progress: Option<Box<crate::func::native::OnProgressCallback>>,
@@ -135,7 +136,7 @@ pub struct Engine {
     pub(crate) optimization_level: OptimizationLevel,
 
     /// Language options.
-    pub(crate) options: crate::api::options::LanguageOptions,
+    pub(crate) options: LanguageOptions,
 
     /// Max limits.
     #[cfg(not(feature = "unchecked"))]
@@ -157,8 +158,7 @@ impl fmt::Debug for Engine {
         f.field("global_modules", &self.global_modules);
 
         #[cfg(not(feature = "no_module"))]
-        f.field("global_sub_modules", &self.global_sub_modules)
-            .field("module_resolver", &self.module_resolver.is_some());
+        f.field("global_sub_modules", &self.global_sub_modules);
 
         f.field("type_names", &self.custom_types)
             .field("disabled_symbols", &self.disabled_symbols)
@@ -166,9 +166,7 @@ impl fmt::Debug for Engine {
             .field("custom_syntax", &(!self.custom_syntax.is_empty()))
             .field("def_var_filter", &self.def_var_filter.is_some())
             .field("resolve_var", &self.resolve_var.is_some())
-            .field("token_mapper", &self.token_mapper.is_some())
-            .field("print", &self.print.is_some())
-            .field("debug", &self.debug.is_some());
+            .field("token_mapper", &self.token_mapper.is_some());
 
         #[cfg(not(feature = "unchecked"))]
         f.field("progress", &self.progress.is_some());
@@ -226,16 +224,15 @@ impl Engine {
         #[cfg(not(feature = "no_std"))]
         #[cfg(not(target_family = "wasm"))]
         {
-            engine.module_resolver =
-                Some(Box::new(crate::module::resolvers::FileModuleResolver::new()));
+            engine.module_resolver = Box::new(crate::module::resolvers::FileModuleResolver::new());
         }
 
         // default print/debug implementations
         #[cfg(not(feature = "no_std"))]
         #[cfg(not(target_family = "wasm"))]
         {
-            engine.print = Some(Box::new(|s| println!("{}", s)));
-            engine.debug = Some(Box::new(|s, source, pos| {
+            engine.print = Box::new(|s| println!("{}", s));
+            engine.debug = Box::new(|s, source, pos| {
                 if let Some(source) = source {
                     println!("{} @ {:?} | {}", source, pos, s);
                 } else if pos.is_none() {
@@ -243,7 +240,7 @@ impl Engine {
                 } else {
                     println!("{:?} | {}", pos, s);
                 }
-            }));
+            });
         }
         #[cfg(any(feature = "no_std", target_family = "wasm"))]
         {
@@ -269,7 +266,7 @@ impl Engine {
             global_sub_modules: BTreeMap::new(),
 
             #[cfg(not(feature = "no_module"))]
-            module_resolver: None,
+            module_resolver: Box::new(crate::module::resolvers::DummyModuleResolver::new()),
 
             custom_types: CustomTypesCollection::new(),
             empty_string: ImmutableString::new(),
@@ -281,15 +278,15 @@ impl Engine {
             resolve_var: None,
             token_mapper: None,
 
-            print: None,
-            debug: None,
+            print: Box::new(|_| {}),
+            debug: Box::new(|_, _, _| {}),
 
             #[cfg(not(feature = "unchecked"))]
             progress: None,
 
             optimization_level: OptimizationLevel::default(),
 
-            options: crate::api::options::LanguageOptions::new(),
+            options: LanguageOptions::new(),
 
             #[cfg(not(feature = "unchecked"))]
             limits: crate::api::limits::Limits::new(),

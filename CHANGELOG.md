@@ -17,6 +17,11 @@ Bug fixes
 * Exporting a variable that contains a local function pointer (including anonymous function or closure) now raises a runtime error.
 * Full optimization is now skipped for method calls.
 
+New features
+------------
+
+* [Type aliases](https://doc.rust-lang.org/reference/items/type-aliases.html) in plugin modules are now used as friendly names for custom types. This makes plugin modules more self-contained when they are used to define a custom type's API.
+
 Enhancements
 ------------
 

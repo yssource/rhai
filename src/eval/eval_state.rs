@@ -28,7 +28,7 @@ pub struct EvalState<'a> {
     /// Stack of function resolution caches.
     fn_resolution_caches: StaticVec<FnResolutionCache>,
     /// Take care of the lifetime parameter
-    dummy: PhantomData<Option<&'a ()>>,
+    dummy: PhantomData<&'a ()>,
 }
 
 impl EvalState<'_> {

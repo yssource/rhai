@@ -282,7 +282,7 @@ impl Engine {
     /// ```
     #[inline(always)]
     pub fn on_print(&mut self, callback: impl Fn(&str) + SendSync + 'static) -> &mut Self {
-        self.print = Some(Box::new(callback));
+        self.print = Box::new(callback);
         self
     }
     /// Override default action of `debug` (print to stdout using [`println!`])
@@ -332,7 +332,7 @@ impl Engine {
         &mut self,
         callback: impl Fn(&str, Option<&str>, Position) + SendSync + 'static,
     ) -> &mut Self {
-        self.debug = Some(Box::new(callback));
+        self.debug = Box::new(callback);
         self
     }
     /// _(debugging)_ Register a callback for debugging.

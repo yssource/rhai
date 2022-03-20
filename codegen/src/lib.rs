@@ -269,7 +269,7 @@ pub fn exported_module(module_path: proc_macro::TokenStream) -> proc_macro::Toke
 pub fn combine_with_exported_module(args: proc_macro::TokenStream) -> proc_macro::TokenStream {
     match crate::register::parse_register_macro(args) {
         Ok((module_expr, _export_name, module_path)) => proc_macro::TokenStream::from(quote! {
-            #module_path::rhai_generate_into_module(#module_expr, true);
+            #module_path::rhai_generate_into_module(#module_expr, true)
         }),
         Err(e) => e.to_compile_error().into(),
     }
@@ -303,7 +303,7 @@ pub fn register_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenS
         Ok((engine_expr, export_name, rust_mod_path)) => {
             let gen_mod_path = crate::register::generated_module_path(&rust_mod_path);
             proc_macro::TokenStream::from(quote! {
-                #engine_expr.register_result_fn(#export_name, #gen_mod_path::dynamic_result_fn);
+                #engine_expr.register_result_fn(#export_name, #gen_mod_path::dynamic_result_fn)
             })
         }
         Err(e) => e.to_compile_error().into(),
@@ -352,7 +352,7 @@ pub fn set_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream
                 #module_expr.set_fn(#export_name, FnNamespace::Internal, FnAccess::Public,
                                     #param_names,
                                     &#gen_mod_path::Token::param_types(),
-                                    #gen_mod_path::Token().into());
+                                    #gen_mod_path::Token().into())
             })
         }
         Err(e) => e.to_compile_error().into(),
@@ -401,7 +401,7 @@ pub fn set_exported_global_fn(args: proc_macro::TokenStream) -> proc_macro::Toke
                 #module_expr.set_fn(#export_name, FnNamespace::Global, FnAccess::Public,
                                     #param_names,
                                     &#gen_mod_path::Token::param_types(),
-                                    #gen_mod_path::Token().into());
+                                    #gen_mod_path::Token().into())
             })
         }
         Err(e) => e.to_compile_error().into(),
