@@ -458,6 +458,35 @@ mod string_functions {
         *character = to_lower_char(*character)
     }
 
+    /// Return `true` if the string starts with a specified string.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world!";
+    ///
+    /// print(text.starts_with("hello"));   // prints true
+    ///
+    /// print(text.starts_with("world"));   // prints false
+    /// ```
+    pub fn starts_with(string: &str, match_string: &str) -> bool {
+        string.starts_with(match_string)
+    }
+    /// Return `true` if the string ends with a specified string.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let text = "hello, world!";
+    ///
+    /// print(text.ends_with("world!"));    // prints true
+    ///
+    /// print(text.ends_with("hello"));     // prints false
+    /// ```
+    pub fn ends_with(string: &str, match_string: &str) -> bool {
+        string.ends_with(match_string)
+    }
+
     /// Find the specified `character` in the string, starting from the specified `start` position,
     /// and return the first index where it is found.
     /// If the `character` is not found, `-1` is returned.

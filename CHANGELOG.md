@@ -31,6 +31,7 @@ Enhancements
 * Separation of constants in function calls is removed as its performance benefit is dubious.
 * A function `sleep` is added to block the current thread by a specified number of seconds.
 * `Scope::set_alias` is added to export a variable under a particular alias name.
+* `starts_with` and `ends_with` are added for strings.
 
 
 Version 1.5.0
