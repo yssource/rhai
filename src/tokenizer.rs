@@ -5,7 +5,7 @@ use crate::engine::{
     KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
 use crate::func::native::OnParseTokenCallback;
-use crate::{Engine, LexError, SmartString, StaticVec, INT, UNSIGNED_INT};
+use crate::{Engine, Identifier, LexError, SmartString, StaticVec, INT, UNSIGNED_INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -363,7 +363,7 @@ pub enum Token {
     #[cfg(feature = "decimal")]
     DecimalConstant(rust_decimal::Decimal),
     /// An identifier.
-    Identifier(SmartString),
+    Identifier(Identifier),
     /// A character constant.
     CharConstant(char),
     /// A string constant.
@@ -1113,8 +1113,8 @@ pub fn parse_string_literal(
     allow_line_continuation: bool,
     allow_interpolation: bool,
 ) -> Result<(SmartString, bool, Position), (LexError, Position)> {
-    let mut result = SmartString::new();
-    let mut escape = SmartString::new();
+    let mut result = SmartString::new_const();
+    let mut escape = SmartString::new_const();
 
     let start = *pos;
     let mut first_char = Position::NONE;
@@ -1323,7 +1323,7 @@ fn scan_block_comment(
     stream: &mut impl InputStream,
     level: usize,
     pos: &mut Position,
-    comment: Option<&mut String>,
+    comment: Option<&mut SmartString>,
 ) -> usize {
     let mut level = level;
     let mut comment = comment;
@@ -1418,7 +1418,7 @@ fn get_next_token_inner(
     if state.comment_level > 0 {
         let start_pos = *pos;
         let mut comment = if state.include_comments {
-            Some(String::new())
+            Some(SmartString::new_const())
         } else {
             None
         };
@@ -1796,7 +1796,7 @@ fn get_next_token_inner(
             ('/', '/') => {
                 eat_next(stream, pos);
 
-                let mut comment = match stream.peek_next() {
+                let mut comment: Option<SmartString> = match stream.peek_next() {
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(feature = "metadata")]
                     Some('/') => {
@@ -1805,10 +1805,10 @@ fn get_next_token_inner(
                         // Long streams of `///...` are not doc-comments
                         match stream.peek_next() {
                             Some('/') => None,
-                            _ => Some("///".to_string()),
+                            _ => Some("///".into()),
                         }
                     }
-                    _ if state.include_comments => Some("//".to_string()),
+                    _ if state.include_comments => Some("//".into()),
                     _ => None,
                 };
 
@@ -1832,14 +1832,14 @@ fn get_next_token_inner(
                 }
 
                 if let Some(comment) = comment {
-                    return Some((Token::Comment(comment.into()), start_pos));
+                    return Some((Token::Comment(comment), start_pos));
                 }
             }
             ('/', '*') => {
                 state.comment_level = 1;
                 eat_next(stream, pos);
 
-                let mut comment = match stream.peek_next() {
+                let mut comment: Option<SmartString> = match stream.peek_next() {
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(feature = "metadata")]
                     Some('*') => {
@@ -1848,10 +1848,10 @@ fn get_next_token_inner(
                         // Long streams of `/****...` are not doc-comments
                         match stream.peek_next() {
                             Some('*') => None,
-                            _ => Some("/**".to_string()),
+                            _ => Some("/**".into()),
                         }
                     }
-                    _ if state.include_comments => Some("/*".to_string()),
+                    _ if state.include_comments => Some("/*".into()),
                     _ => None,
                 };
 
@@ -1859,7 +1859,7 @@ fn get_next_token_inner(
                     scan_block_comment(stream, state.comment_level, pos, comment.as_mut());
 
                 if let Some(comment) = comment {
-                    return Some((Token::Comment(comment.into()), start_pos));
+                    return Some((Token::Comment(comment), start_pos));
                 }
             }
 
