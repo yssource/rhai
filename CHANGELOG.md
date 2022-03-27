@@ -32,6 +32,8 @@ Enhancements
 * A function `sleep` is added to block the current thread by a specified number of seconds.
 * `Scope::set_alias` is added to export a variable under a particular alias name.
 * `starts_with` and `ends_with` are added for strings.
+* Variables in modules registered via `register_global_module` can now be accessed in the global namespace.
+* `Dynamic::into_read_only` is added to convert a `Dynamic` value into constant.
 
 
 Version 1.5.0

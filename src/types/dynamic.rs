@@ -1051,6 +1051,13 @@ impl Dynamic {
         }
         self
     }
+    /// Make this [`Dynamic`] read-only (i.e. a constant).
+    #[inline(always)]
+    pub fn into_read_only(self) -> Self {
+        let mut value = self;
+        value.set_access_mode(AccessMode::ReadOnly);
+        value
+    }
     /// Is this [`Dynamic`] read-only?
     ///
     /// Constant [`Dynamic`] values are read-only.
