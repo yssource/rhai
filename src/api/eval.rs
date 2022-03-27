@@ -227,9 +227,9 @@ impl Engine {
             ast.as_ref(),
         ];
         let lib = if lib.first().map(|m: &&Module| m.is_empty()).unwrap_or(true) {
-            &lib[0..0]
+            &[]
         } else {
-            &lib
+            &lib[..]
         };
         self.eval_global_statements(scope, global, &mut state, statements, lib, level)
     }
