@@ -242,11 +242,6 @@ impl Engine {
                 }
             });
         }
-        #[cfg(any(feature = "no_std", target_family = "wasm"))]
-        {
-            engine.print = None;
-            engine.debug = None;
-        }
 
         engine.register_global_module(StandardPackage::new().as_shared_module());
 

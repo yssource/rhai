@@ -5,9 +5,6 @@ use crate::{Dynamic, RhaiResultOf, ERR, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
-#[cfg(not(feature = "no_float"))]
-use crate::FLOAT;
-
 def_package! {
     /// Package of core language features.
     pub LanguageCorePackage(lib) {
@@ -84,7 +81,7 @@ mod core_functions {
     #[cfg(not(feature = "no_float"))]
     #[cfg(not(feature = "no_std"))]
     #[rhai_fn(name = "sleep")]
-    pub fn sleep_float(seconds: FLOAT) {
+    pub fn sleep_float(seconds: crate::FLOAT) {
         if seconds <= 0.0 {
             return;
         }
