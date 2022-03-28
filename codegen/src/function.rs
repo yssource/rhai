@@ -651,8 +651,7 @@ impl ExportedFn {
         let return_span = self
             .return_type()
             .map(|r| r.span())
-            .unwrap_or_else(Span::call_site)
-            .resolved_at(Span::call_site());
+            .unwrap_or_else(Span::call_site);
         if self.params.return_raw.is_some() {
             quote_spanned! { return_span =>
                 pub #dynamic_signature {
@@ -835,8 +834,7 @@ impl ExportedFn {
         let return_span = self
             .return_type()
             .map(|r| r.span())
-            .unwrap_or_else(Span::call_site)
-            .resolved_at(Span::call_site());
+            .unwrap_or_else(Span::call_site);
         let return_expr = if self.params.return_raw.is_none() {
             quote_spanned! { return_span =>
                 Ok(Dynamic::from(#sig_name(#(#unpack_exprs),*)))
