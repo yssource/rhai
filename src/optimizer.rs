@@ -1236,6 +1236,16 @@ fn optimize_top_level(
         optimization_level,
     );
 
+    // Add constants from global modules
+    for (name, value) in engine
+        .global_modules
+        .iter()
+        .rev()
+        .flat_map(|m| m.iter_var())
+    {
+        state.push_var(name, AccessMode::ReadOnly, Some(value.clone()));
+    }
+
     // Add constants and variables from the scope
     for (name, constant, value) in scope.iter() {
         if !constant {

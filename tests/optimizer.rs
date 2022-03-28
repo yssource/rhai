@@ -1,6 +1,6 @@
 #![cfg(not(feature = "no_optimize"))]
 
-use rhai::{Engine, EvalAltResult, OptimizationLevel, Scope, INT};
+use rhai::{Engine, EvalAltResult, Module, OptimizationLevel, Scope, INT};
 
 #[test]
 fn test_optimizer() -> Result<(), Box<EvalAltResult>> {
@@ -74,6 +74,7 @@ fn test_optimizer_run() -> Result<(), Box<EvalAltResult>> {
 #[test]
 fn test_optimizer_parse() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
+
     engine.set_optimization_level(OptimizationLevel::Simple);
 
     let ast = engine.compile("{ const DECISION = false; if DECISION { 42 } else { 123 } }")?;
@@ -94,6 +95,22 @@ fn test_optimizer_parse() -> Result<(), Box<EvalAltResult>> {
     engine.set_optimization_level(OptimizationLevel::Full);
 
     let ast = engine.compile("abs(-42)")?;
+
+    assert_eq!(format!("{:?}", ast), "AST { body: [Expr(42 @ 1:1)] }");
+
+    let ast = engine.compile("NUMBER")?;
+
+    assert_eq!(
+        format!("{:?}", ast),
+        "AST { body: [Expr(Variable(NUMBER) @ 1:1)] }"
+    );
+
+    let mut module = Module::new();
+    module.set_var("NUMBER", 42 as INT);
+
+    engine.register_global_module(module.into());
+
+    let ast = engine.compile("NUMBER")?;
 
     assert_eq!(format!("{:?}", ast), "AST { body: [Expr(42 @ 1:1)] }");
 
