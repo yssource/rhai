@@ -61,6 +61,7 @@ Protected against attacks
 * [Sand-boxed](https://rhai.rs/book/safety/sandbox.html) - the scripting engine, if declared immutable, cannot mutate the containing environment unless [explicitly permitted](https://rhai.rs/book/patterns/control.html).
 * Rugged - protected against malicious attacks (such as [stack-overflow](https://rhai.rs/book/safety/max-call-stack.html), [over-sized data](https://rhai.rs/book/safety/max-string-size.html), and [runaway scripts](https://rhai.rs/book/safety/max-operations.html) etc.) that may come from untrusted third-party user-land scripts.
 * Track script evaluation [progress](https://rhai.rs/book/safety/progress.html) and manually terminate a script run.
+* Passes Miri.
 
 
 For those who actually want their own language

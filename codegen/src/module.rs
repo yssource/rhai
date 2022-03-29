@@ -140,20 +140,18 @@ impl Parse for Module {
             for item in content.iter() {
                 match item {
                     syn::Item::Const(syn::ItemConst {
-                        vis,
+                        vis: syn::Visibility::Public(..),
                         ref expr,
                         ident,
                         attrs,
                         ty,
                         ..
-                    }) if matches!(vis, syn::Visibility::Public(..)) => {
-                        consts.push(ExportedConst {
-                            name: ident.to_string(),
-                            typ: ty.clone(),
-                            expr: expr.as_ref().clone(),
-                            cfg_attrs: crate::attrs::collect_cfg_attr(&attrs),
-                        })
-                    }
+                    }) => consts.push(ExportedConst {
+                        name: ident.to_string(),
+                        typ: ty.clone(),
+                        expr: expr.as_ref().clone(),
+                        cfg_attrs: crate::attrs::collect_cfg_attr(&attrs),
+                    }),
                     _ => {}
                 }
             }
@@ -161,18 +159,16 @@ impl Parse for Module {
             for item in content.iter() {
                 match item {
                     syn::Item::Type(syn::ItemType {
-                        vis,
+                        vis: syn::Visibility::Public(..),
                         ident,
                         attrs,
                         ty,
                         ..
-                    }) if matches!(vis, syn::Visibility::Public(..)) => {
-                        custom_types.push(ExportedType {
-                            name: ident.to_string(),
-                            typ: ty.clone(),
-                            cfg_attrs: crate::attrs::collect_cfg_attr(&attrs),
-                        })
-                    }
+                    }) => custom_types.push(ExportedType {
+                        name: ident.to_string(),
+                        typ: ty.clone(),
+                        cfg_attrs: crate::attrs::collect_cfg_attr(&attrs),
+                    }),
                     _ => {}
                 }
             }

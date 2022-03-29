@@ -89,6 +89,26 @@ pub struct ConditionalStmtBlock {
     pub statements: StmtBlock,
 }
 
+impl<B: Into<StmtBlock>> From<B> for ConditionalStmtBlock {
+    #[inline(always)]
+    fn from(value: B) -> Self {
+        Self {
+            condition: None,
+            statements: value.into(),
+        }
+    }
+}
+
+impl<B: Into<StmtBlock>> From<(Expr, B)> for ConditionalStmtBlock {
+    #[inline(always)]
+    fn from(value: (Expr, B)) -> Self {
+        Self {
+            condition: Some(value.0),
+            statements: value.1.into(),
+        }
+    }
+}
+
 impl<B: Into<StmtBlock>> From<(Option<Expr>, B)> for ConditionalStmtBlock {
     #[inline(always)]
     fn from(value: (Option<Expr>, B)) -> Self {

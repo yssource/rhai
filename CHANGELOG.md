@@ -17,6 +17,11 @@ Bug fixes
 * Exporting a variable that contains a local function pointer (including anonymous function or closure) now raises a runtime error.
 * Full optimization is now skipped for method calls.
 
+New features
+------------
+
+* [Type aliases](https://doc.rust-lang.org/reference/items/type-aliases.html) in plugin modules are now used as friendly names for custom types. This makes plugin modules more self-contained when they are used to define a custom type's API.
+
 Enhancements
 ------------
 
@@ -26,6 +31,10 @@ Enhancements
 * Separation of constants in function calls is removed as its performance benefit is dubious.
 * A function `sleep` is added to block the current thread by a specified number of seconds.
 * `Scope::set_alias` is added to export a variable under a particular alias name.
+* `starts_with` and `ends_with` are added for strings.
+* Variables in modules registered via `register_global_module` can now be accessed in the global namespace.
+* `Dynamic::into_read_only` is added to convert a `Dynamic` value into constant.
+* `Module` now holds a collection of custom types with an API.
 
 
 Version 1.5.0

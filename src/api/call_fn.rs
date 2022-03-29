@@ -178,7 +178,7 @@ impl Engine {
         #[cfg(not(feature = "no_closure"))]
         crate::func::call::ensure_no_data_race(name, &mut args, false)?;
 
-        let result = self.call_script_fn(
+        self.call_script_fn(
             scope,
             global,
             state,
@@ -189,8 +189,6 @@ impl Engine {
             rewind_scope,
             Position::NONE,
             0,
-        );
-
-        result
+        )
     }
 }

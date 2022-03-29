@@ -27,13 +27,18 @@ impl CustomTypesCollection {
     }
     /// Register a custom type.
     #[inline(always)]
-    pub fn add(&mut self, key: impl Into<Identifier>, name: impl Into<Identifier>) {
-        self.0.insert(key.into(), name.into());
+    pub fn add(&mut self, type_name: impl Into<Identifier>, name: impl Into<Identifier>) {
+        self.add_raw(type_name, name.into());
     }
     /// Register a custom type.
     #[inline(always)]
     pub fn add_type<T>(&mut self, name: &str) {
-        self.0.insert(type_name::<T>().into(), name.into());
+        self.add_raw(type_name::<T>(), name.into());
+    }
+    /// Register a custom type.
+    #[inline(always)]
+    pub fn add_raw(&mut self, type_name: impl Into<Identifier>, custom_type: CustomType) {
+        self.0.insert(type_name.into(), custom_type);
     }
     /// Find a custom type.
     #[inline(always)]

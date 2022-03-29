@@ -30,7 +30,7 @@ impl Engine {
             &mut stream.peekable(),
             &mut state,
             scope,
-            self.optimization_level,
+            self.options.optimization_level,
         )?;
 
         self.run_ast_with_scope(scope, &ast)

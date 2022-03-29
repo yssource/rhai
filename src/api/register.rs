@@ -273,7 +273,7 @@ impl Engine {
     /// ```
     #[inline(always)]
     pub fn register_type_with_name<T: Variant + Clone>(&mut self, name: &str) -> &mut Self {
-        self.custom_types.add_type::<T>(name);
+        self.global_namespace_mut().set_custom_type::<T>(name);
         self
     }
     /// Register a custom type for use with the [`Engine`], with a pretty-print name
@@ -289,7 +289,8 @@ impl Engine {
         name: impl Into<Identifier>,
     ) -> &mut Self {
         // Add the pretty-print type name into the map
-        self.custom_types.add(fully_qualified_type_path, name);
+        self.global_namespace_mut()
+            .set_custom_type_raw(fully_qualified_type_path, name);
         self
     }
     /// Register an type iterator for an iterable type with the [`Engine`].

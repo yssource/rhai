@@ -85,6 +85,8 @@ fn test_plugins_package() -> Result<(), Box<EvalAltResult>> {
 
     reg_functions!(engine += greet::single(INT, bool, char));
 
+    assert_eq!(engine.eval::<INT>("MYSTIC_NUMBER")?, 42);
+
     #[cfg(not(feature = "no_object"))]
     {
         assert_eq!(engine.eval::<INT>("let a = [1, 2, 3]; a.foo")?, 1);

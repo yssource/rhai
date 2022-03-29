@@ -1,3 +1,4 @@
+use rhai::plugin::*;
 use rhai::{Dynamic, Engine, EvalAltResult, Module, Scope, AST, INT};
 use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
@@ -58,7 +59,7 @@ fn print_help() {
     #[cfg(feature = "metadata")]
     println!("functions  => print all functions defined");
     #[cfg(feature = "metadata")]
-    println!("json       => output all functions in JSON format");
+    println!("json       => output all functions to `metadata.json`");
     println!("ast        => print the last AST (optimized)");
     #[cfg(not(feature = "no_optimize"))]
     println!("astu       => print the last raw, un-optimized AST");
@@ -267,6 +268,41 @@ fn setup_editor() -> Editor<()> {
     rl
 }
 
+#[export_module]
+mod sample_functions {
+    /// This is a sample function.
+    ///
+    /// It takes two numbers and prints them to a string.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let result = test(42, 123);
+    ///
+    /// print(result);      // prints "42 123"
+    /// ```
+    pub fn test(x: INT, y: INT) -> String {
+        format!("{} {}", x, y)
+    }
+
+    /// This is a sample method for integers.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let x = 42;
+    ///
+    /// x.test(123, "hello");
+    ///
+    /// print(x);       // prints 170
+    /// ```
+    #[rhai_fn(name = "test")]
+    pub fn test2(x: &mut INT, y: INT, z: &str) {
+        *x += y + (z.len() as INT);
+        println!("{} {} {}", x, y, z);
+    }
+}
+
 fn main() {
     let title = format!("Rhai REPL tool (version {})", env!("CARGO_PKG_VERSION"));
     println!("{}", title);
@@ -296,12 +332,7 @@ fn main() {
     }
 
     // Register sample functions
-    engine
-        .register_fn("test", |x: INT, y: INT| format!("{} {}", x, y))
-        .register_fn("test", |x: &mut INT, y: INT, z: &str| {
-            *x += y;
-            println!("{} {} {}", x, y, z);
-        });
+    engine.register_global_module(exported_module!(sample_functions).into());
 
     // Create scope
     let mut scope = Scope::new();
@@ -463,12 +494,15 @@ fn main() {
             }
             #[cfg(feature = "metadata")]
             "json" => {
-                println!(
-                    "{}",
-                    engine
-                        .gen_fn_metadata_with_ast_to_json(&main_ast, true)
-                        .unwrap()
-                );
+                use std::io::Write;
+
+                let json = engine
+                    .gen_fn_metadata_with_ast_to_json(&main_ast, false)
+                    .unwrap();
+                let mut f = std::fs::File::create("metadata.json")
+                    .expect("Unable to create `metadata.json`");
+                f.write_all(json.as_bytes()).expect("Unable to write data");
+                println!("Functions metadata written to `metadata.json`.");
                 continue;
             }
             "!!" => {

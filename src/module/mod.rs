@@ -421,6 +421,15 @@ impl Module {
     pub fn set_custom_type<T>(&mut self, name: &str) {
         self.custom_types.add_type::<T>(name)
     }
+    /// Map a custom type to a friendly display name.
+    #[inline(always)]
+    pub fn set_custom_type_raw(
+        &mut self,
+        type_name: impl Into<Identifier>,
+        name: impl Into<Identifier>,
+    ) {
+        self.custom_types.add(type_name, name)
+    }
     /// Get the display name of a registered custom type.
     #[inline(always)]
     pub fn get_custom_type(&self, key: &str) -> Option<&str> {

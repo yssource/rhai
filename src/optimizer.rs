@@ -9,8 +9,8 @@ use crate::func::hashing::get_hasher;
 use crate::tokenizer::{Span, Token};
 use crate::types::dynamic::AccessMode;
 use crate::{
-    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnPtr, Position, Scope,
-    StaticVec, AST, INT, INT_BITS,
+    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnPtr, Identifier,
+    Position, Scope, StaticVec, AST, INT, INT_BITS,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -46,7 +46,7 @@ struct OptimizerState<'a> {
     /// Has the [`AST`] been changed during this pass?
     changed: bool,
     /// Collection of constants to use for eager function evaluations.
-    variables: StaticVec<(String, AccessMode, Option<Dynamic>)>,
+    variables: StaticVec<(Identifier, AccessMode, Option<Dynamic>)>,
     /// Activate constants propagation?
     propagate_constants: bool,
     /// An [`Engine`] instance for eager function evaluation.
@@ -100,7 +100,7 @@ impl<'a> OptimizerState<'a> {
     #[inline(always)]
     pub fn push_var(
         &mut self,
-        name: impl Into<String>,
+        name: impl Into<Identifier>,
         access: AccessMode,
         value: Option<Dynamic>,
     ) {
@@ -1235,6 +1235,16 @@ fn optimize_top_level(
         lib,
         optimization_level,
     );
+
+    // Add constants from global modules
+    for (name, value) in engine
+        .global_modules
+        .iter()
+        .rev()
+        .flat_map(|m| m.iter_var())
+    {
+        state.push_var(name, AccessMode::ReadOnly, Some(value.clone()));
+    }
 
     // Add constants and variables from the scope
     for (name, constant, value) in scope.iter() {

@@ -165,11 +165,8 @@ impl Engine {
                 this_ptr,
                 level,
             };
-            match resolve_var(
-                expr.get_variable_name(true).expect("`Expr::Variable`"),
-                index,
-                &context,
-            ) {
+            let var_name = expr.get_variable_name(true).expect("`Expr::Variable`");
+            match resolve_var(var_name, index, &context) {
                 Ok(Some(mut result)) => {
                     result.set_access_mode(AccessMode::ReadOnly);
                     return Ok((result.into(), var_pos));
@@ -184,10 +181,18 @@ impl Engine {
         } else {
             // Find the variable in the scope
             let var_name = expr.get_variable_name(true).expect("`Expr::Variable`");
-            scope
-                .get_index(var_name)
-                .ok_or_else(|| ERR::ErrorVariableNotFound(var_name.to_string(), var_pos))?
-                .0
+
+            match scope.get_index(var_name) {
+                Some((index, _)) => index,
+                None => {
+                    return match self.global_modules.iter().find_map(|m| m.get_var(var_name)) {
+                        Some(val) => Ok((val.into(), var_pos)),
+                        None => {
+                            Err(ERR::ErrorVariableNotFound(var_name.to_string(), var_pos).into())
+                        }
+                    }
+                }
+            }
         };
 
         let val = scope.get_mut_by_index(index);

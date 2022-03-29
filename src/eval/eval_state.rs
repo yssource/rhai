@@ -28,7 +28,7 @@ pub struct EvalState<'a> {
     /// Stack of function resolution caches.
     fn_resolution_caches: StaticVec<FnResolutionCache>,
     /// Take care of the lifetime parameter
-    dummy: PhantomData<Option<&'a ()>>,
+    dummy: PhantomData<&'a ()>,
 }
 
 impl EvalState<'_> {
@@ -40,7 +40,7 @@ impl EvalState<'_> {
             always_search_scope: false,
             scope_level: 0,
             fn_resolution_caches: StaticVec::new_const(),
-            dummy: PhantomData::default(),
+            dummy: Default::default(),
         }
     }
     /// Get the number of function resolution cache(s) in the stack.

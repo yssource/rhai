@@ -464,30 +464,23 @@ impl Engine {
             // See if the function match print/debug (which requires special processing)
             return Ok(match name {
                 KEYWORD_PRINT => {
-                    if let Some(ref print) = self.print {
-                        let text = result.into_immutable_string().map_err(|typ| {
-                            let t = self.map_type_name(type_name::<ImmutableString>()).into();
-                            ERR::ErrorMismatchOutputType(t, typ.into(), pos)
-                        })?;
-                        (print(&text).into(), false)
-                    } else {
-                        (Dynamic::UNIT, false)
-                    }
+                    let text = result.into_immutable_string().map_err(|typ| {
+                        let t = self.map_type_name(type_name::<ImmutableString>()).into();
+                        ERR::ErrorMismatchOutputType(t, typ.into(), pos)
+                    })?;
+                    ((&*self.print)(&text).into(), false)
                 }
                 KEYWORD_DEBUG => {
-                    if let Some(ref debug) = self.debug {
-                        let text = result.into_immutable_string().map_err(|typ| {
-                            let t = self.map_type_name(type_name::<ImmutableString>()).into();
-                            ERR::ErrorMismatchOutputType(t, typ.into(), pos)
-                        })?;
-                        let source = match global.source.as_str() {
-                            "" => None,
-                            s => Some(s),
-                        };
-                        (debug(&text, source, pos).into(), false)
+                    let text = result.into_immutable_string().map_err(|typ| {
+                        let t = self.map_type_name(type_name::<ImmutableString>()).into();
+                        ERR::ErrorMismatchOutputType(t, typ.into(), pos)
+                    })?;
+                    let source = if global.source.is_empty() {
+                        None
                     } else {
-                        (Dynamic::UNIT, false)
-                    }
+                        Some(global.source.as_str())
+                    };
+                    ((&*self.debug)(&text, source, pos).into(), false)
                 }
                 _ => (result, is_method),
             });
