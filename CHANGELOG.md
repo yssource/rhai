@@ -34,6 +34,7 @@ Enhancements
 * `starts_with` and `ends_with` are added for strings.
 * Variables in modules registered via `register_global_module` can now be accessed in the global namespace.
 * `Dynamic::into_read_only` is added to convert a `Dynamic` value into constant.
+* `Module` now holds a collection of custom types with an API.
 
 
 Version 1.5.0

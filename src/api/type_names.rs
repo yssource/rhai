@@ -97,7 +97,6 @@ impl Engine {
                 #[cfg(feature = "no_module")]
                 return None;
             })
-            .or_else(|| self.custom_types.get(name))
             .unwrap_or_else(|| map_std_type_name(name, true))
     }
 
@@ -119,8 +118,18 @@ impl Engine {
             };
         }
 
-        self.custom_types
-            .get(name)
+        self.global_modules
+            .iter()
+            .find_map(|m| m.get_custom_type(name))
+            .or_else(|| {
+                #[cfg(not(feature = "no_module"))]
+                return self
+                    .global_sub_modules
+                    .iter()
+                    .find_map(|(_, m)| m.get_custom_type(name));
+                #[cfg(feature = "no_module")]
+                return None;
+            })
             .unwrap_or_else(|| match name {
                 "INT" => return type_name::<crate::INT>(),
                 #[cfg(not(feature = "no_float"))]
