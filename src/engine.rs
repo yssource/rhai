@@ -9,8 +9,7 @@ use crate::packages::{Package, StandardPackage};
 use crate::tokenizer::Token;
 use crate::types::dynamic::Union;
 use crate::{
-    Dynamic, Identifier, ImmutableString, Module, OptimizationLevel, Position, RhaiResult, Shared,
-    StaticVec,
+    Dynamic, Identifier, ImmutableString, Module, Position, RhaiResult, Shared, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -129,9 +128,6 @@ pub struct Engine {
     #[cfg(not(feature = "unchecked"))]
     pub(crate) progress: Option<Box<crate::func::native::OnProgressCallback>>,
 
-    /// Optimize the [`AST`][crate::AST] after compilation.
-    pub(crate) optimization_level: OptimizationLevel,
-
     /// Language options.
     pub(crate) options: LanguageOptions,
 
@@ -166,9 +162,6 @@ impl fmt::Debug for Engine {
 
         #[cfg(not(feature = "unchecked"))]
         f.field("progress", &self.progress.is_some());
-
-        #[cfg(not(feature = "no_optimize"))]
-        f.field("optimization_level", &self.optimization_level);
 
         f.field("options", &self.options);
 
@@ -273,8 +266,6 @@ impl Engine {
 
             #[cfg(not(feature = "unchecked"))]
             progress: None,
-
-            optimization_level: OptimizationLevel::default(),
 
             options: LanguageOptions::new(),
 

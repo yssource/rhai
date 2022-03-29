@@ -201,7 +201,11 @@ impl Engine {
         scope: &Scope,
         scripts: impl AsRef<[S]>,
     ) -> ParseResult<AST> {
-        self.compile_with_scope_and_optimization_level(scope, scripts, self.optimization_level)
+        self.compile_with_scope_and_optimization_level(
+            scope,
+            scripts,
+            self.options.optimization_level,
+        )
     }
     /// Join a list of strings and compile into an [`AST`] using own scope at a specific optimization level.
     ///
@@ -297,7 +301,12 @@ impl Engine {
 
         let mut peekable = stream.peekable();
         let mut state = ParseState::new(self, tokenizer_control);
-        self.parse_global_expr(&mut peekable, &mut state, scope, self.optimization_level)
+        self.parse_global_expr(
+            &mut peekable,
+            &mut state,
+            scope,
+            self.options.optimization_level,
+        )
     }
     /// Parse a JSON string into an [object map][crate::Map].
     /// This is a light-weight alternative to using, say,

@@ -1,12 +1,14 @@
 //! Settings for [`Engine`]'s language options.
 
-use crate::Engine;
+use crate::{Engine, OptimizationLevel};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
 /// A type containing all language options for the [`Engine`].
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct LanguageOptions {
+    /// Script optimization level.
+    pub optimization_level: OptimizationLevel,
     /// Is `if`-expression allowed?
     pub allow_if_expr: bool,
     /// Is `switch` expression allowed?
@@ -33,6 +35,11 @@ impl LanguageOptions {
     #[inline(always)]
     pub const fn new() -> Self {
         Self {
+            #[cfg(not(feature = "no_optimize"))]
+            optimization_level: OptimizationLevel::Simple,
+            #[cfg(feature = "no_optimize")]
+            optimization_level: (),
+
             allow_if_expr: true,
             allow_switch_expr: true,
             allow_stmt_expr: true,

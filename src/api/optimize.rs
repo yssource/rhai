@@ -9,7 +9,7 @@ impl Engine {
     /// Not available under `no_optimize`.
     #[inline(always)]
     pub fn set_optimization_level(&mut self, optimization_level: OptimizationLevel) -> &mut Self {
-        self.optimization_level = optimization_level;
+        self.options.optimization_level = optimization_level;
         self
     }
 
@@ -20,7 +20,7 @@ impl Engine {
     #[inline(always)]
     #[must_use]
     pub const fn optimization_level(&self) -> OptimizationLevel {
-        self.optimization_level
+        self.options.optimization_level
     }
 
     /// Optimize the [`AST`] with constants defined in an external Scope.
