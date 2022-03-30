@@ -417,20 +417,68 @@ impl Module {
     }
 
     /// Map a custom type to a friendly display name.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use rhai::Module;
+    /// #[derive(Clone)]
+    /// struct TestStruct {}
+    ///
+    /// let name = std::any::type_name::of::<TestStruct>());
+    ///
+    /// let mut module = Module::new();
+    ///
+    /// module.set_custom_type<TestStruct>("MyType");
+    ///
+    /// assert_eq!(module.get_custom_type(name, Some("MyType"));
+    /// ```
     #[inline(always)]
-    pub fn set_custom_type<T>(&mut self, name: &str) {
-        self.custom_types.add_type::<T>(name)
+    pub fn set_custom_type<T>(&mut self, name: &str) -> &mut Self {
+        self.custom_types.add_type::<T>(name);
+        self
     }
     /// Map a custom type to a friendly display name.
+    ///
+    /// ```
+    /// # use rhai::Module;
+    /// #[derive(Clone)]
+    /// struct TestStruct {}
+    ///
+    /// let name = std::any::type_name::of::<TestStruct>());
+    ///
+    /// let mut module = Module::new();
+    ///
+    /// module.set_custom_type_raw(name, "MyType");
+    ///
+    /// assert_eq!(module.get_custom_type(name, Some("MyType"));
+    /// ```
     #[inline(always)]
     pub fn set_custom_type_raw(
         &mut self,
         type_name: impl Into<Identifier>,
         name: impl Into<Identifier>,
-    ) {
-        self.custom_types.add(type_name, name)
+    ) -> &mut Self {
+        self.custom_types.add(type_name, name);
+        self
     }
     /// Get the display name of a registered custom type.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use rhai::Module;
+    /// #[derive(Clone)]
+    /// struct TestStruct {}
+    ///
+    /// let name = std::any::type_name::of::<TestStruct>());
+    ///
+    /// let mut module = Module::new();
+    ///
+    /// module.set_custom_type<TestStruct>("MyType");
+    ///
+    /// assert_eq!(module.get_custom_type(name, Some("MyType"));
+    /// ```
     #[inline(always)]
     pub fn get_custom_type(&self, key: &str) -> Option<&str> {
         self.custom_types.get(key)
