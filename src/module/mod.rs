@@ -423,15 +423,15 @@ impl Module {
     /// ```
     /// # use rhai::Module;
     /// #[derive(Clone)]
-    /// struct TestStruct {}
+    /// struct TestStruct;
     ///
-    /// let name = std::any::type_name::of::<TestStruct>());
+    /// let name = std::any::type_name::<TestStruct>();
     ///
     /// let mut module = Module::new();
     ///
-    /// module.set_custom_type<TestStruct>("MyType");
+    /// module.set_custom_type::<TestStruct>("MyType");
     ///
-    /// assert_eq!(module.get_custom_type(name, Some("MyType"));
+    /// assert_eq!(module.get_custom_type(name), Some("MyType"));
     /// ```
     #[inline(always)]
     pub fn set_custom_type<T>(&mut self, name: &str) -> &mut Self {
@@ -443,15 +443,15 @@ impl Module {
     /// ```
     /// # use rhai::Module;
     /// #[derive(Clone)]
-    /// struct TestStruct {}
+    /// struct TestStruct;
     ///
-    /// let name = std::any::type_name::of::<TestStruct>());
+    /// let name = std::any::type_name::<TestStruct>();
     ///
     /// let mut module = Module::new();
     ///
     /// module.set_custom_type_raw(name, "MyType");
     ///
-    /// assert_eq!(module.get_custom_type(name, Some("MyType"));
+    /// assert_eq!(module.get_custom_type(name), Some("MyType"));
     /// ```
     #[inline(always)]
     pub fn set_custom_type_raw(
@@ -469,15 +469,15 @@ impl Module {
     /// ```
     /// # use rhai::Module;
     /// #[derive(Clone)]
-    /// struct TestStruct {}
+    /// struct TestStruct;
     ///
-    /// let name = std::any::type_name::of::<TestStruct>());
+    /// let name = std::any::type_name::<TestStruct>();
     ///
     /// let mut module = Module::new();
     ///
-    /// module.set_custom_type<TestStruct>("MyType");
+    /// module.set_custom_type::<TestStruct>("MyType");
     ///
-    /// assert_eq!(module.get_custom_type(name, Some("MyType"));
+    /// assert_eq!(module.get_custom_type(name), Some("MyType"));
     /// ```
     #[inline(always)]
     pub fn get_custom_type(&self, key: &str) -> Option<&str> {
