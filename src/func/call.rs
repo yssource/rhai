@@ -1301,13 +1301,14 @@ impl Engine {
             }
         }
 
+        // Search for the root namespace
         let module = self
             .search_imports(global, state, namespace)
             .ok_or_else(|| ERR::ErrorModuleNotFound(namespace.to_string(), namespace.position()))?;
 
-        // First search in script-defined functions (can override built-in)
-        let func = match module.get_qualified_fn(hash) {
-            // Then search in Rust functions
+        // First search script-defined functions in namespace (can override built-in)
+        let mut func = match module.get_qualified_fn(hash) {
+            // Then search native Rust functions
             None => {
                 #[cfg(not(feature = "unchecked"))]
                 self.inc_operations(&mut global.num_operations, pos)?;
@@ -1319,6 +1320,41 @@ impl Engine {
             }
             r => r,
         };
+
+        // Check for `Dynamic` parameters.
+        //
+        // Note - This is done during every function call mismatch without cache,
+        //        so hopefully the number of arguments should not be too many
+        //        (expected because closures cannot be qualified).
+        if func.is_none() && !args.is_empty() {
+            let num_args = args.len();
+            let max_bitmask = 1usize << usize::min(num_args, MAX_DYNAMIC_PARAMETERS);
+            let mut bitmask = 1usize; // Bitmask of which parameter to replace with `Dynamic`
+
+            // Try all permutations with `Dynamic` wildcards
+            while bitmask < max_bitmask {
+                let hash_params = calc_fn_params_hash(args.iter().enumerate().map(|(i, a)| {
+                    let mask = 1usize << (num_args - i - 1);
+                    if bitmask & mask != 0 {
+                        // Replace with `Dynamic`
+                        TypeId::of::<Dynamic>()
+                    } else {
+                        a.type_id()
+                    }
+                }));
+                let hash_qualified_fn = combine_hashes(hash, hash_params);
+
+                #[cfg(not(feature = "unchecked"))]
+                self.inc_operations(&mut global.num_operations, pos)?;
+
+                if let Some(f) = module.get_qualified_fn(hash_qualified_fn) {
+                    func = Some(f);
+                    break;
+                }
+
+                bitmask += 1;
+            }
+        }
 
         // Clone first argument if the function is not a method after-all
         if !func.map(|f| f.is_method()).unwrap_or(true) {

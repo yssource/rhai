@@ -1,6 +1,15 @@
 Rhai Release Notes
 ==================
 
+Version 1.7.0
+=============
+
+Bug fixes
+---------
+
+* Functions with `Dynamic` parameters now work in qualified calls from `import`ed modules.
+
+
 Version 1.6.0
 =============
 

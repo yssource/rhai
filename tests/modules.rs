@@ -562,3 +562,29 @@ fn test_module_environ() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_module_dynamic() -> Result<(), Box<EvalAltResult>> {
+    fn test_fn(input: Dynamic, x: INT) -> Result<INT, Box<EvalAltResult>> {
+        let s = input.into_string().unwrap();
+        Ok(s.len() as INT + x)
+    }
+
+    let mut engine = rhai::Engine::new();
+    let mut module = Module::new();
+    module.set_native_fn("test", test_fn);
+
+    let mut static_modules = rhai::module_resolvers::StaticModuleResolver::new();
+    static_modules.insert("test", module);
+    engine.set_module_resolver(static_modules);
+    engine.register_result_fn("test2", test_fn);
+
+    assert_eq!(engine.eval::<INT>(r#"test2("test", 38);"#)?, 42);
+
+    assert_eq!(
+        engine.eval::<INT>(r#"import "test" as test; test::test("test", 38);"#)?,
+        42
+    );
+
+    Ok(())
+}
