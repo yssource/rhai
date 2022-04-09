@@ -15,6 +15,11 @@ Script-breaking changes
 * `split` now splits a string by whitespaces instead of splitting it into individual characters. This is more in line with common practices.
 * A new function `to_chars` for strings is added to split the string into individual characters.
 
+Enhancements
+------------
+
+* Strings are not directly iterable (via `for .. in`) yielding individual characters.
+
 
 Version 1.6.0
 =============

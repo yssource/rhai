@@ -316,8 +316,6 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Expr::FloatConstant(..) => "a floating-point number",
             Expr::CharConstant(..) => "a character",
-            Expr::StringConstant(..) => "a string",
-            Expr::InterpolatedString(..) => "a string",
             Expr::Map(..) => "an object map",
             _ => return Ok(self),
         };
