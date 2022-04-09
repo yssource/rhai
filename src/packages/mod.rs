@@ -8,7 +8,7 @@ mod bit_field;
 pub(crate) mod blob_basic;
 mod debugging;
 mod fn_basic;
-mod iter_basic;
+pub(crate) mod iter_basic;
 mod lang_core;
 mod logic;
 mod map_basic;
