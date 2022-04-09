@@ -9,6 +9,12 @@ Bug fixes
 
 * Functions with `Dynamic` parameters now work in qualified calls from `import`ed modules.
 
+Script-breaking changes
+-----------------------
+
+* `split` now splits a string by whitespaces instead of splitting it into individual characters. This is more in line with common practices.
+* A new function `to_chars` for strings is added to split the string into individual characters.
+
 
 Version 1.6.0
 =============
