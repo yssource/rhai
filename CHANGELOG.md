@@ -1,6 +1,10 @@
 Rhai Release Notes
 ==================
 
+Version 1.7.0
+=============
+
+
 Version 1.6.1
 =============
 
@@ -9,6 +13,7 @@ Bug fixes
 
 * Functions with `Dynamic` parameters now work in qualified calls from `import`ed modules.
 * `rhai-repl` now compiles with the new patch version of `rustyline`.
+* `rhai_codegen` dependency is now explicitly `1.4` or higher.
 
 Script-breaking changes
 -----------------------
