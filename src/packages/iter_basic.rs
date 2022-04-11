@@ -795,13 +795,13 @@ mod range_functions {
     /// Return `true` if the range is inclusive.
     #[rhai_fn(get = "is_inclusive", name = "is_inclusive", pure)]
     pub fn is_inclusive(range: &mut ExclusiveRange) -> bool {
-        let _range = range;
+        let _ = range;
         false
     }
     /// Return `true` if the range is exclusive.
     #[rhai_fn(get = "is_exclusive", name = "is_exclusive", pure)]
     pub fn is_exclusive(range: &mut ExclusiveRange) -> bool {
-        let _range = range;
+        let _ = range;
         true
     }
     /// Return the start of the inclusive range.
@@ -817,13 +817,13 @@ mod range_functions {
     /// Return `true` if the range is inclusive.
     #[rhai_fn(get = "is_inclusive", name = "is_inclusive", pure)]
     pub fn is_inclusive_inclusive(range: &mut InclusiveRange) -> bool {
-        let _range = range;
+        let _ = range;
         true
     }
     /// Return `true` if the range is exclusive.
     #[rhai_fn(get = "is_exclusive", name = "is_exclusive", pure)]
     pub fn is_exclusive_inclusive(range: &mut InclusiveRange) -> bool {
-        let _range = range;
+        let _ = range;
         false
     }
 }

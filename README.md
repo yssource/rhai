@@ -1,5 +1,5 @@
 Rhai - Embedded Scripting for Rust
-=================================
+==================================
 
 ![GitHub last commit](https://img.shields.io/github/last-commit/rhaiscript/rhai?logo=github)
 [![Build Status](https://github.com/rhaiscript/rhai/workflows/Build/badge.svg)](https://github.com/rhaiscript/rhai/actions)
@@ -66,7 +66,7 @@ Protected against attacks
 
 
 For those who actually want their own language
----------------------------------------------
+----------------------------------------------
 
 * Use as a [DSL](https://rhai.rs/book/engine/dsl.html).
 * Disable certain [language features](https://rhai.rs/book/engine/options.html#language-features) such as [looping](https://rhai.rs/book/engine/disable-looping.html).

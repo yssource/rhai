@@ -469,9 +469,7 @@ impl Hash for Dynamic {
             #[cfg(feature = "sync")]
             Union::Shared(ref cell, ..) => (*cell.read().unwrap()).hash(state),
 
-            Union::Variant(ref v, ..) => {
-                let _v = v;
-
+            Union::Variant(ref _v, ..) => {
                 #[cfg(not(feature = "only_i32"))]
                 #[cfg(not(feature = "only_i64"))]
                 {

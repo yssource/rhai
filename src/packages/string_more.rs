@@ -76,7 +76,7 @@ mod string_functions {
 
     #[rhai_fn(name = "+")]
     pub fn add_append_unit(string: ImmutableString, item: ()) -> ImmutableString {
-        let _item = item;
+        let _ = item;
         string
     }
     #[rhai_fn(name = "+")]

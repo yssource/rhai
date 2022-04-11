@@ -321,7 +321,7 @@ fn debug_callback(
     let mut input = String::new();
 
     loop {
-        print!("rhai-dbg> ");
+        print!("dbg> ");
 
         stdout().flush().expect("couldn't flush stdout");
 

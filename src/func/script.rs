@@ -38,13 +38,11 @@ impl Engine {
         #[inline(never)]
         fn make_error(
             name: String,
-            fn_def: &ScriptFnDef,
+            _fn_def: &ScriptFnDef,
             global: &GlobalRuntimeState,
             err: RhaiError,
             pos: Position,
         ) -> RhaiResult {
-            let _fn_def = fn_def;
-
             #[cfg(not(feature = "no_module"))]
             let source = _fn_def
                 .environ
@@ -232,13 +230,11 @@ impl Engine {
     #[must_use]
     pub(crate) fn has_script_fn(
         &self,
-        global: Option<&GlobalRuntimeState>,
+        _global: Option<&GlobalRuntimeState>,
         state: &mut EvalState,
         lib: &[&Module],
         hash_script: u64,
     ) -> bool {
-        let _global = global;
-
         let cache = state.fn_resolution_cache_mut();
 
         if let Some(result) = cache.get(&hash_script).map(|v| v.is_some()) {

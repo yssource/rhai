@@ -127,16 +127,14 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         target: &mut Target,
         root: (&str, Position),
-        parent: &Expr,
+        _parent: &Expr,
         rhs: &Expr,
-        parent_options: ASTFlags,
+        _parent_options: ASTFlags,
         idx_values: &mut StaticVec<super::ChainArgument>,
         chain_type: ChainType,
         level: usize,
         new_val: Option<((Dynamic, Position), (Option<OpAssignment>, Position))>,
     ) -> RhaiResultOf<(Dynamic, bool)> {
-        let _parent = parent;
-        let _parent_options = parent_options;
         let is_ref_mut = target.is_ref();
 
         // Pop the last index value
@@ -671,15 +669,13 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
         parent_options: ASTFlags,
-        parent_chain_type: ChainType,
+        _parent_chain_type: ChainType,
         idx_values: &mut StaticVec<super::ChainArgument>,
         size: usize,
         level: usize,
     ) -> RhaiResultOf<()> {
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(&mut global.num_operations, expr.position())?;
-
-        let _parent_chain_type = parent_chain_type;
 
         match expr {
             #[cfg(not(feature = "no_object"))]
@@ -850,17 +846,14 @@ impl Engine {
         state: &mut EvalState,
         lib: &[&Module],
         target: &'t mut Dynamic,
-        idx: Dynamic,
+        mut idx: Dynamic,
         idx_pos: Position,
-        add_if_not_found: bool,
+        _add_if_not_found: bool,
         use_indexers: bool,
         level: usize,
     ) -> RhaiResultOf<Target<'t>> {
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(&mut global.num_operations, Position::NONE)?;
-
-        let mut idx = idx;
-        let _add_if_not_found = add_if_not_found;
 
         match target {
             #[cfg(not(feature = "no_index"))]

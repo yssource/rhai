@@ -195,7 +195,7 @@ impl Engine {
     #[must_use]
     fn resolve_fn<'s>(
         &self,
-        global: &GlobalRuntimeState,
+        _global: &GlobalRuntimeState,
         state: &'s mut EvalState,
         lib: &[&Module],
         fn_name: &str,
@@ -204,8 +204,6 @@ impl Engine {
         allow_dynamic: bool,
         is_op_assignment: bool,
     ) -> Option<&'s FnResolutionCacheEntry> {
-        let _global = global;
-
         if hash_script == 0 {
             return None;
         }
@@ -576,7 +574,7 @@ impl Engine {
     /// all others are silently replaced by `()`!
     pub(crate) fn exec_fn_call(
         &self,
-        scope: Option<&mut Scope>,
+        _scope: Option<&mut Scope>,
         global: &mut GlobalRuntimeState,
         state: &mut EvalState,
         lib: &[&Module],
@@ -584,7 +582,7 @@ impl Engine {
         hashes: FnCallHashes,
         args: &mut FnCallArgs,
         is_ref_mut: bool,
-        is_method_call: bool,
+        _is_method_call: bool,
         pos: Position,
         level: usize,
     ) -> RhaiResultOf<(Dynamic, bool)> {
@@ -599,9 +597,6 @@ impl Engine {
         // Check for data race.
         #[cfg(not(feature = "no_closure"))]
         ensure_no_data_race(fn_name, args, is_ref_mut)?;
-
-        let _scope = scope;
-        let _is_method_call = is_method_call;
 
         // These may be redirected from method style calls.
         match fn_name {
@@ -1418,11 +1413,9 @@ impl Engine {
         state: &mut EvalState,
         lib: &[&Module],
         script: &str,
-        pos: Position,
+        _pos: Position,
         level: usize,
     ) -> RhaiResult {
-        let _pos = pos;
-
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(&mut global.num_operations, _pos)?;
 
