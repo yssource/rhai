@@ -3,7 +3,6 @@ use rhai::{Dynamic, Engine, EvalAltResult, Module, Scope, AST, INT};
 use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
 use rustyline::{Cmd, Editor, Event, EventHandler, KeyCode, KeyEvent, Modifiers, Movement};
-use smallvec::smallvec;
 
 use std::{env, fs::File, io::Read, path::Path, process::exit};
 
@@ -223,40 +222,40 @@ fn setup_editor() -> Editor<()> {
     // On Windows, Esc clears the input buffer
     #[cfg(target_family = "windows")]
     rl.bind_sequence(
-        Event::KeySeq(smallvec![KeyEvent(KeyCode::Esc, Modifiers::empty())]),
+        Event::KeySeq(vec![KeyEvent(KeyCode::Esc, Modifiers::empty())]),
         EventHandler::Simple(Cmd::Kill(Movement::WholeBuffer)),
     );
     // On Windows, Ctrl-Z is undo
     #[cfg(target_family = "windows")]
     rl.bind_sequence(
-        Event::KeySeq(smallvec![KeyEvent::ctrl('z')]),
+        Event::KeySeq(vec![KeyEvent::ctrl('z')]),
         EventHandler::Simple(Cmd::Undo(1)),
     );
     // Map Ctrl-Enter to insert a new line - bypass need for `\` continuation
     rl.bind_sequence(
-        Event::KeySeq(smallvec![KeyEvent(KeyCode::Char('J'), Modifiers::CTRL)]),
+        Event::KeySeq(vec![KeyEvent(KeyCode::Char('J'), Modifiers::CTRL)]),
         EventHandler::Simple(Cmd::Newline),
     );
     rl.bind_sequence(
-        Event::KeySeq(smallvec![KeyEvent(KeyCode::Enter, Modifiers::CTRL)]),
+        Event::KeySeq(vec![KeyEvent(KeyCode::Enter, Modifiers::CTRL)]),
         EventHandler::Simple(Cmd::Newline),
     );
     // Map Ctrl-Home and Ctrl-End for beginning/end of input
     rl.bind_sequence(
-        Event::KeySeq(smallvec![KeyEvent(KeyCode::Home, Modifiers::CTRL)]),
+        Event::KeySeq(vec![KeyEvent(KeyCode::Home, Modifiers::CTRL)]),
         EventHandler::Simple(Cmd::Move(Movement::BeginningOfBuffer)),
     );
     rl.bind_sequence(
-        Event::KeySeq(smallvec![KeyEvent(KeyCode::End, Modifiers::CTRL)]),
+        Event::KeySeq(vec![KeyEvent(KeyCode::End, Modifiers::CTRL)]),
         EventHandler::Simple(Cmd::Move(Movement::EndOfBuffer)),
     );
     // Map Ctrl-Up and Ctrl-Down to skip up/down the history, even through multi-line histories
     rl.bind_sequence(
-        Event::KeySeq(smallvec![KeyEvent(KeyCode::Down, Modifiers::CTRL)]),
+        Event::KeySeq(vec![KeyEvent(KeyCode::Down, Modifiers::CTRL)]),
         EventHandler::Simple(Cmd::NextHistory),
     );
     rl.bind_sequence(
-        Event::KeySeq(smallvec![KeyEvent(KeyCode::Up, Modifiers::CTRL)]),
+        Event::KeySeq(vec![KeyEvent(KeyCode::Up, Modifiers::CTRL)]),
         EventHandler::Simple(Cmd::PreviousHistory),
     );
 
@@ -371,11 +370,7 @@ fn main() {
             input.clear();
 
             loop {
-                let prompt = if input.is_empty() {
-                    "rhai-repl> "
-                } else {
-                    "         > "
-                };
+                let prompt = if input.is_empty() { "repl> " } else { "    > " };
 
                 match rl.readline(prompt) {
                     // Line continuation

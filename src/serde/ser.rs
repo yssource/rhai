@@ -417,9 +417,9 @@ impl SerializeSeq for DynamicSerializer {
     fn serialize_element<T: ?Sized + Serialize>(&mut self, _value: &T) -> RhaiResultOf<()> {
         #[cfg(not(feature = "no_index"))]
         {
-            let _value = _value.serialize(&mut *self)?;
+            let value = _value.serialize(&mut *self)?;
             let arr = self._value.downcast_mut::<crate::Array>().unwrap();
-            arr.push(_value);
+            arr.push(value);
             Ok(())
         }
         #[cfg(feature = "no_index")]
@@ -452,9 +452,9 @@ impl SerializeTuple for DynamicSerializer {
     fn serialize_element<T: ?Sized + Serialize>(&mut self, _value: &T) -> RhaiResultOf<()> {
         #[cfg(not(feature = "no_index"))]
         {
-            let _value = _value.serialize(&mut *self)?;
+            let value = _value.serialize(&mut *self)?;
             let arr = self._value.downcast_mut::<crate::Array>().unwrap();
-            arr.push(_value);
+            arr.push(value);
             Ok(())
         }
         #[cfg(feature = "no_index")]
@@ -486,9 +486,9 @@ impl SerializeTupleStruct for DynamicSerializer {
     fn serialize_field<T: ?Sized + Serialize>(&mut self, _value: &T) -> RhaiResultOf<()> {
         #[cfg(not(feature = "no_index"))]
         {
-            let _value = _value.serialize(&mut *self)?;
+            let value = _value.serialize(&mut *self)?;
             let arr = self._value.downcast_mut::<crate::Array>().unwrap();
-            arr.push(_value);
+            arr.push(value);
             Ok(())
         }
         #[cfg(feature = "no_index")]
@@ -540,9 +540,9 @@ impl SerializeMap for DynamicSerializer {
                 .map_err(|typ| {
                     ERR::ErrorMismatchDataType("string".into(), typ.into(), Position::NONE)
                 })?;
-            let _value = _value.serialize(&mut *self)?;
+            let value = _value.serialize(&mut *self)?;
             let map = self._value.downcast_mut::<crate::Map>().unwrap();
-            map.insert(key.into(), _value);
+            map.insert(key.into(), value);
             Ok(())
         }
         #[cfg(feature = "no_object")]
@@ -561,13 +561,13 @@ impl SerializeMap for DynamicSerializer {
     ) -> RhaiResultOf<()> {
         #[cfg(not(feature = "no_object"))]
         {
-            let _key: Dynamic = _key.serialize(&mut *self)?;
-            let _key = _key.into_immutable_string().map_err(|typ| {
+            let key: Dynamic = _key.serialize(&mut *self)?;
+            let key = key.into_immutable_string().map_err(|typ| {
                 ERR::ErrorMismatchDataType("string".into(), typ.into(), Position::NONE)
             })?;
-            let _value = _value.serialize(&mut *self)?;
+            let value = _value.serialize(&mut *self)?;
             let map = self._value.downcast_mut::<crate::Map>().unwrap();
-            map.insert(_key.into(), _value);
+            map.insert(key.into(), value);
             Ok(())
         }
         #[cfg(feature = "no_object")]
@@ -603,9 +603,9 @@ impl SerializeStruct for DynamicSerializer {
     ) -> RhaiResultOf<()> {
         #[cfg(not(feature = "no_object"))]
         {
-            let _value = _value.serialize(&mut *self)?;
+            let value = _value.serialize(&mut *self)?;
             let map = self._value.downcast_mut::<crate::Map>().unwrap();
-            map.insert(_key.into(), _value);
+            map.insert(_key.into(), value);
             Ok(())
         }
         #[cfg(feature = "no_object")]

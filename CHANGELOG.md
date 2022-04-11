@@ -1,8 +1,35 @@
 Rhai Release Notes
 ==================
 
+Version 1.6.1
+=============
+
+Bug fixes
+---------
+
+* Functions with `Dynamic` parameters now work in qualified calls from `import`ed modules.
+* `rhai-repl` now compiles with the new patch version of `rustyline`.
+
+Script-breaking changes
+-----------------------
+
+* `split` now splits a string by whitespaces instead of splitting it into individual characters. This is more in line with common practices.
+* A new function `to_chars` for strings is added to split the string into individual characters.
+
+Enhancements
+------------
+
+* Strings are now directly iterable (via `for .. in`) yielding individual characters.
+
+
 Version 1.6.0
 =============
+
+This version, in particular, fixes a plugin macro hygiene error for the nightly compiler:
+
+```text
+error[E0425]: cannot find value `args` in this scope
+```
 
 Compiler version
 ----------------
@@ -12,6 +39,7 @@ Compiler version
 Bug fixes
 ---------
 
+* Fixed macro hygiene error with nightly compiler.
 * Invalid property or method access such as `a.b::c.d` or `a.b::func()` no longer panics but properly returns a syntax error.
 * `Scope::is_constant` now returns the correct value.
 * Exporting a variable that contains a local function pointer (including anonymous function or closure) now raises a runtime error.

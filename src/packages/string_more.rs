@@ -76,7 +76,7 @@ mod string_functions {
 
     #[rhai_fn(name = "+")]
     pub fn add_append_unit(string: ImmutableString, item: ()) -> ImmutableString {
-        let _item = item;
+        let _ = item;
         string
     }
     #[rhai_fn(name = "+")]
@@ -1210,22 +1210,6 @@ mod string_functions {
     pub mod arrays {
         use crate::{Array, ImmutableString};
 
-        /// Return an array containing all the characters of the string.
-        ///
-        /// # Example
-        ///
-        /// ```rhai
-        /// let text = "hello";
-        ///
-        /// print(text.split());        // prints "['h', 'e', 'l', 'l', 'o']"
-        #[rhai_fn(name = "split")]
-        pub fn chars(string: &str) -> Array {
-            if string.is_empty() {
-                Array::new()
-            } else {
-                string.chars().map(Into::into).collect()
-            }
-        }
         /// Split the string into two at the specified `index` position and return it both strings
         /// as an array.
         ///
@@ -1273,6 +1257,40 @@ mod string_functions {
                 let prefix: String = string.chars().take(index as usize).collect();
                 let prefix_len = prefix.len();
                 vec![prefix.into(), string[prefix_len..].into()]
+            }
+        }
+        /// Return an array containing all the characters of the string.
+        ///
+        /// # Example
+        ///
+        /// ```rhai
+        /// let text = "hello";
+        ///
+        /// print(text.to_chars());     // prints "['h', 'e', 'l', 'l', 'o']"
+        /// ```
+        #[rhai_fn(name = "to_chars")]
+        pub fn to_chars(string: &str) -> Array {
+            if string.is_empty() {
+                Array::new()
+            } else {
+                string.chars().map(Into::into).collect()
+            }
+        }
+        /// Split the string into segments based on whitespaces, returning an array of the segments.
+        ///
+        /// # Example
+        ///
+        /// ```rhai
+        /// let text = "hello, world! hello, foo!";
+        ///
+        /// print(text.split());        // prints ["hello,", "world!", "hello,", "foo!"]
+        /// ```
+        #[rhai_fn(name = "split")]
+        pub fn split_whitespace(string: &str) -> Array {
+            if string.is_empty() {
+                Array::new()
+            } else {
+                string.split_whitespace().map(Into::into).collect()
             }
         }
         /// Split the string into segments based on a `delimiter` string, returning an array of the segments.

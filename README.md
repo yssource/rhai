@@ -1,5 +1,5 @@
 Rhai - Embedded Scripting for Rust
-=================================
+==================================
 
 ![GitHub last commit](https://img.shields.io/github/last-commit/rhaiscript/rhai?logo=github)
 [![Build Status](https://github.com/rhaiscript/rhai/workflows/Build/badge.svg)](https://github.com/rhaiscript/rhai/actions)
@@ -11,6 +11,7 @@ Rhai - Embedded Scripting for Rust
 [![VS Code plugin installs](https://img.shields.io/visual-studio-marketplace/i/rhaiscript.vscode-rhai?logo=visual-studio-code&label=vs%20code)](https://marketplace.visualstudio.com/items?itemName=rhaiscript.vscode-rhai)
 [![Sublime Text package downloads](https://img.shields.io/packagecontrol/dt/Rhai.svg?logo=sublime-text&label=sublime%20text)](https://packagecontrol.io/packages/Rhai)
 [![Discord Chat](https://img.shields.io/discord/767611025456889857.svg?logo=discord&label=discord)](https://discord.gg/HquqbYFcZ9)
+[![Forum](https://img.shields.io/discourse/topics?server=https%3A%2F%2Frhai.discourse.group&logo=discourse&label=forum)](https://rhai.discourse.group/)
 [![Zulip Chat](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg?logo=zulip)](https://rhaiscript.zulipchat.com)
 [![Reddit Channel](https://img.shields.io/reddit/subreddit-subscribers/Rhai?logo=reddit&label=reddit)](https://www.reddit.com/r/Rhai)
 
@@ -65,7 +66,7 @@ Protected against attacks
 
 
 For those who actually want their own language
----------------------------------------------
+----------------------------------------------
 
 * Use as a [DSL](https://rhai.rs/book/engine/dsl.html).
 * Disable certain [language features](https://rhai.rs/book/engine/options.html#language-features) such as [looping](https://rhai.rs/book/engine/disable-looping.html).

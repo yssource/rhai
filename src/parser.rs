@@ -316,8 +316,6 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Expr::FloatConstant(..) => "a floating-point number",
             Expr::CharConstant(..) => "a character",
-            Expr::StringConstant(..) => "a string",
-            Expr::InterpolatedString(..) => "a string",
             Expr::Map(..) => "an object map",
             _ => return Ok(self),
         };
@@ -3506,11 +3504,9 @@ impl Engine {
         &self,
         input: &mut TokenStream,
         state: &mut ParseState,
-        scope: &Scope,
-        optimization_level: OptimizationLevel,
+        _scope: &Scope,
+        _optimization_level: OptimizationLevel,
     ) -> ParseResult<AST> {
-        let _scope = scope;
-        let _optimization_level = optimization_level;
         let mut functions = BTreeMap::new();
 
         let settings = ParseSettings {
@@ -3554,7 +3550,7 @@ impl Engine {
             statements,
             #[cfg(not(feature = "no_function"))]
             StaticVec::new_const(),
-            optimization_level,
+            _optimization_level,
         ));
 
         #[cfg(feature = "no_optimize")]
@@ -3632,12 +3628,9 @@ impl Engine {
         &self,
         input: &mut TokenStream,
         state: &mut ParseState,
-        scope: &Scope,
-        optimization_level: OptimizationLevel,
+        _scope: &Scope,
+        _optimization_level: OptimizationLevel,
     ) -> ParseResult<AST> {
-        let _scope = scope;
-        let _optimization_level = optimization_level;
-
         let (statements, _lib) = self.parse_global_level(input, state)?;
 
         #[cfg(not(feature = "no_optimize"))]
@@ -3647,7 +3640,7 @@ impl Engine {
             statements,
             #[cfg(not(feature = "no_function"))]
             _lib,
-            optimization_level,
+            _optimization_level,
         ));
 
         #[cfg(feature = "no_optimize")]

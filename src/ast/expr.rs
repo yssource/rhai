@@ -636,9 +636,7 @@ impl Expr {
     /// `non_qualified` is ignored under `no_module`.
     #[inline]
     #[must_use]
-    pub(crate) fn is_variable_access(&self, non_qualified: bool) -> bool {
-        let _non_qualified = non_qualified;
-
+    pub(crate) fn is_variable_access(&self, _non_qualified: bool) -> bool {
         match self {
             #[cfg(not(feature = "no_module"))]
             Self::Variable(x, ..) if _non_qualified && !x.1.is_empty() => false,
@@ -651,9 +649,7 @@ impl Expr {
     /// `non_qualified` is ignored under `no_module`.
     #[inline]
     #[must_use]
-    pub(crate) fn get_variable_name(&self, non_qualified: bool) -> Option<&str> {
-        let _non_qualified = non_qualified;
-
+    pub(crate) fn get_variable_name(&self, _non_qualified: bool) -> Option<&str> {
         match self {
             #[cfg(not(feature = "no_module"))]
             Self::Variable(x, ..) if _non_qualified && !x.1.is_empty() => None,

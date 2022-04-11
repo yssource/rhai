@@ -1,5 +1,6 @@
 use crate::plugin::*;
 use crate::{def_package, FnPtr, INT};
+use std::any::TypeId;
 use std::fmt::{Binary, LowerHex, Octal};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -20,6 +21,12 @@ def_package! {
 
         combine_with_exported_module!(lib, "print_debug", print_debug_functions);
         combine_with_exported_module!(lib, "number_formatting", number_formatting);
+
+        // Register characters iterator
+        #[cfg(not(feature = "no_index"))]
+        lib.set_iter(TypeId::of::<ImmutableString>(), |value| Box::new(
+            value.cast::<ImmutableString>().chars().map(Into::into).collect::<crate::Array>().into_iter()
+        ));
     }
 }
 

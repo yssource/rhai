@@ -16,9 +16,7 @@ impl Engine {
     ///
     /// Panics if any interior data is shared (should never happen).
     #[cfg(not(feature = "unchecked"))]
-    pub(crate) fn calc_data_sizes(value: &Dynamic, top: bool) -> (usize, usize, usize) {
-        let _top = top;
-
+    pub(crate) fn calc_data_sizes(value: &Dynamic, _top: bool) -> (usize, usize, usize) {
         match value.0 {
             #[cfg(not(feature = "no_index"))]
             Union::Array(ref arr, ..) => {

@@ -1,3 +1,4 @@
+use crate::packages::iter_basic::{BitRange, CharsStream, StepRange};
 use crate::{
     Engine, ExclusiveRange, FnPtr, ImmutableString, InclusiveRange, Position, RhaiError, ERR,
 };
@@ -63,6 +64,41 @@ fn map_std_type_name(name: &str, shorthands: bool) -> &str {
             "RangeInclusive<i32>"
         } else {
             "RangeInclusive<i64>"
+        };
+    }
+    if name == type_name::<BitRange>() {
+        return if shorthands { "range" } else { "BitRange" };
+    }
+    if name == type_name::<CharsStream>() {
+        return if shorthands { "range" } else { "CharStream" };
+    }
+
+    let step_range_name = type_name::<StepRange<u8>>();
+    let step_range_name = &step_range_name[..step_range_name.len() - 3];
+
+    if name.starts_with(step_range_name) && name.ends_with('>') {
+        return if shorthands {
+            "range"
+        } else {
+            let step_range_name = step_range_name.split("::").last().unwrap();
+            &step_range_name[..step_range_name.len() - 1]
+        };
+    }
+
+    #[cfg(not(feature = "no_float"))]
+    if name == type_name::<crate::packages::iter_basic::float::StepFloatRange>() {
+        return if shorthands {
+            "range"
+        } else {
+            "StepFloatRange"
+        };
+    }
+    #[cfg(feature = "decimal")]
+    if name == type_name::<crate::packages::iter_basic::decimal::StepDecimalRange>() {
+        return if shorthands {
+            "range"
+        } else {
+            "StepDecimalRange"
         };
     }
 

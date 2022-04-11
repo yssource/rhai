@@ -17,7 +17,7 @@ use std::ops::{Add, Sub};
 
 // Range iterator with step
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-struct StepRange<T>(T, T, T)
+pub struct StepRange<T>(T, T, T)
 where
     T: Variant + Copy + PartialOrd + Add<Output = T> + Sub<Output = T>;
 
@@ -115,7 +115,7 @@ impl<T> FusedIterator for StepRange<T> where
 
 // Bit-field iterator with step
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-struct BitRange(INT, INT, usize);
+pub struct BitRange(INT, INT, usize);
 
 impl BitRange {
     pub fn new(value: INT, from: INT, len: INT) -> RhaiResultOf<Self> {
@@ -166,7 +166,7 @@ impl ExactSizeIterator for BitRange {
 
 // String iterator over characters
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
-struct CharsStream(Vec<char>, usize);
+pub struct CharsStream(Vec<char>, usize);
 
 impl CharsStream {
     pub fn new(string: &str, from: INT, len: INT) -> Self {
@@ -235,6 +235,134 @@ impl ExactSizeIterator for CharsStream {
     fn len(&self) -> usize {
         self.0.len() - self.1
     }
+}
+
+#[cfg(not(feature = "no_float"))]
+pub mod float {
+    use super::*;
+    use crate::FLOAT;
+
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    pub struct StepFloatRange(FLOAT, FLOAT, FLOAT);
+
+    impl StepFloatRange {
+        pub fn new(from: FLOAT, to: FLOAT, step: FLOAT) -> RhaiResultOf<Self> {
+            #[cfg(not(feature = "unchecked"))]
+            if step == 0.0 {
+                return Err(crate::ERR::ErrorInFunctionCall(
+                    "range".to_string(),
+                    "".to_string(),
+                    crate::ERR::ErrorArithmetic(
+                        "step value cannot be zero".to_string(),
+                        Position::NONE,
+                    )
+                    .into(),
+                    Position::NONE,
+                )
+                .into());
+            }
+
+            Ok(Self(from, to, step))
+        }
+    }
+
+    impl Iterator for StepFloatRange {
+        type Item = FLOAT;
+
+        fn next(&mut self) -> Option<FLOAT> {
+            if self.0 == self.1 {
+                None
+            } else if self.0 < self.1 {
+                #[cfg(not(feature = "unchecked"))]
+                if self.2 < 0.0 {
+                    return None;
+                }
+
+                let v = self.0;
+                let n = self.0 + self.2;
+
+                self.0 = if n >= self.1 { self.1 } else { n };
+                Some(v)
+            } else {
+                #[cfg(not(feature = "unchecked"))]
+                if self.2 > 0.0 {
+                    return None;
+                }
+
+                let v = self.0;
+                let n = self.0 + self.2;
+
+                self.0 = if n <= self.1 { self.1 } else { n };
+                Some(v)
+            }
+        }
+    }
+
+    impl FusedIterator for StepFloatRange {}
+}
+
+#[cfg(feature = "decimal")]
+pub mod decimal {
+    use super::*;
+    use rust_decimal::Decimal;
+
+    #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+    pub struct StepDecimalRange(Decimal, Decimal, Decimal);
+
+    impl StepDecimalRange {
+        pub fn new(from: Decimal, to: Decimal, step: Decimal) -> RhaiResultOf<Self> {
+            #[cfg(not(feature = "unchecked"))]
+            if step.is_zero() {
+                return Err(crate::ERR::ErrorInFunctionCall(
+                    "range".to_string(),
+                    "".to_string(),
+                    crate::ERR::ErrorArithmetic(
+                        "step value cannot be zero".to_string(),
+                        Position::NONE,
+                    )
+                    .into(),
+                    Position::NONE,
+                )
+                .into());
+            }
+
+            Ok(Self(from, to, step))
+        }
+    }
+
+    impl Iterator for StepDecimalRange {
+        type Item = Decimal;
+
+        fn next(&mut self) -> Option<Decimal> {
+            if self.0 == self.1 {
+                None
+            } else if self.0 < self.1 {
+                #[cfg(not(feature = "unchecked"))]
+                if self.2.is_sign_negative() {
+                    return None;
+                }
+
+                let v = self.0;
+                let n = self.0 + self.2;
+
+                self.0 = if n >= self.1 { self.1 } else { n };
+                Some(v)
+            } else {
+                #[cfg(not(feature = "unchecked"))]
+                if self.2.is_sign_positive() {
+                    return None;
+                }
+
+                let v = self.0;
+                let n = self.0 + self.2;
+
+                self.0 = if n <= self.1 { self.1 } else { n };
+                Some(v)
+            }
+        }
+    }
+
+    impl FusedIterator for StepDecimalRange {}
 }
 
 macro_rules! reg_range {
@@ -326,62 +454,9 @@ def_package! {
 
         #[cfg(not(feature = "no_float"))]
         {
-            use crate::FLOAT;
+            lib.set_iterator::<float::StepFloatRange>();
 
-            #[derive(Debug, Clone, Copy, PartialEq)]
-            struct StepFloatRange(FLOAT, FLOAT, FLOAT);
-
-            impl StepFloatRange {
-                pub fn new(from: FLOAT, to: FLOAT, step: FLOAT) -> RhaiResultOf<Self> {
-                    #[cfg(not(feature = "unchecked"))]
-                    if step == 0.0 {
-                        return Err(crate::ERR::ErrorInFunctionCall("range".to_string(), "".to_string(),
-                            crate::ERR::ErrorArithmetic("step value cannot be zero".to_string(), Position::NONE).into(),
-                            Position::NONE,
-                        ).into());
-                    }
-
-                    Ok(Self(from, to, step))
-                }
-            }
-
-            impl Iterator for StepFloatRange {
-                type Item = FLOAT;
-
-                fn next(&mut self) -> Option<FLOAT> {
-                    if self.0 == self.1 {
-                        None
-                    } else if self.0 < self.1 {
-                        #[cfg(not(feature = "unchecked"))]
-                        if self.2 < 0.0 {
-                            return None;
-                        }
-
-                        let v = self.0;
-                        let n = self.0 + self.2;
-
-                        self.0 = if n >= self.1 { self.1 } else { n };
-                        Some(v)
-                    } else {
-                        #[cfg(not(feature = "unchecked"))]
-                        if self.2 > 0.0 {
-                            return None;
-                        }
-
-                        let v = self.0;
-                        let n = self.0 + self.2;
-
-                        self.0 = if n <= self.1 { self.1 } else { n };
-                        Some(v)
-                    }
-                }
-            }
-
-            impl FusedIterator for StepFloatRange {}
-
-            lib.set_iterator::<StepFloatRange>();
-
-            let _hash = lib.set_native_fn("range", StepFloatRange::new);
+            let _hash = lib.set_native_fn("range", float::StepFloatRange::new);
             #[cfg(feature = "metadata")]
             lib.update_fn_metadata_with_comments(
                 _hash,
@@ -408,62 +483,9 @@ def_package! {
 
         #[cfg(feature = "decimal")]
         {
-            use rust_decimal::Decimal;
+            lib.set_iterator::<decimal::StepDecimalRange>();
 
-            #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-            struct StepDecimalRange(Decimal, Decimal, Decimal);
-
-            impl StepDecimalRange {
-                pub fn new(from: Decimal, to: Decimal, step: Decimal) -> RhaiResultOf<Self> {
-                    #[cfg(not(feature = "unchecked"))]
-                    if step.is_zero() {
-                        return Err(crate::ERR::ErrorInFunctionCall("range".to_string(), "".to_string(),
-                            crate::ERR::ErrorArithmetic("step value cannot be zero".to_string(), Position::NONE).into(),
-                            Position::NONE,
-                        ).into());
-                    }
-
-                    Ok(Self(from, to, step))
-                }
-            }
-
-            impl Iterator for StepDecimalRange {
-                type Item = Decimal;
-
-                fn next(&mut self) -> Option<Decimal> {
-                    if self.0 == self.1 {
-                        None
-                    } else if self.0 < self.1 {
-                        #[cfg(not(feature = "unchecked"))]
-                        if self.2.is_sign_negative() {
-                            return None;
-                        }
-
-                        let v = self.0;
-                        let n = self.0 + self.2;
-
-                        self.0 = if n >= self.1 { self.1 } else { n };
-                        Some(v)
-                    } else {
-                        #[cfg(not(feature = "unchecked"))]
-                        if self.2.is_sign_positive() {
-                            return None;
-                        }
-
-                        let v = self.0;
-                        let n = self.0 + self.2;
-
-                        self.0 = if n <= self.1 { self.1 } else { n };
-                        Some(v)
-                    }
-                }
-            }
-
-            impl FusedIterator for StepDecimalRange {}
-
-            lib.set_iterator::<StepDecimalRange>();
-
-            let _hash = lib.set_native_fn("range", StepDecimalRange::new);
+            let _hash = lib.set_native_fn("range", decimal::StepDecimalRange::new);
             #[cfg(feature = "metadata")]
             lib.update_fn_metadata_with_comments(
                 _hash,
@@ -773,13 +795,13 @@ mod range_functions {
     /// Return `true` if the range is inclusive.
     #[rhai_fn(get = "is_inclusive", name = "is_inclusive", pure)]
     pub fn is_inclusive(range: &mut ExclusiveRange) -> bool {
-        let _range = range;
+        let _ = range;
         false
     }
     /// Return `true` if the range is exclusive.
     #[rhai_fn(get = "is_exclusive", name = "is_exclusive", pure)]
     pub fn is_exclusive(range: &mut ExclusiveRange) -> bool {
-        let _range = range;
+        let _ = range;
         true
     }
     /// Return the start of the inclusive range.
@@ -795,13 +817,13 @@ mod range_functions {
     /// Return `true` if the range is inclusive.
     #[rhai_fn(get = "is_inclusive", name = "is_inclusive", pure)]
     pub fn is_inclusive_inclusive(range: &mut InclusiveRange) -> bool {
-        let _range = range;
+        let _ = range;
         true
     }
     /// Return `true` if the range is exclusive.
     #[rhai_fn(get = "is_exclusive", name = "is_exclusive", pure)]
     pub fn is_exclusive_inclusive(range: &mut InclusiveRange) -> bool {
-        let _range = range;
+        let _ = range;
         false
     }
 }

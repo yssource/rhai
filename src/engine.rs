@@ -295,9 +295,7 @@ impl Engine {
     }
 
     /// Check a result to ensure that it is valid.
-    pub(crate) fn check_return_value(&self, mut result: RhaiResult, pos: Position) -> RhaiResult {
-        let _pos = pos;
-
+    pub(crate) fn check_return_value(&self, mut result: RhaiResult, _pos: Position) -> RhaiResult {
         match result {
             Ok(ref mut r) => {
                 // Concentrate all empty strings into one instance to save memory

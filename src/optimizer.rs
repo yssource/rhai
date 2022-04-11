@@ -863,15 +863,13 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
 }
 
 /// Optimize an [expression][Expr].
-fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
+fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
     // These keywords are handled specially
     const DONT_EVAL_KEYWORDS: &[&str] = &[
         KEYWORD_PRINT, // side effects
         KEYWORD_DEBUG, // side effects
         KEYWORD_EVAL,  // arbitrary scripts
     ];
-
-    let _chaining = chaining;
 
     match expr {
         // {}
