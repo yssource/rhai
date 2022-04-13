@@ -4,6 +4,7 @@ use crate::{
     Dynamic, Engine, EvalAltResult, Expression, FnPtr, ImmutableString, NativeCallContext,
     Position, RhaiResult, RhaiResultOf, Scope, AST,
 };
+use std::path::PathBuf;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -22,7 +23,7 @@ impl Engine {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_family = "wasm"))]
     #[inline(always)]
-    pub fn consume_file(&self, path: std::path::PathBuf) -> RhaiResultOf<()> {
+    pub fn consume_file(&self, path: PathBuf) -> RhaiResultOf<()> {
         self.run_file(path)
     }
 
@@ -40,11 +41,7 @@ impl Engine {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_family = "wasm"))]
     #[inline(always)]
-    pub fn consume_file_with_scope(
-        &self,
-        scope: &mut Scope,
-        path: std::path::PathBuf,
-    ) -> RhaiResultOf<()> {
+    pub fn consume_file_with_scope(&self, scope: &mut Scope, path: PathBuf) -> RhaiResultOf<()> {
         self.run_file_with_scope(scope, path)
     }
 

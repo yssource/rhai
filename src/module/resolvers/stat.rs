@@ -3,7 +3,7 @@ use crate::{
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-use std::{collections::BTreeMap, ops::AddAssign};
+use std::{collections::btree_map::IntoIter, collections::BTreeMap, ops::AddAssign};
 
 /// A static [module][Module] resolution service that serves [modules][Module] added into it.
 ///
@@ -120,7 +120,7 @@ impl StaticModuleResolver {
 
 impl IntoIterator for StaticModuleResolver {
     type Item = (Identifier, Shared<Module>);
-    type IntoIter = std::collections::btree_map::IntoIter<SmartString, Shared<Module>>;
+    type IntoIter = IntoIter<SmartString, Shared<Module>>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()

@@ -6,7 +6,7 @@ use crate::ast::{ASTNode, Expr, Stmt};
 use crate::{Dynamic, Engine, EvalAltResult, Identifier, Module, Position, RhaiResultOf, Scope};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-use std::{fmt, mem};
+use std::{fmt, iter::repeat, mem};
 
 /// Callback function to initialize the debugger.
 #[cfg(not(feature = "sync"))]
@@ -160,10 +160,7 @@ impl fmt::Display for BreakPoint {
                     f,
                     "{} ({})",
                     fn_name,
-                    std::iter::repeat("_")
-                        .take(*args)
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                    repeat("_").take(*args).collect::<Vec<_>>().join(", ")
                 )?;
                 if !*enabled {
                     f.write_str(" (disabled)")?;

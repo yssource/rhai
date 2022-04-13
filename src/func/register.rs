@@ -48,7 +48,7 @@ pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
         // # Safety
         //
         // We already checked that `T` is `&str`, so it is safe to cast here.
-        return unsafe { std::mem::transmute_copy::<_, T>(&ref_str) };
+        return unsafe { mem::transmute_copy::<_, T>(&ref_str) };
     }
     if TypeId::of::<T>() == TypeId::of::<String>() {
         // If T is `String`, data must be `ImmutableString`, so map directly to it
