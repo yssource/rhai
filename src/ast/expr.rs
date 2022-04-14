@@ -17,7 +17,11 @@ use std::{
 };
 
 #[cfg(not(feature = "no_float"))]
-use std::str::FromStr;
+use std::{
+    hash::Hasher,
+    ops::{Deref, DerefMut},
+    str::FromStr,
+};
 
 #[cfg(not(feature = "no_float"))]
 use num_traits::float::FloatCore as Float;
@@ -230,7 +234,7 @@ pub struct FloatWrapper<F>(F);
 #[cfg(not(feature = "no_float"))]
 impl Hash for FloatWrapper<crate::FLOAT> {
     #[inline(always)]
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.to_ne_bytes().hash(state);
     }
 }
@@ -252,7 +256,7 @@ impl<F: Float> AsMut<F> for FloatWrapper<F> {
 }
 
 #[cfg(not(feature = "no_float"))]
-impl<F: Float> std::ops::Deref for FloatWrapper<F> {
+impl<F: Float> Deref for FloatWrapper<F> {
     type Target = F;
 
     #[inline(always)]
@@ -262,7 +266,7 @@ impl<F: Float> std::ops::Deref for FloatWrapper<F> {
 }
 
 #[cfg(not(feature = "no_float"))]
-impl<F: Float> std::ops::DerefMut for FloatWrapper<F> {
+impl<F: Float> DerefMut for FloatWrapper<F> {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0

@@ -7,6 +7,10 @@ use crate::{
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
+#[cfg(not(feature = "no_std"))]
+#[cfg(not(target_family = "wasm"))]
+use std::path::PathBuf;
+
 impl Engine {
     /// Evaluate a file, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
@@ -17,12 +21,12 @@ impl Engine {
     ///
     /// This method is deprecated. Use [`run_file`][Engine::run_file] instead.
     ///
-    /// This method will be removed in the next major version.
+    /// This method will be removed in the next majocd cr version.
     #[deprecated(since = "1.1.0", note = "use `run_file` instead")]
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_family = "wasm"))]
     #[inline(always)]
-    pub fn consume_file(&self, path: std::path::PathBuf) -> RhaiResultOf<()> {
+    pub fn consume_file(&self, path: PathBuf) -> RhaiResultOf<()> {
         self.run_file(path)
     }
 
@@ -40,11 +44,7 @@ impl Engine {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_family = "wasm"))]
     #[inline(always)]
-    pub fn consume_file_with_scope(
-        &self,
-        scope: &mut Scope,
-        path: std::path::PathBuf,
-    ) -> RhaiResultOf<()> {
+    pub fn consume_file_with_scope(&self, scope: &mut Scope, path: PathBuf) -> RhaiResultOf<()> {
         self.run_file_with_scope(scope, path)
     }
 

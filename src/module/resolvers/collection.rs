@@ -1,7 +1,7 @@
 use crate::{Engine, Module, ModuleResolver, Position, RhaiResultOf, Shared, ERR};
-use std::ops::AddAssign;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
+use std::{ops::AddAssign, vec::IntoIter};
 
 /// [Module] resolution service that holds a collection of module resolvers,
 /// to be searched in sequential order.
@@ -108,7 +108,7 @@ impl ModuleResolversCollection {
 
 impl IntoIterator for ModuleResolversCollection {
     type Item = Box<dyn ModuleResolver>;
-    type IntoIter = std::vec::IntoIter<Box<dyn ModuleResolver>>;
+    type IntoIter = IntoIter<Box<dyn ModuleResolver>>;
 
     #[inline(always)]
     fn into_iter(self) -> Self::IntoIter {

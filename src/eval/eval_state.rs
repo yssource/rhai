@@ -2,10 +2,9 @@
 
 use crate::func::call::FnResolutionCache;
 use crate::StaticVec;
-use std::collections::BTreeMap;
-use std::marker::PhantomData;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
+use std::{collections::BTreeMap, marker::PhantomData};
 
 /// _(internals)_ A type that holds all the current states of the [`Engine`][crate::Engine].
 /// Exported under the `internals` feature only.

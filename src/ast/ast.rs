@@ -8,6 +8,7 @@ use std::{
     fmt,
     hash::Hash,
     ops::{Add, AddAssign},
+    ptr,
 };
 
 /// Compiled AST (abstract syntax tree) of a Rhai script.
@@ -870,8 +871,8 @@ impl PartialEq for ASTNode<'_> {
     #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Stmt(x), Self::Stmt(y)) => std::ptr::eq(*x, *y),
-            (Self::Expr(x), Self::Expr(y)) => std::ptr::eq(*x, *y),
+            (Self::Stmt(x), Self::Stmt(y)) => ptr::eq(*x, *y),
+            (Self::Expr(x), Self::Expr(y)) => ptr::eq(*x, *y),
             _ => false,
         }
     }

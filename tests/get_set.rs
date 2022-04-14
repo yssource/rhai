@@ -334,6 +334,30 @@ fn test_get_set_indexer() -> Result<(), Box<EvalAltResult>> {
         42
     );
 
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let my_map = new_map();
+                my_map["eggs"] = 41;
+                my_map["eggs"] = my_map["eggs"] + 1;
+                my_map["eggs"]
+            "#,
+        )?,
+        42
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let my_map = new_map();
+                my_map["eggs"] = 41;
+                my_map["eggs"] += 1;
+                my_map["eggs"]
+            "#,
+        )?,
+        42
+    );
+
     assert!(engine
         .eval::<INT>(
             r#"

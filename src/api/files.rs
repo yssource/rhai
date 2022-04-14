@@ -6,13 +6,12 @@ use crate::types::dynamic::Variant;
 use crate::{Engine, RhaiResultOf, Scope, AST, ERR};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
+use std::{fs::File, io::Read, path::PathBuf};
 
 impl Engine {
     /// Read the contents of a file into a string.
-    fn read_file(path: std::path::PathBuf) -> RhaiResultOf<String> {
-        use std::io::Read;
-
-        let mut f = std::fs::File::open(path.clone()).map_err(|err| {
+    fn read_file(path: PathBuf) -> RhaiResultOf<String> {
+        let mut f = File::open(path.clone()).map_err(|err| {
             ERR::ErrorSystem(
                 format!("Cannot open script file '{}'", path.to_string_lossy()),
                 err.into(),
@@ -62,7 +61,7 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    pub fn compile_file(&self, path: std::path::PathBuf) -> RhaiResultOf<AST> {
+    pub fn compile_file(&self, path: PathBuf) -> RhaiResultOf<AST> {
         self.compile_file_with_scope(&Scope::new(), path)
     }
     /// Compile a script file into an [`AST`] using own scope, which can be used later for evaluation.
@@ -100,11 +99,7 @@ impl Engine {
     /// # }
     /// ```
     #[inline]
-    pub fn compile_file_with_scope(
-        &self,
-        scope: &Scope,
-        path: std::path::PathBuf,
-    ) -> RhaiResultOf<AST> {
+    pub fn compile_file_with_scope(&self, scope: &Scope, path: PathBuf) -> RhaiResultOf<AST> {
         Self::read_file(path).and_then(|contents| Ok(self.compile_with_scope(scope, &contents)?))
     }
     /// Evaluate a script file.
@@ -125,7 +120,7 @@ impl Engine {
     /// # }
     /// ```
     #[inline]
-    pub fn eval_file<T: Variant + Clone>(&self, path: std::path::PathBuf) -> RhaiResultOf<T> {
+    pub fn eval_file<T: Variant + Clone>(&self, path: PathBuf) -> RhaiResultOf<T> {
         Self::read_file(path).and_then(|contents| self.eval::<T>(&contents))
     }
     /// Evaluate a script file with own scope.
@@ -160,7 +155,7 @@ impl Engine {
     pub fn eval_file_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
-        path: std::path::PathBuf,
+        path: PathBuf,
     ) -> RhaiResultOf<T> {
         Self::read_file(path).and_then(|contents| self.eval_with_scope(scope, &contents))
     }
@@ -168,7 +163,7 @@ impl Engine {
     ///
     /// Not available under `no_std` or `WASM`.
     #[inline]
-    pub fn run_file(&self, path: std::path::PathBuf) -> RhaiResultOf<()> {
+    pub fn run_file(&self, path: PathBuf) -> RhaiResultOf<()> {
         Self::read_file(path).and_then(|contents| self.run(&contents))
     }
     /// Evaluate a file with own scope, returning any error (if any).
@@ -182,11 +177,7 @@ impl Engine {
     ///
     /// This allows functions to be optimized based on dynamic global constants.
     #[inline]
-    pub fn run_file_with_scope(
-        &self,
-        scope: &mut Scope,
-        path: std::path::PathBuf,
-    ) -> RhaiResultOf<()> {
+    pub fn run_file_with_scope(&self, scope: &mut Scope, path: PathBuf) -> RhaiResultOf<()> {
         Self::read_file(path).and_then(|contents| self.run_with_scope(scope, &contents))
     }
 }

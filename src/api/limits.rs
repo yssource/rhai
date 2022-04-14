@@ -27,7 +27,7 @@ pub struct Limits {
     #[cfg(not(feature = "no_function"))]
     pub max_function_expr_depth: Option<NonZeroUsize>,
     /// Maximum number of operations allowed to run.
-    pub max_operations: Option<std::num::NonZeroU64>,
+    pub max_operations: Option<NonZeroU64>,
     /// Maximum number of [modules][crate::Module] allowed to load.
     ///
     /// Set to zero to effectively disable loading any [module][crate::Module].
