@@ -4,6 +4,11 @@ Rhai Release Notes
 Version 1.7.0
 =============
 
+Bug fixes
+---------
+
+* Compound assignments now work properly with indexers.
+
 
 Version 1.6.1
 =============

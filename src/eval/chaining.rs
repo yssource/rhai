@@ -201,12 +201,12 @@ impl Engine {
                         self.run_debugger(scope, global, state, lib, this_ptr, _parent, level)?;
 
                         let ((new_val, new_pos), (op_info, op_pos)) = new_val.expect("`Some`");
-                        let mut idx_val_for_setter = idx_val.clone();
+                        let mut idx_val2 = idx_val.clone();
 
                         let try_setter = match self.get_indexed_mut(
                             global, state, lib, target, idx_val, pos, true, false, level,
                         ) {
-                            // Indexed value is a reference - update directly
+                            // Indexed value is not a temp value - update directly
                             Ok(ref mut obj_ptr) => {
                                 self.eval_op_assignment(
                                     global, state, lib, op_info, op_pos, obj_ptr, root, new_val,
@@ -217,7 +217,7 @@ impl Engine {
                                 self.check_data_size(obj_ptr, new_pos)?;
                                 None
                             }
-                            // Can't index - try to call an index setter
+                            // Indexed value cannot be referenced - use indexer
                             #[cfg(not(feature = "no_index"))]
                             Err(err) if matches!(*err, ERR::ErrorIndexingType(..)) => Some(new_val),
                             // Any other error
@@ -225,8 +225,30 @@ impl Engine {
                         };
 
                         if let Some(mut new_val) = try_setter {
+                            let idx = &mut idx_val2;
+
+                            // Is this an op-assignment?
+                            if op_info.is_some() {
+                                let idx = &mut idx.clone();
+                                // Call the index getter to get the current value
+                                if let Ok(val) =
+                                    self.call_indexer_get(global, state, lib, target, idx, level)
+                                {
+                                    let mut res = val.into();
+                                    // Run the op-assignment
+                                    self.eval_op_assignment(
+                                        global, state, lib, op_info, op_pos, &mut res, root,
+                                        new_val, level,
+                                    )
+                                    .map_err(|err| err.fill_position(new_pos))?;
+                                    // Replace new value
+                                    new_val = res.take_or_clone();
+                                    #[cfg(not(feature = "unchecked"))]
+                                    self.check_data_size(&new_val, new_pos)?;
+                                }
+                            }
+
                             // Try to call index setter
-                            let idx = &mut idx_val_for_setter;
                             let new_val = &mut new_val;
                             self.call_indexer_set(
                                 global, state, lib, target, idx, new_val, is_ref_mut, level,
@@ -333,6 +355,7 @@ impl Engine {
                                         self.call_indexer_get(
                                             global, state, lib, target, &mut prop, level,
                                         )
+                                        .map(|r| (r, false))
                                         .map_err(|e| {
                                             match *e {
                                                 ERR::ErrorIndexingType(..) => err,
@@ -398,6 +421,7 @@ impl Engine {
                                     self.call_indexer_get(
                                         global, state, lib, target, &mut prop, level,
                                     )
+                                    .map(|r| (r, false))
                                     .map_err(|e| match *e {
                                         ERR::ErrorIndexingType(..) => err,
                                         _ => e,
@@ -494,6 +518,7 @@ impl Engine {
                                             self.call_indexer_get(
                                                 global, state, lib, target, &mut prop, level,
                                             )
+                                            .map(|r| (r, false))
                                             .map_err(
                                                 |e| match *e {
                                                     ERR::ErrorIndexingType(..) => err,
@@ -803,7 +828,7 @@ impl Engine {
         target: &mut Dynamic,
         idx: &mut Dynamic,
         level: usize,
-    ) -> RhaiResultOf<(Dynamic, bool)> {
+    ) -> RhaiResultOf<Dynamic> {
         let args = &mut [target, idx];
         let hash_get = crate::ast::FnCallHashes::from_native(global.hash_idx_get());
         let fn_name = crate::engine::FN_IDX_GET;
@@ -812,6 +837,7 @@ impl Engine {
         self.exec_fn_call(
             None, global, state, lib, fn_name, hash_get, args, true, true, pos, level,
         )
+        .map(|(r, ..)| r)
     }
 
     /// Call a set indexer.
@@ -1039,7 +1065,7 @@ impl Engine {
 
             _ if use_indexers => self
                 .call_indexer_get(global, state, lib, target, &mut idx, level)
-                .map(|(v, ..)| v.into()),
+                .map(Into::into),
 
             _ => Err(ERR::ErrorIndexingType(
                 format!(
