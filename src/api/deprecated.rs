@@ -4,9 +4,12 @@ use crate::{
     Dynamic, Engine, EvalAltResult, Expression, FnPtr, ImmutableString, NativeCallContext,
     Position, RhaiResult, RhaiResultOf, Scope, AST,
 };
-use std::path::PathBuf;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
+
+#[cfg(not(feature = "no_std"))]
+#[cfg(not(target_family = "wasm"))]
+use std::path::PathBuf;
 
 impl Engine {
     /// Evaluate a file, but throw away the result and only return error (if any).
@@ -18,7 +21,7 @@ impl Engine {
     ///
     /// This method is deprecated. Use [`run_file`][Engine::run_file] instead.
     ///
-    /// This method will be removed in the next major version.
+    /// This method will be removed in the next majocd cr version.
     #[deprecated(since = "1.1.0", note = "use `run_file` instead")]
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_family = "wasm"))]
