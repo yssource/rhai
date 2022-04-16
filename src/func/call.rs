@@ -419,9 +419,7 @@ impl Engine {
                         Ok(ref r) => crate::eval::DebuggerEvent::FunctionExitWithValue(r),
                         Err(ref err) => crate::eval::DebuggerEvent::FunctionExitWithError(err),
                     };
-                    match self
-                        .run_debugger_raw(scope, global, caches, lib, &mut None, node, event, level)
-                    {
+                    match self.run_debugger_raw(scope, global, lib, &mut None, node, event, level) {
                         Ok(_) => (),
                         Err(err) => _result = Err(err),
                     }
@@ -905,7 +903,7 @@ impl Engine {
         if self.debugger.is_some() {
             if let Some(value) = arg_expr.get_literal_value() {
                 #[cfg(feature = "debugging")]
-                self.run_debugger(scope, global, caches, lib, this_ptr, arg_expr, level)?;
+                self.run_debugger(scope, global, lib, this_ptr, arg_expr, level)?;
                 return Ok((value, arg_expr.start_position()));
             }
         }
@@ -1152,7 +1150,7 @@ impl Engine {
                 let first_expr = first_arg.unwrap();
 
                 #[cfg(feature = "debugging")]
-                self.run_debugger(scope, global, caches, lib, this_ptr, first_expr, level)?;
+                self.run_debugger(scope, global, lib, this_ptr, first_expr, level)?;
 
                 // func(x, ...) -> x.func(...)
                 a_expr.iter().try_for_each(|expr| {
@@ -1161,7 +1159,7 @@ impl Engine {
                 })?;
 
                 let (mut target, _pos) =
-                    self.search_namespace(scope, global, caches, lib, this_ptr, first_expr, level)?;
+                    self.search_namespace(scope, global, lib, this_ptr, first_expr, level)?;
 
                 if target.as_ref().is_read_only() {
                     target = target.into_owned();
@@ -1233,7 +1231,7 @@ impl Engine {
             // and avoid cloning the value
             if !args_expr.is_empty() && args_expr[0].is_variable_access(true) {
                 #[cfg(feature = "debugging")]
-                self.run_debugger(scope, global, caches, lib, this_ptr, &args_expr[0], level)?;
+                self.run_debugger(scope, global, lib, this_ptr, &args_expr[0], level)?;
 
                 // func(x, ...) -> x.func(...)
                 arg_values.push(Dynamic::UNIT);
@@ -1246,7 +1244,7 @@ impl Engine {
                 // Get target reference to first argument
                 let first_arg = &args_expr[0];
                 let (target, _pos) =
-                    self.search_scope_only(scope, global, caches, lib, this_ptr, first_arg, level)?;
+                    self.search_scope_only(scope, global, lib, this_ptr, first_arg, level)?;
 
                 #[cfg(not(feature = "unchecked"))]
                 self.inc_operations(&mut global.num_operations, _pos)?;

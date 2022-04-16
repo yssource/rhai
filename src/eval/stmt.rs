@@ -206,7 +206,7 @@ impl Engine {
     ) -> RhaiResult {
         #[cfg(feature = "debugging")]
         let reset_debugger =
-            self.run_debugger_with_reset(scope, global, caches, lib, this_ptr, stmt, level)?;
+            self.run_debugger_with_reset(scope, global, lib, this_ptr, stmt, level)?;
 
         // Coded this way for better branch prediction.
         // Popular branches are lifted out of the `match` statement into their own branches.
@@ -241,7 +241,7 @@ impl Engine {
 
                 if let Ok(rhs_val) = rhs_result {
                     let search_result =
-                        self.search_namespace(scope, global, caches, lib, this_ptr, lhs, level);
+                        self.search_namespace(scope, global, lib, this_ptr, lhs, level);
 
                     if let Ok(search_val) = search_result {
                         let (mut lhs_ptr, pos) = search_val;
@@ -843,7 +843,7 @@ impl Engine {
                         engine: self,
                         scope,
                         global,
-                        caches,
+                        caches: None,
                         lib,
                         this_ptr,
                         level,

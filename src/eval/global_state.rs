@@ -63,7 +63,7 @@ pub struct GlobalRuntimeState<'a> {
     /// Interior mutability is needed because it is shared in order to aid in cloning.
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
-    pub(crate) constants: Option<GlobalConstants>,
+    pub constants: Option<GlobalConstants>,
     /// Debugging interface.
     #[cfg(feature = "debugging")]
     pub debugger: super::Debugger,

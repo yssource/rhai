@@ -47,7 +47,6 @@ impl Engine {
         &self,
         scope: &'s mut Scope,
         global: &mut GlobalRuntimeState,
-        caches: &mut Caches,
         lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &Expr,
@@ -55,13 +54,13 @@ impl Engine {
     ) -> RhaiResultOf<(Target<'s>, Position)> {
         match expr {
             Expr::Variable(_, Some(_), _) => {
-                self.search_scope_only(scope, global, caches, lib, this_ptr, expr, level)
+                self.search_scope_only(scope, global, lib, this_ptr, expr, level)
             }
             Expr::Variable(v, None, _var_pos) => match v.as_ref() {
                 // Normal variable access
                 #[cfg(not(feature = "no_module"))]
                 (_, ns, ..) if ns.is_empty() => {
-                    self.search_scope_only(scope, global, caches, lib, this_ptr, expr, level)
+                    self.search_scope_only(scope, global, lib, this_ptr, expr, level)
                 }
                 #[cfg(feature = "no_module")]
                 (_, (), ..) => {
@@ -130,7 +129,6 @@ impl Engine {
         &self,
         scope: &'s mut Scope,
         global: &mut GlobalRuntimeState,
-        caches: &mut Caches,
         lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &Expr,
@@ -159,7 +157,7 @@ impl Engine {
                 engine: self,
                 scope,
                 global,
-                caches,
+                caches: None,
                 lib,
                 this_ptr,
                 level,
@@ -269,7 +267,7 @@ impl Engine {
         if let Expr::FnCall(x, ..) = expr {
             #[cfg(feature = "debugging")]
             let reset_debugger =
-                self.run_debugger_with_reset(scope, global, caches, lib, this_ptr, expr, level)?;
+                self.run_debugger_with_reset(scope, global, lib, this_ptr, expr, level)?;
 
             #[cfg(not(feature = "unchecked"))]
             self.inc_operations(&mut global.num_operations, expr.position())?;
@@ -288,7 +286,7 @@ impl Engine {
         // will cost more than the mis-predicted `match` branch.
         if let Expr::Variable(x, index, var_pos) = expr {
             #[cfg(feature = "debugging")]
-            self.run_debugger(scope, global, caches, lib, this_ptr, expr, level)?;
+            self.run_debugger(scope, global, lib, this_ptr, expr, level)?;
 
             #[cfg(not(feature = "unchecked"))]
             self.inc_operations(&mut global.num_operations, expr.position())?;
@@ -299,14 +297,14 @@ impl Engine {
                     .cloned()
                     .ok_or_else(|| ERR::ErrorUnboundThis(*var_pos).into())
             } else {
-                self.search_namespace(scope, global, caches, lib, this_ptr, expr, level)
+                self.search_namespace(scope, global, lib, this_ptr, expr, level)
                     .map(|(val, ..)| val.take_or_clone())
             };
         }
 
         #[cfg(feature = "debugging")]
         let reset_debugger =
-            self.run_debugger_with_reset(scope, global, caches, lib, this_ptr, expr, level)?;
+            self.run_debugger_with_reset(scope, global, lib, this_ptr, expr, level)?;
 
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(&mut global.num_operations, expr.position())?;
@@ -490,7 +488,7 @@ impl Engine {
                     engine: self,
                     scope,
                     global,
-                    caches,
+                    caches: Some(caches),
                     lib,
                     this_ptr,
                     level,

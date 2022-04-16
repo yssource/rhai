@@ -142,7 +142,7 @@ impl Engine {
         #[cfg(feature = "debugging")]
         {
             let node = crate::ast::Stmt::Noop(fn_def.body.position());
-            self.run_debugger(scope, global, caches, lib, this_ptr, &node, level)?;
+            self.run_debugger(scope, global, lib, this_ptr, &node, level)?;
         }
 
         // Evaluate the function
@@ -193,9 +193,7 @@ impl Engine {
                     Ok(ref r) => crate::eval::DebuggerEvent::FunctionExitWithValue(r),
                     Err(ref err) => crate::eval::DebuggerEvent::FunctionExitWithError(err),
                 };
-                match self
-                    .run_debugger_raw(scope, global, caches, lib, this_ptr, node, event, level)
-                {
+                match self.run_debugger_raw(scope, global, lib, this_ptr, node, event, level) {
                     Ok(_) => (),
                     Err(err) => _result = Err(err),
                 }

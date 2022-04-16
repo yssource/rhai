@@ -8,7 +8,7 @@ use crate::ast::{
     OpAssignment, ScriptFnDef, Stmt, StmtBlock, StmtBlockContainer, SwitchCases, TryCatchBlock,
 };
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
-use crate::eval::{Caches, GlobalRuntimeState};
+use crate::eval::GlobalRuntimeState;
 use crate::func::hashing::get_hasher;
 use crate::tokenizer::{
     is_keyword_function, is_valid_function_name, is_valid_identifier, Token, TokenStream,
@@ -2686,7 +2686,7 @@ impl Engine {
                 engine: self,
                 scope: &mut state.stack,
                 global: &mut GlobalRuntimeState::new(self),
-                caches: &mut Caches::new(),
+                caches: None,
                 lib: &[],
                 this_ptr: &mut None,
                 level,
