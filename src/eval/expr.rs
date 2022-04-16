@@ -1,6 +1,6 @@
 //! Module defining functions for evaluating an expression.
 
-use super::{EvalContext, EvalState, GlobalRuntimeState, Target};
+use super::{Caches, EvalContext, GlobalRuntimeState, Target};
 use crate::ast::{Expr, FnCallExpr, OpAssignment};
 use crate::engine::{KEYWORD_THIS, OP_CONCAT};
 use crate::types::dynamic::AccessMode;
@@ -17,7 +17,6 @@ impl Engine {
     pub(crate) fn search_imports(
         &self,
         global: &GlobalRuntimeState,
-        state: &mut EvalState,
         namespace: &crate::ast::Namespace,
     ) -> Option<crate::Shared<Module>> {
         assert!(!namespace.is_empty());
@@ -25,7 +24,7 @@ impl Engine {
         let root = namespace.root();
 
         // Qualified - check if the root module is directly indexed
-        let index = if state.always_search_scope {
+        let index = if global.always_search_scope {
             None
         } else {
             namespace.index()
@@ -48,7 +47,7 @@ impl Engine {
         &self,
         scope: &'s mut Scope,
         global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
+        caches: &mut Caches,
         lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &Expr,
@@ -56,24 +55,24 @@ impl Engine {
     ) -> RhaiResultOf<(Target<'s>, Position)> {
         match expr {
             Expr::Variable(_, Some(_), _) => {
-                self.search_scope_only(scope, global, state, lib, this_ptr, expr, level)
+                self.search_scope_only(scope, global, caches, lib, this_ptr, expr, level)
             }
             Expr::Variable(v, None, _var_pos) => match v.as_ref() {
                 // Normal variable access
                 #[cfg(not(feature = "no_module"))]
                 (_, ns, ..) if ns.is_empty() => {
-                    self.search_scope_only(scope, global, state, lib, this_ptr, expr, level)
+                    self.search_scope_only(scope, global, caches, lib, this_ptr, expr, level)
                 }
                 #[cfg(feature = "no_module")]
                 (_, (), ..) => {
-                    self.search_scope_only(scope, global, state, lib, this_ptr, expr, level)
+                    self.search_scope_only(scope, global, caches, lib, this_ptr, expr, level)
                 }
 
                 // Qualified variable access
                 #[cfg(not(feature = "no_module"))]
                 (_, namespace, hash_var, var_name) => {
                     // foo:bar::baz::VARIABLE
-                    if let Some(module) = self.search_imports(global, state, namespace) {
+                    if let Some(module) = self.search_imports(global, namespace) {
                         return if let Some(mut target) = module.get_qualified_var(*hash_var) {
                             // Module variables are constant
                             target.set_access_mode(AccessMode::ReadOnly);
@@ -131,7 +130,7 @@ impl Engine {
         &self,
         scope: &'s mut Scope,
         global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
+        caches: &mut Caches,
         lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &Expr,
@@ -148,7 +147,7 @@ impl Engine {
                     Err(ERR::ErrorUnboundThis(*pos).into())
                 }
             }
-            _ if state.always_search_scope => (0, expr.start_position()),
+            _ if global.always_search_scope => (0, expr.start_position()),
             Expr::Variable(.., Some(i), pos) => (i.get() as usize, *pos),
             Expr::Variable(v, None, pos) => (v.0.map(NonZeroUsize::get).unwrap_or(0), *pos),
             _ => unreachable!("Expr::Variable expected but gets {:?}", expr),
@@ -160,7 +159,7 @@ impl Engine {
                 engine: self,
                 scope,
                 global,
-                state,
+                caches,
                 lib,
                 this_ptr,
                 level,
@@ -205,7 +204,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
+        caches: &mut Caches,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &FnCallExpr,
@@ -228,7 +227,7 @@ impl Engine {
             let hash = hashes.native;
 
             return self.make_qualified_function_call(
-                scope, global, state, lib, this_ptr, namespace, name, args, hash, pos, level,
+                scope, global, caches, lib, this_ptr, namespace, name, args, hash, pos, level,
             );
         }
 
@@ -239,7 +238,7 @@ impl Engine {
         );
 
         self.make_function_call(
-            scope, global, state, lib, this_ptr, name, first_arg, args, *hashes, *capture, pos,
+            scope, global, caches, lib, this_ptr, name, first_arg, args, *hashes, *capture, pos,
             level,
         )
     }
@@ -256,7 +255,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
+        caches: &mut Caches,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
@@ -270,13 +269,13 @@ impl Engine {
         if let Expr::FnCall(x, ..) = expr {
             #[cfg(feature = "debugging")]
             let reset_debugger =
-                self.run_debugger_with_reset(scope, global, state, lib, this_ptr, expr, level)?;
+                self.run_debugger_with_reset(scope, global, caches, lib, this_ptr, expr, level)?;
 
             #[cfg(not(feature = "unchecked"))]
             self.inc_operations(&mut global.num_operations, expr.position())?;
 
             let result =
-                self.eval_fn_call_expr(scope, global, state, lib, this_ptr, x, x.pos, level);
+                self.eval_fn_call_expr(scope, global, caches, lib, this_ptr, x, x.pos, level);
 
             #[cfg(feature = "debugging")]
             global.debugger.reset_status(reset_debugger);
@@ -289,7 +288,7 @@ impl Engine {
         // will cost more than the mis-predicted `match` branch.
         if let Expr::Variable(x, index, var_pos) = expr {
             #[cfg(feature = "debugging")]
-            self.run_debugger(scope, global, state, lib, this_ptr, expr, level)?;
+            self.run_debugger(scope, global, caches, lib, this_ptr, expr, level)?;
 
             #[cfg(not(feature = "unchecked"))]
             self.inc_operations(&mut global.num_operations, expr.position())?;
@@ -300,14 +299,14 @@ impl Engine {
                     .cloned()
                     .ok_or_else(|| ERR::ErrorUnboundThis(*var_pos).into())
             } else {
-                self.search_namespace(scope, global, state, lib, this_ptr, expr, level)
+                self.search_namespace(scope, global, caches, lib, this_ptr, expr, level)
                     .map(|(val, ..)| val.take_or_clone())
             };
         }
 
         #[cfg(feature = "debugging")]
         let reset_debugger =
-            self.run_debugger_with_reset(scope, global, state, lib, this_ptr, expr, level)?;
+            self.run_debugger_with_reset(scope, global, caches, lib, this_ptr, expr, level)?;
 
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(&mut global.num_operations, expr.position())?;
@@ -330,7 +329,7 @@ impl Engine {
 
                 for expr in x.iter() {
                     let item =
-                        match self.eval_expr(scope, global, state, lib, this_ptr, expr, level) {
+                        match self.eval_expr(scope, global, caches, lib, this_ptr, expr, level) {
                             Ok(r) => r,
                             err => {
                                 result = err;
@@ -340,7 +339,7 @@ impl Engine {
 
                     if let Err(err) = self.eval_op_assignment(
                         global,
-                        state,
+                        caches,
                         lib,
                         Some(OpAssignment::new(OP_CONCAT)),
                         expr.start_position(),
@@ -367,7 +366,7 @@ impl Engine {
 
                 for item_expr in x.iter() {
                     let value = match self
-                        .eval_expr(scope, global, state, lib, this_ptr, item_expr, level)
+                        .eval_expr(scope, global, caches, lib, this_ptr, item_expr, level)
                     {
                         Ok(r) => r.flatten(),
                         err => {
@@ -405,7 +404,7 @@ impl Engine {
 
                 for (key, value_expr) in x.0.iter() {
                     let value = match self
-                        .eval_expr(scope, global, state, lib, this_ptr, value_expr, level)
+                        .eval_expr(scope, global, caches, lib, this_ptr, value_expr, level)
                     {
                         Ok(r) => r.flatten(),
                         err => {
@@ -431,7 +430,7 @@ impl Engine {
 
             Expr::And(x, ..) => {
                 let lhs = self
-                    .eval_expr(scope, global, state, lib, this_ptr, &x.lhs, level)
+                    .eval_expr(scope, global, caches, lib, this_ptr, &x.lhs, level)
                     .and_then(|v| {
                         v.as_bool().map_err(|typ| {
                             self.make_type_mismatch_err::<bool>(typ, x.lhs.position())
@@ -439,7 +438,7 @@ impl Engine {
                     });
 
                 if let Ok(true) = lhs {
-                    self.eval_expr(scope, global, state, lib, this_ptr, &x.rhs, level)
+                    self.eval_expr(scope, global, caches, lib, this_ptr, &x.rhs, level)
                         .and_then(|v| {
                             v.as_bool()
                                 .map_err(|typ| {
@@ -454,7 +453,7 @@ impl Engine {
 
             Expr::Or(x, ..) => {
                 let lhs = self
-                    .eval_expr(scope, global, state, lib, this_ptr, &x.lhs, level)
+                    .eval_expr(scope, global, caches, lib, this_ptr, &x.lhs, level)
                     .and_then(|v| {
                         v.as_bool().map_err(|typ| {
                             self.make_type_mismatch_err::<bool>(typ, x.lhs.position())
@@ -462,7 +461,7 @@ impl Engine {
                     });
 
                 if let Ok(false) = lhs {
-                    self.eval_expr(scope, global, state, lib, this_ptr, &x.rhs, level)
+                    self.eval_expr(scope, global, caches, lib, this_ptr, &x.rhs, level)
                         .and_then(|v| {
                             v.as_bool()
                                 .map_err(|typ| {
@@ -491,7 +490,7 @@ impl Engine {
                     engine: self,
                     scope,
                     global,
-                    state,
+                    caches,
                     lib,
                     this_ptr,
                     level,
@@ -504,17 +503,17 @@ impl Engine {
 
             Expr::Stmt(x) if x.is_empty() => Ok(Dynamic::UNIT),
             Expr::Stmt(x) => {
-                self.eval_stmt_block(scope, global, state, lib, this_ptr, x, true, level)
+                self.eval_stmt_block(scope, global, caches, lib, this_ptr, x, true, level)
             }
 
             #[cfg(not(feature = "no_index"))]
             Expr::Index(..) => {
-                self.eval_dot_index_chain(scope, global, state, lib, this_ptr, expr, level, None)
+                self.eval_dot_index_chain(scope, global, caches, lib, this_ptr, expr, level, None)
             }
 
             #[cfg(not(feature = "no_object"))]
             Expr::Dot(..) => {
-                self.eval_dot_index_chain(scope, global, state, lib, this_ptr, expr, level, None)
+                self.eval_dot_index_chain(scope, global, caches, lib, this_ptr, expr, level, None)
             }
 
             _ => unreachable!("expression cannot be evaluated: {:?}", expr),

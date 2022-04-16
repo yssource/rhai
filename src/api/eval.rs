@@ -1,6 +1,6 @@
 //! Module that defines the public evaluation API of [`Engine`].
 
-use crate::eval::{EvalState, GlobalRuntimeState};
+use crate::eval::{Caches, GlobalRuntimeState};
 use crate::parser::ParseState;
 use crate::types::dynamic::Variant;
 use crate::{
@@ -208,7 +208,7 @@ impl Engine {
         ast: &'a AST,
         level: usize,
     ) -> RhaiResult {
-        let mut state = EvalState::new();
+        let mut caches = Caches::new();
         global.source = ast.source_raw().clone();
 
         #[cfg(not(feature = "no_module"))]
@@ -231,6 +231,6 @@ impl Engine {
         } else {
             &lib[..]
         };
-        self.eval_global_statements(scope, global, &mut state, statements, lib, level)
+        self.eval_global_statements(scope, global, &mut caches, statements, lib, level)
     }
 }

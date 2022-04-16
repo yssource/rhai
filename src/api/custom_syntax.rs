@@ -130,7 +130,7 @@ impl Deref for Expression<'_> {
     }
 }
 
-impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_, '_, '_> {
+impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_, '_> {
     /// Evaluate an [expression tree][Expression].
     ///
     /// # WARNING - Low Level API
@@ -141,7 +141,7 @@ impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_, '_, '_> {
         self.engine.eval_expr(
             self.scope,
             self.global,
-            self.state,
+            self.caches,
             self.lib,
             self.this_ptr,
             expr,

@@ -1,6 +1,6 @@
 //! Module defining functions for evaluating a statement.
 
-use super::{EvalContext, EvalState, GlobalRuntimeState, Target};
+use super::{Caches, EvalContext, GlobalRuntimeState, Target};
 use crate::api::events::VarDefInfo;
 use crate::ast::{
     ASTFlags, BinaryExpr, Expr, Ident, OpAssignment, Stmt, SwitchCases, TryCatchBlock,
@@ -25,7 +25,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
+        caches: &mut Caches,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         statements: &[Stmt],
@@ -36,14 +36,14 @@ impl Engine {
             return Ok(Dynamic::UNIT);
         }
 
-        let orig_always_search_scope = state.always_search_scope;
+        let orig_always_search_scope = global.always_search_scope;
         let orig_scope_len = scope.len();
         #[cfg(not(feature = "no_module"))]
         let orig_imports_len = global.num_imports();
-        let orig_fn_resolution_caches_len = state.fn_resolution_caches_len();
+        let orig_fn_resolution_caches_len = caches.fn_resolution_caches_len();
 
         if restore_orig_state {
-            state.scope_level += 1;
+            global.scope_level += 1;
         }
 
         let mut result = Ok(Dynamic::UNIT);
@@ -55,7 +55,7 @@ impl Engine {
             result = self.eval_stmt(
                 scope,
                 global,
-                state,
+                caches,
                 lib,
                 this_ptr,
                 stmt,
@@ -76,34 +76,34 @@ impl Engine {
                     .skip(imports_len)
                     .any(|(.., m)| m.contains_indexed_global_functions())
                 {
-                    if state.fn_resolution_caches_len() > orig_fn_resolution_caches_len {
+                    if caches.fn_resolution_caches_len() > orig_fn_resolution_caches_len {
                         // When new module is imported with global functions and there is already
                         // a new cache, clear it - notice that this is expensive as all function
                         // resolutions must start again
-                        state.fn_resolution_cache_mut().clear();
+                        caches.fn_resolution_cache_mut().clear();
                     } else if restore_orig_state {
                         // When new module is imported with global functions, push a new cache
-                        state.push_fn_resolution_cache();
+                        caches.push_fn_resolution_cache();
                     } else {
                         // When the block is to be evaluated in-place, just clear the current cache
-                        state.fn_resolution_cache_mut().clear();
+                        caches.fn_resolution_cache_mut().clear();
                     }
                 }
             }
         }
 
         // If imports list is modified, pop the functions lookup cache
-        state.rewind_fn_resolution_caches(orig_fn_resolution_caches_len);
+        caches.rewind_fn_resolution_caches(orig_fn_resolution_caches_len);
 
         if restore_orig_state {
             scope.rewind(orig_scope_len);
-            state.scope_level -= 1;
+            global.scope_level -= 1;
             #[cfg(not(feature = "no_module"))]
             global.truncate_imports(orig_imports_len);
 
             // The impact of new local variables goes away at the end of a block
             // because any new variables introduced will go out of scope
-            state.always_search_scope = orig_always_search_scope;
+            global.always_search_scope = orig_always_search_scope;
         }
 
         result
@@ -114,7 +114,7 @@ impl Engine {
     pub(crate) fn eval_op_assignment(
         &self,
         global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
+        caches: &mut Caches,
         lib: &[&Module],
         op_info: Option<OpAssignment>,
         op_pos: Position,
@@ -157,7 +157,7 @@ impl Engine {
             let level = level + 1;
 
             match self.call_native_fn(
-                global, state, lib, op_assign, hash, args, true, true, op_pos, level,
+                global, caches, lib, op_assign, hash, args, true, true, op_pos, level,
             ) {
                 Ok(_) => {
                     #[cfg(not(feature = "unchecked"))]
@@ -167,7 +167,7 @@ impl Engine {
                 {
                     // Expand to `var = var op rhs`
                     let (value, ..) = self.call_native_fn(
-                        global, state, lib, op, hash_op, args, true, false, op_pos, level,
+                        global, caches, lib, op, hash_op, args, true, false, op_pos, level,
                     )?;
 
                     #[cfg(not(feature = "unchecked"))]
@@ -197,7 +197,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
+        caches: &mut Caches,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         stmt: &Stmt,
@@ -206,7 +206,7 @@ impl Engine {
     ) -> RhaiResult {
         #[cfg(feature = "debugging")]
         let reset_debugger =
-            self.run_debugger_with_reset(scope, global, state, lib, this_ptr, stmt, level)?;
+            self.run_debugger_with_reset(scope, global, caches, lib, this_ptr, stmt, level)?;
 
         // Coded this way for better branch prediction.
         // Popular branches are lifted out of the `match` statement into their own branches.
@@ -217,7 +217,7 @@ impl Engine {
             self.inc_operations(&mut global.num_operations, stmt.position())?;
 
             let result =
-                self.eval_fn_call_expr(scope, global, state, lib, this_ptr, x, x.pos, level);
+                self.eval_fn_call_expr(scope, global, caches, lib, this_ptr, x, x.pos, level);
 
             #[cfg(feature = "debugging")]
             global.debugger.reset_status(reset_debugger);
@@ -236,12 +236,12 @@ impl Engine {
                 let (op_info, BinaryExpr { lhs, rhs }) = x.as_ref();
 
                 let rhs_result = self
-                    .eval_expr(scope, global, state, lib, this_ptr, rhs, level)
+                    .eval_expr(scope, global, caches, lib, this_ptr, rhs, level)
                     .map(Dynamic::flatten);
 
                 if let Ok(rhs_val) = rhs_result {
                     let search_result =
-                        self.search_namespace(scope, global, state, lib, this_ptr, lhs, level);
+                        self.search_namespace(scope, global, caches, lib, this_ptr, lhs, level);
 
                     if let Ok(search_val) = search_result {
                         let (mut lhs_ptr, pos) = search_val;
@@ -261,7 +261,7 @@ impl Engine {
                         let lhs_ptr = &mut lhs_ptr;
 
                         self.eval_op_assignment(
-                            global, state, lib, *op_info, *op_pos, lhs_ptr, root, rhs_val, level,
+                            global, caches, lib, *op_info, *op_pos, lhs_ptr, root, rhs_val, level,
                         )
                         .map_err(|err| err.fill_position(rhs.start_position()))
                         .map(|_| Dynamic::UNIT)
@@ -275,7 +275,7 @@ impl Engine {
                 let (op_info, BinaryExpr { lhs, rhs }) = x.as_ref();
 
                 let rhs_result = self
-                    .eval_expr(scope, global, state, lib, this_ptr, rhs, level)
+                    .eval_expr(scope, global, caches, lib, this_ptr, rhs, level)
                     .map(Dynamic::flatten);
 
                 if let Ok(rhs_val) = rhs_result {
@@ -291,14 +291,14 @@ impl Engine {
                         #[cfg(not(feature = "no_index"))]
                         Expr::Index(..) => self
                             .eval_dot_index_chain(
-                                scope, global, state, lib, this_ptr, lhs, level, _new_val,
+                                scope, global, caches, lib, this_ptr, lhs, level, _new_val,
                             )
                             .map(|_| Dynamic::UNIT),
                         // dot_lhs.dot_rhs op= rhs
                         #[cfg(not(feature = "no_object"))]
                         Expr::Dot(..) => self
                             .eval_dot_index_chain(
-                                scope, global, state, lib, this_ptr, lhs, level, _new_val,
+                                scope, global, caches, lib, this_ptr, lhs, level, _new_val,
                             )
                             .map(|_| Dynamic::UNIT),
                         _ => unreachable!("cannot assign to expression: {:?}", lhs),
@@ -323,21 +323,21 @@ impl Engine {
 
             // Expression as statement
             Stmt::Expr(expr) => self
-                .eval_expr(scope, global, state, lib, this_ptr, expr, level)
+                .eval_expr(scope, global, caches, lib, this_ptr, expr, level)
                 .map(Dynamic::flatten),
 
             // Block scope
             Stmt::Block(statements, ..) if statements.is_empty() => Ok(Dynamic::UNIT),
-            Stmt::Block(statements, ..) => {
-                self.eval_stmt_block(scope, global, state, lib, this_ptr, statements, true, level)
-            }
+            Stmt::Block(statements, ..) => self.eval_stmt_block(
+                scope, global, caches, lib, this_ptr, statements, true, level,
+            ),
 
             // If statement
             Stmt::If(x, ..) => {
                 let (expr, if_block, else_block) = x.as_ref();
 
                 let guard_val = self
-                    .eval_expr(scope, global, state, lib, this_ptr, expr, level)
+                    .eval_expr(scope, global, caches, lib, this_ptr, expr, level)
                     .and_then(|v| {
                         v.as_bool().map_err(|typ| {
                             self.make_type_mismatch_err::<bool>(typ, expr.position())
@@ -348,7 +348,7 @@ impl Engine {
                     Ok(true) => {
                         if !if_block.is_empty() {
                             self.eval_stmt_block(
-                                scope, global, state, lib, this_ptr, if_block, true, level,
+                                scope, global, caches, lib, this_ptr, if_block, true, level,
                             )
                         } else {
                             Ok(Dynamic::UNIT)
@@ -357,7 +357,7 @@ impl Engine {
                     Ok(false) => {
                         if !else_block.is_empty() {
                             self.eval_stmt_block(
-                                scope, global, state, lib, this_ptr, else_block, true, level,
+                                scope, global, caches, lib, this_ptr, else_block, true, level,
                             )
                         } else {
                             Ok(Dynamic::UNIT)
@@ -378,7 +378,8 @@ impl Engine {
                     },
                 ) = x.as_ref();
 
-                let value_result = self.eval_expr(scope, global, state, lib, this_ptr, expr, level);
+                let value_result =
+                    self.eval_expr(scope, global, caches, lib, this_ptr, expr, level);
 
                 if let Ok(value) = value_result {
                     let stmt_block_result = if value.is_hashable() {
@@ -392,15 +393,17 @@ impl Engine {
                                 .condition
                                 .as_ref()
                                 .map(|cond| {
-                                    self.eval_expr(scope, global, state, lib, this_ptr, cond, level)
-                                        .and_then(|v| {
-                                            v.as_bool().map_err(|typ| {
-                                                self.make_type_mismatch_err::<bool>(
-                                                    typ,
-                                                    cond.position(),
-                                                )
-                                            })
+                                    self.eval_expr(
+                                        scope, global, caches, lib, this_ptr, cond, level,
+                                    )
+                                    .and_then(|v| {
+                                        v.as_bool().map_err(|typ| {
+                                            self.make_type_mismatch_err::<bool>(
+                                                typ,
+                                                cond.position(),
+                                            )
                                         })
+                                    })
                                 })
                                 .unwrap_or(Ok(true));
 
@@ -425,7 +428,7 @@ impl Engine {
                                     .as_ref()
                                     .map(|cond| {
                                         self.eval_expr(
-                                            scope, global, state, lib, this_ptr, cond, level,
+                                            scope, global, caches, lib, this_ptr, cond, level,
                                         )
                                         .and_then(|v| {
                                             v.as_bool().map_err(|typ| {
@@ -460,7 +463,7 @@ impl Engine {
                     if let Ok(Some(statements)) = stmt_block_result {
                         if !statements.is_empty() {
                             self.eval_stmt_block(
-                                scope, global, state, lib, this_ptr, statements, true, level,
+                                scope, global, caches, lib, this_ptr, statements, true, level,
                             )
                         } else {
                             Ok(Dynamic::UNIT)
@@ -469,7 +472,7 @@ impl Engine {
                         // Default match clause
                         if !def_case.is_empty() {
                             self.eval_stmt_block(
-                                scope, global, state, lib, this_ptr, def_case, true, level,
+                                scope, global, caches, lib, this_ptr, def_case, true, level,
                             )
                         } else {
                             Ok(Dynamic::UNIT)
@@ -488,7 +491,7 @@ impl Engine {
 
                 if !body.is_empty() {
                     match self
-                        .eval_stmt_block(scope, global, state, lib, this_ptr, body, true, level)
+                        .eval_stmt_block(scope, global, caches, lib, this_ptr, body, true, level)
                     {
                         Ok(_) => (),
                         Err(err) => match *err {
@@ -508,7 +511,7 @@ impl Engine {
                 let (expr, body) = x.as_ref();
 
                 let condition = self
-                    .eval_expr(scope, global, state, lib, this_ptr, expr, level)
+                    .eval_expr(scope, global, caches, lib, this_ptr, expr, level)
                     .and_then(|v| {
                         v.as_bool().map_err(|typ| {
                             self.make_type_mismatch_err::<bool>(typ, expr.position())
@@ -519,9 +522,9 @@ impl Engine {
                     Ok(false) => break Ok(Dynamic::UNIT),
                     Ok(true) if body.is_empty() => (),
                     Ok(true) => {
-                        match self
-                            .eval_stmt_block(scope, global, state, lib, this_ptr, body, true, level)
-                        {
+                        match self.eval_stmt_block(
+                            scope, global, caches, lib, this_ptr, body, true, level,
+                        ) {
                             Ok(_) => (),
                             Err(err) => match *err {
                                 ERR::LoopBreak(false, ..) => (),
@@ -541,7 +544,7 @@ impl Engine {
 
                 if !body.is_empty() {
                     match self
-                        .eval_stmt_block(scope, global, state, lib, this_ptr, body, true, level)
+                        .eval_stmt_block(scope, global, caches, lib, this_ptr, body, true, level)
                     {
                         Ok(_) => (),
                         Err(err) => match *err {
@@ -553,7 +556,7 @@ impl Engine {
                 }
 
                 let condition = self
-                    .eval_expr(scope, global, state, lib, this_ptr, &expr, level)
+                    .eval_expr(scope, global, caches, lib, this_ptr, &expr, level)
                     .and_then(|v| {
                         v.as_bool().map_err(|typ| {
                             self.make_type_mismatch_err::<bool>(typ, expr.position())
@@ -572,7 +575,7 @@ impl Engine {
                 let (var_name, counter, expr, statements) = x.as_ref();
 
                 let iter_result = self
-                    .eval_expr(scope, global, state, lib, this_ptr, expr, level)
+                    .eval_expr(scope, global, caches, lib, this_ptr, expr, level)
                     .map(Dynamic::flatten);
 
                 if let Ok(iter_obj) = iter_result {
@@ -671,7 +674,7 @@ impl Engine {
                             }
 
                             let result = self.eval_stmt_block(
-                                scope, global, state, lib, this_ptr, statements, true, level,
+                                scope, global, caches, lib, this_ptr, statements, true, level,
                             );
 
                             match result {
@@ -715,7 +718,7 @@ impl Engine {
                 } = x.as_ref();
 
                 let result = self
-                    .eval_stmt_block(scope, global, state, lib, this_ptr, try_block, true, level)
+                    .eval_stmt_block(scope, global, caches, lib, this_ptr, try_block, true, level)
                     .map(|_| Dynamic::UNIT);
 
                 match result {
@@ -767,7 +770,7 @@ impl Engine {
                         let result = self.eval_stmt_block(
                             scope,
                             global,
-                            state,
+                            caches,
                             lib,
                             this_ptr,
                             catch_block,
@@ -794,7 +797,7 @@ impl Engine {
 
             // Throw value
             Stmt::Return(Some(expr), options, pos) if options.contains(ASTFlags::BREAK) => self
-                .eval_expr(scope, global, state, lib, this_ptr, expr, level)
+                .eval_expr(scope, global, caches, lib, this_ptr, expr, level)
                 .and_then(|v| Err(ERR::ErrorRuntime(v.flatten(), *pos).into())),
 
             // Empty throw
@@ -804,7 +807,7 @@ impl Engine {
 
             // Return value
             Stmt::Return(Some(expr), .., pos) => self
-                .eval_expr(scope, global, state, lib, this_ptr, expr, level)
+                .eval_expr(scope, global, caches, lib, this_ptr, expr, level)
                 .and_then(|v| Err(ERR::Return(v.flatten(), *pos).into())),
 
             // Empty return
@@ -828,7 +831,7 @@ impl Engine {
                 // Check variable definition filter
                 let result = if let Some(ref filter) = self.def_var_filter {
                     let will_shadow = scope.contains(var_name);
-                    let nesting_level = state.scope_level;
+                    let nesting_level = global.scope_level;
                     let is_const = access == AccessMode::ReadOnly;
                     let info = VarDefInfo {
                         name: var_name,
@@ -840,7 +843,7 @@ impl Engine {
                         engine: self,
                         scope,
                         global,
-                        state,
+                        caches,
                         lib,
                         this_ptr,
                         level,
@@ -864,7 +867,7 @@ impl Engine {
                 } else {
                     // Evaluate initial value
                     let value_result = self
-                        .eval_expr(scope, global, state, lib, this_ptr, expr, level)
+                        .eval_expr(scope, global, caches, lib, this_ptr, expr, level)
                         .map(Dynamic::flatten);
 
                     if let Ok(mut value) = value_result {
@@ -872,7 +875,7 @@ impl Engine {
                             // Put global constants into global module
                             #[cfg(not(feature = "no_function"))]
                             #[cfg(not(feature = "no_module"))]
-                            if state.scope_level == 0
+                            if global.scope_level == 0
                                 && access == AccessMode::ReadOnly
                                 && lib.iter().any(|&m| !m.is_empty())
                             {
@@ -927,7 +930,7 @@ impl Engine {
                 }
 
                 let path_result = self
-                    .eval_expr(scope, global, state, lib, this_ptr, &expr, level)
+                    .eval_expr(scope, global, caches, lib, this_ptr, &expr, level)
                     .and_then(|v| {
                         let typ = v.type_name();
                         v.try_cast::<crate::ImmutableString>().ok_or_else(|| {

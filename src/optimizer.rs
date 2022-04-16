@@ -3,7 +3,7 @@
 
 use crate::ast::{ASTFlags, Expr, OpAssignment, Stmt, StmtBlock, StmtBlockContainer, SwitchCases};
 use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF};
-use crate::eval::{EvalState, GlobalRuntimeState};
+use crate::eval::{Caches, GlobalRuntimeState};
 use crate::func::builtin::get_builtin_binary_op_fn;
 use crate::func::hashing::get_hasher;
 use crate::tokenizer::{Span, Token};
@@ -139,7 +139,7 @@ impl<'a> OptimizerState<'a> {
         self.engine
             .call_native_fn(
                 &mut GlobalRuntimeState::new(&self.engine),
-                &mut EvalState::new(),
+                &mut Caches::new(),
                 lib,
                 fn_name,
                 calc_fn_hash(&fn_name, arg_values.len()),

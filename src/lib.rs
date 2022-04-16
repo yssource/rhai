@@ -294,10 +294,7 @@ pub use ast::EncapsulatedEnviron;
 pub use ast::FloatWrapper;
 
 #[cfg(feature = "internals")]
-pub use eval::{EvalState, GlobalRuntimeState};
-
-#[cfg(feature = "internals")]
-pub use func::call::{FnResolutionCache, FnResolutionCacheEntry};
+pub use eval::{Caches, FnResolutionCache, FnResolutionCacheEntry, GlobalRuntimeState};
 
 /// Alias to [`smallvec::SmallVec<[T; 3]>`](https://crates.io/crates/smallvec), which is a
 /// specialized [`Vec`] backed by a small, inline, fixed-size array when there are ≤ 3 items stored.
