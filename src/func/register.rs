@@ -5,9 +5,8 @@
 use super::call::FnCallArgs;
 use super::callable_function::CallableFunction;
 use super::native::{FnAny, SendSync};
-use crate::tokenizer::Position;
 use crate::types::dynamic::{DynamicWriteLock, Variant};
-use crate::{reify, Dynamic, NativeCallContext, RhaiResultOf, ERR};
+use crate::{reify, Dynamic, NativeCallContext, RhaiResultOf};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{any::TypeId, mem};
@@ -102,9 +101,11 @@ macro_rules! check_constant {
                     _ => false,
                 };
                 if deny {
-                    return Err(
-                        ERR::ErrorAssignmentToConstant(String::new(), Position::NONE).into(),
-                    );
+                    return Err(crate::ERR::ErrorAssignmentToConstant(
+                        String::new(),
+                        crate::Position::NONE,
+                    )
+                    .into());
                 }
             }
         }
