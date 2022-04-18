@@ -1808,7 +1808,11 @@ impl Engine {
             }
         }
 
-        let op_info = op.map(OpAssignment::new_from_token);
+        let op_info = if let Some(op) = op {
+            OpAssignment::new_op_assignment_from_token(op, op_pos)
+        } else {
+            OpAssignment::new_assignment(op_pos)
+        };
 
         match lhs {
             // const_expr = rhs
@@ -1816,10 +1820,9 @@ impl Engine {
                 Err(PERR::AssignmentToConstant("".into()).into_err(lhs.start_position()))
             }
             // var (non-indexed) = rhs
-            Expr::Variable(ref x, None, _) if x.0.is_none() => Ok(Stmt::Assignment(
-                (op_info, (lhs, rhs).into()).into(),
-                op_pos,
-            )),
+            Expr::Variable(ref x, None, _) if x.0.is_none() => {
+                Ok(Stmt::Assignment((op_info, (lhs, rhs).into()).into()))
+            }
             // var (indexed) = rhs
             Expr::Variable(ref x, i, var_pos) => {
                 let (index, .., name) = x.as_ref();
@@ -1832,10 +1835,9 @@ impl Engine {
                     .get_mut_by_index(state.stack.len() - index)
                     .access_mode()
                 {
-                    AccessMode::ReadWrite => Ok(Stmt::Assignment(
-                        (op_info, (lhs, rhs).into()).into(),
-                        op_pos,
-                    )),
+                    AccessMode::ReadWrite => {
+                        Ok(Stmt::Assignment((op_info, (lhs, rhs).into()).into()))
+                    }
                     // Constant values cannot be assigned to
                     AccessMode::ReadOnly => {
                         Err(PERR::AssignmentToConstant(name.to_string()).into_err(var_pos))
@@ -1854,10 +1856,9 @@ impl Engine {
                     None => {
                         match x.lhs {
                             // var[???] = rhs, var.??? = rhs
-                            Expr::Variable(..) => Ok(Stmt::Assignment(
-                                (op_info, (lhs, rhs).into()).into(),
-                                op_pos,
-                            )),
+                            Expr::Variable(..) => {
+                                Ok(Stmt::Assignment((op_info, (lhs, rhs).into()).into()))
+                            }
                             // expr[???] = rhs, expr.??? = rhs
                             ref expr => Err(PERR::AssignmentToInvalidLHS("".to_string())
                                 .into_err(expr.position())),

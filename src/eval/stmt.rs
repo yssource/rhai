@@ -110,14 +110,12 @@ impl Engine {
     }
 
     /// Evaluate an op-assignment statement.
-    /// [`Position`] in [`EvalAltResult`] is [`NONE`][Position::NONE] and should be set afterwards.
     pub(crate) fn eval_op_assignment(
         &self,
         global: &mut GlobalRuntimeState,
         caches: &mut Caches,
         lib: &[&Module],
-        op_info: Option<OpAssignment>,
-        op_pos: Position,
+        op_info: OpAssignment,
         target: &mut Target,
         root: (&str, Position),
         new_val: Dynamic,
@@ -130,13 +128,15 @@ impl Engine {
 
         let mut new_val = new_val;
 
-        if let Some(OpAssignment {
-            hash_op_assign,
-            hash_op,
-            op_assign,
-            op,
-        }) = op_info
-        {
+        if op_info.is_op_assignment() {
+            let OpAssignment {
+                hash_op_assign,
+                hash_op,
+                op_assign,
+                op,
+                pos: op_pos,
+            } = op_info;
+
             let mut lock_guard;
             let lhs_ptr_inner;
 
@@ -166,9 +166,11 @@ impl Engine {
                 Err(err) if matches!(*err, ERR::ErrorFunctionNotFound(ref f, ..) if f.starts_with(op_assign)) =>
                 {
                     // Expand to `var = var op rhs`
-                    let (value, ..) = self.call_native_fn(
-                        global, caches, lib, op, hash_op, args, true, false, op_pos, level,
-                    )?;
+                    let (value, ..) = self
+                        .call_native_fn(
+                            global, caches, lib, op, hash_op, args, true, false, op_pos, level,
+                        )
+                        .map_err(|err| err.fill_position(op_info.pos))?;
 
                     #[cfg(not(feature = "unchecked"))]
                     self.check_data_size(&value, root.1)?;
@@ -182,7 +184,9 @@ impl Engine {
             *target.as_mut() = new_val;
         }
 
-        target.propagate_changed_value()
+        target
+            .propagate_changed_value()
+            .map_err(|err| err.fill_position(op_info.pos))
     }
 
     /// Evaluate a statement.
@@ -228,7 +232,7 @@ impl Engine {
         // Then assignments.
         // We shouldn't do this for too many variants because, soon or later, the added comparisons
         // will cost more than the mis-predicted `match` branch.
-        if let Stmt::Assignment(x, op_pos) = stmt {
+        if let Stmt::Assignment(x, ..) = stmt {
             #[cfg(not(feature = "unchecked"))]
             self.inc_operations(&mut global.num_operations, stmt.position())?;
 
@@ -261,9 +265,8 @@ impl Engine {
                         let lhs_ptr = &mut lhs_ptr;
 
                         self.eval_op_assignment(
-                            global, caches, lib, *op_info, *op_pos, lhs_ptr, root, rhs_val, level,
+                            global, caches, lib, *op_info, lhs_ptr, root, rhs_val, level,
                         )
-                        .map_err(|err| err.fill_position(rhs.start_position()))
                         .map(|_| Dynamic::UNIT)
                     } else {
                         search_result.map(|_| Dynamic::UNIT)
@@ -279,7 +282,7 @@ impl Engine {
                     .map(Dynamic::flatten);
 
                 if let Ok(rhs_val) = rhs_result {
-                    let _new_val = Some(((rhs_val, rhs.start_position()), (*op_info, *op_pos)));
+                    let _new_val = Some((rhs_val, *op_info));
 
                     // Must be either `var[index] op= val` or `var.prop op= val`
                     match lhs {

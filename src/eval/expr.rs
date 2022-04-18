@@ -322,8 +322,12 @@ impl Engine {
 
             // `... ${...} ...`
             Expr::InterpolatedString(x, _) => {
-                let mut concat: Dynamic = self.const_empty_string().into();
+                let mut concat = self.const_empty_string().into();
+                let target = &mut concat;
                 let mut result = Ok(Dynamic::UNIT);
+
+                let mut op_info = OpAssignment::new_op_assignment(OP_CONCAT, Position::NONE);
+                let root = ("", Position::NONE);
 
                 for expr in x.iter() {
                     let item =
@@ -335,23 +339,17 @@ impl Engine {
                             }
                         };
 
-                    if let Err(err) = self.eval_op_assignment(
-                        global,
-                        caches,
-                        lib,
-                        Some(OpAssignment::new(OP_CONCAT)),
-                        expr.start_position(),
-                        &mut (&mut concat).into(),
-                        ("", Position::NONE),
-                        item,
-                        level,
-                    ) {
-                        result = Err(err.fill_position(expr.start_position()));
+                    op_info.pos = expr.start_position();
+
+                    if let Err(err) = self
+                        .eval_op_assignment(global, caches, lib, op_info, target, root, item, level)
+                    {
+                        result = Err(err);
                         break;
                     }
                 }
 
-                result.map(|_| concat)
+                result.map(|_| concat.take_or_clone())
             }
 
             #[cfg(not(feature = "no_index"))]

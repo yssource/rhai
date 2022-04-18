@@ -130,10 +130,10 @@ impl Engine {
         _parent: &Expr,
         rhs: &Expr,
         _parent_options: ASTFlags,
-        idx_values: &mut StaticVec<super::ChainArgument>,
+        idx_values: &mut StaticVec<ChainArgument>,
         chain_type: ChainType,
         level: usize,
-        new_val: Option<((Dynamic, Position), (Option<OpAssignment>, Position))>,
+        new_val: Option<(Dynamic, OpAssignment)>,
     ) -> RhaiResultOf<(Dynamic, bool)> {
         let is_ref_mut = target.is_ref();
 
@@ -200,7 +200,7 @@ impl Engine {
                         #[cfg(feature = "debugging")]
                         self.run_debugger(scope, global, lib, this_ptr, _parent, level)?;
 
-                        let ((new_val, new_pos), (op_info, op_pos)) = new_val.expect("`Some`");
+                        let (new_val, op_info) = new_val.expect("`Some`");
                         let mut idx_val2 = idx_val.clone();
 
                         let try_setter = match self.get_indexed_mut(
@@ -209,12 +209,10 @@ impl Engine {
                             // Indexed value is not a temp value - update directly
                             Ok(ref mut obj_ptr) => {
                                 self.eval_op_assignment(
-                                    global, caches, lib, op_info, op_pos, obj_ptr, root, new_val,
-                                    level,
-                                )
-                                .map_err(|err| err.fill_position(new_pos))?;
+                                    global, caches, lib, op_info, obj_ptr, root, new_val, level,
+                                )?;
                                 #[cfg(not(feature = "unchecked"))]
-                                self.check_data_size(obj_ptr, new_pos)?;
+                                self.check_data_size(obj_ptr, op_info.pos)?;
                                 None
                             }
                             // Indexed value cannot be referenced - use indexer
@@ -228,7 +226,7 @@ impl Engine {
                             let idx = &mut idx_val2;
 
                             // Is this an op-assignment?
-                            if op_info.is_some() {
+                            if op_info.is_op_assignment() {
                                 let idx = &mut idx.clone();
                                 // Call the index getter to get the current value
                                 if let Ok(val) =
@@ -237,14 +235,13 @@ impl Engine {
                                     let mut res = val.into();
                                     // Run the op-assignment
                                     self.eval_op_assignment(
-                                        global, caches, lib, op_info, op_pos, &mut res, root,
-                                        new_val, level,
-                                    )
-                                    .map_err(|err| err.fill_position(new_pos))?;
+                                        global, caches, lib, op_info, &mut res, root, new_val,
+                                        level,
+                                    )?;
                                     // Replace new value
                                     new_val = res.take_or_clone();
                                     #[cfg(not(feature = "unchecked"))]
-                                    self.check_data_size(&new_val, new_pos)?;
+                                    self.check_data_size(&new_val, op_info.pos)?;
                                 }
                             }
 
@@ -305,19 +302,17 @@ impl Engine {
                         self.run_debugger(scope, global, lib, this_ptr, rhs, level)?;
 
                         let index = x.2.clone().into();
-                        let ((new_val, new_pos), (op_info, op_pos)) = new_val.expect("`Some`");
+                        let (new_val, op_info) = new_val.expect("`Some`");
                         {
                             let val_target = &mut self.get_indexed_mut(
                                 global, caches, lib, target, index, *pos, true, false, level,
                             )?;
                             self.eval_op_assignment(
-                                global, caches, lib, op_info, op_pos, val_target, root, new_val,
-                                level,
-                            )
-                            .map_err(|err| err.fill_position(new_pos))?;
+                                global, caches, lib, op_info, val_target, root, new_val, level,
+                            )?;
                         }
                         #[cfg(not(feature = "unchecked"))]
-                        self.check_data_size(target.source(), new_pos)?;
+                        self.check_data_size(target.source(), op_info.pos)?;
                         Ok((Dynamic::UNIT, true))
                     }
                     // {xxx:map}.id
@@ -337,9 +332,9 @@ impl Engine {
                         self.run_debugger(scope, global, lib, this_ptr, rhs, level)?;
 
                         let ((getter, hash_get), (setter, hash_set), name) = x.as_ref();
-                        let ((mut new_val, new_pos), (op_info, op_pos)) = new_val.expect("`Some`");
+                        let (mut new_val, op_info) = new_val.expect("`Some`");
 
-                        if op_info.is_some() {
+                        if op_info.is_op_assignment() {
                             let hash = crate::ast::FnCallHashes::from_native(*hash_get);
                             let args = &mut [target.as_mut()];
                             let (mut orig_val, ..) = self
@@ -369,10 +364,8 @@ impl Engine {
                                 let orig_val = &mut (&mut orig_val).into();
 
                                 self.eval_op_assignment(
-                                    global, caches, lib, op_info, op_pos, orig_val, root, new_val,
-                                    level,
-                                )
-                                .map_err(|err| err.fill_position(new_pos))?;
+                                    global, caches, lib, op_info, orig_val, root, new_val, level,
+                                )?;
                             }
 
                             new_val = orig_val;
@@ -620,7 +613,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
         level: usize,
-        new_val: Option<((Dynamic, Position), (Option<OpAssignment>, Position))>,
+        new_val: Option<(Dynamic, OpAssignment)>,
     ) -> RhaiResult {
         let (crate::ast::BinaryExpr { lhs, rhs }, chain_type, options, op_pos) = match expr {
             #[cfg(not(feature = "no_index"))]
@@ -690,7 +683,7 @@ impl Engine {
         expr: &Expr,
         parent_options: ASTFlags,
         _parent_chain_type: ChainType,
-        idx_values: &mut StaticVec<super::ChainArgument>,
+        idx_values: &mut StaticVec<ChainArgument>,
         size: usize,
         level: usize,
     ) -> RhaiResultOf<()> {
@@ -717,7 +710,7 @@ impl Engine {
                     },
                 )?;
 
-                idx_values.push(super::ChainArgument::from_fn_call_args(values, pos));
+                idx_values.push(ChainArgument::from_fn_call_args(values, pos));
             }
             #[cfg(not(feature = "no_object"))]
             Expr::MethodCall(..) if _parent_chain_type == ChainType::Dotting => {
@@ -726,7 +719,7 @@ impl Engine {
 
             #[cfg(not(feature = "no_object"))]
             Expr::Property(.., pos) if _parent_chain_type == ChainType::Dotting => {
-                idx_values.push(super::ChainArgument::Property(*pos))
+                idx_values.push(ChainArgument::Property(*pos))
             }
             Expr::Property(..) => unreachable!("unexpected Expr::Property for indexing"),
 
@@ -739,7 +732,7 @@ impl Engine {
                 let lhs_arg_val = match lhs {
                     #[cfg(not(feature = "no_object"))]
                     Expr::Property(.., pos) if _parent_chain_type == ChainType::Dotting => {
-                        super::ChainArgument::Property(*pos)
+                        ChainArgument::Property(*pos)
                     }
                     Expr::Property(..) => unreachable!("unexpected Expr::Property for indexing"),
 
@@ -762,7 +755,7 @@ impl Engine {
                                 Ok::<_, crate::RhaiError>((values, pos))
                             },
                         )?;
-                        super::ChainArgument::from_fn_call_args(values, pos)
+                        ChainArgument::from_fn_call_args(values, pos)
                     }
                     #[cfg(not(feature = "no_object"))]
                     Expr::MethodCall(..) if _parent_chain_type == ChainType::Dotting => {
@@ -776,10 +769,7 @@ impl Engine {
                     _ if _parent_chain_type == ChainType::Indexing => self
                         .eval_expr(scope, global, caches, lib, this_ptr, lhs, level)
                         .map(|v| {
-                            super::ChainArgument::from_index_value(
-                                v.flatten(),
-                                lhs.start_position(),
-                            )
+                            ChainArgument::from_index_value(v.flatten(), lhs.start_position())
                         })?,
                     expr => unreachable!("unknown chained expression: {:?}", expr),
                 };
@@ -802,9 +792,7 @@ impl Engine {
             #[cfg(not(feature = "no_index"))]
             _ if _parent_chain_type == ChainType::Indexing => idx_values.push(
                 self.eval_expr(scope, global, caches, lib, this_ptr, expr, level)
-                    .map(|v| {
-                        super::ChainArgument::from_index_value(v.flatten(), expr.start_position())
-                    })?,
+                    .map(|v| ChainArgument::from_index_value(v.flatten(), expr.start_position()))?,
             ),
             _ => unreachable!("unknown chained expression: {:?}", expr),
         }

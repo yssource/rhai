@@ -426,7 +426,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
     match stmt {
         // var = var op expr => var op= expr
         Stmt::Assignment(x, ..)
-            if x.0.is_none()
+            if !x.0.is_op_assignment()
                 && x.1.lhs.is_variable_access(true)
                 && matches!(&x.1.rhs, Expr::FnCall(x2, ..)
                         if Token::lookup_from_syntax(&x2.name).map(|t| t.has_op_assignment()).unwrap_or(false)
@@ -437,7 +437,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
             match x.1.rhs {
                 Expr::FnCall(ref mut x2, ..) => {
                     state.set_dirty();
-                    x.0 = Some(OpAssignment::new_from_base(&x2.name));
+                    x.0 = OpAssignment::new_op_assignment_from_base(&x2.name, x2.pos);
                     x.1.rhs = mem::take(&mut x2.args[1]);
                 }
                 ref expr => unreachable!("Expr::FnCall expected but gets {:?}", expr),
