@@ -201,17 +201,15 @@ impl FileModuleResolver {
     /// Is a particular path cached?
     #[inline]
     #[must_use]
-    pub fn is_cached(&self, path: impl AsRef<str>, source_path: Option<&str>) -> bool {
+    pub fn is_cached(&self, path: impl AsRef<Path>) -> bool {
         if !self.cache_enabled {
             return false;
         }
 
-        let file_path = self.get_file_path(path.as_ref(), source_path);
-
         let cache = locked_read(&self.cache);
 
         if !cache.is_empty() {
-            cache.contains_key(&file_path)
+            cache.contains_key(path.as_ref())
         } else {
             false
         }
@@ -227,20 +225,14 @@ impl FileModuleResolver {
     /// The next time this path is resolved, the script file will be loaded once again.
     #[inline]
     #[must_use]
-    pub fn clear_cache_for_path(
-        &mut self,
-        path: impl AsRef<str>,
-        source_path: Option<impl AsRef<str>>,
-    ) -> Option<Shared<Module>> {
-        let file_path = self.get_file_path(path.as_ref(), source_path.as_ref().map(<_>::as_ref));
-
+    pub fn clear_cache_for_path(&mut self, path: impl AsRef<Path>) -> Option<Shared<Module>> {
         locked_write(&self.cache)
-            .remove_entry(&file_path)
+            .remove_entry(path.as_ref())
             .map(|(.., v)| v)
     }
     /// Construct a full file path.
     #[must_use]
-    fn get_file_path(&self, path: &str, source_path: Option<&str>) -> PathBuf {
+    pub fn get_file_path(&self, path: &str, source_path: Option<&Path>) -> PathBuf {
         let path = Path::new(path);
 
         let mut file_path;
@@ -274,9 +266,9 @@ impl FileModuleResolver {
             .as_ref()
             .and_then(|g| g.source())
             .or(source)
-            .and_then(|p| Path::new(p).parent().map(|p| p.to_string_lossy()));
+            .and_then(|p| Path::new(p).parent());
 
-        let file_path = self.get_file_path(path, source_path.as_ref().map(|p| p.as_ref()));
+        let file_path = self.get_file_path(path, source_path);
 
         if self.is_cache_enabled() {
             #[cfg(not(feature = "sync"))]
@@ -351,7 +343,7 @@ impl ModuleResolver for FileModuleResolver {
         pos: Position,
     ) -> Option<RhaiResultOf<crate::AST>> {
         // Construct the script file path
-        let file_path = self.get_file_path(path, source_path);
+        let file_path = self.get_file_path(path, source_path.map(|s| Path::new(s)));
 
         // Load the script file and compile it
         Some(
