@@ -9,6 +9,11 @@ Bug fixes
 
 * Compound assignments now work properly with indexers.
 
+Enhancements
+------------
+
+* `Module::eval_ast_as_new_raw` is made public as a low-level API.
+
 
 Version 1.6.1
 =============
