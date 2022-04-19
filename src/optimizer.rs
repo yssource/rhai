@@ -531,35 +531,38 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
 
             // First check hashes
             if let Some(block) = cases.get_mut(&hash) {
-                if let Some(mut condition) = mem::take(&mut block.condition) {
-                    // switch const { case if condition => stmt, _ => def } => if condition { stmt } else { def }
-                    optimize_expr(&mut condition, state, false);
-
-                    let def_stmt =
-                        optimize_stmt_block(mem::take(def_case), state, true, true, false);
-
-                    *stmt = Stmt::If(
-                        (
-                            condition,
+                match mem::take(&mut block.condition) {
+                    Expr::BoolConstant(true, ..) => {
+                        // Promote the matched case
+                        let statements = optimize_stmt_block(
                             mem::take(&mut block.statements),
-                            StmtBlock::new_with_span(
-                                def_stmt,
-                                def_case.span_or_else(*pos, Position::NONE),
-                            ),
-                        )
-                            .into(),
-                        match_expr.start_position(),
-                    );
-                } else {
-                    // Promote the matched case
-                    let statements = optimize_stmt_block(
-                        mem::take(&mut block.statements),
-                        state,
-                        true,
-                        true,
-                        false,
-                    );
-                    *stmt = (statements, block.statements.span()).into();
+                            state,
+                            true,
+                            true,
+                            false,
+                        );
+                        *stmt = (statements, block.statements.span()).into();
+                    }
+                    mut condition => {
+                        // switch const { case if condition => stmt, _ => def } => if condition { stmt } else { def }
+                        optimize_expr(&mut condition, state, false);
+
+                        let def_stmt =
+                            optimize_stmt_block(mem::take(def_case), state, true, true, false);
+
+                        *stmt = Stmt::If(
+                            (
+                                condition,
+                                mem::take(&mut block.statements),
+                                StmtBlock::new_with_span(
+                                    def_stmt,
+                                    def_case.span_or_else(*pos, Position::NONE),
+                                ),
+                            )
+                                .into(),
+                            match_expr.start_position(),
+                        );
+                    }
                 }
 
                 state.set_dirty();
@@ -571,7 +574,11 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                 let value = value.as_int().expect("`INT`");
 
                 // Only one range or all ranges without conditions
-                if ranges.len() == 1 || ranges.iter().all(|(.., c)| !c.has_condition()) {
+                if ranges.len() == 1
+                    || ranges
+                        .iter()
+                        .all(|(.., c)| matches!(c.condition, Expr::BoolConstant(true, ..)))
+                {
                     for (.., block) in
                         ranges
                             .iter_mut()
@@ -580,30 +587,38 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                                     || (inclusive && (start..=end).contains(&value))
                             })
                     {
-                        if let Some(mut condition) = mem::take(&mut block.condition) {
-                            // switch const { range if condition => stmt, _ => def } => if condition { stmt } else { def }
-                            optimize_expr(&mut condition, state, false);
+                        match mem::take(&mut block.condition) {
+                            Expr::BoolConstant(true, ..) => {
+                                // Promote the matched case
+                                let statements = mem::take(&mut *block.statements);
+                                let statements =
+                                    optimize_stmt_block(statements, state, true, true, false);
+                                *stmt = (statements, block.statements.span()).into();
+                            }
+                            mut condition => {
+                                // switch const { range if condition => stmt, _ => def } => if condition { stmt } else { def }
+                                optimize_expr(&mut condition, state, false);
 
-                            let def_stmt =
-                                optimize_stmt_block(mem::take(def_case), state, true, true, false);
-                            *stmt = Stmt::If(
-                                (
-                                    condition,
-                                    mem::take(&mut block.statements),
-                                    StmtBlock::new_with_span(
-                                        def_stmt,
-                                        def_case.span_or_else(*pos, Position::NONE),
-                                    ),
-                                )
-                                    .into(),
-                                match_expr.start_position(),
-                            );
-                        } else {
-                            // Promote the matched case
-                            let statements = mem::take(&mut *block.statements);
-                            let statements =
-                                optimize_stmt_block(statements, state, true, true, false);
-                            *stmt = (statements, block.statements.span()).into();
+                                let def_stmt = optimize_stmt_block(
+                                    mem::take(def_case),
+                                    state,
+                                    true,
+                                    true,
+                                    false,
+                                );
+                                *stmt = Stmt::If(
+                                    (
+                                        condition,
+                                        mem::take(&mut block.statements),
+                                        StmtBlock::new_with_span(
+                                            def_stmt,
+                                            def_case.span_or_else(*pos, Position::NONE),
+                                        ),
+                                    )
+                                        .into(),
+                                    match_expr.start_position(),
+                                );
+                            }
                         }
 
                         state.set_dirty();
@@ -632,12 +647,14 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                         *block.statements =
                             optimize_stmt_block(statements, state, preserve_result, true, false);
 
-                        if let Some(mut condition) = mem::take(&mut block.condition) {
-                            optimize_expr(&mut condition, state, false);
-                            match condition {
-                                Expr::Unit(..) | Expr::BoolConstant(true, ..) => state.set_dirty(),
-                                _ => block.condition = Some(condition),
+                        optimize_expr(&mut block.condition, state, false);
+
+                        match block.condition {
+                            Expr::Unit(pos) => {
+                                block.condition = Expr::BoolConstant(true, pos);
+                                state.set_dirty()
                             }
+                            _ => (),
                         }
                     }
                     return;
@@ -669,18 +686,20 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                 *block.statements =
                     optimize_stmt_block(statements, state, preserve_result, true, false);
 
-                if let Some(mut condition) = mem::take(&mut block.condition) {
-                    optimize_expr(&mut condition, state, false);
-                    match condition {
-                        Expr::Unit(..) | Expr::BoolConstant(true, ..) => state.set_dirty(),
-                        _ => block.condition = Some(condition),
+                optimize_expr(&mut block.condition, state, false);
+
+                match block.condition {
+                    Expr::Unit(pos) => {
+                        block.condition = Expr::BoolConstant(true, pos);
+                        state.set_dirty();
                     }
+                    _ => (),
                 }
             }
 
             // Remove false cases
             cases.retain(|_, block| match block.condition {
-                Some(Expr::BoolConstant(false, ..)) => {
+                Expr::BoolConstant(false, ..) => {
                     state.set_dirty();
                     false
                 }
@@ -693,18 +712,20 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                 *block.statements =
                     optimize_stmt_block(statements, state, preserve_result, true, false);
 
-                if let Some(mut condition) = mem::take(&mut block.condition) {
-                    optimize_expr(&mut condition, state, false);
-                    match condition {
-                        Expr::Unit(..) | Expr::BoolConstant(true, ..) => state.set_dirty(),
-                        _ => block.condition = Some(condition),
+                optimize_expr(&mut block.condition, state, false);
+
+                match block.condition {
+                    Expr::Unit(pos) => {
+                        block.condition = Expr::BoolConstant(true, pos);
+                        state.set_dirty();
                     }
+                    _ => (),
                 }
             }
 
             // Remove false ranges
             ranges.retain(|(.., block)| match block.condition {
-                Some(Expr::BoolConstant(false, ..)) => {
+                Expr::BoolConstant(false, ..) => {
                     state.set_dirty();
                     false
                 }

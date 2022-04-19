@@ -1041,7 +1041,7 @@ impl Engine {
                         return Err(PERR::WrongSwitchCaseCondition.into_err(if_pos));
                     }
 
-                    (None, None)
+                    (None, Expr::BoolConstant(true, Position::NONE))
                 }
                 (Token::Underscore, pos) => return Err(PERR::DuplicatedSwitchCase.into_err(*pos)),
 
@@ -1054,9 +1054,9 @@ impl Engine {
                         Some(self.parse_expr(input, state, lib, settings.level_up())?);
 
                     let condition = if match_token(input, Token::If).0 {
-                        Some(self.parse_expr(input, state, lib, settings.level_up())?)
+                        self.parse_expr(input, state, lib, settings.level_up())?
                     } else {
-                        None
+                        Expr::BoolConstant(true, Position::NONE)
                     };
                     (case_expr, condition)
                 }

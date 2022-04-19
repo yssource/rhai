@@ -19,7 +19,7 @@ use std::{
 /// Exported under the `internals` feature only.
 ///
 /// This type may hold a straight assignment (i.e. not an op-assignment).
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub struct OpAssignment<'a> {
     /// Hash of the op-assignment call.
     pub hash_op_assign: u64,
@@ -106,11 +106,27 @@ impl OpAssignment<'_> {
     }
 }
 
+impl fmt::Debug for OpAssignment<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_op_assignment() {
+            f.debug_struct("OpAssignment")
+                .field("hash_op_assign", &self.hash_op_assign)
+                .field("hash_op", &self.hash_op)
+                .field("op_assign", &self.op_assign)
+                .field("op", &self.op)
+                .field("pos", &self.pos)
+                .finish()
+        } else {
+            fmt::Debug::fmt(&self.pos, f)
+        }
+    }
+}
+
 /// A statements block with an optional condition.
 #[derive(Debug, Clone, Hash)]
 pub struct ConditionalStmtBlock {
-    /// Optional condition.
-    pub condition: Option<Expr>,
+    /// Condition.
+    pub condition: Expr,
     /// Statements block.
     pub statements: StmtBlock,
 }
@@ -119,7 +135,7 @@ impl<B: Into<StmtBlock>> From<B> for ConditionalStmtBlock {
     #[inline(always)]
     fn from(value: B) -> Self {
         Self {
-            condition: None,
+            condition: Expr::BoolConstant(true, Position::NONE),
             statements: value.into(),
         }
     }
@@ -129,28 +145,9 @@ impl<B: Into<StmtBlock>> From<(Expr, B)> for ConditionalStmtBlock {
     #[inline(always)]
     fn from(value: (Expr, B)) -> Self {
         Self {
-            condition: Some(value.0),
-            statements: value.1.into(),
-        }
-    }
-}
-
-impl<B: Into<StmtBlock>> From<(Option<Expr>, B)> for ConditionalStmtBlock {
-    #[inline(always)]
-    fn from(value: (Option<Expr>, B)) -> Self {
-        Self {
             condition: value.0,
             statements: value.1.into(),
         }
-    }
-}
-
-impl ConditionalStmtBlock {
-    /// Does the condition exist?
-    #[inline(always)]
-    #[must_use]
-    pub const fn has_condition(&self) -> bool {
-        self.condition.is_some()
     }
 }
 
@@ -621,12 +618,10 @@ impl Stmt {
             Self::Switch(x, ..) => {
                 x.0.is_pure()
                     && x.1.cases.values().all(|block| {
-                        block.condition.as_ref().map(Expr::is_pure).unwrap_or(true)
-                            && block.statements.iter().all(Stmt::is_pure)
+                        block.condition.is_pure() && block.statements.iter().all(Stmt::is_pure)
                     })
                     && x.1.ranges.iter().all(|(.., block)| {
-                        block.condition.as_ref().map(Expr::is_pure).unwrap_or(true)
-                            && block.statements.iter().all(Stmt::is_pure)
+                        block.condition.is_pure() && block.statements.iter().all(Stmt::is_pure)
                     })
                     && x.1.def_case.iter().all(Stmt::is_pure)
             }
@@ -768,12 +763,7 @@ impl Stmt {
                     return false;
                 }
                 for b in x.1.cases.values() {
-                    if !b
-                        .condition
-                        .as_ref()
-                        .map(|e| e.walk(path, on_node))
-                        .unwrap_or(true)
-                    {
+                    if !b.condition.walk(path, on_node) {
                         return false;
                     }
                     for s in b.statements.iter() {
@@ -783,12 +773,7 @@ impl Stmt {
                     }
                 }
                 for (.., b) in &x.1.ranges {
-                    if !b
-                        .condition
-                        .as_ref()
-                        .map(|e| e.walk(path, on_node))
-                        .unwrap_or(true)
-                    {
+                    if !b.condition.walk(path, on_node) {
                         return false;
                     }
                     for s in b.statements.iter() {

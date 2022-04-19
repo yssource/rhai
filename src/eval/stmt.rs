@@ -392,23 +392,16 @@ impl Engine {
 
                         // First check hashes
                         if let Some(case_block) = cases.get(&hash) {
-                            let cond_result = case_block
-                                .condition
-                                .as_ref()
-                                .map(|cond| {
-                                    self.eval_expr(
-                                        scope, global, caches, lib, this_ptr, cond, level,
-                                    )
+                            let cond_result = match case_block.condition {
+                                Expr::BoolConstant(b, ..) => Ok(b),
+                                ref c => self
+                                    .eval_expr(scope, global, caches, lib, this_ptr, c, level)
                                     .and_then(|v| {
                                         v.as_bool().map_err(|typ| {
-                                            self.make_type_mismatch_err::<bool>(
-                                                typ,
-                                                cond.position(),
-                                            )
+                                            self.make_type_mismatch_err::<bool>(typ, c.position())
                                         })
-                                    })
-                                })
-                                .unwrap_or(Ok(true));
+                                    }),
+                            };
 
                             match cond_result {
                                 Ok(true) => Ok(Some(&case_block.statements)),
@@ -426,23 +419,19 @@ impl Engine {
                                         || (inclusive && (start..=end).contains(&value))
                                 })
                             {
-                                let cond_result = block
-                                    .condition
-                                    .as_ref()
-                                    .map(|cond| {
-                                        self.eval_expr(
-                                            scope, global, caches, lib, this_ptr, cond, level,
-                                        )
+                                let cond_result = match block.condition {
+                                    Expr::BoolConstant(b, ..) => Ok(b),
+                                    ref c => self
+                                        .eval_expr(scope, global, caches, lib, this_ptr, c, level)
                                         .and_then(|v| {
                                             v.as_bool().map_err(|typ| {
                                                 self.make_type_mismatch_err::<bool>(
                                                     typ,
-                                                    cond.position(),
+                                                    c.position(),
                                                 )
                                             })
-                                        })
-                                    })
-                                    .unwrap_or(Ok(true));
+                                        }),
+                                };
 
                                 match cond_result {
                                     Ok(true) => result = Ok(Some(&block.statements)),
