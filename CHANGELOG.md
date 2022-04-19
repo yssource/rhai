@@ -13,6 +13,7 @@ Enhancements
 ------------
 
 * `Module::eval_ast_as_new_raw` is made public as a low-level API.
+* Improper `switch` case condition syntax is now caught at parse time.
 
 
 Version 1.6.1

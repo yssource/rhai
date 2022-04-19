@@ -122,7 +122,9 @@ impl fmt::Debug for OpAssignment<'_> {
     }
 }
 
-/// A statements block with an optional condition.
+/// A statements block with a condition.
+///
+/// The condition may simply be [`Expr::BoolConstant`] with `true` if there is actually no condition.
 #[derive(Debug, Clone, Hash)]
 pub struct ConditionalStmtBlock {
     /// Condition.

@@ -1054,7 +1054,12 @@ impl Engine {
                         Some(self.parse_expr(input, state, lib, settings.level_up())?);
 
                     let condition = if match_token(input, Token::If).0 {
-                        self.parse_expr(input, state, lib, settings.level_up())?
+                        ensure_not_statement_expr(input, "a boolean")?;
+                        let guard = self
+                            .parse_expr(input, state, lib, settings.level_up())?
+                            .ensure_bool_expr()?;
+                        ensure_not_assignment(input)?;
+                        guard
                     } else {
                         Expr::BoolConstant(true, Position::NONE)
                     };
