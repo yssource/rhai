@@ -382,6 +382,8 @@ pub enum Token {
     LeftBracket,
     /// `]`
     RightBracket,
+    /// `()`
+    Unit,
     /// `+`
     Plus,
     /// `+` (unary)
@@ -558,6 +560,7 @@ impl Token {
             RightParen => ")",
             LeftBracket => "[",
             RightBracket => "]",
+            Unit => "()",
             Plus => "+",
             UnaryPlus => "+",
             Minus => "-",
@@ -754,6 +757,7 @@ impl Token {
             ")" => RightParen,
             "[" => LeftBracket,
             "]" => RightBracket,
+            "()" => Unit,
             "+" => Plus,
             "-" => Minus,
             "*" => Multiply,
@@ -1701,6 +1705,12 @@ fn get_next_token_inner(
             // Braces
             ('{', ..) => return Some((Token::LeftBrace, start_pos)),
             ('}', ..) => return Some((Token::RightBrace, start_pos)),
+
+            // Unit
+            ('(', ')') => {
+                eat_next(stream, pos);
+                return Some((Token::Unit, start_pos));
+            }
 
             // Parentheses
             ('(', '*') => {

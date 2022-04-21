@@ -426,10 +426,6 @@ impl Engine {
         let mut settings = settings;
         settings.pos = eat_token(input, Token::LeftParen);
 
-        if match_token(input, Token::RightParen).0 {
-            return Ok(Expr::Unit(settings.pos));
-        }
-
         let expr = self.parse_expr(input, state, lib, settings.level_up())?;
 
         match input.next().expect(NEVER_ENDS) {
@@ -453,6 +449,7 @@ impl Engine {
         state: &mut ParseState,
         lib: &mut FnLib,
         id: Identifier,
+        no_args: bool,
         capture_parent_scope: bool,
         #[cfg(not(feature = "no_module"))] namespace: crate::ast::Namespace,
         settings: ParseSettings,
@@ -460,7 +457,11 @@ impl Engine {
         #[cfg(not(feature = "unchecked"))]
         settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-        let (token, token_pos) = input.peek().expect(NEVER_ENDS);
+        let (token, token_pos) = if no_args {
+            &(Token::RightParen, Position::NONE)
+        } else {
+            input.peek().expect(NEVER_ENDS)
+        };
 
         #[cfg(not(feature = "no_module"))]
         let mut namespace = namespace;
@@ -479,7 +480,9 @@ impl Engine {
             Token::LexError(err) => return Err(err.clone().into_err(*token_pos)),
             // id()
             Token::RightParen => {
-                eat_token(input, Token::RightParen);
+                if !no_args {
+                    eat_token(input, Token::RightParen);
+                }
 
                 #[cfg(not(feature = "no_module"))]
                 let hash = if !namespace.is_empty() {
@@ -897,7 +900,7 @@ impl Engine {
             }
 
             let (name, pos) = match input.next().expect(NEVER_ENDS) {
-                (Token::Identifier(s), pos) | (Token::StringConstant(s), pos) => {
+                (Token::Identifier(s) | Token::StringConstant(s), pos) => {
                     if map.iter().any(|(p, ..)| **p == s) {
                         return Err(PERR::DuplicatedProperty(s.to_string()).into_err(pos));
                     }
@@ -1201,6 +1204,11 @@ impl Engine {
         let root_expr = match token {
             Token::EOF => return Err(PERR::UnexpectedEOF.into_err(settings.pos)),
 
+            Token::Unit => {
+                input.next();
+                Expr::Unit(settings.pos)
+            }
+
             Token::IntegerConstant(..)
             | Token::CharConstant(..)
             | Token::StringConstant(..)
@@ -1218,13 +1226,13 @@ impl Engine {
             #[cfg(not(feature = "no_float"))]
             Token::FloatConstant(x) => {
                 let x = *x;
-                input.next().expect(NEVER_ENDS);
+                input.next();
                 Expr::FloatConstant(x, settings.pos)
             }
             #[cfg(feature = "decimal")]
             Token::DecimalConstant(x) => {
                 let x = (*x).into();
-                input.next().expect(NEVER_ENDS);
+                input.next();
                 Expr::DynamicConstant(Box::new(x), settings.pos)
             }
 
@@ -1235,6 +1243,7 @@ impl Engine {
                     stmt => unreachable!("Stmt::Block expected but gets {:?}", stmt),
                 }
             }
+
             // ( - grouped expression
             Token::LeftParen => self.parse_paren_expr(input, state, lib, settings.level_up())?,
 
@@ -1401,7 +1410,7 @@ impl Engine {
 
                 match input.peek().expect(NEVER_ENDS).0 {
                     // Function call
-                    Token::LeftParen | Token::Bang => {
+                    Token::LeftParen | Token::Bang | Token::Unit => {
                         #[cfg(not(feature = "no_closure"))]
                         {
                             // Once the identifier consumed we must enable next variables capturing
@@ -1467,11 +1476,13 @@ impl Engine {
 
                 match input.peek().expect(NEVER_ENDS).0 {
                     // Function call is allowed to have reserved keyword
-                    Token::LeftParen | Token::Bang if is_keyword_function(&s) => Expr::Variable(
-                        (None, ns, 0, state.get_identifier("", s)).into(),
-                        None,
-                        settings.pos,
-                    ),
+                    Token::LeftParen | Token::Bang | Token::Unit if is_keyword_function(&s) => {
+                        Expr::Variable(
+                            (None, ns, 0, state.get_identifier("", s)).into(),
+                            None,
+                            settings.pos,
+                        )
+                    }
                     // Access to `this` as a variable is OK within a function scope
                     #[cfg(not(feature = "no_function"))]
                     _ if &*s == KEYWORD_THIS && settings.is_function_scope => Expr::Variable(
@@ -1531,29 +1542,32 @@ impl Engine {
                 // Qualified function call with !
                 #[cfg(not(feature = "no_module"))]
                 (Expr::Variable(x, ..), Token::Bang) if !x.1.is_empty() => {
-                    return if !match_token(input, Token::LeftParen).0 {
-                        Err(LexError::UnexpectedInput(Token::Bang.syntax().to_string())
-                            .into_err(tail_pos))
-                    } else {
-                        Err(LexError::ImproperSymbol(
+                    return match input.peek().expect(NEVER_ENDS) {
+                        (Token::LeftParen | Token::Unit, ..) => {
+                            Err(LexError::UnexpectedInput(Token::Bang.syntax().to_string())
+                                .into_err(tail_pos))
+                        }
+                        _ => Err(LexError::ImproperSymbol(
                             "!".to_string(),
                             "'!' cannot be used to call module functions".to_string(),
                         )
-                        .into_err(tail_pos))
+                        .into_err(tail_pos)),
                     };
                 }
                 // Function call with !
                 (Expr::Variable(x, .., pos), Token::Bang) => {
-                    match match_token(input, Token::LeftParen) {
-                        (false, pos) => {
+                    match input.peek().expect(NEVER_ENDS) {
+                        (Token::LeftParen | Token::Unit, ..) => (),
+                        (_, pos) => {
                             return Err(PERR::MissingToken(
                                 Token::LeftParen.syntax().into(),
                                 "to start arguments list of function call".into(),
                             )
-                            .into_err(pos))
+                            .into_err(*pos))
                         }
-                        _ => (),
                     }
+
+                    let no_args = input.next().expect(NEVER_ENDS).0 == Token::Unit;
 
                     let (.., _ns, _, name) = *x;
                     settings.pos = pos;
@@ -1562,6 +1576,7 @@ impl Engine {
                         state,
                         lib,
                         name,
+                        no_args,
                         true,
                         #[cfg(not(feature = "no_module"))]
                         _ns,
@@ -1569,7 +1584,7 @@ impl Engine {
                     )?
                 }
                 // Function call
-                (Expr::Variable(x, .., pos), Token::LeftParen) => {
+                (Expr::Variable(x, .., pos), t @ (Token::LeftParen | Token::Unit)) => {
                     let (.., _ns, _, name) = *x;
                     settings.pos = pos;
                     self.parse_fn_call(
@@ -1577,6 +1592,7 @@ impl Engine {
                         state,
                         lib,
                         name,
+                        t == Token::Unit,
                         false,
                         #[cfg(not(feature = "no_module"))]
                         _ns,
@@ -1992,7 +2008,7 @@ impl Engine {
                 ))
             }
             // lhs.dot_lhs.dot_rhs or lhs.dot_lhs[idx_rhs]
-            (lhs, rhs @ Expr::Dot(..)) | (lhs, rhs @ Expr::Index(..)) => {
+            (lhs, rhs @ (Expr::Dot(..) | Expr::Index(..))) => {
                 let (x, term, pos, is_dot) = match rhs {
                     Expr::Dot(x, term, pos) => (x, term, pos, true),
                     Expr::Index(x, term, pos) => (x, term, pos, false),
@@ -2324,7 +2340,7 @@ impl Engine {
                     }
                 }
                 CUSTOM_SYNTAX_MARKER_BOOL => match input.next().expect(NEVER_ENDS) {
-                    (b @ Token::True, pos) | (b @ Token::False, pos) => {
+                    (b @ (Token::True | Token::False), pos) => {
                         inputs.push(Expr::BoolConstant(b == Token::True, pos));
                         segments.push(state.get_interned_string("", b.literal_syntax()));
                         tokens.push(state.get_identifier("", CUSTOM_SYNTAX_MARKER_BOOL));
@@ -2999,7 +3015,7 @@ impl Engine {
                         comments.push(comment);
 
                         match input.peek().expect(NEVER_ENDS) {
-                            (Token::Fn, ..) | (Token::Private, ..) => break,
+                            (Token::Fn | Token::Private, ..) => break,
                             (Token::Comment(..), ..) => (),
                             _ => return Err(PERR::WrongDocComment.into_err(comments_pos)),
                         }
@@ -3269,14 +3285,21 @@ impl Engine {
             Err(_) => return Err(PERR::FnMissingName.into_err(pos)),
         };
 
-        match input.peek().expect(NEVER_ENDS) {
-            (Token::LeftParen, ..) => eat_token(input, Token::LeftParen),
+        let no_params = match input.peek().expect(NEVER_ENDS) {
+            (Token::LeftParen, ..) => {
+                eat_token(input, Token::LeftParen);
+                match_token(input, Token::RightParen).0
+            }
+            (Token::Unit, ..) => {
+                eat_token(input, Token::Unit);
+                true
+            }
             (.., pos) => return Err(PERR::FnMissingParams(name.to_string()).into_err(*pos)),
         };
 
         let mut params = StaticVec::new_const();
 
-        if !match_token(input, Token::RightParen).0 {
+        if !no_params {
             let sep_err = format!("to separate the parameters of function '{}'", name);
 
             loop {
