@@ -1,7 +1,11 @@
 //! Module that defines JSON manipulation functions for [`Engine`].
 #![cfg(not(feature = "no_object"))]
 
-use crate::{Engine, LexError, Map, OptimizationLevel, ParseState, RhaiResultOf, Scope, Token};
+use crate::parser::ParseState;
+use crate::tokenizer::Token;
+use crate::{Engine, LexError, Map, OptimizationLevel, RhaiResultOf, Scope};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 impl Engine {
     /// Parse a JSON string into an [object map][Map].
@@ -53,8 +57,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_object"))]
-    #[inline(always)]
+    #[inline]
     pub fn parse_json(&self, json: impl AsRef<str>, has_null: bool) -> RhaiResultOf<Map> {
         let scripts = [json.as_ref()];
 
@@ -134,6 +137,8 @@ impl Engine {
 
 /// Return the JSON representation of an [object map][Map].
 ///
+/// Not available under `no_std`.
+///
 /// This function can be used together with [`Engine::parse_json`] to work with JSON texts
 /// without using the [`serde`](https://crates.io/crates/serde) crate (which is heavy).
 ///
@@ -146,6 +151,7 @@ impl Engine {
 /// # Errors
 ///
 /// Data types not supported by JSON serialize into formats that may invalidate the result.
+#[inline]
 pub fn format_map_as_json(map: &Map) -> String {
     let mut result = String::from('{');
 

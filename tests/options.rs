@@ -112,6 +112,7 @@ fn test_options_strict_var() -> Result<(), Box<EvalAltResult>> {
             engine.compile("let x = 42; let f = |y| { || x + y };")?;
             assert!(engine.compile("fn foo() { |y| { || x + y } }").is_err());
         }
+        #[cfg(not(feature = "no_optimize"))]
         assert_eq!(
             engine.eval_with_scope::<INT>(&mut scope, "fn foo(z) { x * y + z } foo(1)")?,
             1
