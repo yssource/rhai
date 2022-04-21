@@ -47,6 +47,8 @@ pub struct ParseState<'e> {
     pub tokenizer_control: TokenizerControl,
     /// Interned strings.
     interned_strings: StringsInterner,
+    /// External [scope][Scope] with constants.
+    pub scope: &'e Scope<'e>,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     pub stack: Scope<'e>,
     /// Size of the local variables stack upon entry of the current block scope.
@@ -72,7 +74,7 @@ impl<'e> ParseState<'e> {
     /// Create a new [`ParseState`].
     #[inline(always)]
     #[must_use]
-    pub fn new(engine: &Engine, tokenizer_control: TokenizerControl) -> Self {
+    pub fn new(engine: &Engine, scope: &'e Scope, tokenizer_control: TokenizerControl) -> Self {
         Self {
             tokenizer_control,
             #[cfg(not(feature = "no_closure"))]
@@ -80,6 +82,7 @@ impl<'e> ParseState<'e> {
             #[cfg(not(feature = "no_closure"))]
             allow_capture: true,
             interned_strings: StringsInterner::new(),
+            scope,
             stack: Scope::new(),
             block_stack_len: 0,
             #[cfg(not(feature = "no_module"))]
@@ -1261,7 +1264,8 @@ impl Engine {
             // | ...
             #[cfg(not(feature = "no_function"))]
             Token::Pipe | Token::Or if settings.options.allow_anonymous_fn => {
-                let mut new_state = ParseState::new(self, state.tokenizer_control.clone());
+                let mut new_state =
+                    ParseState::new(self, state.scope, state.tokenizer_control.clone());
 
                 #[cfg(not(feature = "unchecked"))]
                 {
@@ -1297,6 +1301,10 @@ impl Engine {
                         if settings.options.strict_var
                             && !settings.is_closure_scope
                             && index.is_none()
+                            && !matches!(
+                                state.scope.get_index(name),
+                                Some((_, AccessMode::ReadOnly))
+                            )
                         {
                             // If the parent scope is not inside another capturing closure
                             // then we can conclude that the captured variable doesn't exist.
@@ -1440,7 +1448,10 @@ impl Engine {
                     _ => {
                         let index = state.access_var(&s, settings.pos);
 
-                        if settings.options.strict_var && index.is_none() {
+                        if settings.options.strict_var
+                            && index.is_none()
+                            && !matches!(state.scope.get_index(&s), Some((_, AccessMode::ReadOnly)))
+                        {
                             return Err(
                                 PERR::VariableUndefined(s.to_string()).into_err(settings.pos)
                             );
@@ -3061,7 +3072,8 @@ impl Engine {
 
                 match input.next().expect(NEVER_ENDS) {
                     (Token::Fn, pos) => {
-                        let mut new_state = ParseState::new(self, state.tokenizer_control.clone());
+                        let mut new_state =
+                            ParseState::new(self, state.scope, state.tokenizer_control.clone());
 
                         #[cfg(not(feature = "unchecked"))]
                         {
@@ -3533,7 +3545,6 @@ impl Engine {
         &self,
         input: &mut TokenStream,
         state: &mut ParseState,
-        _scope: &Scope,
         _optimization_level: OptimizationLevel,
     ) -> ParseResult<AST> {
         let mut functions = BTreeMap::new();
@@ -3575,7 +3586,7 @@ impl Engine {
         #[cfg(not(feature = "no_optimize"))]
         return Ok(crate::optimizer::optimize_into_ast(
             self,
-            _scope,
+            state.scope,
             statements,
             #[cfg(not(feature = "no_function"))]
             StaticVec::new_const(),
@@ -3657,7 +3668,6 @@ impl Engine {
         &self,
         input: &mut TokenStream,
         state: &mut ParseState,
-        _scope: &Scope,
         _optimization_level: OptimizationLevel,
     ) -> ParseResult<AST> {
         let (statements, _lib) = self.parse_global_level(input, state)?;
@@ -3665,7 +3675,7 @@ impl Engine {
         #[cfg(not(feature = "no_optimize"))]
         return Ok(crate::optimizer::optimize_into_ast(
             self,
-            _scope,
+            state.scope,
             statements,
             #[cfg(not(feature = "no_function"))]
             _lib,

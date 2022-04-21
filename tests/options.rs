@@ -56,6 +56,10 @@ fn test_options_allow() -> Result<(), Box<EvalAltResult>> {
 fn test_options_strict_var() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
+    let mut scope = Scope::new();
+    scope.push_constant("x", 42 as INT);
+    scope.push_constant("y", 0 as INT);
+
     engine.compile("let x = if y { z } else { w };")?;
 
     #[cfg(not(feature = "no_function"))]
@@ -78,6 +82,11 @@ fn test_options_strict_var() -> Result<(), Box<EvalAltResult>> {
 
     assert!(engine.compile("let x = if y { z } else { w };").is_err());
     engine.compile("let y = 42; let x = y;")?;
+
+    assert_eq!(
+        engine.eval_with_scope::<INT>(&mut scope, "{ let y = 42; x * y }")?,
+        42 * 42
+    );
 
     #[cfg(not(feature = "no_function"))]
     assert!(engine.compile("fn foo(x) { x + y }").is_err());
@@ -103,6 +112,10 @@ fn test_options_strict_var() -> Result<(), Box<EvalAltResult>> {
             engine.compile("let x = 42; let f = |y| { || x + y };")?;
             assert!(engine.compile("fn foo() { |y| { || x + y } }").is_err());
         }
+        assert_eq!(
+            engine.eval_with_scope::<INT>(&mut scope, "fn foo(z) { x * y + z } foo(1)")?,
+            1
+        );
     }
 
     Ok(())

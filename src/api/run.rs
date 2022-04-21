@@ -24,12 +24,11 @@ impl Engine {
         let scripts = [script];
         let (stream, tokenizer_control) =
             self.lex_raw(&scripts, self.token_mapper.as_ref().map(Box::as_ref));
-        let mut state = ParseState::new(self, tokenizer_control);
+        let mut state = ParseState::new(self, scope, tokenizer_control);
 
         let ast = self.parse(
             &mut stream.peekable(),
             &mut state,
-            scope,
             self.options.optimization_level,
         )?;
 

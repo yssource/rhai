@@ -225,13 +225,8 @@ impl Engine {
             scripts.as_ref(),
             self.token_mapper.as_ref().map(Box::as_ref),
         );
-        let mut state = ParseState::new(self, tokenizer_control);
-        self.parse(
-            &mut stream.peekable(),
-            &mut state,
-            scope,
-            optimization_level,
-        )
+        let mut state = ParseState::new(self, scope, tokenizer_control);
+        self.parse(&mut stream.peekable(), &mut state, optimization_level)
     }
     /// Compile a string containing an expression into an [`AST`],
     /// which can be used later for evaluation.
@@ -300,12 +295,7 @@ impl Engine {
             self.lex_raw(&scripts, self.token_mapper.as_ref().map(Box::as_ref));
 
         let mut peekable = stream.peekable();
-        let mut state = ParseState::new(self, tokenizer_control);
-        self.parse_global_expr(
-            &mut peekable,
-            &mut state,
-            scope,
-            self.options.optimization_level,
-        )
+        let mut state = ParseState::new(self, scope, tokenizer_control);
+        self.parse_global_expr(&mut peekable, &mut state, self.options.optimization_level)
     }
 }

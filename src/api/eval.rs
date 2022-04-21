@@ -116,13 +116,12 @@ impl Engine {
         let scripts = [script];
         let (stream, tokenizer_control) =
             self.lex_raw(&scripts, self.token_mapper.as_ref().map(Box::as_ref));
-        let mut state = ParseState::new(self, tokenizer_control);
+        let mut state = ParseState::new(self, scope, tokenizer_control);
 
         // No need to optimize a lone expression
         let ast = self.parse_global_expr(
             &mut stream.peekable(),
             &mut state,
-            scope,
             #[cfg(not(feature = "no_optimize"))]
             OptimizationLevel::None,
             #[cfg(feature = "no_optimize")]

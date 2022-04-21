@@ -116,12 +116,12 @@ impl Engine {
             },
         );
 
-        let mut state = ParseState::new(self, tokenizer_control);
+        let scope = &Scope::new();
+        let mut state = ParseState::new(self, scope, tokenizer_control);
 
         let ast = self.parse_global_expr(
             &mut stream.peekable(),
             &mut state,
-            &Scope::new(),
             #[cfg(not(feature = "no_optimize"))]
             OptimizationLevel::None,
             #[cfg(feature = "no_optimize")]

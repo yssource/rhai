@@ -9,6 +9,11 @@ Bug fixes
 
 * Compound assignments now work properly with indexers.
 
+Script-breaking changes
+-----------------------
+
+* _Strict Variables Mode_ no longer returns an error when an undeclared variable matches a constant in the provided external `Scope`.
+
 Enhancements
 ------------
 
