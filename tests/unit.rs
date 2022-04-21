@@ -17,6 +17,6 @@ fn test_unit_eq() -> Result<(), Box<EvalAltResult>> {
 #[test]
 fn test_unit_with_spaces() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
-    engine.run("let x = ( ); x")?;
+    engine.run("let x = ( ); x").expect_err("should error");
     Ok(())
 }

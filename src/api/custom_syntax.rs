@@ -1,6 +1,7 @@
 //! Module implementing custom syntax for [`Engine`].
 
 use crate::ast::Expr;
+use crate::eval::Caches;
 use crate::func::native::SendSync;
 use crate::parser::ParseResult;
 use crate::tokenizer::{is_valid_identifier, Token};
@@ -130,7 +131,7 @@ impl Deref for Expression<'_> {
     }
 }
 
-impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_, '_, '_> {
+impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_> {
     /// Evaluate an [expression tree][Expression].
     ///
     /// # WARNING - Low Level API
@@ -138,10 +139,18 @@ impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_, '_, '_> {
     /// This function is very low level.  It evaluates an expression from an [`AST`][crate::AST].
     #[inline(always)]
     pub fn eval_expression_tree(&mut self, expr: &Expression) -> RhaiResult {
+        let mut caches;
+
         self.engine.eval_expr(
             self.scope,
             self.global,
-            self.state,
+            match self.caches.as_mut() {
+                Some(c) => c,
+                None => {
+                    caches = Caches::new();
+                    &mut caches
+                }
+            },
             self.lib,
             self.this_ptr,
             expr,

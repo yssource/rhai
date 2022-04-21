@@ -3,7 +3,7 @@
 
 use super::call::FnCallArgs;
 use crate::ast::ScriptFnDef;
-use crate::eval::{EvalState, GlobalRuntimeState};
+use crate::eval::{Caches, GlobalRuntimeState};
 use crate::{Dynamic, Engine, Module, Position, RhaiError, RhaiResult, Scope, ERR};
 use std::mem;
 #[cfg(feature = "no_std")]
@@ -26,7 +26,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
+        caches: &mut Caches,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         fn_def: &ScriptFnDef,
@@ -109,7 +109,7 @@ impl Engine {
         }
 
         // Merge in encapsulated environment, if any
-        let orig_fn_resolution_caches_len = state.fn_resolution_caches_len();
+        let orig_fn_resolution_caches_len = caches.fn_resolution_caches_len();
 
         #[cfg(not(feature = "no_module"))]
         let mut lib_merged = crate::StaticVec::with_capacity(lib.len() + 1);
@@ -128,7 +128,7 @@ impl Engine {
                 if fn_lib.is_empty() {
                     lib
                 } else {
-                    state.push_fn_resolution_cache();
+                    caches.push_fn_resolution_cache();
                     lib_merged.push(fn_lib.as_ref());
                     lib_merged.extend(lib.iter().cloned());
                     &lib_merged
@@ -142,7 +142,7 @@ impl Engine {
         #[cfg(feature = "debugging")]
         {
             let node = crate::ast::Stmt::Noop(fn_def.body.position());
-            self.run_debugger(scope, global, state, lib, this_ptr, &node, level)?;
+            self.run_debugger(scope, global, lib, this_ptr, &node, level)?;
         }
 
         // Evaluate the function
@@ -150,7 +150,7 @@ impl Engine {
             .eval_stmt_block(
                 scope,
                 global,
-                state,
+                caches,
                 lib,
                 this_ptr,
                 &fn_def.body,
@@ -193,8 +193,7 @@ impl Engine {
                     Ok(ref r) => crate::eval::DebuggerEvent::FunctionExitWithValue(r),
                     Err(ref err) => crate::eval::DebuggerEvent::FunctionExitWithError(err),
                 };
-                match self.run_debugger_raw(scope, global, state, lib, this_ptr, node, event, level)
-                {
+                match self.run_debugger_raw(scope, global, lib, this_ptr, node, event, level) {
                     Ok(_) => (),
                     Err(err) => _result = Err(err),
                 }
@@ -221,7 +220,7 @@ impl Engine {
         }
 
         // Restore state
-        state.rewind_fn_resolution_caches(orig_fn_resolution_caches_len);
+        caches.rewind_fn_resolution_caches(orig_fn_resolution_caches_len);
 
         _result
     }
@@ -231,11 +230,11 @@ impl Engine {
     pub(crate) fn has_script_fn(
         &self,
         _global: Option<&GlobalRuntimeState>,
-        state: &mut EvalState,
+        caches: &mut Caches,
         lib: &[&Module],
         hash_script: u64,
     ) -> bool {
-        let cache = state.fn_resolution_cache_mut();
+        let cache = caches.fn_resolution_cache_mut();
 
         if let Some(result) = cache.get(&hash_script).map(|v| v.is_some()) {
             return result;

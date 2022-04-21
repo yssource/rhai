@@ -1,6 +1,6 @@
 //! Module that defines the public evaluation API of [`Engine`].
 
-use crate::eval::{EvalState, GlobalRuntimeState};
+use crate::eval::{Caches, GlobalRuntimeState};
 use crate::parser::ParseState;
 use crate::{Engine, Module, RhaiResultOf, Scope, AST};
 #[cfg(feature = "no_std")]
@@ -24,12 +24,11 @@ impl Engine {
         let scripts = [script];
         let (stream, tokenizer_control) =
             self.lex_raw(&scripts, self.token_mapper.as_ref().map(Box::as_ref));
-        let mut state = ParseState::new(self, tokenizer_control);
+        let mut state = ParseState::new(self, scope, tokenizer_control);
 
         let ast = self.parse(
             &mut stream.peekable(),
             &mut state,
-            scope,
             self.options.optimization_level,
         )?;
 
@@ -43,7 +42,7 @@ impl Engine {
     /// Evaluate an [`AST`] with own scope, returning any error (if any).
     #[inline]
     pub fn run_ast_with_scope(&self, scope: &mut Scope, ast: &AST) -> RhaiResultOf<()> {
-        let state = &mut EvalState::new();
+        let caches = &mut Caches::new();
         let global = &mut GlobalRuntimeState::new(self);
         global.source = ast.source_raw().clone();
 
@@ -63,7 +62,7 @@ impl Engine {
             } else {
                 &lib
             };
-            self.eval_global_statements(scope, global, state, statements, lib, 0)?;
+            self.eval_global_statements(scope, global, caches, statements, lib, 0)?;
         }
         Ok(())
     }

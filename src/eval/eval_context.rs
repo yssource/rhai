@@ -1,30 +1,30 @@
 //! Evaluation context.
 
-use super::{EvalState, GlobalRuntimeState};
+use super::{Caches, GlobalRuntimeState};
 use crate::{Dynamic, Engine, Module, Scope};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
 /// Context of a script evaluation process.
 #[derive(Debug)]
-pub struct EvalContext<'a, 'x, 'px, 'm, 'pm, 's, 'ps, 'b, 't, 'pt> {
+pub struct EvalContext<'a, 's, 'ps, 'm, 'pm, 'c, 't, 'pt> {
     /// The current [`Engine`].
     pub(crate) engine: &'a Engine,
     /// The current [`Scope`].
-    pub(crate) scope: &'x mut Scope<'px>,
+    pub(crate) scope: &'s mut Scope<'ps>,
     /// The current [`GlobalRuntimeState`].
     pub(crate) global: &'m mut GlobalRuntimeState<'pm>,
-    /// The current [evaluation state][EvalState].
-    pub(crate) state: &'s mut EvalState<'ps>,
+    /// The current [caches][Caches], if available.
+    pub(crate) caches: Option<&'c mut Caches>,
     /// The current stack of imported [modules][Module].
-    pub(crate) lib: &'b [&'b Module],
+    pub(crate) lib: &'a [&'a Module],
     /// The current bound `this` pointer, if any.
     pub(crate) this_ptr: &'t mut Option<&'pt mut Dynamic>,
     /// The current nesting level of function calls.
     pub(crate) level: usize,
 }
 
-impl<'x, 'px, 'm, 'pm, 'pt> EvalContext<'_, 'x, 'px, 'm, 'pm, '_, '_, '_, '_, 'pt> {
+impl<'s, 'ps, 'm, 'pm, 'pt> EvalContext<'_, 's, 'ps, 'm, 'pm, '_, '_, 'pt> {
     /// The current [`Engine`].
     #[inline(always)]
     #[must_use]
@@ -44,13 +44,13 @@ impl<'x, 'px, 'm, 'pm, 'pt> EvalContext<'_, 'x, 'px, 'm, 'pm, '_, '_, '_, '_, 'p
     /// The current [`Scope`].
     #[inline(always)]
     #[must_use]
-    pub const fn scope(&self) -> &Scope<'px> {
+    pub const fn scope(&self) -> &Scope<'ps> {
         self.scope
     }
     /// Get a mutable reference to the current [`Scope`].
     #[inline(always)]
     #[must_use]
-    pub fn scope_mut(&mut self) -> &mut &'x mut Scope<'px> {
+    pub fn scope_mut(&mut self) -> &mut &'s mut Scope<'ps> {
         &mut self.scope
     }
     /// Get an iterator over the current set of modules imported via `import` statements,

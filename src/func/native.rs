@@ -3,7 +3,7 @@
 use super::call::FnCallArgs;
 use crate::api::events::VarDefInfo;
 use crate::ast::FnCallHashes;
-use crate::eval::{EvalState, GlobalRuntimeState};
+use crate::eval::{Caches, GlobalRuntimeState};
 use crate::plugin::PluginFunction;
 use crate::tokenizer::{Token, TokenizeState};
 use crate::types::dynamic::Variant;
@@ -311,7 +311,7 @@ impl<'a> NativeCallContext<'a> {
             .global
             .cloned()
             .unwrap_or_else(|| GlobalRuntimeState::new(self.engine()));
-        let mut state = EvalState::new();
+        let mut caches = Caches::new();
 
         let fn_name = fn_name.as_ref();
         let args_len = args.len();
@@ -330,7 +330,7 @@ impl<'a> NativeCallContext<'a> {
             .exec_fn_call(
                 None,
                 &mut global,
-                &mut state,
+                &mut caches,
                 self.lib,
                 fn_name,
                 hash,

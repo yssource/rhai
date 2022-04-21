@@ -272,6 +272,8 @@ impl<'a> Target<'a> {
     }
     /// Propagate a changed value back to the original source.
     /// This has no effect for direct references.
+    ///
+    /// [`Position`] in [`EvalAltResult`] is [`NONE`][Position::NONE] and should be set afterwards.
     #[inline]
     pub fn propagate_changed_value(&mut self) -> RhaiResultOf<()> {
         match self {

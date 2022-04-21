@@ -30,16 +30,31 @@ pub struct GlobalRuntimeState<'a> {
     #[cfg(not(feature = "no_module"))]
     modules: crate::StaticVec<crate::Shared<crate::Module>>,
     /// Source of the current context.
+    ///
     /// No source if the string is empty.
     pub source: Identifier,
     /// Number of operations performed.
     pub num_operations: u64,
     /// Number of modules loaded.
     pub num_modules_loaded: usize,
+    /// Level of the current scope.
+    ///
+    /// The global (root) level is zero, a new block (or function call) is one level higher, and so on.
+    pub scope_level: usize,
+    /// Force a [`Scope`][crate::Scope] search by name.
+    ///
+    /// Normally, access to variables are parsed with a relative offset into the
+    /// [`Scope`][crate::Scope] to avoid a lookup.
+    ///
+    /// In some situation, e.g. after running an `eval` statement, or after a custom syntax
+    /// statement, subsequent offsets may become mis-aligned.
+    ///
+    /// When that happens, this flag is turned on.
+    pub always_search_scope: bool,
     /// Function call hashes to index getters and setters.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn_hash_indexing: (u64, u64),
-    /// Embedded [crate::Module][crate::Module] resolver.
+    /// Embedded [module][crate::Module] resolver.
     #[cfg(not(feature = "no_module"))]
     pub embedded_module_resolver:
         Option<crate::Shared<crate::module::resolvers::StaticModuleResolver>>,
@@ -48,7 +63,7 @@ pub struct GlobalRuntimeState<'a> {
     /// Interior mutability is needed because it is shared in order to aid in cloning.
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
-    pub(crate) constants: Option<GlobalConstants>,
+    pub constants: Option<GlobalConstants>,
     /// Debugging interface.
     #[cfg(feature = "debugging")]
     pub debugger: super::Debugger,
@@ -71,6 +86,8 @@ impl GlobalRuntimeState<'_> {
             source: Identifier::new_const(),
             num_operations: 0,
             num_modules_loaded: 0,
+            scope_level: 0,
+            always_search_scope: false,
             #[cfg(not(feature = "no_module"))]
             embedded_module_resolver: None,
             #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
@@ -92,7 +109,7 @@ impl GlobalRuntimeState<'_> {
     pub fn num_imports(&self) -> usize {
         self.keys.len()
     }
-    /// Get the globally-imported [crate::Module][crate::Module] at a particular index.
+    /// Get the globally-imported [module][crate::Module] at a particular index.
     ///
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
@@ -101,7 +118,7 @@ impl GlobalRuntimeState<'_> {
     pub fn get_shared_import(&self, index: usize) -> Option<crate::Shared<crate::Module>> {
         self.modules.get(index).cloned()
     }
-    /// Get a mutable reference to the globally-imported [crate::Module][crate::Module] at a
+    /// Get a mutable reference to the globally-imported [module][crate::Module] at a
     /// particular index.
     ///
     /// Not available under `no_module`.
@@ -115,7 +132,7 @@ impl GlobalRuntimeState<'_> {
     ) -> Option<&mut crate::Shared<crate::Module>> {
         self.modules.get_mut(index)
     }
-    /// Get the index of a globally-imported [crate::Module][crate::Module] by name.
+    /// Get the index of a globally-imported [module][crate::Module] by name.
     ///
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
@@ -132,7 +149,7 @@ impl GlobalRuntimeState<'_> {
             }
         })
     }
-    /// Push an imported [crate::Module][crate::Module] onto the stack.
+    /// Push an imported [module][crate::Module] onto the stack.
     ///
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]

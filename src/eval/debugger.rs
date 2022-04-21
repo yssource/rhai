@@ -1,7 +1,7 @@
 //! Module defining the debugging interface.
 #![cfg(feature = "debugging")]
 
-use super::{EvalContext, EvalState, GlobalRuntimeState};
+use super::{EvalContext, GlobalRuntimeState};
 use crate::ast::{ASTNode, Expr, Stmt};
 use crate::{Dynamic, Engine, EvalAltResult, Identifier, Module, Position, RhaiResultOf, Scope};
 #[cfg(feature = "no_std")]
@@ -406,7 +406,6 @@ impl Engine {
         &self,
         scope: &mut Scope,
         global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         node: impl Into<ASTNode<'a>>,
@@ -414,7 +413,7 @@ impl Engine {
     ) -> RhaiResultOf<()> {
         if self.debugger.is_some() {
             if let Some(cmd) =
-                self.run_debugger_with_reset_raw(scope, global, state, lib, this_ptr, node, level)?
+                self.run_debugger_with_reset_raw(scope, global, lib, this_ptr, node, level)?
             {
                 global.debugger.status = cmd;
             }
@@ -434,14 +433,13 @@ impl Engine {
         &self,
         scope: &mut Scope,
         global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         node: impl Into<ASTNode<'a>>,
         level: usize,
     ) -> RhaiResultOf<Option<DebuggerStatus>> {
         if self.debugger.is_some() {
-            self.run_debugger_with_reset_raw(scope, global, state, lib, this_ptr, node, level)
+            self.run_debugger_with_reset_raw(scope, global, lib, this_ptr, node, level)
         } else {
             Ok(None)
         }
@@ -458,7 +456,6 @@ impl Engine {
         &self,
         scope: &mut Scope,
         global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         node: impl Into<ASTNode<'a>>,
@@ -490,7 +487,7 @@ impl Engine {
             }
         };
 
-        self.run_debugger_raw(scope, global, state, lib, this_ptr, node, event, level)
+        self.run_debugger_raw(scope, global, lib, this_ptr, node, event, level)
     }
     /// Run the debugger callback unconditionally.
     ///
@@ -504,7 +501,6 @@ impl Engine {
         &self,
         scope: &mut Scope,
         global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         node: ASTNode<'a>,
@@ -522,7 +518,7 @@ impl Engine {
             engine: self,
             scope,
             global,
-            state,
+            caches: None,
             lib,
             this_ptr,
             level,

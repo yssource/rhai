@@ -9,7 +9,7 @@ use crate::engine::{
     KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY,
     KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
-use crate::eval::{EvalState, GlobalRuntimeState};
+use crate::eval::{Caches, FnResolutionCacheEntry, GlobalRuntimeState};
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnArgsVec, FnPtr,
     Identifier, ImmutableString, Module, OptimizationLevel, Position, RhaiError, RhaiResult,
@@ -19,7 +19,6 @@ use crate::{
 use std::prelude::v1::*;
 use std::{
     any::{type_name, TypeId},
-    collections::BTreeMap,
     convert::TryFrom,
     mem,
 };
@@ -128,24 +127,6 @@ pub fn ensure_no_data_race(
     Ok(())
 }
 
-/// _(internals)_ An entry in a function resolution cache.
-/// Exported under the `internals` feature only.
-#[derive(Debug, Clone)]
-pub struct FnResolutionCacheEntry {
-    /// Function.
-    pub func: CallableFunction,
-    /// Optional source.
-    /// No source if the string is empty.
-    pub source: Identifier,
-}
-
-/// _(internals)_ A function resolution cache.
-/// Exported under the `internals` feature only.
-///
-/// [`FnResolutionCacheEntry`] is [`Box`]ed in order to pack as many entries inside a single B-Tree
-/// level as possible.
-pub type FnResolutionCache = BTreeMap<u64, Option<Box<FnResolutionCacheEntry>>>;
-
 impl Engine {
     /// Generate the signature for a function call.
     #[inline]
@@ -196,7 +177,7 @@ impl Engine {
     fn resolve_fn<'s>(
         &self,
         _global: &GlobalRuntimeState,
-        state: &'s mut EvalState,
+        state: &'s mut Caches,
         lib: &[&Module],
         fn_name: &str,
         hash_script: u64,
@@ -344,7 +325,7 @@ impl Engine {
     pub(crate) fn call_native_fn(
         &self,
         global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
+        caches: &mut Caches,
         lib: &[&Module],
         name: &str,
         hash: u64,
@@ -362,7 +343,7 @@ impl Engine {
         // Check if function access already in the cache
         let func = self.resolve_fn(
             global,
-            state,
+            caches,
             lib,
             name,
             hash,
@@ -438,9 +419,7 @@ impl Engine {
                         Ok(ref r) => crate::eval::DebuggerEvent::FunctionExitWithValue(r),
                         Err(ref err) => crate::eval::DebuggerEvent::FunctionExitWithError(err),
                     };
-                    match self
-                        .run_debugger_raw(scope, global, state, lib, &mut None, node, event, level)
-                    {
+                    match self.run_debugger_raw(scope, global, lib, &mut None, node, event, level) {
                         Ok(_) => (),
                         Err(err) => _result = Err(err),
                     }
@@ -576,7 +555,7 @@ impl Engine {
         &self,
         _scope: Option<&mut Scope>,
         global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
+        caches: &mut Caches,
         lib: &[&Module],
         fn_name: &str,
         hashes: FnCallHashes,
@@ -619,7 +598,7 @@ impl Engine {
                         false
                     } else {
                         let hash_script = calc_fn_hash(fn_name.as_str(), num_params as usize);
-                        self.has_script_fn(Some(global), state, lib, hash_script)
+                        self.has_script_fn(Some(global), caches, lib, hash_script)
                     }
                     .into(),
                     false,
@@ -650,7 +629,7 @@ impl Engine {
         if let Some(FnResolutionCacheEntry { func, mut source }) = self
             .resolve_fn(
                 global,
-                state,
+                caches,
                 lib,
                 fn_name,
                 hashes.script,
@@ -687,7 +666,7 @@ impl Engine {
                 self.call_script_fn(
                     scope,
                     global,
-                    state,
+                    caches,
                     lib,
                     &mut Some(*first_arg),
                     func,
@@ -706,7 +685,7 @@ impl Engine {
                 }
 
                 let result = self.call_script_fn(
-                    scope, global, state, lib, &mut None, func, args, true, pos, level,
+                    scope, global, caches, lib, &mut None, func, args, true, pos, level,
                 );
 
                 // Restore the original reference
@@ -724,7 +703,7 @@ impl Engine {
         // Native function call
         let hash = hashes.native;
         self.call_native_fn(
-            global, state, lib, fn_name, hash, args, is_ref_mut, false, pos, level,
+            global, caches, lib, fn_name, hash, args, is_ref_mut, false, pos, level,
         )
     }
 
@@ -735,13 +714,13 @@ impl Engine {
         &self,
         scope: &mut Scope,
         global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
+        caches: &mut Caches,
         statements: &[Stmt],
         lib: &[&Module],
         level: usize,
     ) -> RhaiResult {
         self.eval_stmt_block(
-            scope, global, state, lib, &mut None, statements, false, level,
+            scope, global, caches, lib, &mut None, statements, false, level,
         )
         .or_else(|err| match *err {
             ERR::Return(out, ..) => Ok(out),
@@ -757,7 +736,7 @@ impl Engine {
     pub(crate) fn make_method_call(
         &self,
         global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
+        caches: &mut Caches,
         lib: &[&Module],
         fn_name: &str,
         mut hash: FnCallHashes,
@@ -786,7 +765,7 @@ impl Engine {
 
                 // Map it to name(args) in function-call style
                 self.exec_fn_call(
-                    None, global, state, lib, fn_name, new_hash, &mut args, false, false, pos,
+                    None, global, caches, lib, fn_name, new_hash, &mut args, false, false, pos,
                     level,
                 )
             }
@@ -822,7 +801,7 @@ impl Engine {
 
                 // Map it to name(args) in function-call style
                 self.exec_fn_call(
-                    None, global, state, lib, fn_name, new_hash, &mut args, is_ref_mut, true, pos,
+                    None, global, caches, lib, fn_name, new_hash, &mut args, is_ref_mut, true, pos,
                     level,
                 )
             }
@@ -892,7 +871,7 @@ impl Engine {
                 args.extend(call_args.iter_mut());
 
                 self.exec_fn_call(
-                    None, global, state, lib, fn_name, hash, &mut args, is_ref_mut, true, pos,
+                    None, global, caches, lib, fn_name, hash, &mut args, is_ref_mut, true, pos,
                     level,
                 )
             }
@@ -914,7 +893,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
+        caches: &mut Caches,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         arg_expr: &Expr,
@@ -924,7 +903,7 @@ impl Engine {
         if self.debugger.is_some() {
             if let Some(value) = arg_expr.get_literal_value() {
                 #[cfg(feature = "debugging")]
-                self.run_debugger(scope, global, state, lib, this_ptr, arg_expr, level)?;
+                self.run_debugger(scope, global, lib, this_ptr, arg_expr, level)?;
                 return Ok((value, arg_expr.start_position()));
             }
         }
@@ -935,7 +914,7 @@ impl Engine {
             matches!(status, crate::eval::DebuggerStatus::FunctionExit(..))
         });
 
-        let result = self.eval_expr(scope, global, state, lib, this_ptr, arg_expr, level);
+        let result = self.eval_expr(scope, global, caches, lib, this_ptr, arg_expr, level);
 
         // Restore function exit status
         #[cfg(feature = "debugging")]
@@ -949,7 +928,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
+        caches: &mut Caches,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         fn_name: &str,
@@ -973,7 +952,7 @@ impl Engine {
             KEYWORD_FN_PTR_CALL if total_args >= 1 => {
                 let arg = first_arg.unwrap();
                 let (arg_value, arg_pos) =
-                    self.get_arg_value(scope, global, state, lib, this_ptr, arg, level)?;
+                    self.get_arg_value(scope, global, caches, lib, this_ptr, arg, level)?;
 
                 if !arg_value.is::<FnPtr>() {
                     let typ = self.map_type_name(arg_value.type_name());
@@ -1006,7 +985,7 @@ impl Engine {
             KEYWORD_FN_PTR if total_args == 1 => {
                 let arg = first_arg.unwrap();
                 let (arg_value, arg_pos) =
-                    self.get_arg_value(scope, global, state, lib, this_ptr, arg, level)?;
+                    self.get_arg_value(scope, global, caches, lib, this_ptr, arg, level)?;
 
                 // Fn - only in function call style
                 return arg_value
@@ -1021,7 +1000,7 @@ impl Engine {
             KEYWORD_FN_PTR_CURRY if total_args > 1 => {
                 let first = first_arg.unwrap();
                 let (arg_value, arg_pos) =
-                    self.get_arg_value(scope, global, state, lib, this_ptr, first, level)?;
+                    self.get_arg_value(scope, global, caches, lib, this_ptr, first, level)?;
 
                 if !arg_value.is::<FnPtr>() {
                     let typ = self.map_type_name(arg_value.type_name());
@@ -1033,7 +1012,7 @@ impl Engine {
                 // Append the new curried arguments to the existing list.
                 let fn_curry = a_expr.iter().try_fold(fn_curry, |mut curried, expr| {
                     let (value, ..) =
-                        self.get_arg_value(scope, global, state, lib, this_ptr, expr, level)?;
+                        self.get_arg_value(scope, global, caches, lib, this_ptr, expr, level)?;
                     curried.push(value);
                     Ok::<_, RhaiError>(curried)
                 })?;
@@ -1046,7 +1025,7 @@ impl Engine {
             crate::engine::KEYWORD_IS_SHARED if total_args == 1 => {
                 let arg = first_arg.unwrap();
                 let (arg_value, ..) =
-                    self.get_arg_value(scope, global, state, lib, this_ptr, arg, level)?;
+                    self.get_arg_value(scope, global, caches, lib, this_ptr, arg, level)?;
                 return Ok(arg_value.is_shared().into());
             }
 
@@ -1055,14 +1034,14 @@ impl Engine {
             crate::engine::KEYWORD_IS_DEF_FN if total_args == 2 => {
                 let first = first_arg.unwrap();
                 let (arg_value, arg_pos) =
-                    self.get_arg_value(scope, global, state, lib, this_ptr, first, level)?;
+                    self.get_arg_value(scope, global, caches, lib, this_ptr, first, level)?;
 
                 let fn_name = arg_value
                     .into_immutable_string()
                     .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, arg_pos))?;
 
                 let (arg_value, arg_pos) =
-                    self.get_arg_value(scope, global, state, lib, this_ptr, &a_expr[0], level)?;
+                    self.get_arg_value(scope, global, caches, lib, this_ptr, &a_expr[0], level)?;
 
                 let num_params = arg_value
                     .as_int()
@@ -1072,7 +1051,7 @@ impl Engine {
                     false
                 } else {
                     let hash_script = calc_fn_hash(&fn_name, num_params as usize);
-                    self.has_script_fn(Some(global), state, lib, hash_script)
+                    self.has_script_fn(Some(global), caches, lib, hash_script)
                 }
                 .into());
             }
@@ -1081,7 +1060,7 @@ impl Engine {
             KEYWORD_IS_DEF_VAR if total_args == 1 => {
                 let arg = first_arg.unwrap();
                 let (arg_value, arg_pos) =
-                    self.get_arg_value(scope, global, state, lib, this_ptr, arg, level)?;
+                    self.get_arg_value(scope, global, caches, lib, this_ptr, arg, level)?;
                 let var_name = arg_value
                     .into_immutable_string()
                     .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, arg_pos))?;
@@ -1094,14 +1073,14 @@ impl Engine {
                 let orig_scope_len = scope.len();
                 let arg = first_arg.unwrap();
                 let (arg_value, pos) =
-                    self.get_arg_value(scope, global, state, lib, this_ptr, arg, level)?;
+                    self.get_arg_value(scope, global, caches, lib, this_ptr, arg, level)?;
                 let script = &arg_value
                     .into_immutable_string()
                     .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, pos))?;
                 let result = self.eval_script_expr_in_place(
                     scope,
                     global,
-                    state,
+                    caches,
                     lib,
                     script,
                     pos,
@@ -1111,7 +1090,7 @@ impl Engine {
                 // IMPORTANT! If the eval defines new variables in the current scope,
                 //            all variable offsets from this point on will be mis-aligned.
                 if scope.len() != orig_scope_len {
-                    state.always_search_scope = true;
+                    global.always_search_scope = true;
                 }
 
                 return result.map_err(|err| {
@@ -1143,7 +1122,7 @@ impl Engine {
                 .map(|&v| v)
                 .chain(a_expr.iter())
                 .try_for_each(|expr| {
-                    self.get_arg_value(scope, global, state, lib, this_ptr, expr, level)
+                    self.get_arg_value(scope, global, caches, lib, this_ptr, expr, level)
                         .map(|(value, ..)| arg_values.push(value.flatten()))
                 })?;
             args.extend(curry.iter_mut());
@@ -1154,7 +1133,7 @@ impl Engine {
 
             return self
                 .exec_fn_call(
-                    scope, global, state, lib, name, hashes, &mut args, is_ref_mut, false, pos,
+                    scope, global, caches, lib, name, hashes, &mut args, is_ref_mut, false, pos,
                     level,
                 )
                 .map(|(v, ..)| v);
@@ -1171,16 +1150,16 @@ impl Engine {
                 let first_expr = first_arg.unwrap();
 
                 #[cfg(feature = "debugging")]
-                self.run_debugger(scope, global, state, lib, this_ptr, first_expr, level)?;
+                self.run_debugger(scope, global, lib, this_ptr, first_expr, level)?;
 
                 // func(x, ...) -> x.func(...)
                 a_expr.iter().try_for_each(|expr| {
-                    self.get_arg_value(scope, global, state, lib, this_ptr, expr, level)
+                    self.get_arg_value(scope, global, caches, lib, this_ptr, expr, level)
                         .map(|(value, ..)| arg_values.push(value.flatten()))
                 })?;
 
                 let (mut target, _pos) =
-                    self.search_namespace(scope, global, state, lib, this_ptr, first_expr, level)?;
+                    self.search_namespace(scope, global, lib, this_ptr, first_expr, level)?;
 
                 if target.as_ref().is_read_only() {
                     target = target.into_owned();
@@ -1210,7 +1189,7 @@ impl Engine {
                     .into_iter()
                     .chain(a_expr.iter())
                     .try_for_each(|expr| {
-                        self.get_arg_value(scope, global, state, lib, this_ptr, expr, level)
+                        self.get_arg_value(scope, global, caches, lib, this_ptr, expr, level)
                             .map(|(value, ..)| arg_values.push(value.flatten()))
                     })?;
                 args.extend(curry.iter_mut());
@@ -1219,7 +1198,7 @@ impl Engine {
         }
 
         self.exec_fn_call(
-            None, global, state, lib, name, hashes, &mut args, is_ref_mut, false, pos, level,
+            None, global, caches, lib, name, hashes, &mut args, is_ref_mut, false, pos, level,
         )
         .map(|(v, ..)| v)
     }
@@ -1230,7 +1209,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
+        caches: &mut Caches,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         namespace: &crate::ast::Namespace,
@@ -1252,20 +1231,20 @@ impl Engine {
             // and avoid cloning the value
             if !args_expr.is_empty() && args_expr[0].is_variable_access(true) {
                 #[cfg(feature = "debugging")]
-                self.run_debugger(scope, global, state, lib, this_ptr, &args_expr[0], level)?;
+                self.run_debugger(scope, global, lib, this_ptr, &args_expr[0], level)?;
 
                 // func(x, ...) -> x.func(...)
                 arg_values.push(Dynamic::UNIT);
 
                 args_expr.iter().skip(1).try_for_each(|expr| {
-                    self.get_arg_value(scope, global, state, lib, this_ptr, expr, level)
+                    self.get_arg_value(scope, global, caches, lib, this_ptr, expr, level)
                         .map(|(value, ..)| arg_values.push(value.flatten()))
                 })?;
 
                 // Get target reference to first argument
                 let first_arg = &args_expr[0];
                 let (target, _pos) =
-                    self.search_scope_only(scope, global, state, lib, this_ptr, first_arg, level)?;
+                    self.search_scope_only(scope, global, lib, this_ptr, first_arg, level)?;
 
                 #[cfg(not(feature = "unchecked"))]
                 self.inc_operations(&mut global.num_operations, _pos)?;
@@ -1289,7 +1268,7 @@ impl Engine {
             } else {
                 // func(..., ...) or func(mod::x, ...)
                 args_expr.iter().try_for_each(|expr| {
-                    self.get_arg_value(scope, global, state, lib, this_ptr, expr, level)
+                    self.get_arg_value(scope, global, caches, lib, this_ptr, expr, level)
                         .map(|(value, ..)| arg_values.push(value.flatten()))
                 })?;
                 args.extend(arg_values.iter_mut());
@@ -1298,7 +1277,7 @@ impl Engine {
 
         // Search for the root namespace
         let module = self
-            .search_imports(global, state, namespace)
+            .search_imports(global, namespace)
             .ok_or_else(|| ERR::ErrorModuleNotFound(namespace.to_string(), namespace.position()))?;
 
         // First search script-defined functions in namespace (can override built-in)
@@ -1370,7 +1349,7 @@ impl Engine {
                 mem::swap(&mut global.source, &mut source);
 
                 let result = self.call_script_fn(
-                    new_scope, global, state, lib, &mut None, fn_def, &mut args, true, pos, level,
+                    new_scope, global, caches, lib, &mut None, fn_def, &mut args, true, pos, level,
                 );
 
                 global.source = source;
@@ -1410,7 +1389,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         global: &mut GlobalRuntimeState,
-        state: &mut EvalState,
+        caches: &mut Caches,
         lib: &[&Module],
         script: &str,
         _pos: Position,
@@ -1448,6 +1427,6 @@ impl Engine {
         }
 
         // Evaluate the AST
-        self.eval_global_statements(scope, global, state, statements, lib, level)
+        self.eval_global_statements(scope, global, caches, statements, lib, level)
     }
 }

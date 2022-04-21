@@ -17,7 +17,9 @@ use std::{
 
 /// _(internals)_ An op-assignment operator.
 /// Exported under the `internals` feature only.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+///
+/// This type may hold a straight assignment (i.e. not an op-assignment).
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub struct OpAssignment<'a> {
     /// Hash of the op-assignment call.
     pub hash_op_assign: u64,
@@ -27,9 +29,29 @@ pub struct OpAssignment<'a> {
     pub op_assign: &'a str,
     /// Underlying operator.
     pub op: &'a str,
+    /// [Position] of the op-assignment operator.
+    pub pos: Position,
 }
 
 impl OpAssignment<'_> {
+    /// Create a new [`OpAssignment`] that is only a straight assignment.
+    #[must_use]
+    #[inline(always)]
+    pub const fn new_assignment(pos: Position) -> Self {
+        Self {
+            hash_op_assign: 0,
+            hash_op: 0,
+            op_assign: "=",
+            op: "=",
+            pos,
+        }
+    }
+    /// Is this an op-assignment?
+    #[must_use]
+    #[inline(always)]
+    pub const fn is_op_assignment(&self) -> bool {
+        self.hash_op_assign != 0 || self.hash_op != 0
+    }
     /// Create a new [`OpAssignment`].
     ///
     /// # Panics
@@ -37,8 +59,8 @@ impl OpAssignment<'_> {
     /// Panics if the name is not an op-assignment operator.
     #[must_use]
     #[inline(always)]
-    pub fn new(name: &str) -> Self {
-        Self::new_from_token(Token::lookup_from_syntax(name).expect("operator"))
+    pub fn new_op_assignment(name: &str, pos: Position) -> Self {
+        Self::new_op_assignment_from_token(Token::lookup_from_syntax(name).expect("operator"), pos)
     }
     /// Create a new [`OpAssignment`] from a [`Token`].
     ///
@@ -46,7 +68,7 @@ impl OpAssignment<'_> {
     ///
     /// Panics if the token is not an op-assignment operator.
     #[must_use]
-    pub fn new_from_token(op: Token) -> Self {
+    pub fn new_op_assignment_from_token(op: Token, pos: Position) -> Self {
         let op_raw = op
             .get_base_op_from_assignment()
             .expect("op-assignment operator")
@@ -56,6 +78,7 @@ impl OpAssignment<'_> {
             hash_op: calc_fn_hash(op_raw, 2),
             op_assign: op.literal_syntax(),
             op: op_raw,
+            pos,
         }
     }
     /// Create a new [`OpAssignment`] from a base operator.
@@ -65,8 +88,11 @@ impl OpAssignment<'_> {
     /// Panics if the name is not an operator that can be converted into an op-operator.
     #[must_use]
     #[inline(always)]
-    pub fn new_from_base(name: &str) -> Self {
-        Self::new_from_base_token(Token::lookup_from_syntax(name).expect("operator"))
+    pub fn new_op_assignment_from_base(name: &str, pos: Position) -> Self {
+        Self::new_op_assignment_from_base_token(
+            Token::lookup_from_syntax(name).expect("operator"),
+            pos,
+        )
     }
     /// Convert a [`Token`] into a new [`OpAssignment`].
     ///
@@ -75,16 +101,34 @@ impl OpAssignment<'_> {
     /// Panics if the token is cannot be converted into an op-assignment operator.
     #[inline(always)]
     #[must_use]
-    pub fn new_from_base_token(op: Token) -> Self {
-        Self::new_from_token(op.convert_to_op_assignment().expect("operator"))
+    pub fn new_op_assignment_from_base_token(op: Token, pos: Position) -> Self {
+        Self::new_op_assignment_from_token(op.convert_to_op_assignment().expect("operator"), pos)
     }
 }
 
-/// A statements block with an optional condition.
+impl fmt::Debug for OpAssignment<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_op_assignment() {
+            f.debug_struct("OpAssignment")
+                .field("hash_op_assign", &self.hash_op_assign)
+                .field("hash_op", &self.hash_op)
+                .field("op_assign", &self.op_assign)
+                .field("op", &self.op)
+                .field("pos", &self.pos)
+                .finish()
+        } else {
+            fmt::Debug::fmt(&self.pos, f)
+        }
+    }
+}
+
+/// A statements block with a condition.
+///
+/// The condition may simply be [`Expr::BoolConstant`] with `true` if there is actually no condition.
 #[derive(Debug, Clone, Hash)]
 pub struct ConditionalStmtBlock {
-    /// Optional condition.
-    pub condition: Option<Expr>,
+    /// Condition.
+    pub condition: Expr,
     /// Statements block.
     pub statements: StmtBlock,
 }
@@ -93,7 +137,7 @@ impl<B: Into<StmtBlock>> From<B> for ConditionalStmtBlock {
     #[inline(always)]
     fn from(value: B) -> Self {
         Self {
-            condition: None,
+            condition: Expr::BoolConstant(true, Position::NONE),
             statements: value.into(),
         }
     }
@@ -103,28 +147,9 @@ impl<B: Into<StmtBlock>> From<(Expr, B)> for ConditionalStmtBlock {
     #[inline(always)]
     fn from(value: (Expr, B)) -> Self {
         Self {
-            condition: Some(value.0),
-            statements: value.1.into(),
-        }
-    }
-}
-
-impl<B: Into<StmtBlock>> From<(Option<Expr>, B)> for ConditionalStmtBlock {
-    #[inline(always)]
-    fn from(value: (Option<Expr>, B)) -> Self {
-        Self {
             condition: value.0,
             statements: value.1.into(),
         }
-    }
-}
-
-impl ConditionalStmtBlock {
-    /// Does the condition exist?
-    #[inline(always)]
-    #[must_use]
-    pub const fn has_condition(&self) -> bool {
-        self.condition.is_some()
     }
 }
 
@@ -375,7 +400,7 @@ pub enum Stmt {
     /// * [`CONSTANT`][ASTFlags::CONSTANT] = `const`
     Var(Box<(Ident, Expr, Option<NonZeroUsize>)>, ASTFlags, Position),
     /// expr op`=` expr
-    Assignment(Box<(Option<OpAssignment<'static>>, BinaryExpr)>, Position),
+    Assignment(Box<(OpAssignment<'static>, BinaryExpr)>),
     /// func `(` expr `,` ... `)`
     ///
     /// Note - this is a duplicate of [`Expr::FnCall`] to cover the very common pattern of a single
@@ -464,7 +489,6 @@ impl Stmt {
         match self {
             Self::Noop(pos)
             | Self::BreakLoop(.., pos)
-            | Self::Assignment(.., pos)
             | Self::FnCall(.., pos)
             | Self::If(.., pos)
             | Self::Switch(.., pos)
@@ -474,6 +498,8 @@ impl Stmt {
             | Self::Return(.., pos)
             | Self::Var(.., pos)
             | Self::TryCatch(.., pos) => *pos,
+
+            Self::Assignment(x) => x.0.pos,
 
             Self::Block(x) => x.position(),
 
@@ -493,7 +519,6 @@ impl Stmt {
         match self {
             Self::Noop(pos)
             | Self::BreakLoop(.., pos)
-            | Self::Assignment(.., pos)
             | Self::FnCall(.., pos)
             | Self::If(.., pos)
             | Self::Switch(.., pos)
@@ -503,6 +528,8 @@ impl Stmt {
             | Self::Return(.., pos)
             | Self::Var(.., pos)
             | Self::TryCatch(.., pos) => *pos = new_pos,
+
+            Self::Assignment(x) => x.0.pos = new_pos,
 
             Self::Block(x) => x.set_position(new_pos, x.end_position()),
 
@@ -593,12 +620,10 @@ impl Stmt {
             Self::Switch(x, ..) => {
                 x.0.is_pure()
                     && x.1.cases.values().all(|block| {
-                        block.condition.as_ref().map(Expr::is_pure).unwrap_or(true)
-                            && block.statements.iter().all(Stmt::is_pure)
+                        block.condition.is_pure() && block.statements.iter().all(Stmt::is_pure)
                     })
                     && x.1.ranges.iter().all(|(.., block)| {
-                        block.condition.as_ref().map(Expr::is_pure).unwrap_or(true)
-                            && block.statements.iter().all(Stmt::is_pure)
+                        block.condition.is_pure() && block.statements.iter().all(Stmt::is_pure)
                     })
                     && x.1.def_case.iter().all(Stmt::is_pure)
             }
@@ -740,12 +765,7 @@ impl Stmt {
                     return false;
                 }
                 for b in x.1.cases.values() {
-                    if !b
-                        .condition
-                        .as_ref()
-                        .map(|e| e.walk(path, on_node))
-                        .unwrap_or(true)
-                    {
+                    if !b.condition.walk(path, on_node) {
                         return false;
                     }
                     for s in b.statements.iter() {
@@ -755,12 +775,7 @@ impl Stmt {
                     }
                 }
                 for (.., b) in &x.1.ranges {
-                    if !b
-                        .condition
-                        .as_ref()
-                        .map(|e| e.walk(path, on_node))
-                        .unwrap_or(true)
-                    {
+                    if !b.condition.walk(path, on_node) {
                         return false;
                     }
                     for s in b.statements.iter() {

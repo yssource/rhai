@@ -9,6 +9,20 @@ Bug fixes
 
 * Compound assignments now work properly with indexers.
 
+Script-breaking changes
+-----------------------
+
+* _Strict Variables Mode_ no longer returns an error when an undeclared variable matches a constant in the provided external `Scope`.
+
+Enhancements
+------------
+
+* `Module::eval_ast_as_new_raw` is made public as a low-level API.
+* Improper `switch` case condition syntax is now caught at parse time.
+* `Engine::parse_json` now natively handles nested JSON inputs (using a token remap filter) without needing to replace `{` with `#{`.
+* `to_json` is added to object maps to cheaply convert it to JSON format (`()` is mapped to `null`, all other data types must be supported by JSON)
+* A global function `format_map_as_json` is provided which is the same as `to_json` for object maps.
+
 
 Version 1.6.1
 =============

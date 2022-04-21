@@ -1,6 +1,6 @@
 //! Module that defines the public evaluation API of [`Engine`].
 
-use crate::eval::{EvalState, GlobalRuntimeState};
+use crate::eval::{Caches, GlobalRuntimeState};
 use crate::parser::ParseState;
 use crate::types::dynamic::Variant;
 use crate::{
@@ -116,13 +116,12 @@ impl Engine {
         let scripts = [script];
         let (stream, tokenizer_control) =
             self.lex_raw(&scripts, self.token_mapper.as_ref().map(Box::as_ref));
-        let mut state = ParseState::new(self, tokenizer_control);
+        let mut state = ParseState::new(self, scope, tokenizer_control);
 
         // No need to optimize a lone expression
         let ast = self.parse_global_expr(
             &mut stream.peekable(),
             &mut state,
-            scope,
             #[cfg(not(feature = "no_optimize"))]
             OptimizationLevel::None,
             #[cfg(feature = "no_optimize")]
@@ -208,7 +207,7 @@ impl Engine {
         ast: &'a AST,
         level: usize,
     ) -> RhaiResult {
-        let mut state = EvalState::new();
+        let mut caches = Caches::new();
         global.source = ast.source_raw().clone();
 
         #[cfg(not(feature = "no_module"))]
@@ -231,6 +230,6 @@ impl Engine {
         } else {
             &lib[..]
         };
-        self.eval_global_statements(scope, global, &mut state, statements, lib, level)
+        self.eval_global_statements(scope, global, &mut caches, statements, lib, level)
     }
 }

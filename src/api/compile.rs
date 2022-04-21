@@ -225,13 +225,8 @@ impl Engine {
             scripts.as_ref(),
             self.token_mapper.as_ref().map(Box::as_ref),
         );
-        let mut state = ParseState::new(self, tokenizer_control);
-        self.parse(
-            &mut stream.peekable(),
-            &mut state,
-            scope,
-            optimization_level,
-        )
+        let mut state = ParseState::new(self, scope, tokenizer_control);
+        self.parse(&mut stream.peekable(), &mut state, optimization_level)
     }
     /// Compile a string containing an expression into an [`AST`],
     /// which can be used later for evaluation.
@@ -300,118 +295,7 @@ impl Engine {
             self.lex_raw(&scripts, self.token_mapper.as_ref().map(Box::as_ref));
 
         let mut peekable = stream.peekable();
-        let mut state = ParseState::new(self, tokenizer_control);
-        self.parse_global_expr(
-            &mut peekable,
-            &mut state,
-            scope,
-            self.options.optimization_level,
-        )
-    }
-    /// Parse a JSON string into an [object map][crate::Map].
-    /// This is a light-weight alternative to using, say,
-    /// [`serde_json`](https://crates.io/crates/serde_json) to deserialize the JSON.
-    ///
-    /// Not available under `no_object`.
-    ///
-    /// The JSON string must be an object hash.  It cannot be a simple scalar value.
-    ///
-    /// Set `has_null` to `true` in order to map `null` values to `()`.
-    /// Setting it to `false` will cause an [`ErrorVariableNotFound`][crate::EvalAltResult::ErrorVariableNotFound] error during parsing.
-    ///
-    /// # JSON With Sub-Objects
-    ///
-    /// This method assumes no sub-objects in the JSON string.  That is because the syntax
-    /// of a JSON sub-object (or object hash), `{ .. }`, is different from Rhai's syntax, `#{ .. }`.
-    /// Parsing a JSON string with sub-objects will cause a syntax error.
-    ///
-    /// If it is certain that the character `{` never appears in any text string within the JSON object,
-    /// which is a valid assumption for many use cases, then globally replace `{` with `#{` before calling this method.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, Map};
-    ///
-    /// let engine = Engine::new();
-    ///
-    /// let map = engine.parse_json(
-    ///     r#"{"a":123, "b":42, "c":{"x":false, "y":true}, "d":null}"#
-    ///         .replace("{", "#{").as_str(),
-    /// true)?;
-    ///
-    /// assert_eq!(map.len(), 4);
-    /// assert_eq!(map["a"].as_int().expect("a should exist"), 123);
-    /// assert_eq!(map["b"].as_int().expect("b should exist"), 42);
-    /// assert!(map["d"].is::<()>());
-    ///
-    /// let c = map["c"].read_lock::<Map>().expect("c should exist");
-    /// assert_eq!(c["x"].as_bool().expect("x should be bool"), false);
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg(not(feature = "no_object"))]
-    #[inline(always)]
-    pub fn parse_json(
-        &self,
-        json: impl AsRef<str>,
-        has_null: bool,
-    ) -> crate::RhaiResultOf<crate::Map> {
-        use crate::tokenizer::Token;
-
-        fn parse_json_inner(
-            engine: &Engine,
-            json: &str,
-            has_null: bool,
-        ) -> crate::RhaiResultOf<crate::Map> {
-            let mut scope = Scope::new();
-            let json_text = json.trim_start();
-            let scripts = if json_text.starts_with(Token::MapStart.literal_syntax()) {
-                [json_text, ""]
-            } else if json_text.starts_with(Token::LeftBrace.literal_syntax()) {
-                ["#", json_text]
-            } else {
-                return Err(crate::PERR::MissingToken(
-                    Token::LeftBrace.syntax().into(),
-                    "to start a JSON object hash".into(),
-                )
-                .into_err(crate::Position::new(
-                    1,
-                    (json.len() - json_text.len() + 1) as u16,
-                ))
-                .into());
-            };
-            let (stream, tokenizer_control) = engine.lex_raw(
-                &scripts,
-                if has_null {
-                    Some(&|token, _, _| {
-                        match token {
-                            // If `null` is present, make sure `null` is treated as a variable
-                            Token::Reserved(s) if &*s == "null" => Token::Identifier(s),
-                            _ => token,
-                        }
-                    })
-                } else {
-                    None
-                },
-            );
-            let mut state = ParseState::new(engine, tokenizer_control);
-            let ast = engine.parse_global_expr(
-                &mut stream.peekable(),
-                &mut state,
-                &scope,
-                #[cfg(not(feature = "no_optimize"))]
-                OptimizationLevel::None,
-                #[cfg(feature = "no_optimize")]
-                OptimizationLevel::default(),
-            )?;
-            if has_null {
-                scope.push_constant("null", ());
-            }
-            engine.eval_ast_with_scope(&mut scope, &ast)
-        }
-
-        parse_json_inner(self, json.as_ref(), has_null)
+        let mut state = ParseState::new(self, scope, tokenizer_control);
+        self.parse_global_expr(&mut peekable, &mut state, self.options.optimization_level)
     }
 }

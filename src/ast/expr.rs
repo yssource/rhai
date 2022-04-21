@@ -832,6 +832,7 @@ impl Expr {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
                 Token::LeftParen => true,
+                Token::Unit => true,
                 Token::Bang => true,
                 Token::DoubleColon => true,
                 _ => false,
