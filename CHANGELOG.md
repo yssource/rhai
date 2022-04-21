@@ -14,6 +14,7 @@ Enhancements
 
 * `Module::eval_ast_as_new_raw` is made public as a low-level API.
 * Improper `switch` case condition syntax is now caught at parse time.
+* `Engine::parse_json` now natively handles nested JSON inputs (using a token remap filter) without needing to replace `{` with `#{`.
 
 
 Version 1.6.1

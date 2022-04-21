@@ -314,19 +314,12 @@ impl Engine {
     ///
     /// Not available under `no_object`.
     ///
-    /// The JSON string must be an object hash.  It cannot be a simple scalar value.
+    /// The JSON string must be an object hash.  It cannot be a simple primitive value.
     ///
     /// Set `has_null` to `true` in order to map `null` values to `()`.
-    /// Setting it to `false` will cause an [`ErrorVariableNotFound`][crate::EvalAltResult::ErrorVariableNotFound] error during parsing.
+    /// Setting it to `false` causes a syntax error for any `null` value.
     ///
-    /// # JSON With Sub-Objects
-    ///
-    /// This method assumes no sub-objects in the JSON string.  That is because the syntax
-    /// of a JSON sub-object (or object hash), `{ .. }`, is different from Rhai's syntax, `#{ .. }`.
-    /// Parsing a JSON string with sub-objects will cause a syntax error.
-    ///
-    /// If it is certain that the character `{` never appears in any text string within the JSON object,
-    /// which is a valid assumption for many use cases, then globally replace `{` with `#{` before calling this method.
+    /// JSON sub-objects are handled transparently.
     ///
     /// # Example
     ///
@@ -336,18 +329,27 @@ impl Engine {
     ///
     /// let engine = Engine::new();
     ///
-    /// let map = engine.parse_json(
-    ///     r#"{"a":123, "b":42, "c":{"x":false, "y":true}, "d":null}"#
-    ///         .replace("{", "#{").as_str(),
-    /// true)?;
+    /// let map = engine.parse_json(r#"
+    /// {
+    ///     "a": 123,
+    ///     "b": 42,
+    ///     "c": {
+    ///         "x": false,
+    ///         "y": true,
+    ///         "z": '$'
+    ///     },
+    ///     "d": null
+    /// }"#, true)?;
     ///
     /// assert_eq!(map.len(), 4);
     /// assert_eq!(map["a"].as_int().expect("a should exist"), 123);
     /// assert_eq!(map["b"].as_int().expect("b should exist"), 42);
-    /// assert!(map["d"].is::<()>());
+    /// assert_eq!(map["d"].as_unit().expect("d should exist"), ());
     ///
     /// let c = map["c"].read_lock::<Map>().expect("c should exist");
     /// assert_eq!(c["x"].as_bool().expect("x should be bool"), false);
+    /// assert_eq!(c["y"].as_bool().expect("y should be bool"), true);
+    /// assert_eq!(c["z"].as_char().expect("z should be char"), '$');
     /// # Ok(())
     /// # }
     /// ```
@@ -358,60 +360,80 @@ impl Engine {
         json: impl AsRef<str>,
         has_null: bool,
     ) -> crate::RhaiResultOf<crate::Map> {
-        use crate::tokenizer::Token;
+        use crate::{tokenizer::Token, LexError};
 
-        fn parse_json_inner(
-            engine: &Engine,
-            json: &str,
-            has_null: bool,
-        ) -> crate::RhaiResultOf<crate::Map> {
-            let mut scope = Scope::new();
-            let json_text = json.trim_start();
-            let scripts = if json_text.starts_with(Token::MapStart.literal_syntax()) {
-                [json_text, ""]
-            } else if json_text.starts_with(Token::LeftBrace.literal_syntax()) {
-                ["#", json_text]
-            } else {
-                return Err(crate::PERR::MissingToken(
-                    Token::LeftBrace.syntax().into(),
-                    "to start a JSON object hash".into(),
-                )
-                .into_err(crate::Position::new(
-                    1,
-                    (json.len() - json_text.len() + 1) as u16,
-                ))
-                .into());
-            };
-            let (stream, tokenizer_control) = engine.lex_raw(
-                &scripts,
-                if has_null {
-                    Some(&|token, _, _| {
-                        match token {
-                            // If `null` is present, make sure `null` is treated as a variable
-                            Token::Reserved(s) if &*s == "null" => Token::Identifier(s),
-                            _ => token,
-                        }
-                    })
-                } else {
-                    None
-                },
-            );
-            let mut state = ParseState::new(engine, tokenizer_control);
-            let ast = engine.parse_global_expr(
-                &mut stream.peekable(),
-                &mut state,
-                &scope,
-                #[cfg(not(feature = "no_optimize"))]
-                OptimizationLevel::None,
-                #[cfg(feature = "no_optimize")]
-                OptimizationLevel::default(),
-            )?;
+        let scripts = [json.as_ref()];
+
+        let (stream, tokenizer_control) = self.lex_raw(
+            &scripts,
             if has_null {
-                scope.push_constant("null", ());
-            }
-            engine.eval_ast_with_scope(&mut scope, &ast)
-        }
+                Some(&|token, _, _| {
+                    match token {
+                        // `null` => `()`
+                        Token::Reserved(s) if &*s == "null" => Token::Unit,
+                        // `{` => `#{`
+                        Token::LeftBrace => Token::MapStart,
+                        // Disallowed syntax
+                        t @ (Token::Unit | Token::MapStart) => Token::LexError(
+                            LexError::ImproperSymbol(
+                                t.literal_syntax().to_string(),
+                                "".to_string(),
+                            )
+                            .into(),
+                        ),
+                        Token::InterpolatedString(..) => Token::LexError(
+                            LexError::ImproperSymbol(
+                                "interpolated string".to_string(),
+                                "".to_string(),
+                            )
+                            .into(),
+                        ),
+                        // All others
+                        _ => token,
+                    }
+                })
+            } else {
+                Some(&|token, _, _| {
+                    match token {
+                        Token::Reserved(s) if &*s == "null" => Token::LexError(
+                            LexError::ImproperSymbol("null".to_string(), "".to_string()).into(),
+                        ),
+                        // `{` => `#{`
+                        Token::LeftBrace => Token::MapStart,
+                        // Disallowed syntax
+                        t @ (Token::Unit | Token::MapStart) => Token::LexError(
+                            LexError::ImproperSymbol(
+                                t.literal_syntax().to_string(),
+                                "".to_string(),
+                            )
+                            .into(),
+                        ),
+                        Token::InterpolatedString(..) => Token::LexError(
+                            LexError::ImproperSymbol(
+                                "interpolated string".to_string(),
+                                "".to_string(),
+                            )
+                            .into(),
+                        ),
+                        // All others
+                        _ => token,
+                    }
+                })
+            },
+        );
 
-        parse_json_inner(self, json.as_ref(), has_null)
+        let mut state = ParseState::new(self, tokenizer_control);
+
+        let ast = self.parse_global_expr(
+            &mut stream.peekable(),
+            &mut state,
+            &Scope::new(),
+            #[cfg(not(feature = "no_optimize"))]
+            OptimizationLevel::None,
+            #[cfg(feature = "no_optimize")]
+            OptimizationLevel::default(),
+        )?;
+
+        self.eval_ast(&ast)
     }
 }

@@ -130,8 +130,8 @@ fn test_map_assign() -> Result<(), Box<EvalAltResult>> {
 
     let x = engine.eval::<Map>(r#"let x = #{a: 1, b: true, "c$": "hello"}; x"#)?;
 
-    assert_eq!(x["a"].clone_cast::<INT>(), 1);
-    assert_eq!(x["b"].clone_cast::<bool>(), true);
+    assert_eq!(x["a"].as_int().unwrap(), 1);
+    assert_eq!(x["b"].as_bool().unwrap(), true);
     assert_eq!(x["c$"].clone_cast::<String>(), "hello");
 
     Ok(())
@@ -143,8 +143,8 @@ fn test_map_return() -> Result<(), Box<EvalAltResult>> {
 
     let x = engine.eval::<Map>(r#"#{a: 1, b: true, "c$": "hello"}"#)?;
 
-    assert_eq!(x["a"].clone_cast::<INT>(), 1);
-    assert_eq!(x["b"].clone_cast::<bool>(), true);
+    assert_eq!(x["a"].as_int().unwrap(), 1);
+    assert_eq!(x["b"].as_bool().unwrap(), true);
     assert_eq!(x["c$"].clone_cast::<String>(), "hello");
 
     Ok(())
@@ -182,17 +182,17 @@ fn test_map_for() -> Result<(), Box<EvalAltResult>> {
 fn test_map_json() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
-    let json = r#"{"a":1, "b":true, "c":42, "$d e f!":"hello", "z":null}"#;
+    let json = r#"{"a":1, "b":true, "c":41+1, "$d e f!":"hello", "z":null}"#;
 
     let map = engine.parse_json(json, true)?;
 
     assert!(!map.contains_key("x"));
 
-    assert_eq!(map["a"].clone_cast::<INT>(), 1);
-    assert_eq!(map["b"].clone_cast::<bool>(), true);
-    assert_eq!(map["c"].clone_cast::<INT>(), 42);
+    assert_eq!(map["a"].as_int().unwrap(), 1);
+    assert_eq!(map["b"].as_bool().unwrap(), true);
+    assert_eq!(map["c"].as_int().unwrap(), 42);
     assert_eq!(map["$d e f!"].clone_cast::<String>(), "hello");
-    assert_eq!(map["z"].clone_cast::<()>(), ());
+    assert_eq!(map["z"].as_unit().unwrap(), ());
 
     #[cfg(not(feature = "no_index"))]
     {
@@ -218,12 +218,37 @@ fn test_map_json() -> Result<(), Box<EvalAltResult>> {
         );
     }
 
-    engine.parse_json(&format!("#{}", json), true)?;
+    engine.parse_json(json, true)?;
 
     assert!(matches!(
-        *engine.parse_json("   123", true).expect_err("should error"),
-        EvalAltResult::ErrorParsing(ParseErrorType::MissingToken(token, ..), ..)
-            if token == "{"
+        *engine.parse_json("123", true).expect_err("should error"),
+        EvalAltResult::ErrorMismatchOutputType(..)
+    ));
+
+    assert!(matches!(
+        *engine
+            .parse_json("#{a:123}", true)
+            .expect_err("should error"),
+        EvalAltResult::ErrorParsing(..)
+    ));
+
+    assert!(matches!(
+        *engine.parse_json("{a:()}", true).expect_err("should error"),
+        EvalAltResult::ErrorParsing(..)
+    ));
+
+    assert!(matches!(
+        *engine
+            .parse_json("#{a:123+456}", true)
+            .expect_err("should error"),
+        EvalAltResult::ErrorParsing(..)
+    ));
+
+    assert!(matches!(
+        *engine
+            .parse_json("{a:`hello${world}`}", true)
+            .expect_err("should error"),
+        EvalAltResult::ErrorParsing(..)
     ));
 
     Ok(())
