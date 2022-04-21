@@ -237,6 +237,9 @@ pub type Blob = Vec<u8>;
 #[cfg(not(feature = "no_object"))]
 pub type Map = std::collections::BTreeMap<Identifier, Dynamic>;
 
+#[cfg(not(feature = "no_object"))]
+pub use api::json::format_map_as_json;
+
 #[cfg(not(feature = "no_module"))]
 pub use module::ModuleResolver;
 

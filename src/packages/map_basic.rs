@@ -2,7 +2,7 @@
 
 use crate::engine::OP_EQUALS;
 use crate::plugin::*;
-use crate::{def_package, Dynamic, ImmutableString, Map, RhaiResultOf, INT};
+use crate::{def_package, format_map_as_json, Dynamic, ImmutableString, Map, RhaiResultOf, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -265,5 +265,27 @@ mod map_functions {
         } else {
             map.values().cloned().collect()
         }
+    }
+    /// Return the JSON representation of the object map.
+    ///
+    /// # Data types
+    ///
+    /// Only the following data types should be kept inside the object map:
+    /// `INT`, `FLOAT`, `ImmutableString`, `char`, `bool`, `()`, `Array`, `Map`.
+    ///
+    /// # Errors
+    ///
+    /// Data types not supported by JSON serialize into formats that may
+    /// invalidate the result.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let m = #{a:1, b:2, c:3};
+    ///
+    /// print(m.to_json());     // prints {"a":1, "b":2, "c":3}
+    /// ```
+    pub fn to_json(map: &mut Map) -> String {
+        format_map_as_json(map)
     }
 }

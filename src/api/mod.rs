@@ -8,6 +8,8 @@ pub mod run;
 
 pub mod compile;
 
+pub mod json;
+
 pub mod files;
 
 pub mod register;
