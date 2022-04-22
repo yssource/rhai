@@ -12,7 +12,7 @@ Bug fixes
 Script-breaking changes
 -----------------------
 
-* _Strict Variables Mode_ no longer returns an error when an undeclared variable matches a constant in the provided external `Scope`.
+* _Strict Variables Mode_ no longer returns an error when an undeclared variable matches a variable/constant in the provided external `Scope`.
 
 Enhancements
 ------------

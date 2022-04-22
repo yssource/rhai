@@ -57,7 +57,7 @@ fn test_options_strict_var() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
     let mut scope = Scope::new();
-    scope.push_constant("x", 42 as INT);
+    scope.push("x", 42 as INT);
     scope.push_constant("y", 0 as INT);
 
     engine.compile("let x = if y { z } else { w };")?;
@@ -114,8 +114,8 @@ fn test_options_strict_var() -> Result<(), Box<EvalAltResult>> {
         }
         #[cfg(not(feature = "no_optimize"))]
         assert_eq!(
-            engine.eval_with_scope::<INT>(&mut scope, "fn foo(z) { x * y + z } foo(1)")?,
-            1
+            engine.eval_with_scope::<INT>(&mut scope, "fn foo(z) { y + z } foo(x)")?,
+            42
         );
     }
 

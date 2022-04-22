@@ -1301,10 +1301,7 @@ impl Engine {
                         if settings.options.strict_var
                             && !settings.is_closure_scope
                             && index.is_none()
-                            && !matches!(
-                                state.scope.get_index(name),
-                                Some((_, AccessMode::ReadOnly))
-                            )
+                            && !state.scope.contains(name)
                         {
                             // If the parent scope is not inside another capturing closure
                             // then we can conclude that the captured variable doesn't exist.
@@ -1450,7 +1447,7 @@ impl Engine {
 
                         if settings.options.strict_var
                             && index.is_none()
-                            && !matches!(state.scope.get_index(&s), Some((_, AccessMode::ReadOnly)))
+                            && !state.scope.contains(&s)
                         {
                             return Err(
                                 PERR::VariableUndefined(s.to_string()).into_err(settings.pos)
