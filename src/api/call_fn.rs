@@ -4,9 +4,10 @@
 use crate::eval::{Caches, GlobalRuntimeState};
 use crate::types::dynamic::Variant;
 use crate::{
-    Dynamic, Engine, FuncArgs, Position, RhaiResult, RhaiResultOf, Scope, StaticVec, AST, ERR,
+    reify, Dynamic, Engine, FuncArgs, Position, RhaiResult, RhaiResultOf, Scope, StaticVec, AST,
+    ERR,
 };
-use std::any::type_name;
+use std::any::{type_name, TypeId};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -66,6 +67,15 @@ impl Engine {
 
         let result = self.call_fn_raw(scope, ast, true, true, name, None, arg_values)?;
 
+        // Bail out early if the return type needs no cast
+        if TypeId::of::<T>() == TypeId::of::<Dynamic>() {
+            return Ok(reify!(result => T));
+        }
+        if TypeId::of::<T>() == TypeId::of::<()>() {
+            return Ok(reify!(() => T));
+        }
+
+        // Cast return type
         let typ = self.map_type_name(result.type_name());
 
         result.try_cast().ok_or_else(|| {
