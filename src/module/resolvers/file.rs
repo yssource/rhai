@@ -45,16 +45,24 @@ pub const RHAI_SCRIPT_EXTENSION: &str = "rhai";
 ///
 /// engine.set_module_resolver(resolver);
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FileModuleResolver {
     base_path: Option<PathBuf>,
     extension: Identifier,
     cache_enabled: bool,
+    scope: Scope<'static>,
 
     #[cfg(not(feature = "sync"))]
     cache: std::cell::RefCell<BTreeMap<PathBuf, Shared<Module>>>,
     #[cfg(feature = "sync")]
     cache: std::sync::RwLock<BTreeMap<PathBuf, Shared<Module>>>,
+}
+
+impl Default for FileModuleResolver {
+    #[inline(always)]
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl FileModuleResolver {
@@ -126,6 +134,7 @@ impl FileModuleResolver {
             extension: extension.into(),
             cache_enabled: true,
             cache: BTreeMap::new().into(),
+            scope: Scope::new(),
         }
     }
 
@@ -155,6 +164,7 @@ impl FileModuleResolver {
             extension: extension.into(),
             cache_enabled: true,
             cache: BTreeMap::new().into(),
+            scope: Scope::new(),
         }
     }
 
@@ -183,6 +193,32 @@ impl FileModuleResolver {
     pub fn set_extension(&mut self, extension: impl Into<Identifier>) -> &mut Self {
         self.extension = extension.into();
         self
+    }
+
+    /// Get a reference to the file module resolver's [scope][Scope].
+    ///
+    /// The [scope][Scope] is used for compiling module scripts.
+    #[must_use]
+    #[inline(always)]
+    pub const fn scope(&self) -> &Scope {
+        &self.scope
+    }
+
+    /// Set the file module resolver's [scope][Scope].
+    ///
+    /// The [scope][Scope] is used for compiling module scripts.
+    #[inline(always)]
+    pub fn set_scope(&mut self, scope: Scope<'static>) {
+        self.scope = scope;
+    }
+
+    /// Get a mutable reference to the file module resolver's [scope][Scope].
+    ///
+    /// The [scope][Scope] is used for compiling module scripts.
+    #[must_use]
+    #[inline(always)]
+    pub fn scope_mut(&mut self) -> &mut Scope<'static> {
+        &mut self.scope
     }
 
     /// Enable/disable the cache.
@@ -281,10 +317,8 @@ impl FileModuleResolver {
             }
         }
 
-        let scope = Scope::new();
-
         let mut ast = engine
-            .compile_file(file_path.clone())
+            .compile_file_with_scope(&self.scope, file_path.clone())
             .map_err(|err| match *err {
                 ERR::ErrorSystem(.., err) if err.is::<IoError>() => {
                     Box::new(ERR::ErrorModuleNotFound(path.to_string(), pos))
@@ -294,7 +328,9 @@ impl FileModuleResolver {
 
         ast.set_source(path);
 
-        let m: Shared<Module> = if let Some(global) = global {
+        let scope = Scope::new();
+
+        let m: Shared<_> = if let Some(global) = global {
             Module::eval_ast_as_new_raw(engine, scope, global, &ast)
         } else {
             Module::eval_ast_as_new(scope, &ast, engine)

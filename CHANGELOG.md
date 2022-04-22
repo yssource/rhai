@@ -22,6 +22,7 @@ Enhancements
 * `Engine::parse_json` now natively handles nested JSON inputs (using a token remap filter) without needing to replace `{` with `#{`.
 * `to_json` is added to object maps to cheaply convert it to JSON format (`()` is mapped to `null`, all other data types must be supported by JSON)
 * A global function `format_map_as_json` is provided which is the same as `to_json` for object maps.
+* `FileModuleResolver` now accepts a custom `Scope` to provide constants for optimization.
 
 
 Version 1.6.1

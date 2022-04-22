@@ -22,7 +22,7 @@ use std::{collections::btree_map::IntoIter, collections::BTreeMap, ops::AddAssig
 ///
 /// engine.set_module_resolver(resolver);
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct StaticModuleResolver(BTreeMap<Identifier, Shared<Module>>);
 
 impl StaticModuleResolver {
