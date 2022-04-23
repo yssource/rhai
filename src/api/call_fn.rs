@@ -83,8 +83,9 @@ impl Engine {
             ERR::ErrorMismatchOutputType(t, typ.into(), Position::NONE).into()
         })
     }
-    /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments and the
-    /// following options:
+    /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments.
+    ///
+    /// The following options are available:
     ///
     /// * whether to evaluate the [`AST`] to load necessary modules before calling the function
     /// * whether to rewind the [`Scope`] after the function call
@@ -148,7 +149,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn call_fn_raw(
         &self,
         scope: &mut Scope,
@@ -159,8 +160,82 @@ impl Engine {
         this_ptr: Option<&mut Dynamic>,
         arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {
+        self.call_fn_internal(
+            scope,
+            &mut GlobalRuntimeState::new(self),
+            ast,
+            eval_ast,
+            rewind_scope,
+            name,
+            this_ptr,
+            arg_values,
+        )
+    }
+    /// _(internals)_ Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments.
+    /// Exported under the `internals` feature only.
+    ///
+    /// The following options are available:
+    ///
+    /// * whether to evaluate the [`AST`] to load necessary modules before calling the function
+    /// * whether to rewind the [`Scope`] after the function call
+    /// * a value for binding to the `this` pointer (if any)
+    ///
+    /// Not available under `no_function`.
+    ///
+    /// # WARNING - Low Level API
+    ///
+    /// This function is very low level.
+    ///
+    /// A [`GlobalRuntimeState`] needs to be passed into the function, which can be created via
+    /// [`GlobalRuntimeState::new`].  This makes repeatedly calling particular functions
+    /// extremely efficient as the functions resolution cache inside the [`GlobalRuntimeState`]
+    /// is kept intact.
+    ///
+    /// # Arguments
+    ///
+    /// All the arguments are _consumed_, meaning that they're replaced by `()`.
+    /// This is to avoid unnecessarily cloning the arguments.
+    ///
+    /// Do not use the arguments after this call. If they are needed afterwards, clone them _before_
+    /// calling this function.
+    #[cfg(feature = "internals")]
+    #[inline(always)]
+    pub fn call_fn_with_global_raw(
+        &self,
+        scope: &mut Scope,
+        global: &mut GlobalRuntimeState,
+        ast: &AST,
+        eval_ast: bool,
+        rewind_scope: bool,
+        name: impl AsRef<str>,
+        this_ptr: Option<&mut Dynamic>,
+        arg_values: impl AsMut<[Dynamic]>,
+    ) -> RhaiResult {
+        self.call_fn_internal(
+            scope,
+            global,
+            ast,
+            eval_ast,
+            rewind_scope,
+            name,
+            this_ptr,
+            arg_values,
+        )
+    }
+
+    /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments.
+    fn call_fn_internal(
+        &self,
+        scope: &mut Scope,
+        global: &mut GlobalRuntimeState,
+        ast: &AST,
+        eval_ast: bool,
+        rewind_scope: bool,
+        name: impl AsRef<str>,
+        this_ptr: Option<&mut Dynamic>,
+        arg_values: impl AsMut<[Dynamic]>,
+    ) -> RhaiResult {
         let caches = &mut Caches::new();
-        let global = &mut GlobalRuntimeState::new(self);
 
         let statements = ast.statements();
 

@@ -24,6 +24,7 @@ Enhancements
 * `to_json` is added to object maps to cheaply convert it to JSON format (`()` is mapped to `null`, all other data types must be supported by JSON)
 * A global function `format_map_as_json` is provided which is the same as `to_json` for object maps.
 * `FileModuleResolver` now accepts a custom `Scope` to provide constants for optimization.
+* A new low-level method `Engine::call_fn_with_global_raw` is added to add speed to repeated function calls.
 
 
 Version 1.6.1
