@@ -160,6 +160,8 @@ impl Engine {
         this_ptr: Option<&mut Dynamic>,
         arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {
+        let mut arg_values = arg_values;
+
         self.call_fn_internal(
             scope,
             &mut GlobalRuntimeState::new(self),
@@ -167,9 +169,9 @@ impl Engine {
             ast,
             eval_ast,
             rewind_scope,
-            name,
+            name.as_ref(),
             this_ptr,
-            arg_values,
+            arg_values.as_mut(),
         )
     }
     /// _(internals)_ Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments.
@@ -209,9 +211,9 @@ impl Engine {
         ast: &AST,
         eval_ast: bool,
         rewind_scope: bool,
-        name: impl AsRef<str>,
+        name: &str,
         this_ptr: Option<&mut Dynamic>,
-        arg_values: impl AsMut<[Dynamic]>,
+        arg_values: &mut [Dynamic],
     ) -> RhaiResult {
         self.call_fn_internal(
             scope,
@@ -225,7 +227,6 @@ impl Engine {
             arg_values,
         )
     }
-
     /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments.
     fn call_fn_internal(
         &self,
@@ -235,9 +236,9 @@ impl Engine {
         ast: &AST,
         eval_ast: bool,
         rewind_scope: bool,
-        name: impl AsRef<str>,
+        name: &str,
         this_ptr: Option<&mut Dynamic>,
-        arg_values: impl AsMut<[Dynamic]>,
+        arg_values: &mut [Dynamic],
     ) -> RhaiResult {
         let statements = ast.statements();
 
@@ -251,9 +252,7 @@ impl Engine {
             }
         }
 
-        let name = name.as_ref();
         let mut this_ptr = this_ptr;
-        let mut arg_values = arg_values;
         let mut args: StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
         let fn_def = ast
