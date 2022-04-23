@@ -25,6 +25,7 @@ Enhancements
 * A global function `format_map_as_json` is provided which is the same as `to_json` for object maps.
 * `FileModuleResolver` now accepts a custom `Scope` to provide constants for optimization.
 * A new low-level method `Engine::call_fn_raw_raw` is added to add speed to repeated function calls.
+* A new low-level method `Engine::eval_statements_raw` is added to evaluate a sequence of statements.
 
 
 Version 1.6.1
