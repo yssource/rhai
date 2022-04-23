@@ -6,9 +6,9 @@ use crate::types::dynamic::Variant;
 use crate::{
     Dynamic, Engine, Module, OptimizationLevel, Position, RhaiResult, RhaiResultOf, Scope, AST, ERR,
 };
-use std::any::type_name;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
+use std::{any::type_name, mem};
 
 impl Engine {
     /// Evaluate a string.
@@ -211,9 +211,10 @@ impl Engine {
         global.source = ast.source_raw().clone();
 
         #[cfg(not(feature = "no_module"))]
-        {
-            global.embedded_module_resolver = ast.resolver().cloned();
-        }
+        let orig_embedded_module_resolver = mem::replace(
+            &mut global.embedded_module_resolver,
+            ast.resolver().cloned(),
+        );
 
         let statements = ast.statements();
 
@@ -230,6 +231,36 @@ impl Engine {
         } else {
             &lib[..]
         };
-        self.eval_global_statements(scope, global, &mut caches, statements, lib, level)
+
+        let result =
+            self.eval_global_statements(scope, global, &mut caches, statements, lib, level);
+
+        #[cfg(not(feature = "no_module"))]
+        {
+            global.embedded_module_resolver = orig_embedded_module_resolver;
+        }
+
+        result
+    }
+    /// _(internals)_ Evaluate a list of statements with no `this` pointer.
+    /// Exported under the `internals` feature only.
+    ///
+    /// This is commonly used to evaluate a list of statements in an [`AST`] or a script function body.
+    ///
+    /// # WARNING - Low Level API
+    ///
+    /// This function is very low level.
+    #[cfg(feature = "internals")]
+    #[inline(always)]
+    pub fn eval_statements_raw(
+        &self,
+        scope: &mut Scope,
+        global: &mut GlobalRuntimeState,
+        caches: &mut Caches,
+        statements: &[crate::ast::Stmt],
+        lib: &[&Module],
+        level: usize,
+    ) -> RhaiResult {
+        self.eval_global_statements(scope, global, caches, statements, lib, level)
     }
 }

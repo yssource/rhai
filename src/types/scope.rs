@@ -6,6 +6,7 @@ use smallvec::SmallVec;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
+    fmt,
     iter::{Extend, FromIterator},
     marker::PhantomData,
 };
@@ -59,7 +60,7 @@ const SCOPE_ENTRIES_INLINED: usize = 8;
 // direct indexing, by-passing the name altogether.
 //
 // [`Dynamic`] is reasonably small so packing it tightly improves cache performance.
-#[derive(Debug, Clone, Hash, Default)]
+#[derive(Debug, Hash, Default)]
 pub struct Scope<'a> {
     /// Current value of the entry.
     values: SmallVec<[Dynamic; SCOPE_ENTRIES_INLINED]>,
@@ -69,6 +70,51 @@ pub struct Scope<'a> {
     aliases: SmallVec<[Vec<Identifier>; SCOPE_ENTRIES_INLINED]>,
     /// Phantom to keep the lifetime parameter in order not to break existing code.
     phantom: PhantomData<&'a ()>,
+}
+
+impl fmt::Display for Scope<'_> {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (i, (name, constant, value)) in self.iter_raw().enumerate() {
+            #[cfg(not(feature = "no_closure"))]
+            let value_is_shared = if value.is_shared() { " (shared)" } else { "" };
+            #[cfg(feature = "no_closure")]
+            let value_is_shared = "";
+
+            write!(
+                f,
+                "[{}] {}{}{} = {:?}\n",
+                i + 1,
+                if constant { "const " } else { "" },
+                name,
+                value_is_shared,
+                *value.read_lock::<Dynamic>().unwrap(),
+            )?;
+        }
+
+        Ok(())
+    }
+}
+
+impl Clone for Scope<'_> {
+    #[inline]
+    fn clone(&self) -> Self {
+        Self {
+            values: self
+                .values
+                .iter()
+                .map(|v| {
+                    // Also copy the value's access mode (otherwise will turn to read-write)
+                    let mut v2 = v.clone();
+                    v2.set_access_mode(v.access_mode());
+                    v2
+                })
+                .collect(),
+            names: self.names.clone(),
+            aliases: self.aliases.clone(),
+            phantom: self.phantom.clone(),
+        }
+    }
 }
 
 impl IntoIterator for Scope<'_> {
@@ -551,24 +597,24 @@ impl Scope<'_> {
     #[must_use]
     pub fn clone_visible(&self) -> Self {
         let len = self.len();
+        let mut scope = Self::new();
 
-        self.names
-            .iter()
-            .rev()
-            .enumerate()
-            .fold(Self::new(), |mut entries, (index, name)| {
-                if entries.names.is_empty() || !entries.names.contains(name) {
-                    let orig_value = &self.values[len - 1 - index];
-                    let alias = &self.aliases[len - 1 - index];
-                    let mut value = orig_value.clone();
-                    value.set_access_mode(orig_value.access_mode());
+        self.names.iter().rev().enumerate().for_each(|(i, name)| {
+            if scope.names.contains(name) {
+                return;
+            }
 
-                    entries.names.push(name.clone());
-                    entries.values.push(value);
-                    entries.aliases.push(alias.clone());
-                }
-                entries
-            })
+            let v1 = &self.values[len - 1 - i];
+            let alias = &self.aliases[len - 1 - i];
+            let mut v2 = v1.clone();
+            v2.set_access_mode(v1.access_mode());
+
+            scope.names.push(name.clone());
+            scope.values.push(v2);
+            scope.aliases.push(alias.clone());
+        });
+
+        scope
     }
     /// Get an iterator to entries in the [`Scope`].
     #[inline]

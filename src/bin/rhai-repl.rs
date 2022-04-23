@@ -108,27 +108,6 @@ fn print_keys() {
     println!();
 }
 
-/// Display the scope.
-fn print_scope(scope: &Scope) {
-    for (i, (name, constant, value)) in scope.iter_raw().enumerate() {
-        #[cfg(not(feature = "no_closure"))]
-        let value_is_shared = if value.is_shared() { " (shared)" } else { "" };
-        #[cfg(feature = "no_closure")]
-        let value_is_shared = "";
-
-        println!(
-            "[{}] {}{}{} = {:?}",
-            i + 1,
-            if constant { "const " } else { "" },
-            name,
-            value_is_shared,
-            *value.read_lock::<Dynamic>().unwrap(),
-        )
-    }
-
-    println!();
-}
-
 // Load script files specified in the command line.
 #[cfg(not(feature = "no_module"))]
 #[cfg(not(feature = "no_std"))]
@@ -458,7 +437,7 @@ fn main() {
                 continue;
             }
             "scope" => {
-                print_scope(&scope);
+                println!("{}", scope);
                 continue;
             }
             #[cfg(not(feature = "no_optimize"))]
