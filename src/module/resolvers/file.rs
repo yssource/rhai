@@ -45,7 +45,7 @@ pub const RHAI_SCRIPT_EXTENSION: &str = "rhai";
 ///
 /// engine.set_module_resolver(resolver);
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct FileModuleResolver {
     base_path: Option<PathBuf>,
     extension: Identifier,
