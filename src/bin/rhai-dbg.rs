@@ -154,43 +154,6 @@ fn print_debug_help() {
     println!();
 }
 
-/// Display the current scope.
-fn print_scope(scope: &Scope, dedup: bool) {
-    let flattened_clone;
-    let scope = if dedup {
-        flattened_clone = scope.clone_visible();
-        &flattened_clone
-    } else {
-        scope
-    };
-
-    for (i, (name, constant, value)) in scope.iter_raw().enumerate() {
-        #[cfg(not(feature = "no_closure"))]
-        let value_is_shared = if value.is_shared() { " (shared)" } else { "" };
-        #[cfg(feature = "no_closure")]
-        let value_is_shared = "";
-
-        if dedup {
-            println!(
-                "{}{}{} = {:?}",
-                if constant { "const " } else { "" },
-                name,
-                value_is_shared,
-                *value.read_lock::<Dynamic>().unwrap(),
-            );
-        } else {
-            println!(
-                "[{}] {}{}{} = {:?}",
-                i + 1,
-                if constant { "const " } else { "" },
-                name,
-                value_is_shared,
-                *value.read_lock::<Dynamic>().unwrap(),
-            );
-        }
-    }
-}
-
 // Load script to debug.
 fn load_script(engine: &Engine) -> (rhai::AST, String) {
     if let Some(filename) = env::args().skip(1).next() {
@@ -365,7 +328,7 @@ fn debug_callback(
                 [] | ["step" | "s"] => break Ok(DebuggerCommand::StepInto),
                 ["over" | "o"] => break Ok(DebuggerCommand::StepOver),
                 ["next" | "n"] => break Ok(DebuggerCommand::Next),
-                ["scope"] => print_scope(context.scope(), false),
+                ["scope"] => println!("{}", context.scope()),
                 ["print" | "p", "this"] => {
                     if let Some(value) = context.this_ptr() {
                         println!("=> {:?}", value);
@@ -381,7 +344,7 @@ fn debug_callback(
                     }
                 }
                 ["print" | "p"] => {
-                    print_scope(context.scope(), true);
+                    println!("{}", context.scope().clone_visible());
                     if let Some(value) = context.this_ptr() {
                         println!("this = {:?}", value);
                     }
