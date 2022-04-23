@@ -79,6 +79,17 @@ fn test_var_scope() -> Result<(), Box<EvalAltResult>> {
         );
     }
 
+    scope.clear();
+
+    scope.push("x", 42 as INT);
+    scope.push_constant("x", 42 as INT);
+
+    let scope2 = scope.clone();
+    let scope3 = scope.clone_visible();
+
+    assert_eq!(scope2.is_constant("x"), Some(true));
+    assert_eq!(scope3.is_constant("x"), Some(true));
+
     Ok(())
 }
 

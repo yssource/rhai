@@ -8,6 +8,7 @@ Bug fixes
 ---------
 
 * Compound assignments now work properly with indexers.
+* Cloning a `Scope` no longer turns all constants to mutable.
 
 Script-breaking changes
 -----------------------
