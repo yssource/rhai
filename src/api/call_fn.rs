@@ -163,6 +163,7 @@ impl Engine {
         self.call_fn_internal(
             scope,
             &mut GlobalRuntimeState::new(self),
+            &mut Caches::new(),
             ast,
             eval_ast,
             rewind_scope,
@@ -186,9 +187,9 @@ impl Engine {
     ///
     /// This function is very low level.
     ///
-    /// A [`GlobalRuntimeState`] needs to be passed into the function, which can be created via
-    /// [`GlobalRuntimeState::new`].  This makes repeatedly calling particular functions
-    /// extremely efficient as the functions resolution cache inside the [`GlobalRuntimeState`]
+    /// A [`GlobalRuntimeState`] and [`Caches`] need to be passed into the function, which can be
+    /// created via [`GlobalRuntimeState::new`] and [`Caches::new`].
+    /// This makes repeatedly calling particular functions more efficient as the functions resolution cache
     /// is kept intact.
     ///
     /// # Arguments
@@ -200,10 +201,11 @@ impl Engine {
     /// calling this function.
     #[cfg(feature = "internals")]
     #[inline(always)]
-    pub fn call_fn_with_global_raw(
+    pub fn call_fn_raw_raw(
         &self,
         scope: &mut Scope,
         global: &mut GlobalRuntimeState,
+        caches: &mut Caches,
         ast: &AST,
         eval_ast: bool,
         rewind_scope: bool,
@@ -214,6 +216,7 @@ impl Engine {
         self.call_fn_internal(
             scope,
             global,
+            caches,
             ast,
             eval_ast,
             rewind_scope,
@@ -228,6 +231,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         global: &mut GlobalRuntimeState,
+        caches: &mut Caches,
         ast: &AST,
         eval_ast: bool,
         rewind_scope: bool,
@@ -235,8 +239,6 @@ impl Engine {
         this_ptr: Option<&mut Dynamic>,
         arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {
-        let caches = &mut Caches::new();
-
         let statements = ast.statements();
 
         let orig_scope_len = scope.len();
