@@ -118,8 +118,10 @@ fn print_debug_help() {
     println!("help, h                => print this help");
     println!("quit, q, exit, kill    => quit");
     println!("scope                  => print the scope");
+    println!("operations             => print the total operations performed");
+    println!("source                 => print the current source");
     println!("print, p               => print all variables de-duplicated");
-    println!("print/p this           => print the 'this' pointer");
+    println!("print/p this           => print the `this` pointer");
     println!("print/p <variable>     => print the current value of a variable");
     #[cfg(not(feature = "no_module"))]
     println!("imports                => print all imported modules");
@@ -313,6 +315,12 @@ fn debug_callback(
                     }
                     println!();
                 }
+                ["operations"] => {
+                    println!("{}", context.global_runtime_state().num_operations)
+                }
+                ["source"] => {
+                    println!("{}", context.global_runtime_state().source().unwrap_or(""))
+                }
                 ["list" | "l"] => print_current_source(context, source, pos, &lines, (3, 6)),
                 ["list" | "l", n] if n.parse::<usize>().is_ok() => {
                     let num = n.parse::<usize>().unwrap();
@@ -333,7 +341,7 @@ fn debug_callback(
                     if let Some(value) = context.this_ptr() {
                         println!("=> {:?}", value);
                     } else {
-                        println!("'this' pointer is unbound.");
+                        println!("`this` pointer is unbound.");
                     }
                 }
                 ["print" | "p", var_name] => {
