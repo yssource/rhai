@@ -848,6 +848,7 @@ impl AsRef<crate::Shared<crate::Module>> for AST {
 /// _(internals)_ An [`AST`] node, consisting of either an [`Expr`] or a [`Stmt`].
 /// Exported under the `internals` feature only.
 #[derive(Debug, Clone, Copy, Hash)]
+#[non_exhaustive]
 pub enum ASTNode<'a> {
     /// A statement ([`Stmt`]).
     Stmt(&'a Stmt),

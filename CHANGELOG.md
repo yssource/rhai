@@ -15,17 +15,22 @@ Script-breaking changes
 
 * _Strict Variables Mode_ no longer returns an error when an undeclared variable matches a variable/constant in the provided external `Scope`.
 
+New API
+-------
+
+* `Module::eval_ast_as_new_raw` is made public as a low-level API.
+* `format_map_as_json` is provided globally, which is the same as `to_json` for object maps.
+* `Engine::call_fn_raw_raw` is added to add speed to repeated function calls.
+* `Engine::eval_statements_raw` is added to evaluate a sequence of statements.
+
 Enhancements
 ------------
 
-* `Module::eval_ast_as_new_raw` is made public as a low-level API.
 * Improper `switch` case condition syntax is now caught at parse time.
 * `Engine::parse_json` now natively handles nested JSON inputs (using a token remap filter) without needing to replace `{` with `#{`.
 * `to_json` is added to object maps to cheaply convert it to JSON format (`()` is mapped to `null`, all other data types must be supported by JSON)
-* A global function `format_map_as_json` is provided which is the same as `to_json` for object maps.
 * `FileModuleResolver` now accepts a custom `Scope` to provide constants for optimization.
-* A new low-level method `Engine::call_fn_raw_raw` is added to add speed to repeated function calls.
-* A new low-level method `Engine::eval_statements_raw` is added to evaluate a sequence of statements.
+* New variants, `Start` and `End`, are added to `DebuggerEvent` triggered at the start/end of script evaluation.
 
 
 Version 1.6.1

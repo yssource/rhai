@@ -255,26 +255,36 @@ impl Engine {
         let mut this_ptr = this_ptr;
         let mut args: StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
+        // Check for data race.
+        #[cfg(not(feature = "no_closure"))]
+        crate::func::call::ensure_no_data_race(name, &mut args, false)?;
+
+        let lib = &[ast.as_ref()];
         let fn_def = ast
             .shared_lib()
             .get_script_fn(name, args.len())
             .ok_or_else(|| ERR::ErrorFunctionNotFound(name.into(), Position::NONE))?;
 
-        // Check for data race.
-        #[cfg(not(feature = "no_closure"))]
-        crate::func::call::ensure_no_data_race(name, &mut args, false)?;
-
-        self.call_script_fn(
+        let result = self.call_script_fn(
             scope,
             global,
             caches,
-            &[ast.as_ref()],
+            lib,
             &mut this_ptr,
             fn_def,
             &mut args,
             rewind_scope,
             Position::NONE,
             0,
-        )
+        )?;
+
+        #[cfg(feature = "debugging")]
+        if self.debugger.is_some() {
+            global.debugger.status = crate::eval::DebuggerStatus::Terminate;
+            let node = &crate::ast::Stmt::Noop(Position::NONE);
+            self.run_debugger(scope, global, lib, &mut this_ptr, node, 0)?;
+        }
+
+        Ok(result)
     }
 }

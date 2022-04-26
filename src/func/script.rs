@@ -121,9 +121,11 @@ impl Engine {
             ref constants,
         }) = fn_def.environ
         {
-            for (n, m) in imports.iter().cloned() {
-                global.push_import(n, m)
-            }
+            imports
+                .iter()
+                .cloned()
+                .for_each(|(n, m)| global.push_import(n, m));
+
             (
                 if fn_lib.is_empty() {
                     lib
@@ -167,7 +169,6 @@ impl Engine {
                     } else {
                         format!("{} @ '{}' < {}", name, src, fn_def.name)
                     };
-
                     make_error(fn_name, fn_def, global, err, pos)
                 }
                 // System errors are passed straight-through

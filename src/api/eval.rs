@@ -191,6 +191,14 @@ impl Engine {
 
         let result = self.eval_ast_with_scope_raw(scope, global, ast, 0)?;
 
+        #[cfg(feature = "debugging")]
+        if self.debugger.is_some() {
+            global.debugger.status = crate::eval::DebuggerStatus::Terminate;
+            let lib = &[ast.as_ref()];
+            let node = &crate::ast::Stmt::Noop(Position::NONE);
+            self.run_debugger(scope, global, lib, &mut None, node, 0)?;
+        }
+
         let typ = self.map_type_name(result.type_name());
 
         result.try_cast::<T>().ok_or_else(|| {

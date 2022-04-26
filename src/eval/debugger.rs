@@ -38,6 +38,7 @@ pub type OnDebuggerCallback = dyn Fn(
 
 /// A command for the debugger on the next iteration.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[non_exhaustive]
 pub enum DebuggerCommand {
     // Continue normal execution.
     Continue,
@@ -60,29 +61,31 @@ impl Default for DebuggerCommand {
 
 /// The debugger status.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[non_exhaustive]
 pub enum DebuggerStatus {
+    // Script evaluation starts.
+    Init,
     // Stop at the next statement or expression.
     Next(bool, bool),
     // Run to the end of the current level of function call.
     FunctionExit(usize),
-}
-
-impl Default for DebuggerStatus {
-    #[inline(always)]
-    fn default() -> Self {
-        Self::CONTINUE
-    }
+    // Script evaluation ends.
+    Terminate,
 }
 
 impl DebuggerStatus {
     pub const CONTINUE: Self = Self::Next(false, false);
     pub const STEP: Self = Self::Next(true, true);
     pub const NEXT: Self = Self::Next(true, false);
+    pub const INTO: Self = Self::Next(false, true);
 }
 
 /// A event that triggers the debugger.
 #[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
 pub enum DebuggerEvent<'a> {
+    // Script evaluation starts.
+    Start,
     // Break on next step.
     Step,
     // Break on break-point.
@@ -91,10 +94,13 @@ pub enum DebuggerEvent<'a> {
     FunctionExitWithValue(&'a Dynamic),
     // Return from a function with a value.
     FunctionExitWithError(&'a EvalAltResult),
+    // Script evaluation ends.
+    End,
 }
 
 /// A break-point for debugging.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[non_exhaustive]
 pub enum BreakPoint {
     /// Break at a particular position under a particular source.
     ///
@@ -264,7 +270,7 @@ impl Debugger {
     pub fn new(engine: &Engine) -> Self {
         Self {
             status: if engine.debugger.is_some() {
-                DebuggerStatus::STEP
+                DebuggerStatus::Init
             } else {
                 DebuggerStatus::CONTINUE
             },
@@ -469,21 +475,26 @@ impl Engine {
             _ => (),
         }
 
-        let stop = match global.debugger.status {
-            DebuggerStatus::Next(false, false) => false,
-            DebuggerStatus::Next(true, false) => matches!(node, ASTNode::Stmt(..)),
-            DebuggerStatus::Next(false, true) => matches!(node, ASTNode::Expr(..)),
-            DebuggerStatus::Next(true, true) => true,
-            DebuggerStatus::FunctionExit(..) => false,
+        let event = match global.debugger.status {
+            DebuggerStatus::Init => Some(DebuggerEvent::Start),
+            DebuggerStatus::CONTINUE => None,
+            DebuggerStatus::NEXT if matches!(node, ASTNode::Stmt(..)) => Some(DebuggerEvent::Step),
+            DebuggerStatus::NEXT => None,
+            DebuggerStatus::INTO if matches!(node, ASTNode::Expr(..)) => Some(DebuggerEvent::Step),
+            DebuggerStatus::INTO => None,
+            DebuggerStatus::STEP => Some(DebuggerEvent::Step),
+            DebuggerStatus::FunctionExit(..) => None,
+            DebuggerStatus::Terminate => Some(DebuggerEvent::End),
         };
 
-        let event = if stop {
-            DebuggerEvent::Step
-        } else {
-            if let Some(bp) = global.debugger.is_break_point(&global.source, node) {
-                DebuggerEvent::BreakPoint(bp)
-            } else {
-                return Ok(None);
+        let event = match event {
+            Some(e) => e,
+            None => {
+                if let Some(bp) = global.debugger.is_break_point(&global.source, node) {
+                    DebuggerEvent::BreakPoint(bp)
+                } else {
+                    return Ok(None);
+                }
             }
         };
 

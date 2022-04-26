@@ -366,6 +366,7 @@ impl Extend<Stmt> for StmtBlock {
 /// _(internals)_ A statement.
 /// Exported under the `internals` feature only.
 #[derive(Debug, Clone, Hash)]
+#[non_exhaustive]
 pub enum Stmt {
     /// No-op.
     Noop(Position),

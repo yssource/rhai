@@ -68,7 +68,10 @@ fn print_current_source(
         .unwrap();
     let src = source.unwrap_or("");
     if src != current_source {
-        println!(">>> Source => {}", source.unwrap_or("main script"));
+        println!(
+            "\x1b[34m>>> Source => {}\x1b[39m",
+            source.unwrap_or("main script")
+        );
         *current_source = src.into();
     }
     if !src.is_empty() {
@@ -236,6 +239,8 @@ fn debug_callback(
 ) -> Result<DebuggerCommand, Box<EvalAltResult>> {
     // Check event
     match event {
+        DebuggerEvent::Start => println!("\x1b[32m! Script start\x1b[39m"),
+        DebuggerEvent::End => println!("\x1b[31m! Script end\x1b[39m"),
         DebuggerEvent::Step => (),
         DebuggerEvent::BreakPoint(n) => {
             match context.global_runtime_state().debugger.break_points()[n] {
@@ -249,6 +254,7 @@ fn debug_callback(
                 BreakPoint::AtProperty { ref name, .. } => {
                     println!("! Property {} accessed.", name)
                 }
+                _ => unreachable!(),
             }
         }
         DebuggerEvent::FunctionExitWithValue(r) => {
@@ -277,6 +283,7 @@ fn debug_callback(
                 err
             )
         }
+        _ => unreachable!(),
     }
 
     // Print current source line
@@ -640,4 +647,6 @@ fn main() {
             }
         }
     }
+
+    println!("Script terminated. Bye!");
 }

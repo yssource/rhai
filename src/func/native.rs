@@ -1,7 +1,6 @@
 //! Module defining interfaces to native-Rust functions.
 
 use super::call::FnCallArgs;
-use crate::api::events::VarDefInfo;
 use crate::ast::FnCallHashes;
 use crate::eval::{Caches, GlobalRuntimeState};
 use crate::plugin::PluginFunction;
@@ -9,7 +8,7 @@ use crate::tokenizer::{Token, TokenizeState};
 use crate::types::dynamic::Variant;
 use crate::{
     calc_fn_hash, Dynamic, Engine, EvalContext, FuncArgs, Module, Position, RhaiResult,
-    RhaiResultOf, StaticVec, ERR,
+    RhaiResultOf, StaticVec, VarDefInfo, ERR,
 };
 use std::any::type_name;
 #[cfg(feature = "no_std")]

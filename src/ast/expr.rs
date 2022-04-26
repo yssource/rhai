@@ -348,6 +348,7 @@ impl FloatWrapper<crate::FLOAT> {
 /// _(internals)_ An expression sub-tree.
 /// Exported under the `internals` feature only.
 #[derive(Clone, Hash)]
+#[non_exhaustive]
 pub enum Expr {
     /// Dynamic constant.
     ///

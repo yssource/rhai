@@ -349,6 +349,7 @@ impl fmt::Debug for Span {
 /// _(internals)_ A Rhai language token.
 /// Exported under the `internals` feature only.
 #[derive(Debug, PartialEq, Clone, Hash)]
+#[non_exhaustive]
 pub enum Token {
     /// An `INT` constant.
     IntegerConstant(INT),
