@@ -230,7 +230,7 @@ fn load_script(engine: &Engine) -> (rhai::AST, String) {
 
 // Main callback for debugging.
 fn debug_callback(
-    context: &mut rhai::EvalContext,
+    mut context: rhai::EvalContext,
     event: DebuggerEvent,
     node: rhai::ASTNode,
     source: Option<&str>,
@@ -287,7 +287,7 @@ fn debug_callback(
     }
 
     // Print current source line
-    print_current_source(context, source, pos, lines, (0, 0));
+    print_current_source(&mut context, source, pos, lines, (0, 0));
 
     // Read stdin for commands
     let mut input = String::new();
@@ -328,14 +328,14 @@ fn debug_callback(
                 ["source"] => {
                     println!("{}", context.global_runtime_state().source().unwrap_or(""))
                 }
-                ["list" | "l"] => print_current_source(context, source, pos, &lines, (3, 6)),
+                ["list" | "l"] => print_current_source(&mut context, source, pos, &lines, (3, 6)),
                 ["list" | "l", n] if n.parse::<usize>().is_ok() => {
                     let num = n.parse::<usize>().unwrap();
                     if num <= 0 || num > lines.len() {
                         eprintln!("\x1b[31mInvalid line: {}\x1b[39m", num);
                     } else {
                         let pos = Position::new(num as u16, 0);
-                        print_current_source(context, source, pos, &lines, (3, 6));
+                        print_current_source(&mut context, source, pos, &lines, (3, 6));
                     }
                 }
                 ["continue" | "c"] => break Ok(DebuggerCommand::Continue),

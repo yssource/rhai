@@ -841,7 +841,7 @@ impl Engine {
                         level,
                     };
 
-                    match filter(true, info, &context) {
+                    match filter(true, info, context) {
                         Ok(true) => None,
                         Ok(false) => {
                             Some(Err(

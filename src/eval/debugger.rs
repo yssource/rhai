@@ -18,7 +18,7 @@ pub type OnDebuggingInit = dyn Fn() -> Dynamic + Send + Sync;
 /// Callback function for debugging.
 #[cfg(not(feature = "sync"))]
 pub type OnDebuggerCallback = dyn Fn(
-    &mut EvalContext,
+    EvalContext,
     DebuggerEvent,
     ASTNode,
     Option<&str>,
@@ -26,13 +26,7 @@ pub type OnDebuggerCallback = dyn Fn(
 ) -> RhaiResultOf<DebuggerCommand>;
 /// Callback function for debugging.
 #[cfg(feature = "sync")]
-pub type OnDebuggerCallback = dyn Fn(
-        &mut EvalContext,
-        DebuggerEvent,
-        ASTNode,
-        Option<&str>,
-        Position,
-    ) -> RhaiResultOf<DebuggerCommand>
+pub type OnDebuggerCallback = dyn Fn(EvalContext, DebuggerEvent, ASTNode, Option<&str>, Position) -> RhaiResultOf<DebuggerCommand>
     + Send
     + Sync;
 
@@ -525,7 +519,7 @@ impl Engine {
             Some(source.as_str())
         };
 
-        let mut context = crate::EvalContext {
+        let context = crate::EvalContext {
             engine: self,
             scope,
             global,
@@ -536,7 +530,7 @@ impl Engine {
         };
 
         if let Some((.., ref on_debugger)) = self.debugger {
-            let command = on_debugger(&mut context, event, node, source, node.position())?;
+            let command = on_debugger(context, event, node, source, node.position())?;
 
             match command {
                 DebuggerCommand::Continue => {
@@ -559,12 +553,12 @@ impl Engine {
                     // Bump a level if it is a function call
                     let level = match node {
                         ASTNode::Expr(Expr::FnCall(..)) | ASTNode::Stmt(Stmt::FnCall(..)) => {
-                            context.call_level() + 1
+                            level + 1
                         }
                         ASTNode::Stmt(Stmt::Expr(e)) if matches!(e.as_ref(), Expr::FnCall(..)) => {
-                            context.call_level() + 1
+                            level + 1
                         }
-                        _ => context.call_level(),
+                        _ => level,
                     };
                     global.debugger.status = DebuggerStatus::FunctionExit(level);
                     Ok(None)

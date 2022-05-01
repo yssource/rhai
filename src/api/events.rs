@@ -21,11 +21,13 @@ pub struct VarDefInfo<'a> {
 impl Engine {
     /// Provide a callback that will be invoked before each variable access.
     ///
+    /// # WARNING - Unstable API
+    ///
+    /// This API is volatile and may change in the future.
+    ///
     /// # Callback Function Signature
     ///
-    /// The callback function signature takes the following form:
-    ///
-    /// > `Fn(name: &str, index: usize, context: &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>`
+    /// > `Fn(name: &str, index: usize, context: EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>`
     ///
     /// where:
     /// * `name`: name of the variable.
@@ -66,10 +68,11 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[deprecated = "This API is volatile and may change in the future."]
     #[inline(always)]
     pub fn on_var(
         &mut self,
-        callback: impl Fn(&str, usize, &EvalContext) -> RhaiResultOf<Option<Dynamic>>
+        callback: impl Fn(&str, usize, EvalContext) -> RhaiResultOf<Option<Dynamic>>
             + SendSync
             + 'static,
     ) -> &mut Self {
@@ -84,9 +87,7 @@ impl Engine {
     ///
     /// # Callback Function Signature
     ///
-    /// The callback function signature takes the following form:
-    ///
-    /// > `Fn(is_runtime: bool, info: VarInfo, context: &EvalContext) -> Result<bool, Box<EvalAltResult>>`
+    /// > `Fn(is_runtime: bool, info: VarInfo, context: EvalContext) -> Result<bool, Box<EvalAltResult>>`
     ///
     /// where:
     /// * `is_runtime`: `true` if the variable definition event happens during runtime, `false` if during compilation.
@@ -133,7 +134,7 @@ impl Engine {
     #[inline(always)]
     pub fn on_def_var(
         &mut self,
-        callback: impl Fn(bool, VarDefInfo, &EvalContext) -> RhaiResultOf<bool> + SendSync + 'static,
+        callback: impl Fn(bool, VarDefInfo, EvalContext) -> RhaiResultOf<bool> + SendSync + 'static,
     ) -> &mut Self {
         self.def_var_filter = Some(Box::new(callback));
         self
@@ -141,9 +142,11 @@ impl Engine {
     /// _(internals)_ Register a callback that will be invoked during parsing to remap certain tokens.
     /// Exported under the `internals` feature only.
     ///
-    /// # Callback Function Signature
+    /// # WARNING - Unstable API
     ///
-    /// The callback function signature takes the following form:
+    /// This API is volatile and may change in the future.
+    ///
+    /// # Callback Function Signature
     ///
     /// > `Fn(token: Token, pos: Position, state: &TokenizeState) -> Token`
     ///
@@ -185,6 +188,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[deprecated = "This API is volatile and may change in the future."]
     #[cfg(feature = "internals")]
     #[inline(always)]
     pub fn on_parse_token(
@@ -348,7 +352,7 @@ impl Engine {
         &mut self,
         init: impl Fn() -> Dynamic + SendSync + 'static,
         callback: impl Fn(
-                &mut EvalContext,
+                EvalContext,
                 crate::eval::DebuggerEvent,
                 crate::ast::ASTNode,
                 Option<&str>,

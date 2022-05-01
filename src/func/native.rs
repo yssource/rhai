@@ -217,6 +217,12 @@ impl<'a> NativeCallContext<'a> {
     pub const fn source(&self) -> Option<&str> {
         self.source
     }
+    /// Custom state kept in a [`Dynamic`].
+    #[inline(always)]
+    #[must_use]
+    pub fn tag(&self) -> Option<&Dynamic> {
+        self.global.as_ref().map(|g| &g.tag)
+    }
     /// Get an iterator over the current set of modules imported via `import` statements
     /// in reverse order.
     ///
@@ -465,16 +471,16 @@ pub type OnParseTokenCallback = dyn Fn(Token, Position, &TokenizeState) -> Token
 
 /// Callback function for variable access.
 #[cfg(not(feature = "sync"))]
-pub type OnVarCallback = dyn Fn(&str, usize, &EvalContext) -> RhaiResultOf<Option<Dynamic>>;
+pub type OnVarCallback = dyn Fn(&str, usize, EvalContext) -> RhaiResultOf<Option<Dynamic>>;
 /// Callback function for variable access.
 #[cfg(feature = "sync")]
 pub type OnVarCallback =
-    dyn Fn(&str, usize, &EvalContext) -> RhaiResultOf<Option<Dynamic>> + Send + Sync;
+    dyn Fn(&str, usize, EvalContext) -> RhaiResultOf<Option<Dynamic>> + Send + Sync;
 
 /// Callback function for variable definition.
 #[cfg(not(feature = "sync"))]
-pub type OnDefVarCallback = dyn Fn(bool, VarDefInfo, &EvalContext) -> RhaiResultOf<bool>;
+pub type OnDefVarCallback = dyn Fn(bool, VarDefInfo, EvalContext) -> RhaiResultOf<bool>;
 /// Callback function for variable definition.
 #[cfg(feature = "sync")]
 pub type OnDefVarCallback =
-    dyn Fn(bool, VarDefInfo, &EvalContext) -> RhaiResultOf<bool> + Send + Sync;
+    dyn Fn(bool, VarDefInfo, EvalContext) -> RhaiResultOf<bool> + Send + Sync;

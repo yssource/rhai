@@ -15,6 +15,12 @@ Script-breaking changes
 
 * _Strict Variables Mode_ no longer returns an error when an undeclared variable matches a variable/constant in the provided external `Scope`.
 
+Changes to unstable API's
+-------------------------
+
+* The `Engine::on_var` and `Engine::on_parse_token` API's are now marked unstable/volatile.
+* The closures passed to `Engine::on_var`, `Engine::on_def_var` and `Engine::register_debugger` take `EvalContext` instead of `&EvalContext` or `&mut EvalContext`.
+
 New API
 -------
 
@@ -22,6 +28,11 @@ New API
 * `format_map_as_json` is provided globally, which is the same as `to_json` for object maps.
 * `Engine::call_fn_raw_raw` is added to add speed to repeated function calls.
 * `Engine::eval_statements_raw` is added to evaluate a sequence of statements.
+
+New features
+------------
+
+* A custom state is provided that is persistent during the entire evaluation run. This custom state is a `Dynamic`, which can hold any data, and can be accessed by the host via `EvalContext::tag`, `EvalContext::tag_mut`, `NativeCallContext::tag` and `GlobalRuntimeState.tag`.
 
 Enhancements
 ------------
