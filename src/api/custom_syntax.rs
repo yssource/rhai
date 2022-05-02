@@ -331,7 +331,7 @@ impl Engine {
     ///
     /// The implementation function has the following signature:
     ///
-    /// > `Fn(symbols: &[ImmutableString], look_ahead: &str) -> Result<Option<ImmutableString>, ParseError>`
+    /// `Fn(symbols: &[ImmutableString], look_ahead: &str) -> Result<Option<ImmutableString>, ParseError>`
     ///
     /// where:
     /// * `symbols`: a slice of symbols that have been parsed so far, possibly containing `$expr$` and/or `$block$`;

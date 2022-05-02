@@ -27,7 +27,7 @@ impl Engine {
     ///
     /// # Callback Function Signature
     ///
-    /// > `Fn(name: &str, index: usize, context: EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>`
+    /// `Fn(name: &str, index: usize, context: EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>`
     ///
     /// where:
     /// * `name`: name of the variable.
@@ -87,7 +87,7 @@ impl Engine {
     ///
     /// # Callback Function Signature
     ///
-    /// > `Fn(is_runtime: bool, info: VarInfo, context: EvalContext) -> Result<bool, Box<EvalAltResult>>`
+    /// `Fn(is_runtime: bool, info: VarInfo, context: EvalContext) -> Result<bool, Box<EvalAltResult>>`
     ///
     /// where:
     /// * `is_runtime`: `true` if the variable definition event happens during runtime, `false` if during compilation.
@@ -148,7 +148,7 @@ impl Engine {
     ///
     /// # Callback Function Signature
     ///
-    /// > `Fn(token: Token, pos: Position, state: &TokenizeState) -> Token`
+    /// `Fn(token: Token, pos: Position, state: &TokenizeState) -> Token`
     ///
     /// where:
     /// * [`token`][crate::tokenizer::Token]: current token parsed
@@ -210,9 +210,7 @@ impl Engine {
     ///
     /// # Callback Function Signature
     ///
-    /// The callback function signature takes the following form:
-    ///
-    /// > `Fn(counter: u64) -> Option<Dynamic>`
+    /// `Fn(counter: u64) -> Option<Dynamic>`
     ///
     /// ## Return value
     ///
@@ -295,7 +293,7 @@ impl Engine {
     ///
     /// The callback function signature passed takes the following form:
     ///
-    /// > `Fn(text: &str, source: Option<&str>, pos: Position)`
+    /// `Fn(text: &str, source: Option<&str>, pos: Position)`
     ///
     /// where:
     /// * `text`: the text to display
