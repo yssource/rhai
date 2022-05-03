@@ -1,7 +1,6 @@
 //! Module defining interfaces to native-Rust functions.
 
 use super::call::FnCallArgs;
-use crate::api::events::VarDefInfo;
 use crate::ast::FnCallHashes;
 use crate::eval::{Caches, GlobalRuntimeState};
 use crate::plugin::PluginFunction;
@@ -9,7 +8,7 @@ use crate::tokenizer::{Token, TokenizeState};
 use crate::types::dynamic::Variant;
 use crate::{
     calc_fn_hash, Dynamic, Engine, EvalContext, FuncArgs, Module, Position, RhaiResult,
-    RhaiResultOf, StaticVec, ERR,
+    RhaiResultOf, StaticVec, VarDefInfo, ERR,
 };
 use std::any::type_name;
 #[cfg(feature = "no_std")]
@@ -217,6 +216,12 @@ impl<'a> NativeCallContext<'a> {
     #[must_use]
     pub const fn source(&self) -> Option<&str> {
         self.source
+    }
+    /// Custom state kept in a [`Dynamic`].
+    #[inline(always)]
+    #[must_use]
+    pub fn tag(&self) -> Option<&Dynamic> {
+        self.global.as_ref().map(|g| &g.tag)
     }
     /// Get an iterator over the current set of modules imported via `import` statements
     /// in reverse order.
@@ -466,16 +471,16 @@ pub type OnParseTokenCallback = dyn Fn(Token, Position, &TokenizeState) -> Token
 
 /// Callback function for variable access.
 #[cfg(not(feature = "sync"))]
-pub type OnVarCallback = dyn Fn(&str, usize, &EvalContext) -> RhaiResultOf<Option<Dynamic>>;
+pub type OnVarCallback = dyn Fn(&str, usize, EvalContext) -> RhaiResultOf<Option<Dynamic>>;
 /// Callback function for variable access.
 #[cfg(feature = "sync")]
 pub type OnVarCallback =
-    dyn Fn(&str, usize, &EvalContext) -> RhaiResultOf<Option<Dynamic>> + Send + Sync;
+    dyn Fn(&str, usize, EvalContext) -> RhaiResultOf<Option<Dynamic>> + Send + Sync;
 
 /// Callback function for variable definition.
 #[cfg(not(feature = "sync"))]
-pub type OnDefVarCallback = dyn Fn(bool, VarDefInfo, &EvalContext) -> RhaiResultOf<bool>;
+pub type OnDefVarCallback = dyn Fn(bool, VarDefInfo, EvalContext) -> RhaiResultOf<bool>;
 /// Callback function for variable definition.
 #[cfg(feature = "sync")]
 pub type OnDefVarCallback =
-    dyn Fn(bool, VarDefInfo, &EvalContext) -> RhaiResultOf<bool> + Send + Sync;
+    dyn Fn(bool, VarDefInfo, EvalContext) -> RhaiResultOf<bool> + Send + Sync;

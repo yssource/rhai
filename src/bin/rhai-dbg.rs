@@ -68,7 +68,10 @@ fn print_current_source(
         .unwrap();
     let src = source.unwrap_or("");
     if src != current_source {
-        println!(">>> Source => {}", source.unwrap_or("main script"));
+        println!(
+            "\x1b[34m>>> Source => {}\x1b[39m",
+            source.unwrap_or("main script")
+        );
         *current_source = src.into();
     }
     if !src.is_empty() {
@@ -118,8 +121,10 @@ fn print_debug_help() {
     println!("help, h                => print this help");
     println!("quit, q, exit, kill    => quit");
     println!("scope                  => print the scope");
+    println!("operations             => print the total operations performed");
+    println!("source                 => print the current source");
     println!("print, p               => print all variables de-duplicated");
-    println!("print/p this           => print the 'this' pointer");
+    println!("print/p this           => print the `this` pointer");
     println!("print/p <variable>     => print the current value of a variable");
     #[cfg(not(feature = "no_module"))]
     println!("imports                => print all imported modules");
@@ -225,7 +230,7 @@ fn load_script(engine: &Engine) -> (rhai::AST, String) {
 
 // Main callback for debugging.
 fn debug_callback(
-    context: &mut rhai::EvalContext,
+    mut context: rhai::EvalContext,
     event: DebuggerEvent,
     node: rhai::ASTNode,
     source: Option<&str>,
@@ -234,6 +239,8 @@ fn debug_callback(
 ) -> Result<DebuggerCommand, Box<EvalAltResult>> {
     // Check event
     match event {
+        DebuggerEvent::Start => println!("\x1b[32m! Script start\x1b[39m"),
+        DebuggerEvent::End => println!("\x1b[31m! Script end\x1b[39m"),
         DebuggerEvent::Step => (),
         DebuggerEvent::BreakPoint(n) => {
             match context.global_runtime_state().debugger.break_points()[n] {
@@ -247,6 +254,7 @@ fn debug_callback(
                 BreakPoint::AtProperty { ref name, .. } => {
                     println!("! Property {} accessed.", name)
                 }
+                _ => unreachable!(),
             }
         }
         DebuggerEvent::FunctionExitWithValue(r) => {
@@ -275,10 +283,11 @@ fn debug_callback(
                 err
             )
         }
+        _ => unreachable!(),
     }
 
     // Print current source line
-    print_current_source(context, source, pos, lines, (0, 0));
+    print_current_source(&mut context, source, pos, lines, (0, 0));
 
     // Read stdin for commands
     let mut input = String::new();
@@ -313,14 +322,20 @@ fn debug_callback(
                     }
                     println!();
                 }
-                ["list" | "l"] => print_current_source(context, source, pos, &lines, (3, 6)),
+                ["operations"] => {
+                    println!("{}", context.global_runtime_state().num_operations)
+                }
+                ["source"] => {
+                    println!("{}", context.global_runtime_state().source().unwrap_or(""))
+                }
+                ["list" | "l"] => print_current_source(&mut context, source, pos, &lines, (3, 6)),
                 ["list" | "l", n] if n.parse::<usize>().is_ok() => {
                     let num = n.parse::<usize>().unwrap();
                     if num <= 0 || num > lines.len() {
                         eprintln!("\x1b[31mInvalid line: {}\x1b[39m", num);
                     } else {
                         let pos = Position::new(num as u16, 0);
-                        print_current_source(context, source, pos, &lines, (3, 6));
+                        print_current_source(&mut context, source, pos, &lines, (3, 6));
                     }
                 }
                 ["continue" | "c"] => break Ok(DebuggerCommand::Continue),
@@ -333,7 +348,7 @@ fn debug_callback(
                     if let Some(value) = context.this_ptr() {
                         println!("=> {:?}", value);
                     } else {
-                        println!("'this' pointer is unbound.");
+                        println!("`this` pointer is unbound.");
                     }
                 }
                 ["print" | "p", var_name] => {
@@ -632,4 +647,6 @@ fn main() {
             }
         }
     }
+
+    println!("Script terminated. Bye!");
 }

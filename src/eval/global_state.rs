@@ -1,6 +1,6 @@
 //! Global runtime state.
 
-use crate::{Engine, Identifier};
+use crate::{Dynamic, Engine, Identifier};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{fmt, marker::PhantomData};
@@ -9,7 +9,7 @@ use std::{fmt, marker::PhantomData};
 #[cfg(not(feature = "no_module"))]
 #[cfg(not(feature = "no_function"))]
 pub type GlobalConstants =
-    crate::Shared<crate::Locked<std::collections::BTreeMap<Identifier, crate::Dynamic>>>;
+    crate::Shared<crate::Locked<std::collections::BTreeMap<Identifier, Dynamic>>>;
 
 /// _(internals)_ Global runtime states.
 /// Exported under the `internals` feature only.
@@ -64,6 +64,8 @@ pub struct GlobalRuntimeState<'a> {
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
     pub constants: Option<GlobalConstants>,
+    /// Custom state that can be used by the external host.
+    pub tag: Dynamic,
     /// Debugging interface.
     #[cfg(feature = "debugging")]
     pub debugger: super::Debugger,
@@ -95,6 +97,7 @@ impl GlobalRuntimeState<'_> {
             #[cfg(not(feature = "no_module"))]
             #[cfg(not(feature = "no_function"))]
             constants: None,
+            tag: Dynamic::UNIT,
             #[cfg(feature = "debugging")]
             debugger: crate::eval::Debugger::new(_engine),
             dummy: PhantomData::default(),

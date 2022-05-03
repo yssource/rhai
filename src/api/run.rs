@@ -64,6 +64,18 @@ impl Engine {
             };
             self.eval_global_statements(scope, global, caches, statements, lib, 0)?;
         }
+
+        #[cfg(feature = "debugging")]
+        if self.debugger.is_some() {
+            global.debugger.status = crate::eval::DebuggerStatus::Terminate;
+            let lib = &[
+                #[cfg(not(feature = "no_function"))]
+                ast.as_ref(),
+            ];
+            let node = &crate::ast::Stmt::Noop(crate::Position::NONE);
+            self.run_debugger(scope, global, lib, &mut None, node, 0)?;
+        }
+
         Ok(())
     }
 }

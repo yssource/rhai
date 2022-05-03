@@ -49,6 +49,8 @@ pub struct ParseState<'e> {
     interned_strings: StringsInterner,
     /// External [scope][Scope] with constants.
     pub scope: &'e Scope<'e>,
+    /// Global runtime state.
+    pub global: GlobalRuntimeState<'e>,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     pub stack: Scope<'e>,
     /// Size of the local variables stack upon entry of the current block scope.
@@ -83,6 +85,7 @@ impl<'e> ParseState<'e> {
             allow_capture: true,
             interned_strings: StringsInterner::new(),
             scope,
+            global: GlobalRuntimeState::new(engine),
             stack: Scope::new(),
             block_stack_len: 0,
             #[cfg(not(feature = "no_module"))]
@@ -2715,14 +2718,14 @@ impl Engine {
             let context = EvalContext {
                 engine: self,
                 scope: &mut state.stack,
-                global: &mut GlobalRuntimeState::new(self),
+                global: &mut state.global,
                 caches: None,
                 lib: &[],
                 this_ptr: &mut None,
                 level,
             };
 
-            match filter(false, info, &context) {
+            match filter(false, info, context) {
                 Ok(true) => (),
                 Ok(false) => return Err(PERR::ForbiddenVariable(name.to_string()).into_err(pos)),
                 Err(err) => match *err {

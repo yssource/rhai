@@ -4,7 +4,7 @@ use crate::eval::{Caches, GlobalRuntimeState};
 use crate::parser::ParseState;
 use crate::types::dynamic::Variant;
 use crate::{
-    Dynamic, Engine, Module, OptimizationLevel, Position, RhaiResult, RhaiResultOf, Scope, AST, ERR,
+    Dynamic, Engine, OptimizationLevel, Position, RhaiResult, RhaiResultOf, Scope, AST, ERR,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -191,6 +191,17 @@ impl Engine {
 
         let result = self.eval_ast_with_scope_raw(scope, global, ast, 0)?;
 
+        #[cfg(feature = "debugging")]
+        if self.debugger.is_some() {
+            global.debugger.status = crate::eval::DebuggerStatus::Terminate;
+            let lib = &[
+                #[cfg(not(feature = "no_function"))]
+                ast.as_ref(),
+            ];
+            let node = &crate::ast::Stmt::Noop(Position::NONE);
+            self.run_debugger(scope, global, lib, &mut None, node, 0)?;
+        }
+
         let typ = self.map_type_name(result.type_name());
 
         result.try_cast::<T>().ok_or_else(|| {
@@ -222,18 +233,17 @@ impl Engine {
             return Ok(Dynamic::UNIT);
         }
 
-        let lib = [
+        let mut _lib = &[
             #[cfg(not(feature = "no_function"))]
             ast.as_ref(),
-        ];
-        let lib = if lib.first().map(|m: &&Module| m.is_empty()).unwrap_or(true) {
-            &[]
-        } else {
-            &lib[..]
-        };
+        ][..];
+        #[cfg(not(feature = "no_function"))]
+        if !ast.has_functions() {
+            _lib = &[];
+        }
 
         let result =
-            self.eval_global_statements(scope, global, &mut caches, statements, lib, level);
+            self.eval_global_statements(scope, global, &mut caches, statements, _lib, level);
 
         #[cfg(not(feature = "no_module"))]
         {
@@ -258,7 +268,7 @@ impl Engine {
         global: &mut GlobalRuntimeState,
         caches: &mut Caches,
         statements: &[crate::ast::Stmt],
-        lib: &[&Module],
+        lib: &[&crate::Module],
         level: usize,
     ) -> RhaiResult {
         self.eval_global_statements(scope, global, caches, statements, lib, level)

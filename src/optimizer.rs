@@ -51,6 +51,10 @@ struct OptimizerState<'a> {
     propagate_constants: bool,
     /// An [`Engine`] instance for eager function evaluation.
     engine: &'a Engine,
+    /// The global runtime state.
+    global: GlobalRuntimeState<'a>,
+    /// Function resolution caches.
+    caches: Caches,
     /// [Module][crate::Module] containing script-defined functions.
     #[cfg(not(feature = "no_function"))]
     lib: &'a [&'a crate::Module],
@@ -61,7 +65,7 @@ struct OptimizerState<'a> {
 impl<'a> OptimizerState<'a> {
     /// Create a new State.
     #[inline(always)]
-    pub const fn new(
+    pub fn new(
         engine: &'a Engine,
         #[cfg(not(feature = "no_function"))] lib: &'a [&'a crate::Module],
         optimization_level: OptimizationLevel,
@@ -71,6 +75,8 @@ impl<'a> OptimizerState<'a> {
             variables: StaticVec::new_const(),
             propagate_constants: true,
             engine,
+            global: GlobalRuntimeState::new(engine),
+            caches: Caches::new(),
             #[cfg(not(feature = "no_function"))]
             lib,
             optimization_level,
@@ -127,7 +133,7 @@ impl<'a> OptimizerState<'a> {
     /// Call a registered function
     #[inline]
     pub fn call_fn_with_constant_arguments(
-        &self,
+        &mut self,
         fn_name: &str,
         arg_values: &mut [Dynamic],
     ) -> Option<Dynamic> {
@@ -138,8 +144,8 @@ impl<'a> OptimizerState<'a> {
 
         self.engine
             .call_native_fn(
-                &mut GlobalRuntimeState::new(&self.engine),
-                &mut Caches::new(),
+                &mut self.global,
+                &mut self.caches,
                 lib,
                 fn_name,
                 calc_fn_hash(&fn_name, arg_values.len()),

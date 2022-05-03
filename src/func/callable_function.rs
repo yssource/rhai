@@ -10,6 +10,7 @@ use std::prelude::v1::*;
 
 /// A type encapsulating a function callable by Rhai.
 #[derive(Clone)]
+#[non_exhaustive]
 pub enum CallableFunction {
     /// A pure native Rust function with all arguments passed by value.
     Pure(Shared<FnAny>),

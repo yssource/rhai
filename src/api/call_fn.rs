@@ -160,6 +160,8 @@ impl Engine {
         this_ptr: Option<&mut Dynamic>,
         arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {
+        let mut arg_values = arg_values;
+
         self.call_fn_internal(
             scope,
             &mut GlobalRuntimeState::new(self),
@@ -167,9 +169,9 @@ impl Engine {
             ast,
             eval_ast,
             rewind_scope,
-            name,
+            name.as_ref(),
             this_ptr,
-            arg_values,
+            arg_values.as_mut(),
         )
     }
     /// _(internals)_ Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments.
@@ -209,9 +211,9 @@ impl Engine {
         ast: &AST,
         eval_ast: bool,
         rewind_scope: bool,
-        name: impl AsRef<str>,
+        name: &str,
         this_ptr: Option<&mut Dynamic>,
-        arg_values: impl AsMut<[Dynamic]>,
+        arg_values: &mut [Dynamic],
     ) -> RhaiResult {
         self.call_fn_internal(
             scope,
@@ -225,7 +227,6 @@ impl Engine {
             arg_values,
         )
     }
-
     /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments.
     fn call_fn_internal(
         &self,
@@ -235,9 +236,9 @@ impl Engine {
         ast: &AST,
         eval_ast: bool,
         rewind_scope: bool,
-        name: impl AsRef<str>,
+        name: &str,
         this_ptr: Option<&mut Dynamic>,
-        arg_values: impl AsMut<[Dynamic]>,
+        arg_values: &mut [Dynamic],
     ) -> RhaiResult {
         let statements = ast.statements();
 
@@ -251,31 +252,39 @@ impl Engine {
             }
         }
 
-        let name = name.as_ref();
         let mut this_ptr = this_ptr;
-        let mut arg_values = arg_values;
         let mut args: StaticVec<_> = arg_values.as_mut().iter_mut().collect();
-
-        let fn_def = ast
-            .shared_lib()
-            .get_script_fn(name, args.len())
-            .ok_or_else(|| ERR::ErrorFunctionNotFound(name.into(), Position::NONE))?;
 
         // Check for data race.
         #[cfg(not(feature = "no_closure"))]
         crate::func::call::ensure_no_data_race(name, &mut args, false)?;
 
-        self.call_script_fn(
+        let lib = &[ast.as_ref()];
+        let fn_def = ast
+            .shared_lib()
+            .get_script_fn(name, args.len())
+            .ok_or_else(|| ERR::ErrorFunctionNotFound(name.into(), Position::NONE))?;
+
+        let result = self.call_script_fn(
             scope,
             global,
             caches,
-            &[ast.as_ref()],
+            lib,
             &mut this_ptr,
             fn_def,
             &mut args,
             rewind_scope,
             Position::NONE,
             0,
-        )
+        )?;
+
+        #[cfg(feature = "debugging")]
+        if self.debugger.is_some() {
+            global.debugger.status = crate::eval::DebuggerStatus::Terminate;
+            let node = &crate::ast::Stmt::Noop(Position::NONE);
+            self.run_debugger(scope, global, lib, &mut this_ptr, node, 0)?;
+        }
+
+        Ok(result)
     }
 }

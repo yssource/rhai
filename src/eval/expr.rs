@@ -161,7 +161,7 @@ impl Engine {
                 level,
             };
             let var_name = expr.get_variable_name(true).expect("`Expr::Variable`");
-            match resolve_var(var_name, index, &context) {
+            match resolve_var(var_name, index, context) {
                 Ok(Some(mut result)) => {
                     result.set_access_mode(AccessMode::ReadOnly);
                     return Ok((result.into(), var_pos));
