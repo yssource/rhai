@@ -6,6 +6,7 @@ use std::prelude::v1::*;
 
 /// A type representing the access mode of a function.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[non_exhaustive]
 pub enum FnAccess {
     /// Private function.
     Private,

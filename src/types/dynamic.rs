@@ -127,6 +127,7 @@ impl dyn Variant {
 /// _(internals)_ Modes of access.
 /// Exported under the `internals` feature only.
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
+#[non_exhaustive]
 pub enum AccessMode {
     /// Mutable.
     ReadWrite,

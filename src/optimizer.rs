@@ -23,6 +23,7 @@ use std::{
 
 /// Level of optimization performed.
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
+#[non_exhaustive]
 pub enum OptimizationLevel {
     /// No optimization performed.
     None,
