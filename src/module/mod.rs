@@ -23,6 +23,7 @@ use std::{
 
 /// A type representing the namespace of a function.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[non_exhaustive]
 pub enum FnNamespace {
     /// Module namespace only.
     ///
@@ -34,6 +35,7 @@ pub enum FnNamespace {
 
 /// A type containing all metadata for a registered function.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[non_exhaustive]
 pub struct FnMetadata {
     /// Function namespace.
     pub namespace: FnNamespace,

@@ -249,8 +249,6 @@ impl fmt::Display for CallStackFrame {
 pub struct Debugger {
     /// The current status command.
     pub(crate) status: DebuggerStatus,
-    /// The current state.
-    state: Dynamic,
     /// The current set of break-points.
     break_points: Vec<BreakPoint>,
     /// The current function call stack.
@@ -258,36 +256,15 @@ pub struct Debugger {
 }
 
 impl Debugger {
-    /// Create a new [`Debugger`] based on an [`Engine`].
+    /// Create a new [`Debugger`].
     #[inline(always)]
     #[must_use]
-    pub fn new(engine: &Engine) -> Self {
+    pub fn new(status: DebuggerStatus) -> Self {
         Self {
-            status: if engine.debugger.is_some() {
-                DebuggerStatus::Init
-            } else {
-                DebuggerStatus::CONTINUE
-            },
-            state: if let Some((ref init, ..)) = engine.debugger {
-                init()
-            } else {
-                Dynamic::UNIT
-            },
+            status,
             break_points: Vec::new(),
             call_stack: Vec::new(),
         }
-    }
-    /// Get a reference to the current state.
-    #[inline(always)]
-    #[must_use]
-    pub fn state(&self) -> &Dynamic {
-        &self.state
-    }
-    /// Get a mutable reference to the current state.
-    #[inline(always)]
-    #[must_use]
-    pub fn state_mut(&mut self) -> &mut Dynamic {
-        &mut self.state
     }
     /// Get the current call stack.
     #[inline(always)]

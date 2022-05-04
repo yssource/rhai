@@ -97,9 +97,23 @@ impl GlobalRuntimeState<'_> {
             #[cfg(not(feature = "no_module"))]
             #[cfg(not(feature = "no_function"))]
             constants: None,
+
+            #[cfg(not(feature = "debugging"))]
             tag: Dynamic::UNIT,
             #[cfg(feature = "debugging")]
-            debugger: crate::eval::Debugger::new(_engine),
+            tag: if let Some((ref init, ..)) = engine.debugger {
+                init()
+            } else {
+                Dynamic::UNIT
+            },
+
+            #[cfg(feature = "debugging")]
+            debugger: crate::eval::Debugger::new(if engine.debugger.is_some() {
+                crate::eval::DebuggerStatus::Init
+            } else {
+                crate::eval::DebuggerStatus::CONTINUE
+            }),
+
             dummy: PhantomData::default(),
         }
     }

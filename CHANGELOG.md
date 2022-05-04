@@ -15,11 +15,12 @@ Script-breaking changes
 
 * _Strict Variables Mode_ no longer returns an error when an undeclared variable matches a variable/constant in the provided external `Scope`.
 
-Changes to unstable API's
--------------------------
+Potentially breaking API changes
+--------------------------------
 
 * The `Engine::on_var` and `Engine::on_parse_token` API's are now marked unstable/volatile.
 * The closures passed to `Engine::on_var`, `Engine::on_def_var` and `Engine::register_debugger` take `EvalContext` instead of `&EvalContext` or `&mut EvalContext`.
+* The following enum's are marked `non_exhaustive`: `AccessMode`, `FnAccess`, `FnNamespace`, `FnMetadata`, `OptimizationLevel`
 
 New API
 -------
