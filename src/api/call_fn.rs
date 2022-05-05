@@ -244,6 +244,12 @@ impl Engine {
 
         let orig_scope_len = scope.len();
 
+        #[cfg(not(feature = "no_module"))]
+        let orig_embedded_module_resolver = std::mem::replace(
+            &mut global.embedded_module_resolver,
+            ast.resolver().cloned(),
+        );
+
         if eval_ast && !statements.is_empty() {
             self.eval_global_statements(scope, global, caches, statements, &[ast.as_ref()], 0)?;
 
@@ -277,6 +283,11 @@ impl Engine {
             Position::NONE,
             0,
         )?;
+
+        #[cfg(not(feature = "no_module"))]
+        {
+            global.embedded_module_resolver = orig_embedded_module_resolver;
+        }
 
         #[cfg(feature = "debugging")]
         if self.debugger.is_some() {
