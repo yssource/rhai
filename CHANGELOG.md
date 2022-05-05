@@ -9,6 +9,11 @@ Bug fixes
 
 * Self-contained `AST` now works properly with `Engine::call_fn`.
 
+Deprecated API's
+----------------
+
+* `FnPtr::num_curried` is deprecated in favor of `FnPtr::curry().len()`.
+
 
 Version 1.7.0
 =============
