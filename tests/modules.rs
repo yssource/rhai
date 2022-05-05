@@ -263,11 +263,11 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_function"))]
     {
         let script = r#"
-            fn foo() {
+            fn foo(x) {
                 import "hello" as h;
-                h::answer
+                h::answer * x
             }
-            foo() + { import "hello" as h; h::answer }
+            foo(1) + { import "hello" as h; h::answer }
         "#;
         let mut scope = Scope::new();
 
@@ -278,6 +278,10 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
         assert_eq!(engine.eval_ast::<INT>(&ast)?, 84);
 
         assert!(engine.eval::<INT>(script).is_err());
+
+        let result: INT = engine.call_fn(&mut Scope::new(), &ast, "foo", (2 as INT,))?;
+
+        assert_eq!(result, 84);
     }
 
     Ok(())

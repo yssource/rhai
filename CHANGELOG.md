@@ -1,6 +1,15 @@
 Rhai Release Notes
 ==================
 
+Version 1.8.0
+=============
+
+Bug fixes
+---------
+
+* Self-contained `AST` now works properly with `Engine::call_fn`.
+
+
 Version 1.7.0
 =============
 
