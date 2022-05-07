@@ -195,12 +195,16 @@ mod print_debug_functions {
         result.push_str("#{");
 
         map.iter_mut().enumerate().for_each(|(i, (k, v))| {
-            result.push_str(&format!(
+            use std::fmt::Write;
+
+            write!(
+                result,
                 "{:?}: {}{}",
                 k,
                 &print_with_func(FUNC_TO_DEBUG, &ctx, v),
                 if i < len - 1 { ", " } else { "" }
-            ));
+            )
+            .unwrap();
         });
 
         result.push('}');
