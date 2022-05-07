@@ -7,13 +7,13 @@ use std::prelude::v1::*;
 
 /// Context of a script evaluation process.
 #[derive(Debug)]
-pub struct EvalContext<'a, 's, 'ps, 'm, 'pm, 'c, 't, 'pt> {
+pub struct EvalContext<'a, 's, 'ps, 'g, 'pg, 'c, 't, 'pt> {
     /// The current [`Engine`].
     pub(crate) engine: &'a Engine,
     /// The current [`Scope`].
     pub(crate) scope: &'s mut Scope<'ps>,
     /// The current [`GlobalRuntimeState`].
-    pub(crate) global: &'m mut GlobalRuntimeState<'pm>,
+    pub(crate) global: &'g mut GlobalRuntimeState<'pg>,
     /// The current [caches][Caches], if available.
     pub(crate) caches: Option<&'c mut Caches>,
     /// The current stack of imported [modules][Module].
@@ -24,7 +24,7 @@ pub struct EvalContext<'a, 's, 'ps, 'm, 'pm, 'c, 't, 'pt> {
     pub(crate) level: usize,
 }
 
-impl<'s, 'ps, 'm, 'pm, 'pt> EvalContext<'_, 's, 'ps, 'm, 'pm, '_, '_, 'pt> {
+impl<'s, 'ps, 'g, 'pg, 'pt> EvalContext<'_, 's, 'ps, 'g, 'pg, '_, '_, 'pt> {
     /// The current [`Engine`].
     #[inline(always)]
     #[must_use]
@@ -85,7 +85,7 @@ impl<'s, 'ps, 'm, 'pm, 'pt> EvalContext<'_, 's, 'ps, 'm, 'pm, '_, '_, 'pt> {
     #[cfg(feature = "internals")]
     #[inline(always)]
     #[must_use]
-    pub fn global_runtime_state_mut(&mut self) -> &mut &'m mut GlobalRuntimeState<'pm> {
+    pub fn global_runtime_state_mut(&mut self) -> &mut &'g mut GlobalRuntimeState<'pg> {
         &mut self.global
     }
     /// Get an iterator over the namespaces containing definition of all script-defined functions.

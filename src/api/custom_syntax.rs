@@ -8,7 +8,7 @@ use crate::tokenizer::{is_valid_identifier, Token};
 use crate::types::dynamic::Variant;
 use crate::{
     reify, Engine, EvalContext, Identifier, ImmutableString, LexError, Position, RhaiResult,
-    Shared, StaticVec,
+    StaticVec,
 };
 use std::ops::Deref;
 #[cfg(feature = "no_std")]
@@ -65,6 +65,15 @@ impl<'a> From<&'a Expr> for Expression<'a> {
 }
 
 impl Expression<'_> {
+    /// Evaluate this [expression tree][Expression] within an [evaluation context][`EvalContext`].
+    ///
+    /// # WARNING - Low Level API
+    ///
+    /// This function is very low level.  It evaluates an expression from an [`AST`][crate::AST].
+    #[inline(always)]
+    pub fn eval_with_context(&self, context: &mut EvalContext) -> RhaiResult {
+        context.eval_expression_tree(self)
+    }
     /// Get the value of this expression if it is a variable name or a string constant.
     ///
     /// Returns [`None`] also if the constant is not of the specified type.
@@ -132,7 +141,7 @@ impl Deref for Expression<'_> {
 }
 
 impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_> {
-    /// Evaluate an [expression tree][Expression].
+    /// Evaluate an [expression tree][Expression] within this [evaluation context][`EvalContext`].
     ///
     /// # WARNING - Low Level API
     ///
@@ -165,7 +174,7 @@ pub struct CustomSyntax {
     /// symbols parsed so far.
     pub parse: Box<FnCustomSyntaxParse>,
     /// Custom syntax implementation function.
-    pub func: Shared<FnCustomSyntaxEval>,
+    pub func: Box<FnCustomSyntaxEval>,
     /// Any variables added/removed in the scope?
     pub scope_may_be_changed: bool,
 }
@@ -356,7 +365,7 @@ impl Engine {
             key.into(),
             CustomSyntax {
                 parse: Box::new(parse),
-                func: (Box::new(func) as Box<FnCustomSyntaxEval>).into(),
+                func: Box::new(func),
                 scope_may_be_changed,
             }
             .into(),

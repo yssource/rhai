@@ -214,14 +214,14 @@ impl Engine {
                         .find_map(|&m| {
                             m.get_fn(hash).cloned().map(|func| FnResolutionCacheEntry {
                                 func,
-                                source: m.id_raw().clone(),
+                                source: m.id().map(|s| Box::new(s.into())),
                             })
                         })
                         .or_else(|| {
                             self.global_modules.iter().find_map(|m| {
                                 m.get_fn(hash).cloned().map(|func| FnResolutionCacheEntry {
                                     func,
-                                    source: m.id_raw().clone(),
+                                    source: m.id().map(|s| Box::new(s.into())),
                                 })
                             })
                         });
@@ -232,8 +232,7 @@ impl Engine {
                             _global.get_qualified_fn(hash).map(|(func, source)| {
                                 FnResolutionCacheEntry {
                                     func: func.clone(),
-                                    source: source
-                                        .map_or_else(|| Identifier::new_const(), Into::into),
+                                    source: source.map(|s| Box::new(s.into())),
                                 }
                             })
                         })
@@ -242,7 +241,7 @@ impl Engine {
                                 m.get_qualified_fn(hash).cloned().map(|func| {
                                     FnResolutionCacheEntry {
                                         func,
-                                        source: m.id_raw().clone(),
+                                        source: m.id().map(|s| Box::new(s.into())),
                                     }
                                 })
                             })
@@ -250,7 +249,7 @@ impl Engine {
 
                     match func {
                         // Specific version found
-                        Some(f) => return Some(Box::new(f)),
+                        Some(f) => return Some(f),
 
                         // Stop when all permutations are exhausted
                         None if bitmask >= max_bitmask => {
@@ -265,7 +264,7 @@ impl Engine {
                                             func: CallableFunction::from_method(
                                                 Box::new(f) as Box<FnAny>
                                             ),
-                                            source: Identifier::new_const(),
+                                            source: None,
                                         }
                                     })
                                 } else {
@@ -276,10 +275,9 @@ impl Engine {
                                             func: CallableFunction::from_method(
                                                 Box::new(f) as Box<FnAny>
                                             ),
-                                            source: Identifier::new_const(),
+                                            source: None,
                                         })
                                 }
-                                .map(Box::new)
                             });
                         }
 
@@ -308,7 +306,7 @@ impl Engine {
                 }
             });
 
-        result.as_ref().map(Box::as_ref)
+        result.as_ref()
     }
 
     /// # Main Entry-Point
@@ -370,9 +368,10 @@ impl Engine {
                     backup.change_first_arg_to_copy(args);
                 }
 
-                let source = match (source.as_str(), parent_source.as_str()) {
-                    ("", "") => None,
-                    ("", s) | (s, ..) => Some(s),
+                let source = match (source, parent_source.as_str()) {
+                    (None, "") => None,
+                    (None, s) => Some(s),
+                    (Some(s), ..) => Some(s.as_str()),
                 };
 
                 #[cfg(feature = "debugging")]
@@ -626,7 +625,7 @@ impl Engine {
 
         // Script-defined function call?
         #[cfg(not(feature = "no_function"))]
-        if let Some(FnResolutionCacheEntry { func, mut source }) = self
+        if let Some(FnResolutionCacheEntry { func, ref source }) = self
             .resolve_fn(
                 global,
                 caches,
@@ -657,7 +656,13 @@ impl Engine {
                 }
             };
 
-            mem::swap(&mut global.source, &mut source);
+            let orig_source = mem::replace(
+                &mut global.source,
+                source
+                    .as_ref()
+                    .map(|s| (**s).clone())
+                    .unwrap_or(Identifier::new_const()),
+            );
 
             let result = if _is_method_call {
                 // Method call of script function - map first argument to `this`
@@ -695,7 +700,7 @@ impl Engine {
             };
 
             // Restore the original source
-            mem::swap(&mut global.source, &mut source);
+            global.source = orig_source;
 
             return Ok((result?, false));
         }
@@ -757,7 +762,7 @@ impl Engine {
                 // Recalculate hashes
                 let new_hash = calc_fn_hash(fn_name, args_len).into();
                 // Arguments are passed as-is, adding the curried arguments
-                let mut curry = FnArgsVec::with_capacity(fn_ptr.num_curried());
+                let mut curry = FnArgsVec::with_capacity(fn_ptr.curry().len());
                 curry.extend(fn_ptr.curry().iter().cloned());
                 let mut args = FnArgsVec::with_capacity(curry.len() + call_args.len());
                 args.extend(curry.iter_mut());
@@ -792,7 +797,7 @@ impl Engine {
                     calc_fn_hash(fn_name, args_len + 1),
                 );
                 // Replace the first argument with the object pointer, adding the curried arguments
-                let mut curry = FnArgsVec::with_capacity(fn_ptr.num_curried());
+                let mut curry = FnArgsVec::with_capacity(fn_ptr.curry().len());
                 curry.extend(fn_ptr.curry().iter().cloned());
                 let mut args = FnArgsVec::with_capacity(curry.len() + call_args.len() + 1);
                 args.push(target.as_mut());
