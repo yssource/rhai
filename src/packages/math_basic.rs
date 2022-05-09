@@ -311,10 +311,10 @@ mod float_functions {
     pub fn is_infinite(x: FLOAT) -> bool {
         x.is_infinite()
     }
-    /// Return the integral part of the floating-point number.
+    /// Convert the floating-point number into an integer.
     #[rhai_fn(name = "to_int", return_raw)]
     pub fn f32_to_int(x: f32) -> RhaiResultOf<INT> {
-        if cfg!(not(feature = "unchecked")) && x > (INT::MAX as f32) {
+        if cfg!(not(feature = "unchecked")) && (x > (INT::MAX as f32) || x < (INT::MIN as f32)) {
             Err(
                 ERR::ErrorArithmetic(format!("Integer overflow: to_int({})", x), Position::NONE)
                     .into(),
@@ -323,10 +323,10 @@ mod float_functions {
             Ok(x.trunc() as INT)
         }
     }
-    /// Return the integral part of the floating-point number.
+    /// Convert the floating-point number into an integer.
     #[rhai_fn(name = "to_int", return_raw)]
     pub fn f64_to_int(x: f64) -> RhaiResultOf<INT> {
-        if cfg!(not(feature = "unchecked")) && x > (INT::MAX as f64) {
+        if cfg!(not(feature = "unchecked")) && (x > (INT::MAX as f64) || x < (INT::MIN as f64)) {
             Err(
                 ERR::ErrorArithmetic(format!("Integer overflow: to_int({})", x), Position::NONE)
                     .into(),
@@ -365,6 +365,7 @@ mod float_functions {
 #[cfg(feature = "decimal")]
 #[export_module]
 mod decimal_functions {
+    use num_traits::ToPrimitive;
     use rust_decimal::{
         prelude::{FromStr, RoundingStrategy},
         Decimal, MathematicalOps,
@@ -552,6 +553,30 @@ mod decimal_functions {
         }
 
         Ok(x.round_dp_with_strategy(digits as u32, RoundingStrategy::MidpointTowardZero))
+    }
+    /// Convert the decimal number into an integer.
+    #[rhai_fn(return_raw)]
+    pub fn to_int(x: Decimal) -> RhaiResultOf<INT> {
+        let n = x.to_i64().and_then(|n| {
+            #[cfg(feature = "only_i32")]
+            return if n > (INT::MAX as i64) || n < (INT::MIN as i64) {
+                None
+            } else {
+                Some(n as i32)
+            };
+
+            #[cfg(not(feature = "only_i32"))]
+            return Some(n);
+        });
+
+        match n {
+            Some(n) => Ok(n),
+            _ => Err(ERR::ErrorArithmetic(
+                format!("Integer overflow: to_int({})", x),
+                Position::NONE,
+            )
+            .into()),
+        }
     }
     /// Return the integral part of the decimal number.
     #[rhai_fn(name = "int", get = "int")]

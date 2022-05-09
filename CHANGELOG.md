@@ -8,6 +8,7 @@ Bug fixes
 ---------
 
 * Self-contained `AST` now works properly with `Engine::call_fn`.
+* Missing `to_int` from `Decimal` is added.
 
 Deprecated API's
 ----------------
