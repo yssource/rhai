@@ -831,15 +831,7 @@ impl Engine {
                         nesting_level,
                         will_shadow,
                     };
-                    let context = EvalContext {
-                        engine: self,
-                        scope,
-                        global,
-                        caches: None,
-                        lib,
-                        this_ptr,
-                        level,
-                    };
+                    let context = EvalContext::new(self, scope, global, None, lib, this_ptr, level);
 
                     match filter(true, info, context) {
                         Ok(true) => None,

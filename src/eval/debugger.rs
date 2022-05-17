@@ -496,15 +496,7 @@ impl Engine {
             Some(source.as_str())
         };
 
-        let context = crate::EvalContext {
-            engine: self,
-            scope,
-            global,
-            caches: None,
-            lib,
-            this_ptr,
-            level,
-        };
+        let context = crate::EvalContext::new(self, scope, global, None, lib, this_ptr, level);
 
         if let Some((.., ref on_debugger)) = self.debugger {
             let command = on_debugger(context, event, node, source, node.position())?;

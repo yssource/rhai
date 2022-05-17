@@ -1,7 +1,7 @@
 //! Evaluation context.
 
 use super::{Caches, GlobalRuntimeState};
-use crate::{Dynamic, Engine, Module, Scope};
+use crate::{Dynamic, Engine, Expression, Module, RhaiResult, Scope};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -9,26 +9,48 @@ use std::prelude::v1::*;
 #[derive(Debug)]
 pub struct EvalContext<'a, 's, 'ps, 'g, 'pg, 'c, 't, 'pt> {
     /// The current [`Engine`].
-    pub(crate) engine: &'a Engine,
+    engine: &'a Engine,
     /// The current [`Scope`].
-    pub(crate) scope: &'s mut Scope<'ps>,
+    scope: &'s mut Scope<'ps>,
     /// The current [`GlobalRuntimeState`].
-    pub(crate) global: &'g mut GlobalRuntimeState<'pg>,
+    global: &'g mut GlobalRuntimeState<'pg>,
     /// The current [caches][Caches], if available.
-    pub(crate) caches: Option<&'c mut Caches>,
+    caches: Option<&'c mut Caches>,
     /// The current stack of imported [modules][Module].
-    pub(crate) lib: &'a [&'a Module],
+    lib: &'a [&'a Module],
     /// The current bound `this` pointer, if any.
-    pub(crate) this_ptr: &'t mut Option<&'pt mut Dynamic>,
+    this_ptr: &'t mut Option<&'pt mut Dynamic>,
     /// The current nesting level of function calls.
-    pub(crate) level: usize,
+    level: usize,
 }
 
-impl<'s, 'ps, 'g, 'pg, 'pt> EvalContext<'_, 's, 'ps, 'g, 'pg, '_, '_, 'pt> {
+impl<'a, 's, 'ps, 'g, 'pg, 'c, 't, 'pt> EvalContext<'a, 's, 'ps, 'g, 'pg, 'c, 't, 'pt> {
+    /// Create a new [`EvalContext`].
+    #[inline(always)]
+    #[must_use]
+    pub fn new(
+        engine: &'a Engine,
+        scope: &'s mut Scope<'ps>,
+        global: &'g mut GlobalRuntimeState<'pg>,
+        caches: Option<&'c mut Caches>,
+        lib: &'a [&'a Module],
+        this_ptr: &'t mut Option<&'pt mut Dynamic>,
+        level: usize,
+    ) -> Self {
+        Self {
+            engine,
+            scope,
+            global,
+            caches,
+            lib,
+            this_ptr,
+            level,
+        }
+    }
     /// The current [`Engine`].
     #[inline(always)]
     #[must_use]
-    pub const fn engine(&self) -> &Engine {
+    pub const fn engine(&self) -> &'a Engine {
         self.engine
     }
     /// The current source.
@@ -110,13 +132,38 @@ impl<'s, 'ps, 'g, 'pg, 'pt> EvalContext<'_, 's, 'ps, 'g, 'pg, '_, '_, 'pt> {
     /// Mutable reference to the current bound `this` pointer, if any.
     #[inline(always)]
     #[must_use]
-    pub fn this_ptr_mut(&mut self) -> Option<&mut &'pt mut Dynamic> {
-        self.this_ptr.as_mut()
+    pub fn this_ptr_mut(&mut self) -> &mut Option<&'pt mut Dynamic> {
+        &mut self.this_ptr
     }
     /// The current nesting level of function calls.
     #[inline(always)]
     #[must_use]
     pub const fn call_level(&self) -> usize {
         self.level
+    }
+
+    /// Evaluate an [expression tree][Expression] within this [evaluation context][`EvalContext`].
+    ///
+    /// # WARNING - Low Level API
+    ///
+    /// This function is very low level.  It evaluates an expression from an [`AST`][crate::AST].
+    #[inline(always)]
+    pub fn eval_expression_tree(&mut self, expr: &Expression) -> RhaiResult {
+        let mut new_caches = Caches::new();
+
+        let caches = match self.caches.as_mut() {
+            Some(c) => c,
+            None => &mut new_caches,
+        };
+
+        self.engine.eval_expr(
+            self.scope,
+            self.global,
+            caches,
+            self.lib,
+            self.this_ptr,
+            expr,
+            self.level,
+        )
     }
 }
