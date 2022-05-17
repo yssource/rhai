@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_index"))]
-use rhai::{Array, Dynamic, Engine, EvalAltResult, INT};
+use rhai::{Array, Dynamic, Engine, EvalAltResult, ParseErrorType, INT};
 
 #[test]
 fn test_arrays() -> Result<(), Box<EvalAltResult>> {
@@ -168,6 +168,53 @@ fn test_arrays() -> Result<(), Box<EvalAltResult>> {
             some(y, |x| is_shared(x))
         "
     )?);
+
+    Ok(())
+}
+
+#[test]
+fn test_array_index_types() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    engine.compile("[1, 2, 3][0]['x']")?;
+
+    assert!(matches!(
+        *engine
+            .compile("[1, 2, 3]['x']")
+            .expect_err("should error")
+            .0,
+        ParseErrorType::MalformedIndexExpr(..)
+    ));
+
+    #[cfg(not(feature = "no_float"))]
+    assert!(matches!(
+        *engine
+            .compile("[1, 2, 3][123.456]")
+            .expect_err("should error")
+            .0,
+        ParseErrorType::MalformedIndexExpr(..)
+    ));
+
+    assert!(matches!(
+        *engine.compile("[1, 2, 3][()]").expect_err("should error").0,
+        ParseErrorType::MalformedIndexExpr(..)
+    ));
+
+    assert!(matches!(
+        *engine
+            .compile(r#"[1, 2, 3]["hello"]"#)
+            .expect_err("should error")
+            .0,
+        ParseErrorType::MalformedIndexExpr(..)
+    ));
+
+    assert!(matches!(
+        *engine
+            .compile("[1, 2, 3][true && false]")
+            .expect_err("should error")
+            .0,
+        ParseErrorType::MalformedIndexExpr(..)
+    ));
 
     Ok(())
 }
