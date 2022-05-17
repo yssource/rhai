@@ -631,6 +631,7 @@ impl Engine {
         state: &mut ParseState,
         lib: &mut FnLib,
         lhs: Expr,
+        chained: bool,
         settings: ParseSettings,
     ) -> ParseResult<Expr> {
         #[cfg(not(feature = "unchecked"))]
@@ -640,113 +641,100 @@ impl Engine {
 
         let idx_expr = self.parse_expr(input, state, lib, settings.level_up())?;
 
-        // Check type of indexing - must be integer or string
-        match idx_expr {
-            Expr::IntegerConstant(.., pos) => match lhs {
-                Expr::IntegerConstant(..)
-                | Expr::Array(..)
-                | Expr::StringConstant(..)
-                | Expr::InterpolatedString(..) => (),
+        // Check types of indexing that cannot be overridden
+        // - arrays, maps, strings, bit-fields
+        match lhs {
+            _ if chained => (),
 
-                Expr::Map(..) => {
+            Expr::Map(..) => match idx_expr {
+                // lhs[int]
+                Expr::IntegerConstant(..) => {
                     return Err(PERR::MalformedIndexExpr(
-                        "Object map access expects string index, not a number".into(),
-                    )
-                    .into_err(pos))
-                }
-
-                #[cfg(not(feature = "no_float"))]
-                Expr::FloatConstant(..) => {
-                    return Err(PERR::MalformedIndexExpr(
-                        "Only arrays, object maps and strings can be indexed".into(),
-                    )
-                    .into_err(lhs.start_position()))
-                }
-
-                Expr::CharConstant(..)
-                | Expr::And(..)
-                | Expr::Or(..)
-                | Expr::BoolConstant(..)
-                | Expr::Unit(..) => {
-                    return Err(PERR::MalformedIndexExpr(
-                        "Only arrays, object maps and strings can be indexed".into(),
-                    )
-                    .into_err(lhs.start_position()))
-                }
-
-                _ => (),
-            },
-
-            // lhs[string]
-            Expr::StringConstant(..) | Expr::InterpolatedString(..) => match lhs {
-                Expr::Map(..) => (),
-
-                Expr::Array(..) | Expr::StringConstant(..) | Expr::InterpolatedString(..) => {
-                    return Err(PERR::MalformedIndexExpr(
-                        "Array or string expects numeric index, not a string".into(),
+                        "Object map expects string index, not a number".into(),
                     )
                     .into_err(idx_expr.start_position()))
                 }
 
+                // lhs[string]
+                Expr::StringConstant(..) | Expr::InterpolatedString(..) => (),
+
+                // lhs[float]
                 #[cfg(not(feature = "no_float"))]
                 Expr::FloatConstant(..) => {
                     return Err(PERR::MalformedIndexExpr(
-                        "Only arrays, object maps and strings can be indexed".into(),
+                        "Object map expects string index, not a float".into(),
                     )
-                    .into_err(lhs.start_position()))
+                    .into_err(idx_expr.start_position()))
                 }
-
-                Expr::CharConstant(..)
-                | Expr::And(..)
-                | Expr::Or(..)
-                | Expr::BoolConstant(..)
-                | Expr::Unit(..) => {
+                // lhs[char]
+                Expr::CharConstant(..) => {
                     return Err(PERR::MalformedIndexExpr(
-                        "Only arrays, object maps and strings can be indexed".into(),
+                        "Object map expects string index, not a character".into(),
                     )
-                    .into_err(lhs.start_position()))
+                    .into_err(idx_expr.start_position()))
                 }
-
+                // lhs[()]
+                Expr::Unit(..) => {
+                    return Err(PERR::MalformedIndexExpr(
+                        "Object map expects string index, not ()".into(),
+                    )
+                    .into_err(idx_expr.start_position()))
+                }
+                // lhs[??? && ???], lhs[??? || ???], lhs[true], lhs[false]
+                Expr::And(..) | Expr::Or(..) | Expr::BoolConstant(..) => {
+                    return Err(PERR::MalformedIndexExpr(
+                        "Object map expects string index, not a boolean".into(),
+                    )
+                    .into_err(idx_expr.start_position()))
+                }
                 _ => (),
             },
 
-            // lhs[float]
-            #[cfg(not(feature = "no_float"))]
-            x @ Expr::FloatConstant(..) => {
-                return Err(PERR::MalformedIndexExpr(
-                    "Array access expects integer index, not a float".into(),
-                )
-                .into_err(x.start_position()))
-            }
-            // lhs[char]
-            x @ Expr::CharConstant(..) => {
-                return Err(PERR::MalformedIndexExpr(
-                    "Array access expects integer index, not a character".into(),
-                )
-                .into_err(x.start_position()))
-            }
-            // lhs[()]
-            x @ Expr::Unit(..) => {
-                return Err(PERR::MalformedIndexExpr(
-                    "Array access expects integer index, not ()".into(),
-                )
-                .into_err(x.start_position()))
-            }
-            // lhs[??? && ???], lhs[??? || ???]
-            x @ Expr::And(..) | x @ Expr::Or(..) => {
-                return Err(PERR::MalformedIndexExpr(
-                    "Array access expects integer index, not a boolean".into(),
-                )
-                .into_err(x.start_position()))
-            }
-            // lhs[true], lhs[false]
-            x @ Expr::BoolConstant(..) => {
-                return Err(PERR::MalformedIndexExpr(
-                    "Array access expects integer index, not a boolean".into(),
-                )
-                .into_err(x.start_position()))
-            }
-            // All other expressions
+            Expr::IntegerConstant(..)
+            | Expr::Array(..)
+            | Expr::StringConstant(..)
+            | Expr::InterpolatedString(..) => match idx_expr {
+                // lhs[int]
+                Expr::IntegerConstant(..) => (),
+
+                // lhs[string]
+                Expr::StringConstant(..) | Expr::InterpolatedString(..) => {
+                    return Err(PERR::MalformedIndexExpr(
+                        "Array, string or bit-field expects numeric index, not a string".into(),
+                    )
+                    .into_err(idx_expr.start_position()))
+                }
+                // lhs[float]
+                #[cfg(not(feature = "no_float"))]
+                Expr::FloatConstant(..) => {
+                    return Err(PERR::MalformedIndexExpr(
+                        "Array, string or bit-field expects integer index, not a float".into(),
+                    )
+                    .into_err(idx_expr.start_position()))
+                }
+                // lhs[char]
+                Expr::CharConstant(..) => {
+                    return Err(PERR::MalformedIndexExpr(
+                        "Array, string or bit-field expects integer index, not a character".into(),
+                    )
+                    .into_err(idx_expr.start_position()))
+                }
+                // lhs[()]
+                Expr::Unit(..) => {
+                    return Err(PERR::MalformedIndexExpr(
+                        "Array, string or bit-field expects integer index, not ()".into(),
+                    )
+                    .into_err(idx_expr.start_position()))
+                }
+                // lhs[??? && ???], lhs[??? || ???], lhs[true], lhs[false]
+                Expr::And(..) | Expr::Or(..) | Expr::BoolConstant(..) => {
+                    return Err(PERR::MalformedIndexExpr(
+                        "Array, string or bit-field expects integer index, not a boolean".into(),
+                    )
+                    .into_err(idx_expr.start_position()))
+                }
+                _ => (),
+            },
             _ => (),
         }
 
@@ -767,6 +755,7 @@ impl Engine {
                             state,
                             lib,
                             idx_expr,
+                            true,
                             settings.level_up(),
                         )?;
                         // Indexing binds to right
@@ -1628,7 +1617,7 @@ impl Engine {
                 // Indexing
                 #[cfg(not(feature = "no_index"))]
                 (expr, Token::LeftBracket) => {
-                    self.parse_index_chain(input, state, lib, expr, settings.level_up())?
+                    self.parse_index_chain(input, state, lib, expr, false, settings.level_up())?
                 }
                 // Property access
                 #[cfg(not(feature = "no_object"))]

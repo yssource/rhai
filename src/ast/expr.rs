@@ -799,6 +799,8 @@ impl Expr {
         match token {
             #[cfg(not(feature = "no_object"))]
             Token::Period => return true,
+            #[cfg(not(feature = "no_index"))]
+            Token::LeftBracket => return true,
             _ => (),
         }
 
@@ -823,15 +825,9 @@ impl Expr {
             | Self::Index(..)
             | Self::Array(..)
             | Self::Map(..)
-            | Self::Custom(..) => match token {
-                #[cfg(not(feature = "no_index"))]
-                Token::LeftBracket => true,
-                _ => false,
-            },
+            | Self::Custom(..) => false,
 
             Self::Variable(..) => match token {
-                #[cfg(not(feature = "no_index"))]
-                Token::LeftBracket => true,
                 Token::LeftParen => true,
                 Token::Unit => true,
                 Token::Bang => true,
@@ -840,8 +836,6 @@ impl Expr {
             },
 
             Self::Property(..) => match token {
-                #[cfg(not(feature = "no_index"))]
-                Token::LeftBracket => true,
                 Token::LeftParen => true,
                 _ => false,
             },

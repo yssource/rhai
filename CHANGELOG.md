@@ -9,6 +9,7 @@ Bug fixes
 
 * Self-contained `AST` now works properly with `Engine::call_fn`.
 * Missing `to_int` from `Decimal` is added.
+* Parsing of index expressions is relaxed and many cases no longer result in an index-type error to allow for custom indexers.
 
 Deprecated API's
 ----------------
