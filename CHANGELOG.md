@@ -16,6 +16,11 @@ Deprecated API's
 
 * `FnPtr::num_curried` is deprecated in favor of `FnPtr::curry().len()`.
 
+Enhancements
+------------
+
+* `EvalAltResult::IndexNotFound` is added to aid in raising errors for indexers.
+
 
 Version 1.7.0
 =============

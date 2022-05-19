@@ -42,6 +42,8 @@ pub enum EvalAltResult {
     ErrorVariableNotFound(String, Position),
     /// Access of an unknown object map property. Wrapped value is the property name.
     ErrorPropertyNotFound(String, Position),
+    /// Access of an invalid index. Wrapped value is the index name.
+    ErrorIndexNotFound(Dynamic, Position),
     /// Call to an unknown function. Wrapped value is the function signature.
     ErrorFunctionNotFound(String, Position),
     /// Usage of an unknown [module][crate::Module]. Wrapped value is the [module][crate::Module] name.
@@ -149,10 +151,11 @@ impl fmt::Display for EvalAltResult {
             }
             Self::ErrorInModule(s, err, ..) => write!(f, "Error in module '{}' > {}", s, err)?,
 
-            Self::ErrorVariableExists(s, ..) => write!(f, "Variable is already defined: {}", s)?,
+            Self::ErrorVariableExists(s, ..) => write!(f, "Variable already defined: {}", s)?,
             Self::ErrorForbiddenVariable(s, ..) => write!(f, "Forbidden variable name: {}", s)?,
             Self::ErrorVariableNotFound(s, ..) => write!(f, "Variable not found: {}", s)?,
             Self::ErrorPropertyNotFound(s, ..) => write!(f, "Property not found: {}", s)?,
+            Self::ErrorIndexNotFound(s, ..) => write!(f, "Invalid index: {}", s)?,
             Self::ErrorFunctionNotFound(s, ..) => write!(f, "Function not found: {}", s)?,
             Self::ErrorModuleNotFound(s, ..) => write!(f, "Module not found: {}", s)?,
             Self::ErrorDataRace(s, ..) => {
@@ -162,9 +165,9 @@ impl fmt::Display for EvalAltResult {
                 "" => f.write_str("Malformed dot expression"),
                 s => f.write_str(s),
             }?,
-            Self::ErrorIndexingType(s, ..) => write!(f, "Indexer not registered: {}", s)?,
-            Self::ErrorUnboundThis(..) => f.write_str("'this' is not bound")?,
-            Self::ErrorFor(..) => f.write_str("For loop expects a type that is iterable")?,
+            Self::ErrorIndexingType(s, ..) => write!(f, "Indexer unavailable: {}", s)?,
+            Self::ErrorUnboundThis(..) => f.write_str("'this' not bound")?,
+            Self::ErrorFor(..) => f.write_str("For loop expects an iterable type")?,
             Self::ErrorTooManyOperations(..) => f.write_str("Too many operations")?,
             Self::ErrorTooManyModules(..) => f.write_str("Too many modules imported")?,
             Self::ErrorStackOverflow(..) => f.write_str("Stack overflow")?,
@@ -181,14 +184,14 @@ impl fmt::Display for EvalAltResult {
 
             Self::ErrorAssignmentToConstant(s, ..) => write!(f, "Cannot modify constant: {}", s)?,
             Self::ErrorMismatchOutputType(e, a, ..) => match (a.as_str(), e.as_str()) {
-                ("", e) => write!(f, "Output type is incorrect, expecting {}", e),
-                (a, "") => write!(f, "Output type is incorrect: {}", a),
-                (a, e) => write!(f, "Output type is incorrect: {} (expecting {})", a, e),
+                ("", e) => write!(f, "Output type incorrect, expecting {}", e),
+                (a, "") => write!(f, "Output type incorrect: {}", a),
+                (a, e) => write!(f, "Output type incorrect: {} (expecting {})", a, e),
             }?,
             Self::ErrorMismatchDataType(e, a, ..) => match (a.as_str(), e.as_str()) {
-                ("", e) => write!(f, "Data type is incorrect, expecting {}", e),
-                (a, "") => write!(f, "Data type is incorrect: {}", a),
-                (a, e) => write!(f, "Data type is incorrect: {} (expecting {})", a, e),
+                ("", e) => write!(f, "Data type incorrect, expecting {}", e),
+                (a, "") => write!(f, "Data type incorrect: {}", a),
+                (a, e) => write!(f, "Data type incorrect: {} (expecting {})", a, e),
             }?,
             Self::ErrorArithmetic(s, ..) => match s.as_str() {
                 "" => f.write_str("Arithmetic error"),
@@ -204,12 +207,12 @@ impl fmt::Display for EvalAltResult {
                 0 => write!(f, "Array index {} out of bounds: array is empty", index),
                 1 => write!(
                     f,
-                    "Array index {} out of bounds: only 1 element in the array",
+                    "Array index {} out of bounds: only 1 element in array",
                     index
                 ),
                 _ => write!(
                     f,
-                    "Array index {} out of bounds: only {} elements in the array",
+                    "Array index {} out of bounds: only {} elements in array",
                     index, max
                 ),
             }?,
@@ -217,18 +220,18 @@ impl fmt::Display for EvalAltResult {
                 0 => write!(f, "String index {} out of bounds: string is empty", index),
                 1 => write!(
                     f,
-                    "String index {} out of bounds: only 1 character in the string",
+                    "String index {} out of bounds: only 1 character in string",
                     index
                 ),
                 _ => write!(
                     f,
-                    "String index {} out of bounds: only {} characters in the string",
+                    "String index {} out of bounds: only {} characters in string",
                     index, max
                 ),
             }?,
             Self::ErrorBitFieldBounds(max, index, ..) => write!(
                 f,
-                "Bit-field index {} out of bounds: only {} bits in the bit-field",
+                "Bit-field index {} out of bounds: only {} bits in bit-field",
                 index, max
             )?,
             Self::ErrorDataTooLarge(typ, ..) => write!(f, "{} exceeds maximum limit", typ)?,
@@ -291,6 +294,7 @@ impl EvalAltResult {
             | Self::ErrorForbiddenVariable(..)
             | Self::ErrorVariableNotFound(..)
             | Self::ErrorPropertyNotFound(..)
+            | Self::ErrorIndexNotFound(..)
             | Self::ErrorModuleNotFound(..)
             | Self::ErrorDataRace(..)
             | Self::ErrorAssignmentToConstant(..)
@@ -388,6 +392,9 @@ impl EvalAltResult {
             | Self::ErrorAssignmentToConstant(v, ..) => {
                 map.insert("variable".into(), v.into());
             }
+            Self::ErrorIndexNotFound(v, ..) => {
+                map.insert("index".into(), v.clone());
+            }
             Self::ErrorModuleNotFound(m, ..) => {
                 map.insert("module".into(), m.into());
             }
@@ -448,6 +455,7 @@ impl EvalAltResult {
             | Self::ErrorForbiddenVariable(.., pos)
             | Self::ErrorVariableNotFound(.., pos)
             | Self::ErrorPropertyNotFound(.., pos)
+            | Self::ErrorIndexNotFound(.., pos)
             | Self::ErrorModuleNotFound(.., pos)
             | Self::ErrorDataRace(.., pos)
             | Self::ErrorAssignmentToConstant(.., pos)
@@ -499,6 +507,7 @@ impl EvalAltResult {
             | Self::ErrorForbiddenVariable(.., pos)
             | Self::ErrorVariableNotFound(.., pos)
             | Self::ErrorPropertyNotFound(.., pos)
+            | Self::ErrorIndexNotFound(.., pos)
             | Self::ErrorModuleNotFound(.., pos)
             | Self::ErrorDataRace(.., pos)
             | Self::ErrorAssignmentToConstant(.., pos)
