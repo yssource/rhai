@@ -2,7 +2,7 @@
 
 use crate::api::custom_syntax::{markers::*, CustomSyntax};
 use crate::api::events::VarDefInfo;
-use crate::api::options::LanguageOptions;
+use crate::api::options::LangOptions;
 use crate::ast::{
     ASTFlags, BinaryExpr, ConditionalStmtBlock, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident,
     OpAssignment, ScriptFnDef, Stmt, StmtBlock, StmtBlockContainer, SwitchCases, TryCatchBlock,
@@ -215,7 +215,7 @@ struct ParseSettings {
     /// Is the current position inside a loop?
     is_breakable: bool,
     /// Language options in effect (overrides Engine options).
-    options: LanguageOptions,
+    options: LangOptions,
     /// Current expression nesting level.
     level: usize,
     /// Current position.
@@ -501,7 +501,10 @@ impl Engine {
                     #[cfg(feature = "no_function")]
                     let relax = false;
 
-                    if !relax && settings.options.strict_var && index.is_none() {
+                    if !relax
+                        && settings.options.contains(LangOptions::STRICT_VAR)
+                        && index.is_none()
+                    {
                         return Err(PERR::ModuleUndefined(namespace.root().to_string())
                             .into_err(namespace.position()));
                     }
@@ -561,7 +564,10 @@ impl Engine {
                         #[cfg(feature = "no_function")]
                         let relax = false;
 
-                        if !relax && settings.options.strict_var && index.is_none() {
+                        if !relax
+                            && settings.options.contains(LangOptions::STRICT_VAR)
+                            && index.is_none()
+                        {
                             return Err(PERR::ModuleUndefined(namespace.root().to_string())
                                 .into_err(namespace.position()));
                         }
@@ -1234,7 +1240,7 @@ impl Engine {
             }
 
             // { - block statement as expression
-            Token::LeftBrace if settings.options.allow_stmt_expr => {
+            Token::LeftBrace if settings.options.contains(LangOptions::STMT_EXPR) => {
                 match self.parse_block(input, state, lib, settings.level_up())? {
                     block @ Stmt::Block(..) => Expr::Stmt(Box::new(block.into())),
                     stmt => unreachable!("Stmt::Block expected but gets {:?}", stmt),
@@ -1245,19 +1251,21 @@ impl Engine {
             Token::LeftParen => self.parse_paren_expr(input, state, lib, settings.level_up())?,
 
             // If statement is allowed to act as expressions
-            Token::If if settings.options.allow_if_expr => Expr::Stmt(Box::new(
+            Token::If if settings.options.contains(LangOptions::IF_EXPR) => Expr::Stmt(Box::new(
                 self.parse_if(input, state, lib, settings.level_up())?
                     .into(),
             )),
             // Switch statement is allowed to act as expressions
-            Token::Switch if settings.options.allow_switch_expr => Expr::Stmt(Box::new(
-                self.parse_switch(input, state, lib, settings.level_up())?
-                    .into(),
-            )),
+            Token::Switch if settings.options.contains(LangOptions::SWITCH_EXPR) => {
+                Expr::Stmt(Box::new(
+                    self.parse_switch(input, state, lib, settings.level_up())?
+                        .into(),
+                ))
+            }
 
             // | ...
             #[cfg(not(feature = "no_function"))]
-            Token::Pipe | Token::Or if settings.options.allow_anonymous_fn => {
+            Token::Pipe | Token::Or if settings.options.contains(LangOptions::ANON_FN) => {
                 let mut new_state =
                     ParseState::new(self, state.scope, state.tokenizer_control.clone());
 
@@ -1266,6 +1274,17 @@ impl Engine {
                     new_state.max_expr_depth = self.max_function_expr_depth();
                 }
 
+                let mut options = self.options;
+                options.set(
+                    LangOptions::STRICT_VAR,
+                    if cfg!(feature = "no_closure") {
+                        settings.options.contains(LangOptions::STRICT_VAR)
+                    } else {
+                        // A capturing closure can access variables not defined locally
+                        false
+                    },
+                );
+
                 let new_settings = ParseSettings {
                     is_global: false,
                     is_function_scope: true,
@@ -1273,15 +1292,7 @@ impl Engine {
                     is_closure_scope: true,
                     is_breakable: false,
                     level: 0,
-                    options: LanguageOptions {
-                        strict_var: if cfg!(feature = "no_closure") {
-                            settings.options.strict_var
-                        } else {
-                            // A capturing closure can access variables not defined locally
-                            false
-                        },
-                        ..self.options
-                    },
+                    options,
                     ..settings
                 };
 
@@ -1292,7 +1303,7 @@ impl Engine {
                     |crate::ast::Ident { name, pos }| {
                         let index = state.access_var(name, *pos);
 
-                        if settings.options.strict_var
+                        if settings.options.contains(LangOptions::STRICT_VAR)
                             && !settings.is_closure_scope
                             && index.is_none()
                             && !state.scope.contains(name)
@@ -1439,7 +1450,7 @@ impl Engine {
                     _ => {
                         let index = state.access_var(&s, settings.pos);
 
-                        if settings.options.strict_var
+                        if settings.options.contains(LangOptions::STRICT_VAR)
                             && index.is_none()
                             && !state.scope.contains(&s)
                         {
@@ -1674,7 +1685,10 @@ impl Engine {
                     #[cfg(feature = "no_function")]
                     let relax = false;
 
-                    if !relax && settings.options.strict_var && index.is_none() {
+                    if !relax
+                        && settings.options.contains(LangOptions::STRICT_VAR)
+                        && index.is_none()
+                    {
                         return Err(PERR::ModuleUndefined(namespace.root().to_string())
                             .into_err(namespace.position()));
                     }
@@ -3072,6 +3086,12 @@ impl Engine {
                             new_state.max_expr_depth = self.max_function_expr_depth();
                         }
 
+                        let mut options = self.options;
+                        options.set(
+                            LangOptions::STRICT_VAR,
+                            settings.options.contains(LangOptions::STRICT_VAR),
+                        );
+
                         let new_settings = ParseSettings {
                             is_global: false,
                             is_function_scope: true,
@@ -3079,10 +3099,7 @@ impl Engine {
                             is_closure_scope: false,
                             is_breakable: false,
                             level: 0,
-                            options: LanguageOptions {
-                                strict_var: settings.options.strict_var,
-                                ..self.options
-                            },
+                            options,
                             pos,
                             ..settings
                         };
@@ -3541,6 +3558,11 @@ impl Engine {
     ) -> ParseResult<AST> {
         let mut functions = BTreeMap::new();
 
+        let mut options = self.options;
+        options.remove(LangOptions::IF_EXPR | LangOptions::SWITCH_EXPR | LangOptions::STMT_EXPR);
+        #[cfg(not(feature = "no_function"))]
+        options.remove(LangOptions::ANON_FN);
+
         let settings = ParseSettings {
             is_global: true,
             #[cfg(not(feature = "no_function"))]
@@ -3550,14 +3572,7 @@ impl Engine {
             is_closure_scope: false,
             is_breakable: false,
             level: 0,
-            options: LanguageOptions {
-                allow_if_expr: false,
-                allow_switch_expr: false,
-                allow_stmt_expr: false,
-                #[cfg(not(feature = "no_function"))]
-                allow_anonymous_fn: false,
-                ..self.options
-            },
+            options,
             pos: Position::NONE,
         };
         let expr = self.parse_expr(input, state, &mut functions, settings)?;

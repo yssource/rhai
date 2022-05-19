@@ -1,7 +1,7 @@
 //! Main module defining the script evaluation [`Engine`].
 
 use crate::api::custom_syntax::CustomSyntax;
-use crate::api::options::LanguageOptions;
+use crate::api::options::LangOptions;
 use crate::func::native::{
     OnDebugCallback, OnDefVarCallback, OnParseTokenCallback, OnPrintCallback, OnVarCallback,
 };
@@ -9,7 +9,8 @@ use crate::packages::{Package, StandardPackage};
 use crate::tokenizer::Token;
 use crate::types::dynamic::Union;
 use crate::{
-    Dynamic, Identifier, ImmutableString, Module, Position, RhaiResult, Shared, StaticVec,
+    Dynamic, Identifier, ImmutableString, Module, OptimizationLevel, Position, RhaiResult, Shared,
+    StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -129,7 +130,10 @@ pub struct Engine {
     pub(crate) progress: Option<Box<crate::func::native::OnProgressCallback>>,
 
     /// Language options.
-    pub(crate) options: LanguageOptions,
+    pub(crate) options: LangOptions,
+
+    /// Script optimization level.
+    pub optimization_level: OptimizationLevel,
 
     /// Max limits.
     #[cfg(not(feature = "unchecked"))]
@@ -274,7 +278,12 @@ impl Engine {
             #[cfg(not(feature = "unchecked"))]
             progress: None,
 
-            options: LanguageOptions::new(),
+            options: LangOptions::new(),
+
+            #[cfg(not(feature = "no_optimize"))]
+            optimization_level: OptimizationLevel::Simple,
+            #[cfg(feature = "no_optimize")]
+            optimization_level: (),
 
             #[cfg(not(feature = "unchecked"))]
             limits: crate::api::limits::Limits::new(),
