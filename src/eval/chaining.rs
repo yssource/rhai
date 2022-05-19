@@ -335,12 +335,11 @@ impl Engine {
                         let (mut new_val, op_info) = new_val.expect("`Some`");
 
                         if op_info.is_op_assignment() {
-                            let hash = crate::ast::FnCallHashes::from_native(*hash_get);
                             let args = &mut [target.as_mut()];
                             let (mut orig_val, ..) = self
-                                .exec_fn_call(
-                                    None, global, caches, lib, getter, hash, args, is_ref_mut,
-                                    true, *pos, level,
+                                .call_native_fn(
+                                    global, caches, lib, getter, *hash_get, args, is_ref_mut,
+                                    false, *pos, level,
                                 )
                                 .or_else(|err| match *err {
                                     // Try an indexer if property does not exist
@@ -371,10 +370,9 @@ impl Engine {
                             new_val = orig_val;
                         }
 
-                        let hash = crate::ast::FnCallHashes::from_native(*hash_set);
                         let args = &mut [target.as_mut(), &mut new_val];
-                        self.exec_fn_call(
-                            None, global, caches, lib, setter, hash, args, is_ref_mut, true, *pos,
+                        self.call_native_fn(
+                            global, caches, lib, setter, *hash_set, args, is_ref_mut, false, *pos,
                             level,
                         )
                         .or_else(|err| match *err {
@@ -399,10 +397,9 @@ impl Engine {
                         self.run_debugger(scope, global, lib, this_ptr, rhs, level)?;
 
                         let ((getter, hash_get), _, name) = x.as_ref();
-                        let hash = crate::ast::FnCallHashes::from_native(*hash_get);
                         let args = &mut [target.as_mut()];
-                        self.exec_fn_call(
-                            None, global, caches, lib, getter, hash, args, is_ref_mut, true, *pos,
+                        self.call_native_fn(
+                            global, caches, lib, getter, *hash_get, args, is_ref_mut, false, *pos,
                             level,
                         )
                         .map_or_else(
@@ -488,16 +485,14 @@ impl Engine {
 
                                 let ((getter, hash_get), (setter, hash_set), name) = p.as_ref();
                                 let rhs_chain = rhs.into();
-                                let hash_get = crate::ast::FnCallHashes::from_native(*hash_get);
-                                let hash_set = crate::ast::FnCallHashes::from_native(*hash_set);
                                 let mut arg_values = [target.as_mut(), &mut Dynamic::UNIT.clone()];
                                 let args = &mut arg_values[..1];
 
                                 // Assume getters are always pure
                                 let (mut val, ..) = self
-                                    .exec_fn_call(
-                                        None, global, caches, lib, getter, hash_get, args,
-                                        is_ref_mut, true, pos, level,
+                                    .call_native_fn(
+                                        global, caches, lib, getter, *hash_get, args, is_ref_mut,
+                                        false, pos, level,
                                     )
                                     .or_else(|err| match *err {
                                         // Try an indexer if property does not exist
@@ -531,9 +526,9 @@ impl Engine {
                                     // Re-use args because the first &mut parameter will not be consumed
                                     let mut arg_values = [target.as_mut(), val.as_mut()];
                                     let args = &mut arg_values;
-                                    self.exec_fn_call(
-                                        None, global, caches, lib, setter, hash_set, args,
-                                        is_ref_mut, true, pos, level,
+                                    self.call_native_fn(
+                                        global, caches, lib, setter, *hash_set, args, is_ref_mut,
+                                        false, pos, level,
                                     )
                                     .or_else(
                                         |err| match *err {
@@ -813,12 +808,13 @@ impl Engine {
         level: usize,
     ) -> RhaiResultOf<Dynamic> {
         let args = &mut [target, idx];
-        let hash_get = crate::ast::FnCallHashes::from_native(global.hash_idx_get());
+        let hash = global.hash_idx_get();
         let fn_name = crate::engine::FN_IDX_GET;
         let pos = Position::NONE;
+        let level = level + 1;
 
-        self.exec_fn_call(
-            None, global, caches, lib, fn_name, hash_get, args, true, true, pos, level,
+        self.call_native_fn(
+            global, caches, lib, fn_name, hash, args, true, false, pos, level,
         )
         .map(|(r, ..)| r)
     }
@@ -837,13 +833,14 @@ impl Engine {
         is_ref_mut: bool,
         level: usize,
     ) -> RhaiResultOf<(Dynamic, bool)> {
-        let hash_set = crate::ast::FnCallHashes::from_native(global.hash_idx_set());
+        let hash = global.hash_idx_set();
         let args = &mut [target, idx, new_val];
         let fn_name = crate::engine::FN_IDX_SET;
         let pos = Position::NONE;
+        let level = level + 1;
 
-        self.exec_fn_call(
-            None, global, caches, lib, fn_name, hash_set, args, is_ref_mut, true, pos, level,
+        self.call_native_fn(
+            global, caches, lib, fn_name, hash, args, is_ref_mut, false, pos, level,
         )
     }
 
