@@ -12,8 +12,8 @@ use crate::engine::{
 use crate::eval::{Caches, FnResolutionCacheEntry, GlobalRuntimeState};
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnArgsVec, FnPtr,
-    Identifier, ImmutableString, Module, OptimizationLevel, Position, RhaiError, RhaiResult,
-    RhaiResultOf, Scope, ERR,
+    ImmutableString, Module, OptimizationLevel, Position, RhaiError, RhaiResult, RhaiResultOf,
+    Scope, ERR,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -661,7 +661,7 @@ impl Engine {
                 source
                     .as_ref()
                     .map(|s| (**s).clone())
-                    .unwrap_or(Identifier::new_const()),
+                    .unwrap_or(crate::Identifier::new_const()),
             );
 
             let result = if _is_method_call {

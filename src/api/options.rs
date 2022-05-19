@@ -40,7 +40,9 @@ impl LangOptions {
                 Self::ANON_FN
             }
             #[cfg(feature = "no_function")]
-            0
+            {
+                Self::empty()
+            }
         }
     }
 }
