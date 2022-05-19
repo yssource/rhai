@@ -387,6 +387,7 @@ fn match_token(input: &mut TokenStream, token: Token) -> (bool, Position) {
 }
 
 /// Parse a variable name.
+#[inline]
 fn parse_var_name(input: &mut TokenStream) -> ParseResult<(SmartString, Position)> {
     match input.next().expect(NEVER_ENDS) {
         // Variable name
@@ -403,6 +404,7 @@ fn parse_var_name(input: &mut TokenStream) -> ParseResult<(SmartString, Position
 }
 
 /// Parse a symbol.
+#[inline]
 fn parse_symbol(input: &mut TokenStream) -> ParseResult<(SmartString, Position)> {
     match input.next().expect(NEVER_ENDS) {
         // Symbol
@@ -631,7 +633,7 @@ impl Engine {
         state: &mut ParseState,
         lib: &mut FnLib,
         lhs: Expr,
-        chained: bool,
+        check_index_type: bool,
         settings: ParseSettings,
     ) -> ParseResult<Expr> {
         #[cfg(not(feature = "unchecked"))]
@@ -644,7 +646,7 @@ impl Engine {
         // Check types of indexing that cannot be overridden
         // - arrays, maps, strings, bit-fields
         match lhs {
-            _ if chained => (),
+            _ if !check_index_type => (),
 
             Expr::Map(..) => match idx_expr {
                 // lhs[int]
@@ -755,7 +757,7 @@ impl Engine {
                             state,
                             lib,
                             idx_expr,
-                            true,
+                            false,
                             settings.level_up(),
                         )?;
                         // Indexing binds to right
@@ -1617,7 +1619,7 @@ impl Engine {
                 // Indexing
                 #[cfg(not(feature = "no_index"))]
                 (expr, Token::LeftBracket) => {
-                    self.parse_index_chain(input, state, lib, expr, false, settings.level_up())?
+                    self.parse_index_chain(input, state, lib, expr, true, settings.level_up())?
                 }
                 // Property access
                 #[cfg(not(feature = "no_object"))]
@@ -2704,15 +2706,16 @@ impl Engine {
                 nesting_level: level,
                 will_shadow,
             };
-            let context = EvalContext {
-                engine: self,
-                scope: &mut state.stack,
-                global: &mut state.global,
-                caches: None,
-                lib: &[],
-                this_ptr: &mut None,
+            let mut this_ptr = None;
+            let context = EvalContext::new(
+                self,
+                &mut state.stack,
+                &mut state.global,
+                None,
+                &[],
+                &mut this_ptr,
                 level,
-            };
+            );
 
             match filter(false, info, context) {
                 Ok(true) => (),

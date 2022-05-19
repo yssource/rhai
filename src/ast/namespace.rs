@@ -17,8 +17,8 @@ use std::{
 ///
 /// Not available under `no_module`.
 ///
-/// A [`u64`] offset to the current [stack of imported modules][crate::GlobalRuntimeState] is
-/// cached for quick search purposes.
+/// A [`u64`] offset to the current stack of imported [modules][crate::Module] in the
+/// [global runtime state][crate::GlobalRuntimeState] is cached for quick search purposes.
 ///
 /// A [`StaticVec`] is used because the vast majority of namespace-qualified access contains only
 /// one level, and it is wasteful to always allocate a [`Vec`] with one element.

@@ -736,6 +736,42 @@ impl Engine {
         })
     }
 
+    /// Evaluate an argument.
+    #[inline]
+    pub(crate) fn get_arg_value(
+        &self,
+        scope: &mut Scope,
+        global: &mut GlobalRuntimeState,
+        caches: &mut Caches,
+        lib: &[&Module],
+        this_ptr: &mut Option<&mut Dynamic>,
+        arg_expr: &Expr,
+        level: usize,
+    ) -> RhaiResultOf<(Dynamic, Position)> {
+        #[cfg(feature = "debugging")]
+        if self.debugger.is_some() {
+            if let Some(value) = arg_expr.get_literal_value() {
+                #[cfg(feature = "debugging")]
+                self.run_debugger(scope, global, lib, this_ptr, arg_expr, level)?;
+                return Ok((value, arg_expr.start_position()));
+            }
+        }
+
+        // Do not match function exit for arguments
+        #[cfg(feature = "debugging")]
+        let reset_debugger = global.debugger.clear_status_if(|status| {
+            matches!(status, crate::eval::DebuggerStatus::FunctionExit(..))
+        });
+
+        let result = self.eval_expr(scope, global, caches, lib, this_ptr, arg_expr, level);
+
+        // Restore function exit status
+        #[cfg(feature = "debugging")]
+        global.debugger.reset_status(reset_debugger);
+
+        Ok((result?, arg_expr.start_position()))
+    }
+
     /// Call a dot method.
     #[cfg(not(feature = "no_object"))]
     pub(crate) fn make_method_call(
@@ -890,42 +926,6 @@ impl Engine {
         }
 
         Ok((result, updated))
-    }
-
-    /// Evaluate an argument.
-    #[inline]
-    pub(crate) fn get_arg_value(
-        &self,
-        scope: &mut Scope,
-        global: &mut GlobalRuntimeState,
-        caches: &mut Caches,
-        lib: &[&Module],
-        this_ptr: &mut Option<&mut Dynamic>,
-        arg_expr: &Expr,
-        level: usize,
-    ) -> RhaiResultOf<(Dynamic, Position)> {
-        #[cfg(feature = "debugging")]
-        if self.debugger.is_some() {
-            if let Some(value) = arg_expr.get_literal_value() {
-                #[cfg(feature = "debugging")]
-                self.run_debugger(scope, global, lib, this_ptr, arg_expr, level)?;
-                return Ok((value, arg_expr.start_position()));
-            }
-        }
-
-        // Do not match function exit for arguments
-        #[cfg(feature = "debugging")]
-        let reset_debugger = global.debugger.clear_status_if(|status| {
-            matches!(status, crate::eval::DebuggerStatus::FunctionExit(..))
-        });
-
-        let result = self.eval_expr(scope, global, caches, lib, this_ptr, arg_expr, level);
-
-        // Restore function exit status
-        #[cfg(feature = "debugging")]
-        global.debugger.reset_status(reset_debugger);
-
-        Ok((result?, arg_expr.start_position()))
     }
 
     /// Call a function in normal function-call style.
