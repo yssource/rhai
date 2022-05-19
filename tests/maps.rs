@@ -124,6 +124,7 @@ fn test_map_prop() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
+#[cfg(not(feature = "no_index"))]
 #[test]
 fn test_map_index_types() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
