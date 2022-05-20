@@ -506,7 +506,7 @@ impl AST {
             lib
         };
 
-        if !other.source.is_empty() {
+        let mut _ast = if !other.source.is_empty() {
             Self::new_with_source(
                 merged,
                 #[cfg(not(feature = "no_function"))]
@@ -519,7 +519,31 @@ impl AST {
                 #[cfg(not(feature = "no_function"))]
                 lib,
             )
+        };
+
+        #[cfg(not(feature = "no_module"))]
+        match (
+            self.resolver().map_or(0, |r| r.len()),
+            other.resolver().map_or(0, |r| r.len()),
+        ) {
+            (0, 0) => (),
+            (_, 0) => {
+                _ast.set_resolver(self.resolver().unwrap().clone());
+            }
+            (0, _) => {
+                _ast.set_resolver(other.resolver().unwrap().clone());
+            }
+            (_, _) => {
+                let mut resolver = (**self.resolver().unwrap()).clone();
+                let other_resolver = (**other.resolver().unwrap()).clone();
+                for (k, v) in other_resolver {
+                    resolver.insert(k, crate::func::shared_take_or_clone(v));
+                }
+                _ast.set_resolver(resolver);
+            }
         }
+
+        _ast
     }
     /// Combine one [`AST`] with another.  The second [`AST`] is consumed.
     ///
