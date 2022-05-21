@@ -1,7 +1,7 @@
 //! Main module defining the script evaluation [`Engine`].
 
 use crate::api::custom_syntax::CustomSyntax;
-use crate::api::options::LanguageOptions;
+use crate::api::options::LangOptions;
 use crate::func::native::{
     OnDebugCallback, OnDefVarCallback, OnParseTokenCallback, OnPrintCallback, OnVarCallback,
 };
@@ -9,7 +9,8 @@ use crate::packages::{Package, StandardPackage};
 use crate::tokenizer::Token;
 use crate::types::dynamic::Union;
 use crate::{
-    Dynamic, Identifier, ImmutableString, Module, Position, RhaiResult, Shared, StaticVec,
+    Dynamic, Identifier, ImmutableString, Module, OptimizationLevel, Position, RhaiResult, Shared,
+    StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -112,7 +113,7 @@ pub struct Engine {
     /// A map containing custom keywords and precedence to recognize.
     pub(crate) custom_keywords: BTreeMap<Identifier, Option<Precedence>>,
     /// Custom syntax.
-    pub(crate) custom_syntax: BTreeMap<Identifier, Box<CustomSyntax>>,
+    pub(crate) custom_syntax: BTreeMap<Identifier, CustomSyntax>,
     /// Callback closure for filtering variable definition.
     pub(crate) def_var_filter: Option<Box<OnDefVarCallback>>,
     /// Callback closure for resolving variable access.
@@ -129,7 +130,13 @@ pub struct Engine {
     pub(crate) progress: Option<Box<crate::func::native::OnProgressCallback>>,
 
     /// Language options.
-    pub(crate) options: LanguageOptions,
+    pub(crate) options: LangOptions,
+
+    /// Default value for the custom state.
+    pub(crate) def_tag: Dynamic,
+
+    /// Script optimization level.
+    pub(crate) optimization_level: OptimizationLevel,
 
     /// Max limits.
     #[cfg(not(feature = "unchecked"))]
@@ -155,7 +162,14 @@ impl fmt::Debug for Engine {
 
         f.field("disabled_symbols", &self.disabled_symbols)
             .field("custom_keywords", &self.custom_keywords)
-            .field("custom_syntax", &(!self.custom_syntax.is_empty()))
+            .field(
+                "custom_syntax",
+                &self
+                    .custom_syntax
+                    .keys()
+                    .map(|s| s.as_str())
+                    .collect::<String>(),
+            )
             .field("def_var_filter", &self.def_var_filter.is_some())
             .field("resolve_var", &self.resolve_var.is_some())
             .field("token_mapper", &self.token_mapper.is_some());
@@ -267,7 +281,14 @@ impl Engine {
             #[cfg(not(feature = "unchecked"))]
             progress: None,
 
-            options: LanguageOptions::new(),
+            options: LangOptions::new(),
+
+            def_tag: Dynamic::UNIT,
+
+            #[cfg(not(feature = "no_optimize"))]
+            optimization_level: OptimizationLevel::Simple,
+            #[cfg(feature = "no_optimize")]
+            optimization_level: (),
 
             #[cfg(not(feature = "unchecked"))]
             limits: crate::api::limits::Limits::new(),

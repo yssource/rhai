@@ -81,7 +81,7 @@ impl Ord for FnMetadata {
 #[derive(Debug, Clone)]
 pub struct FuncInfo {
     /// Function instance.
-    pub func: Shared<CallableFunction>,
+    pub func: CallableFunction,
     /// Parameter types (if applicable).
     pub param_types: StaticVec<TypeId>,
     /// Function metadata.
@@ -246,7 +246,7 @@ pub struct Module {
     functions: BTreeMap<u64, Box<FuncInfo>>,
     /// Flattened collection of all external Rust functions, native or scripted.
     /// including those in sub-modules.
-    all_functions: BTreeMap<u64, Shared<CallableFunction>>,
+    all_functions: BTreeMap<u64, CallableFunction>,
     /// Iterator functions, keyed by the type producing the iterator.
     type_iterators: BTreeMap<TypeId, Shared<IteratorFn>>,
     /// Flattened collection of iterator functions, including those in sub-modules.
@@ -1452,7 +1452,7 @@ impl Module {
     #[must_use]
     pub(crate) fn get_fn(&self, hash_fn: u64) -> Option<&CallableFunction> {
         if !self.functions.is_empty() {
-            self.functions.get(&hash_fn).map(|f| f.func.as_ref())
+            self.functions.get(&hash_fn).map(|f| &f.func)
         } else {
             None
         }
@@ -1479,9 +1479,7 @@ impl Module {
     #[must_use]
     pub(crate) fn get_qualified_fn(&self, hash_qualified_fn: u64) -> Option<&CallableFunction> {
         if !self.all_functions.is_empty() {
-            self.all_functions
-                .get(&hash_qualified_fn)
-                .map(|f| f.as_ref())
+            self.all_functions.get(&hash_qualified_fn)
         } else {
             None
         }
@@ -1932,7 +1930,7 @@ impl Module {
             module: &'a Module,
             path: &mut Vec<&'a str>,
             variables: &mut BTreeMap<u64, Dynamic>,
-            functions: &mut BTreeMap<u64, Shared<CallableFunction>>,
+            functions: &mut BTreeMap<u64, CallableFunction>,
             type_iterators: &mut BTreeMap<TypeId, Shared<IteratorFn>>,
         ) -> bool {
             let mut contains_indexed_global_functions = false;

@@ -44,7 +44,7 @@
 //! #   #[cfg(not(target_family = "wasm"))]
 //! #   
 //!     // Evaluate the script, expecting a 'bool' result
-//!     let result = engine.eval_file::<bool>("my_script.rhai".into())?;
+//!     let result: bool = engine.eval_file("my_script.rhai".into())?;
 //!
 //!     assert_eq!(result, true);
 //!

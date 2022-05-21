@@ -314,14 +314,13 @@ fn test_get_set_indexer() -> Result<(), Box<EvalAltResult>> {
         .register_type_with_name::<MyMap>("MyMap")
         .register_fn("new_map", || MyMap::new())
         .register_indexer_get_result(|map: &mut MyMap, index: &str| {
-            map.get(index)
-                .cloned()
-                .ok_or_else(|| format!("Index `{}` not found!", index).into())
+            map.get(index).cloned().ok_or_else(|| {
+                EvalAltResult::ErrorIndexNotFound(index.into(), rhai::Position::NONE).into()
+            })
         })
         .register_indexer_set(|map: &mut MyMap, index: &str, value: INT| {
             map.insert(index.to_string(), value);
-        })
-        .register_fn("to_string", |map: &mut MyMap| format!("{:?}", map));
+        });
 
     assert_eq!(
         engine.eval::<INT>(

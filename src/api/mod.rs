@@ -30,7 +30,7 @@ pub mod deprecated;
 
 use crate::engine::Precedence;
 use crate::tokenizer::Token;
-use crate::{Engine, Identifier};
+use crate::{Dynamic, Engine, Identifier};
 
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -194,5 +194,24 @@ impl Engine {
             .insert(keyword.as_ref().into(), precedence);
 
         Ok(self)
+    }
+
+    /// Get the default value of the custom state for each evaluation run.
+    #[inline(always)]
+    #[must_use]
+    pub fn default_tag(&self) -> &Dynamic {
+        &self.def_tag
+    }
+    /// Get a mutable reference to the default value of the custom state for each evaluation run.
+    #[inline(always)]
+    #[must_use]
+    pub fn default_tag_mut(&mut self) -> &mut Dynamic {
+        &mut self.def_tag
+    }
+    /// Set the default value of the custom state for each evaluation run.
+    #[inline(always)]
+    pub fn set_default_tag(&mut self, value: impl Into<Dynamic>) -> &mut Self {
+        self.def_tag = value.into();
+        self
     }
 }

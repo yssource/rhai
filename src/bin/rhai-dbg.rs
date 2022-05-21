@@ -60,7 +60,12 @@ fn print_current_source(
     lines: &[String],
     window: (usize, usize),
 ) {
-    let current_source = &mut *context.tag_mut().write_lock::<ImmutableString>().unwrap();
+    let current_source = &mut *context
+        .global_runtime_state_mut()
+        .debugger
+        .state_mut()
+        .write_lock::<ImmutableString>()
+        .unwrap();
     let src = source.unwrap_or("");
     if src != current_source {
         println!(

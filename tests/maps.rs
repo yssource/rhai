@@ -124,6 +124,57 @@ fn test_map_prop() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
+#[cfg(not(feature = "no_index"))]
+#[test]
+fn test_map_index_types() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    engine.compile(r#"#{a:1, b:2, c:3}["a"]['x']"#)?;
+
+    assert!(matches!(
+        *engine
+            .compile("#{a:1, b:2, c:3}['x']")
+            .expect_err("should error")
+            .0,
+        ParseErrorType::MalformedIndexExpr(..)
+    ));
+
+    assert!(matches!(
+        *engine
+            .compile("#{a:1, b:2, c:3}[1]")
+            .expect_err("should error")
+            .0,
+        ParseErrorType::MalformedIndexExpr(..)
+    ));
+
+    #[cfg(not(feature = "no_float"))]
+    assert!(matches!(
+        *engine
+            .compile("#{a:1, b:2, c:3}[123.456]")
+            .expect_err("should error")
+            .0,
+        ParseErrorType::MalformedIndexExpr(..)
+    ));
+
+    assert!(matches!(
+        *engine
+            .compile("#{a:1, b:2, c:3}[()]")
+            .expect_err("should error")
+            .0,
+        ParseErrorType::MalformedIndexExpr(..)
+    ));
+
+    assert!(matches!(
+        *engine
+            .compile("#{a:1, b:2, c:3}[true && false]")
+            .expect_err("should error")
+            .0,
+        ParseErrorType::MalformedIndexExpr(..)
+    ));
+
+    Ok(())
+}
+
 #[test]
 fn test_map_assign() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();

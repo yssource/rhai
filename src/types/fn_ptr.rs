@@ -88,12 +88,6 @@ impl FnPtr {
     pub fn is_curried(&self) -> bool {
         !self.1.is_empty()
     }
-    /// Get the number of curried arguments.
-    #[inline(always)]
-    #[must_use]
-    pub fn num_curried(&self) -> usize {
-        self.1.len()
-    }
     /// Does the function pointer refer to an anonymous function?
     ///
     /// Not available under `no_function`.
@@ -219,8 +213,8 @@ impl FnPtr {
         let mut arg_values = arg_values.as_mut();
         let mut args_data;
 
-        if self.num_curried() > 0 {
-            args_data = StaticVec::with_capacity(self.num_curried() + arg_values.len());
+        if self.is_curried() {
+            args_data = StaticVec::with_capacity(self.curry().len() + arg_values.len());
             args_data.extend(self.curry().iter().cloned());
             args_data.extend(arg_values.iter_mut().map(mem::take));
             arg_values = args_data.as_mut();

@@ -2,7 +2,7 @@
 
 use crate::api::custom_syntax::{markers::*, CustomSyntax};
 use crate::api::events::VarDefInfo;
-use crate::api::options::LanguageOptions;
+use crate::api::options::LangOptions;
 use crate::ast::{
     ASTFlags, BinaryExpr, ConditionalStmtBlock, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident,
     OpAssignment, ScriptFnDef, Stmt, StmtBlock, StmtBlockContainer, SwitchCases, TryCatchBlock,
@@ -215,7 +215,7 @@ struct ParseSettings {
     /// Is the current position inside a loop?
     is_breakable: bool,
     /// Language options in effect (overrides Engine options).
-    options: LanguageOptions,
+    options: LangOptions,
     /// Current expression nesting level.
     level: usize,
     /// Current position.
@@ -387,6 +387,7 @@ fn match_token(input: &mut TokenStream, token: Token) -> (bool, Position) {
 }
 
 /// Parse a variable name.
+#[inline]
 fn parse_var_name(input: &mut TokenStream) -> ParseResult<(SmartString, Position)> {
     match input.next().expect(NEVER_ENDS) {
         // Variable name
@@ -403,6 +404,7 @@ fn parse_var_name(input: &mut TokenStream) -> ParseResult<(SmartString, Position
 }
 
 /// Parse a symbol.
+#[inline]
 fn parse_symbol(input: &mut TokenStream) -> ParseResult<(SmartString, Position)> {
     match input.next().expect(NEVER_ENDS) {
         // Symbol
@@ -499,7 +501,10 @@ impl Engine {
                     #[cfg(feature = "no_function")]
                     let relax = false;
 
-                    if !relax && settings.options.strict_var && index.is_none() {
+                    if !relax
+                        && settings.options.contains(LangOptions::STRICT_VAR)
+                        && index.is_none()
+                    {
                         return Err(PERR::ModuleUndefined(namespace.root().to_string())
                             .into_err(namespace.position()));
                     }
@@ -559,7 +564,10 @@ impl Engine {
                         #[cfg(feature = "no_function")]
                         let relax = false;
 
-                        if !relax && settings.options.strict_var && index.is_none() {
+                        if !relax
+                            && settings.options.contains(LangOptions::STRICT_VAR)
+                            && index.is_none()
+                        {
                             return Err(PERR::ModuleUndefined(namespace.root().to_string())
                                 .into_err(namespace.position()));
                         }
@@ -631,6 +639,7 @@ impl Engine {
         state: &mut ParseState,
         lib: &mut FnLib,
         lhs: Expr,
+        check_index_type: bool,
         settings: ParseSettings,
     ) -> ParseResult<Expr> {
         #[cfg(not(feature = "unchecked"))]
@@ -640,113 +649,100 @@ impl Engine {
 
         let idx_expr = self.parse_expr(input, state, lib, settings.level_up())?;
 
-        // Check type of indexing - must be integer or string
-        match idx_expr {
-            Expr::IntegerConstant(.., pos) => match lhs {
-                Expr::IntegerConstant(..)
-                | Expr::Array(..)
-                | Expr::StringConstant(..)
-                | Expr::InterpolatedString(..) => (),
+        // Check types of indexing that cannot be overridden
+        // - arrays, maps, strings, bit-fields
+        match lhs {
+            _ if !check_index_type => (),
 
-                Expr::Map(..) => {
+            Expr::Map(..) => match idx_expr {
+                // lhs[int]
+                Expr::IntegerConstant(..) => {
                     return Err(PERR::MalformedIndexExpr(
-                        "Object map access expects string index, not a number".into(),
-                    )
-                    .into_err(pos))
-                }
-
-                #[cfg(not(feature = "no_float"))]
-                Expr::FloatConstant(..) => {
-                    return Err(PERR::MalformedIndexExpr(
-                        "Only arrays, object maps and strings can be indexed".into(),
-                    )
-                    .into_err(lhs.start_position()))
-                }
-
-                Expr::CharConstant(..)
-                | Expr::And(..)
-                | Expr::Or(..)
-                | Expr::BoolConstant(..)
-                | Expr::Unit(..) => {
-                    return Err(PERR::MalformedIndexExpr(
-                        "Only arrays, object maps and strings can be indexed".into(),
-                    )
-                    .into_err(lhs.start_position()))
-                }
-
-                _ => (),
-            },
-
-            // lhs[string]
-            Expr::StringConstant(..) | Expr::InterpolatedString(..) => match lhs {
-                Expr::Map(..) => (),
-
-                Expr::Array(..) | Expr::StringConstant(..) | Expr::InterpolatedString(..) => {
-                    return Err(PERR::MalformedIndexExpr(
-                        "Array or string expects numeric index, not a string".into(),
+                        "Object map expects string index, not a number".into(),
                     )
                     .into_err(idx_expr.start_position()))
                 }
 
+                // lhs[string]
+                Expr::StringConstant(..) | Expr::InterpolatedString(..) => (),
+
+                // lhs[float]
                 #[cfg(not(feature = "no_float"))]
                 Expr::FloatConstant(..) => {
                     return Err(PERR::MalformedIndexExpr(
-                        "Only arrays, object maps and strings can be indexed".into(),
+                        "Object map expects string index, not a float".into(),
                     )
-                    .into_err(lhs.start_position()))
+                    .into_err(idx_expr.start_position()))
                 }
-
-                Expr::CharConstant(..)
-                | Expr::And(..)
-                | Expr::Or(..)
-                | Expr::BoolConstant(..)
-                | Expr::Unit(..) => {
+                // lhs[char]
+                Expr::CharConstant(..) => {
                     return Err(PERR::MalformedIndexExpr(
-                        "Only arrays, object maps and strings can be indexed".into(),
+                        "Object map expects string index, not a character".into(),
                     )
-                    .into_err(lhs.start_position()))
+                    .into_err(idx_expr.start_position()))
                 }
-
+                // lhs[()]
+                Expr::Unit(..) => {
+                    return Err(PERR::MalformedIndexExpr(
+                        "Object map expects string index, not ()".into(),
+                    )
+                    .into_err(idx_expr.start_position()))
+                }
+                // lhs[??? && ???], lhs[??? || ???], lhs[true], lhs[false]
+                Expr::And(..) | Expr::Or(..) | Expr::BoolConstant(..) => {
+                    return Err(PERR::MalformedIndexExpr(
+                        "Object map expects string index, not a boolean".into(),
+                    )
+                    .into_err(idx_expr.start_position()))
+                }
                 _ => (),
             },
 
-            // lhs[float]
-            #[cfg(not(feature = "no_float"))]
-            x @ Expr::FloatConstant(..) => {
-                return Err(PERR::MalformedIndexExpr(
-                    "Array access expects integer index, not a float".into(),
-                )
-                .into_err(x.start_position()))
-            }
-            // lhs[char]
-            x @ Expr::CharConstant(..) => {
-                return Err(PERR::MalformedIndexExpr(
-                    "Array access expects integer index, not a character".into(),
-                )
-                .into_err(x.start_position()))
-            }
-            // lhs[()]
-            x @ Expr::Unit(..) => {
-                return Err(PERR::MalformedIndexExpr(
-                    "Array access expects integer index, not ()".into(),
-                )
-                .into_err(x.start_position()))
-            }
-            // lhs[??? && ???], lhs[??? || ???]
-            x @ Expr::And(..) | x @ Expr::Or(..) => {
-                return Err(PERR::MalformedIndexExpr(
-                    "Array access expects integer index, not a boolean".into(),
-                )
-                .into_err(x.start_position()))
-            }
-            // lhs[true], lhs[false]
-            x @ Expr::BoolConstant(..) => {
-                return Err(PERR::MalformedIndexExpr(
-                    "Array access expects integer index, not a boolean".into(),
-                )
-                .into_err(x.start_position()))
-            }
-            // All other expressions
+            Expr::IntegerConstant(..)
+            | Expr::Array(..)
+            | Expr::StringConstant(..)
+            | Expr::InterpolatedString(..) => match idx_expr {
+                // lhs[int]
+                Expr::IntegerConstant(..) => (),
+
+                // lhs[string]
+                Expr::StringConstant(..) | Expr::InterpolatedString(..) => {
+                    return Err(PERR::MalformedIndexExpr(
+                        "Array, string or bit-field expects numeric index, not a string".into(),
+                    )
+                    .into_err(idx_expr.start_position()))
+                }
+                // lhs[float]
+                #[cfg(not(feature = "no_float"))]
+                Expr::FloatConstant(..) => {
+                    return Err(PERR::MalformedIndexExpr(
+                        "Array, string or bit-field expects integer index, not a float".into(),
+                    )
+                    .into_err(idx_expr.start_position()))
+                }
+                // lhs[char]
+                Expr::CharConstant(..) => {
+                    return Err(PERR::MalformedIndexExpr(
+                        "Array, string or bit-field expects integer index, not a character".into(),
+                    )
+                    .into_err(idx_expr.start_position()))
+                }
+                // lhs[()]
+                Expr::Unit(..) => {
+                    return Err(PERR::MalformedIndexExpr(
+                        "Array, string or bit-field expects integer index, not ()".into(),
+                    )
+                    .into_err(idx_expr.start_position()))
+                }
+                // lhs[??? && ???], lhs[??? || ???], lhs[true], lhs[false]
+                Expr::And(..) | Expr::Or(..) | Expr::BoolConstant(..) => {
+                    return Err(PERR::MalformedIndexExpr(
+                        "Array, string or bit-field expects integer index, not a boolean".into(),
+                    )
+                    .into_err(idx_expr.start_position()))
+                }
+                _ => (),
+            },
             _ => (),
         }
 
@@ -767,6 +763,7 @@ impl Engine {
                             state,
                             lib,
                             idx_expr,
+                            false,
                             settings.level_up(),
                         )?;
                         // Indexing binds to right
@@ -1243,7 +1240,7 @@ impl Engine {
             }
 
             // { - block statement as expression
-            Token::LeftBrace if settings.options.allow_stmt_expr => {
+            Token::LeftBrace if settings.options.contains(LangOptions::STMT_EXPR) => {
                 match self.parse_block(input, state, lib, settings.level_up())? {
                     block @ Stmt::Block(..) => Expr::Stmt(Box::new(block.into())),
                     stmt => unreachable!("Stmt::Block expected but gets {:?}", stmt),
@@ -1254,19 +1251,21 @@ impl Engine {
             Token::LeftParen => self.parse_paren_expr(input, state, lib, settings.level_up())?,
 
             // If statement is allowed to act as expressions
-            Token::If if settings.options.allow_if_expr => Expr::Stmt(Box::new(
+            Token::If if settings.options.contains(LangOptions::IF_EXPR) => Expr::Stmt(Box::new(
                 self.parse_if(input, state, lib, settings.level_up())?
                     .into(),
             )),
             // Switch statement is allowed to act as expressions
-            Token::Switch if settings.options.allow_switch_expr => Expr::Stmt(Box::new(
-                self.parse_switch(input, state, lib, settings.level_up())?
-                    .into(),
-            )),
+            Token::Switch if settings.options.contains(LangOptions::SWITCH_EXPR) => {
+                Expr::Stmt(Box::new(
+                    self.parse_switch(input, state, lib, settings.level_up())?
+                        .into(),
+                ))
+            }
 
             // | ...
             #[cfg(not(feature = "no_function"))]
-            Token::Pipe | Token::Or if settings.options.allow_anonymous_fn => {
+            Token::Pipe | Token::Or if settings.options.contains(LangOptions::ANON_FN) => {
                 let mut new_state =
                     ParseState::new(self, state.scope, state.tokenizer_control.clone());
 
@@ -1275,6 +1274,17 @@ impl Engine {
                     new_state.max_expr_depth = self.max_function_expr_depth();
                 }
 
+                let mut options = self.options;
+                options.set(
+                    LangOptions::STRICT_VAR,
+                    if cfg!(feature = "no_closure") {
+                        settings.options.contains(LangOptions::STRICT_VAR)
+                    } else {
+                        // A capturing closure can access variables not defined locally
+                        false
+                    },
+                );
+
                 let new_settings = ParseSettings {
                     is_global: false,
                     is_function_scope: true,
@@ -1282,15 +1292,7 @@ impl Engine {
                     is_closure_scope: true,
                     is_breakable: false,
                     level: 0,
-                    options: LanguageOptions {
-                        strict_var: if cfg!(feature = "no_closure") {
-                            settings.options.strict_var
-                        } else {
-                            // A capturing closure can access variables not defined locally
-                            false
-                        },
-                        ..self.options
-                    },
+                    options,
                     ..settings
                 };
 
@@ -1301,7 +1303,7 @@ impl Engine {
                     |crate::ast::Ident { name, pos }| {
                         let index = state.access_var(name, *pos);
 
-                        if settings.options.strict_var
+                        if settings.options.contains(LangOptions::STRICT_VAR)
                             && !settings.is_closure_scope
                             && index.is_none()
                             && !state.scope.contains(name)
@@ -1448,7 +1450,7 @@ impl Engine {
                     _ => {
                         let index = state.access_var(&s, settings.pos);
 
-                        if settings.options.strict_var
+                        if settings.options.contains(LangOptions::STRICT_VAR)
                             && index.is_none()
                             && !state.scope.contains(&s)
                         {
@@ -1628,7 +1630,7 @@ impl Engine {
                 // Indexing
                 #[cfg(not(feature = "no_index"))]
                 (expr, Token::LeftBracket) => {
-                    self.parse_index_chain(input, state, lib, expr, settings.level_up())?
+                    self.parse_index_chain(input, state, lib, expr, true, settings.level_up())?
                 }
                 // Property access
                 #[cfg(not(feature = "no_object"))]
@@ -1683,7 +1685,10 @@ impl Engine {
                     #[cfg(feature = "no_function")]
                     let relax = false;
 
-                    if !relax && settings.options.strict_var && index.is_none() {
+                    if !relax
+                        && settings.options.contains(LangOptions::STRICT_VAR)
+                        && index.is_none()
+                    {
                         return Err(PERR::ModuleUndefined(namespace.root().to_string())
                             .into_err(namespace.position()));
                     }
@@ -2715,15 +2720,16 @@ impl Engine {
                 nesting_level: level,
                 will_shadow,
             };
-            let context = EvalContext {
-                engine: self,
-                scope: &mut state.stack,
-                global: &mut state.global,
-                caches: None,
-                lib: &[],
-                this_ptr: &mut None,
+            let mut this_ptr = None;
+            let context = EvalContext::new(
+                self,
+                &mut state.stack,
+                &mut state.global,
+                None,
+                &[],
+                &mut this_ptr,
                 level,
-            };
+            );
 
             match filter(false, info, context) {
                 Ok(true) => (),
@@ -3080,6 +3086,12 @@ impl Engine {
                             new_state.max_expr_depth = self.max_function_expr_depth();
                         }
 
+                        let mut options = self.options;
+                        options.set(
+                            LangOptions::STRICT_VAR,
+                            settings.options.contains(LangOptions::STRICT_VAR),
+                        );
+
                         let new_settings = ParseSettings {
                             is_global: false,
                             is_function_scope: true,
@@ -3087,10 +3099,7 @@ impl Engine {
                             is_closure_scope: false,
                             is_breakable: false,
                             level: 0,
-                            options: LanguageOptions {
-                                strict_var: settings.options.strict_var,
-                                ..self.options
-                            },
+                            options,
                             pos,
                             ..settings
                         };
@@ -3549,6 +3558,11 @@ impl Engine {
     ) -> ParseResult<AST> {
         let mut functions = BTreeMap::new();
 
+        let mut options = self.options;
+        options.remove(LangOptions::IF_EXPR | LangOptions::SWITCH_EXPR | LangOptions::STMT_EXPR);
+        #[cfg(not(feature = "no_function"))]
+        options.remove(LangOptions::ANON_FN);
+
         let settings = ParseSettings {
             is_global: true,
             #[cfg(not(feature = "no_function"))]
@@ -3558,14 +3572,7 @@ impl Engine {
             is_closure_scope: false,
             is_breakable: false,
             level: 0,
-            options: LanguageOptions {
-                allow_if_expr: false,
-                allow_switch_expr: false,
-                allow_stmt_expr: false,
-                #[cfg(not(feature = "no_function"))]
-                allow_anonymous_fn: false,
-                ..self.options
-            },
+            options,
             pos: Position::NONE,
         };
         let expr = self.parse_expr(input, state, &mut functions, settings)?;

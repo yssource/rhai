@@ -15,7 +15,7 @@ pub enum FnAccess {
 }
 
 bitflags! {
-    /// _(internals)_ A type that holds a configuration option with bit-flags.
+    /// _(internals)_ Bit-flags containing [`AST`][crate::AST] node configuration options.
     /// Exported under the `internals` feature only.
     pub struct ASTFlags: u8 {
         /// No options for the [`AST`][crate::AST] node.

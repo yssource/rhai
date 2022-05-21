@@ -1,14 +1,13 @@
 //! Module implementing custom syntax for [`Engine`].
 
 use crate::ast::Expr;
-use crate::eval::Caches;
 use crate::func::native::SendSync;
 use crate::parser::ParseResult;
 use crate::tokenizer::{is_valid_identifier, Token};
 use crate::types::dynamic::Variant;
 use crate::{
     reify, Engine, EvalContext, Identifier, ImmutableString, LexError, Position, RhaiResult,
-    Shared, StaticVec,
+    StaticVec,
 };
 use std::ops::Deref;
 #[cfg(feature = "no_std")]
@@ -65,6 +64,15 @@ impl<'a> From<&'a Expr> for Expression<'a> {
 }
 
 impl Expression<'_> {
+    /// Evaluate this [expression tree][Expression] within an [evaluation context][`EvalContext`].
+    ///
+    /// # WARNING - Low Level API
+    ///
+    /// This function is very low level.  It evaluates an expression from an [`AST`][crate::AST].
+    #[inline(always)]
+    pub fn eval_with_context(&self, context: &mut EvalContext) -> RhaiResult {
+        context.eval_expression_tree(self)
+    }
     /// Get the value of this expression if it is a variable name or a string constant.
     ///
     /// Returns [`None`] also if the constant is not of the specified type.
@@ -131,41 +139,13 @@ impl Deref for Expression<'_> {
     }
 }
 
-impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_> {
-    /// Evaluate an [expression tree][Expression].
-    ///
-    /// # WARNING - Low Level API
-    ///
-    /// This function is very low level.  It evaluates an expression from an [`AST`][crate::AST].
-    #[inline(always)]
-    pub fn eval_expression_tree(&mut self, expr: &Expression) -> RhaiResult {
-        let mut caches;
-
-        self.engine.eval_expr(
-            self.scope,
-            self.global,
-            match self.caches.as_mut() {
-                Some(c) => c,
-                None => {
-                    caches = Caches::new();
-                    &mut caches
-                }
-            },
-            self.lib,
-            self.this_ptr,
-            expr,
-            self.level,
-        )
-    }
-}
-
 /// Definition of a custom syntax definition.
 pub struct CustomSyntax {
     /// A parsing function to return the next token in a custom syntax based on the
     /// symbols parsed so far.
     pub parse: Box<FnCustomSyntaxParse>,
     /// Custom syntax implementation function.
-    pub func: Shared<FnCustomSyntaxEval>,
+    pub func: Box<FnCustomSyntaxEval>,
     /// Any variables added/removed in the scope?
     pub scope_may_be_changed: bool,
 }
@@ -356,7 +336,7 @@ impl Engine {
             key.into(),
             CustomSyntax {
                 parse: Box::new(parse),
-                func: (Box::new(func) as Box<FnCustomSyntaxEval>).into(),
+                func: Box::new(func),
                 scope_may_be_changed,
             }
             .into(),

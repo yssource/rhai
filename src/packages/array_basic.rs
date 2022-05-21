@@ -639,15 +639,15 @@ pub mod array_functions {
     ///
     /// print(y);       // prints "[0, 2, 6, 12, 20]"
     /// ```
-    #[rhai_fn(return_raw, pure)]
-    pub fn map(ctx: NativeCallContext, array: &mut Array, mapper: FnPtr) -> RhaiResultOf<Array> {
+    #[rhai_fn(return_raw)]
+    pub fn map(ctx: NativeCallContext, array: Array, mapper: FnPtr) -> RhaiResultOf<Array> {
         if array.is_empty() {
-            return Ok(array.clone());
+            return Ok(array);
         }
 
         let mut ar = Array::with_capacity(array.len());
 
-        for (i, item) in array.iter().enumerate() {
+        for (i, item) in array.into_iter().enumerate() {
             ar.push(
                 mapper
                     .call_raw(&ctx, None, [item.clone()])
@@ -655,7 +655,7 @@ pub mod array_functions {
                         ERR::ErrorFunctionNotFound(fn_sig, ..)
                             if fn_sig.starts_with(mapper.fn_name()) =>
                         {
-                            mapper.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
+                            mapper.call_raw(&ctx, None, [item, (i as INT).into()])
                         }
                         _ => Err(err),
                     })
@@ -699,10 +699,10 @@ pub mod array_functions {
     ///
     /// print(y);       // prints "[0, 2, 6, 12, 20]"
     /// ```
-    #[rhai_fn(name = "map", return_raw, pure)]
+    #[rhai_fn(name = "map", return_raw)]
     pub fn map_by_fn_name(
         ctx: NativeCallContext,
-        array: &mut Array,
+        array: Array,
         mapper: &str,
     ) -> RhaiResultOf<Array> {
         map(ctx, array, FnPtr::new(mapper)?)
@@ -729,15 +729,15 @@ pub mod array_functions {
     ///
     /// print(y);       // prints "[12, 20]"
     /// ```
-    #[rhai_fn(return_raw, pure)]
-    pub fn filter(ctx: NativeCallContext, array: &mut Array, filter: FnPtr) -> RhaiResultOf<Array> {
+    #[rhai_fn(return_raw)]
+    pub fn filter(ctx: NativeCallContext, array: Array, filter: FnPtr) -> RhaiResultOf<Array> {
         if array.is_empty() {
-            return Ok(array.clone());
+            return Ok(array);
         }
 
         let mut ar = Array::new();
 
-        for (i, item) in array.iter().enumerate() {
+        for (i, item) in array.into_iter().enumerate() {
             if filter
                 .call_raw(&ctx, None, [item.clone()])
                 .or_else(|err| match *err {
@@ -759,7 +759,7 @@ pub mod array_functions {
                 .as_bool()
                 .unwrap_or(false)
             {
-                ar.push(item.clone());
+                ar.push(item);
             }
         }
 
@@ -790,10 +790,10 @@ pub mod array_functions {
     ///
     /// print(y);       // prints "[12, 20]"
     /// ```
-    #[rhai_fn(name = "filter", return_raw, pure)]
+    #[rhai_fn(name = "filter", return_raw)]
     pub fn filter_by_fn_name(
         ctx: NativeCallContext,
-        array: &mut Array,
+        array: Array,
         filter_func: &str,
     ) -> RhaiResultOf<Array> {
         filter(ctx, array, FnPtr::new(filter_func)?)

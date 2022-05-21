@@ -259,6 +259,19 @@ impl<T> From<EvalAltResult> for RhaiResultOf<T> {
 }
 
 impl FnPtr {
+    /// Get the number of curried arguments.
+    ///
+    /// # Deprecated
+    ///
+    /// This method is deprecated. Use [`curry().len()`][`FnPtr::curry`] instead.
+    ///
+    /// This method will be removed in the next major version.
+    #[deprecated(since = "1.8.0", note = "use `curry().len()` instead")]
+    #[inline(always)]
+    #[must_use]
+    pub fn num_curried(&self) -> usize {
+        self.curry().len()
+    }
     /// Call the function pointer with curried arguments (if any).
     /// The function may be script-defined (not available under `no_function`) or native Rust.
     ///

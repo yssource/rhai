@@ -13,8 +13,7 @@ pub struct FnResolutionCacheEntry {
     /// Function.
     pub func: CallableFunction,
     /// Optional source.
-    /// No source if the string is empty.
-    pub source: Identifier,
+    pub source: Option<Box<Identifier>>,
 }
 
 /// _(internals)_ A function resolution cache.
@@ -22,7 +21,7 @@ pub struct FnResolutionCacheEntry {
 ///
 /// [`FnResolutionCacheEntry`] is [`Box`]ed in order to pack as many entries inside a single B-Tree
 /// level as possible.
-pub type FnResolutionCache = BTreeMap<u64, Option<Box<FnResolutionCacheEntry>>>;
+pub type FnResolutionCache = BTreeMap<u64, Option<FnResolutionCacheEntry>>;
 
 /// _(internals)_ A type containing system-wide caches.
 /// Exported under the `internals` feature only.

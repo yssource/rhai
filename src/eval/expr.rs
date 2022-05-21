@@ -151,15 +151,7 @@ impl Engine {
 
         // Check the variable resolver, if any
         if let Some(ref resolve_var) = self.resolve_var {
-            let context = EvalContext {
-                engine: self,
-                scope,
-                global,
-                caches: None,
-                lib,
-                this_ptr,
-                level,
-            };
+            let context = EvalContext::new(self, scope, global, None, lib, this_ptr, level);
             let var_name = expr.get_variable_name(true).expect("`Expr::Variable`");
             match resolve_var(var_name, index, context) {
                 Ok(Some(mut result)) => {
@@ -480,15 +472,8 @@ impl Engine {
                         *pos,
                     ))
                 })?;
-                let mut context = EvalContext {
-                    engine: self,
-                    scope,
-                    global,
-                    caches: Some(caches),
-                    lib,
-                    this_ptr,
-                    level,
-                };
+                let mut context =
+                    EvalContext::new(self, scope, global, Some(caches), lib, this_ptr, level);
 
                 let result = (custom_def.func)(&mut context, &expressions);
 
