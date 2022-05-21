@@ -78,8 +78,6 @@ impl GlobalRuntimeState<'_> {
     #[inline(always)]
     #[must_use]
     pub fn new(engine: &Engine) -> Self {
-        let _engine = engine;
-
         Self {
             #[cfg(not(feature = "no_module"))]
             keys: crate::StaticVec::new_const(),
@@ -98,21 +96,21 @@ impl GlobalRuntimeState<'_> {
             #[cfg(not(feature = "no_function"))]
             constants: None,
 
-            #[cfg(not(feature = "debugging"))]
-            tag: Dynamic::UNIT,
-            #[cfg(feature = "debugging")]
-            tag: if let Some((ref init, ..)) = engine.debugger {
-                init()
-            } else {
-                Dynamic::UNIT
-            },
+            tag: engine.default_tag().clone(),
 
             #[cfg(feature = "debugging")]
-            debugger: crate::eval::Debugger::new(if engine.debugger.is_some() {
-                crate::eval::DebuggerStatus::Init
-            } else {
-                crate::eval::DebuggerStatus::CONTINUE
-            }),
+            debugger: crate::eval::Debugger::new(
+                if engine.debugger.is_some() {
+                    crate::eval::DebuggerStatus::Init
+                } else {
+                    crate::eval::DebuggerStatus::CONTINUE
+                },
+                if let Some((ref init, ..)) = engine.debugger {
+                    init()
+                } else {
+                    Dynamic::UNIT
+                },
+            ),
 
             dummy: PhantomData::default(),
         }

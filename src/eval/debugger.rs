@@ -253,17 +253,20 @@ pub struct Debugger {
     break_points: Vec<BreakPoint>,
     /// The current function call stack.
     call_stack: Vec<CallStackFrame>,
+    /// The current state.
+    state: Dynamic,
 }
 
 impl Debugger {
     /// Create a new [`Debugger`].
     #[inline(always)]
     #[must_use]
-    pub fn new(status: DebuggerStatus) -> Self {
+    pub fn new(status: DebuggerStatus, state: Dynamic) -> Self {
         Self {
             status,
             break_points: Vec::new(),
             call_stack: Vec::new(),
+            state,
         }
     }
     /// Get the current call stack.
@@ -373,6 +376,23 @@ impl Debugger {
     #[must_use]
     pub fn break_points_mut(&mut self) -> &mut Vec<BreakPoint> {
         &mut self.break_points
+    }
+    /// Get the custom state.
+    #[inline(always)]
+    #[must_use]
+    pub fn state(&self) -> &Dynamic {
+        &self.state
+    }
+    /// Get a mutable reference to the custom state.
+    #[inline(always)]
+    #[must_use]
+    pub fn state_mut(&mut self) -> &mut Dynamic {
+        &mut self.state
+    }
+    /// Set the custom state.
+    #[inline(always)]
+    pub fn set_state(&mut self, state: impl Into<Dynamic>) {
+        self.state = state.into();
     }
 }
 

@@ -132,8 +132,11 @@ pub struct Engine {
     /// Language options.
     pub(crate) options: LangOptions,
 
+    /// Default value for the custom state.
+    pub(crate) def_tag: Dynamic,
+
     /// Script optimization level.
-    pub optimization_level: OptimizationLevel,
+    pub(crate) optimization_level: OptimizationLevel,
 
     /// Max limits.
     #[cfg(not(feature = "unchecked"))]
@@ -279,6 +282,8 @@ impl Engine {
             progress: None,
 
             options: LangOptions::new(),
+
+            def_tag: Dynamic::UNIT,
 
             #[cfg(not(feature = "no_optimize"))]
             optimization_level: OptimizationLevel::Simple,

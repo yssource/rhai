@@ -21,6 +21,8 @@ Enhancements
 ------------
 
 * `EvalAltResult::IndexNotFound` is added to aid in raising errors for indexers.
+* `Engine::def_tag`, `Engine::def_tag_mut` and `Engine::set_tag` are added to manage a default value for the custom evaluation state, accessible via `EvalState::tag()` (which is the same as `NativeCallContext::tag()`).
+* Originally, the debugger's custom state uses the same state as `EvalState::tag()` (which is the same as `NativeCallContext::tag()`).  It is now split into its own variable accessible under `Debugger::state()`.
 
 
 Version 1.7.0
