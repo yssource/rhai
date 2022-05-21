@@ -282,6 +282,19 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
         let result: INT = engine.call_fn(&mut Scope::new(), &ast, "foo", (2 as INT,))?;
 
         assert_eq!(result, 84);
+
+        let mut ast2 = engine.compile("fn foo(x) { 42 }")?;
+
+        let len = ast.resolver().unwrap().len();
+
+        ast2 += ast;
+
+        assert!(ast2.resolver().is_some());
+        assert_eq!(ast2.resolver().unwrap().len(), len);
+
+        let result: INT = engine.call_fn(&mut Scope::new(), &ast2, "foo", (2 as INT,))?;
+
+        assert_eq!(result, 84);
     }
 
     Ok(())

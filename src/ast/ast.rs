@@ -618,6 +618,27 @@ impl AST {
             crate::func::native::shared_make_mut(&mut self.lib)
                 .merge_filtered(&other.lib, &_filter);
         }
+
+        #[cfg(not(feature = "no_module"))]
+        match (
+            self.resolver.as_ref().map_or(0, |r| r.len()),
+            other.resolver.as_ref().map_or(0, |r| r.len()),
+        ) {
+            (_, 0) => (),
+            (0, _) => {
+                self.set_resolver(other.resolver.unwrap());
+            }
+            (_, _) => {
+                let resolver =
+                    crate::func::native::shared_make_mut(self.resolver.as_mut().unwrap());
+                let other_resolver =
+                    crate::func::native::shared_take_or_clone(other.resolver.unwrap());
+                for (k, v) in other_resolver {
+                    resolver.insert(k, crate::func::shared_take_or_clone(v));
+                }
+            }
+        }
+
         self
     }
     /// Filter out the functions, retaining only some based on a filter predicate.
