@@ -67,7 +67,7 @@ impl Engine {
         let ast = self.compile_with_scope_and_optimization_level(
             scope,
             &[script],
-            self.optimization_level(),
+            self.optimization_level,
         )?;
         self.eval_ast_with_scope(scope, &ast)
     }

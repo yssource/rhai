@@ -201,7 +201,7 @@ impl Engine {
         scope: &Scope,
         scripts: impl AsRef<[S]>,
     ) -> ParseResult<AST> {
-        self.compile_with_scope_and_optimization_level(scope, scripts, self.optimization_level())
+        self.compile_with_scope_and_optimization_level(scope, scripts, self.optimization_level)
     }
     /// Join a list of strings and compile into an [`AST`] using own scope at a specific optimization level.
     ///
@@ -292,6 +292,6 @@ impl Engine {
 
         let mut peekable = stream.peekable();
         let mut state = ParseState::new(self, scope, tokenizer_control);
-        self.parse_global_expr(&mut peekable, &mut state, self.optimization_level())
+        self.parse_global_expr(&mut peekable, &mut state, self.optimization_level)
     }
 }
