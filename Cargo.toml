@@ -35,6 +35,7 @@ rustyline = { version = "9", optional = true }
 
 [dev-dependencies]
 serde_bytes = "0.11"
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 
 [features]
 default = []
@@ -56,6 +57,7 @@ unicode-xid-ident = ["unicode-xid"] # allow Unicode Standard Annex #31 for ident
 metadata = ["serde", "serde_json", "rhai_codegen/metadata", "smartstring/serde"] # enable exporting functions metadata
 internals = []                  # expose internal data structures
 debugging = ["internals"]       # enable debugging
+serde = ["dep:serde", "smartstring/serde"] # implement serde for rhai types
 
 # compiling for no-std
 no_std = ["no-std-compat", "num-traits/libm", "core-error", "libm", "ahash/compile-time-rng"]
