@@ -817,6 +817,7 @@ fn test_serde_blob() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
+#[cfg(not(feature = "no_object"))]
 fn test_serde_json_borrowed_string() {
     let value = json!({ "a": "b" });
     println!("value: {:?}", value);
