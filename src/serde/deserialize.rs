@@ -143,8 +143,8 @@ impl<'d> Visitor<'d> for DynamicVisitor {
     fn visit_map<M: serde::de::MapAccess<'d>>(self, mut map: M) -> Result<Self::Value, M::Error> {
         let mut m = crate::Map::new();
 
-        while let Some((k, v)) = map.next_entry::<&str, _>()? {
-            m.insert(k.into(), v);
+        while let Some((k, v)) = map.next_entry()? {
+            m.insert(k, v);
         }
 
         Ok(m.into())

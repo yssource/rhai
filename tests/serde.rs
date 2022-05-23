@@ -5,6 +5,7 @@ use rhai::{
     Dynamic, Engine, EvalAltResult, ImmutableString, INT,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 #[cfg(not(feature = "no_index"))]
 use rhai::Array;
@@ -813,4 +814,11 @@ fn test_serde_blob() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(r.to_vec(), vec![0_u8, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
     Ok(())
+}
+
+#[test]
+fn test_serde_json_borrowed_string() {
+    let value = json!({ "a": "b" });
+    println!("value: {:?}", value);
+    let _: Dynamic = serde_json::from_value(value).unwrap();
 }
