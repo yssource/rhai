@@ -7,7 +7,7 @@ use std::prelude::v1::*;
 
 /// Context of a script evaluation process.
 #[derive(Debug)]
-pub struct EvalContext<'a, 's, 'ps, 'g, 'pg, 'c, 't, 'pt> {
+pub struct EvalContext<'a, 's, 'ps, 'g, 'pg, 'c, 'pc, 't, 'pt> {
     /// The current [`Engine`].
     engine: &'a Engine,
     /// The current [`Scope`].
@@ -15,7 +15,7 @@ pub struct EvalContext<'a, 's, 'ps, 'g, 'pg, 'c, 't, 'pt> {
     /// The current [`GlobalRuntimeState`].
     global: &'g mut GlobalRuntimeState<'pg>,
     /// The current [caches][Caches], if available.
-    caches: Option<&'c mut Caches>,
+    caches: Option<&'c mut Caches<'pc>>,
     /// The current stack of imported [modules][Module].
     lib: &'a [&'a Module],
     /// The current bound `this` pointer, if any.
@@ -24,7 +24,7 @@ pub struct EvalContext<'a, 's, 'ps, 'g, 'pg, 'c, 't, 'pt> {
     level: usize,
 }
 
-impl<'a, 's, 'ps, 'g, 'pg, 'c, 't, 'pt> EvalContext<'a, 's, 'ps, 'g, 'pg, 'c, 't, 'pt> {
+impl<'a, 's, 'ps, 'g, 'pg, 'c, 'pc, 't, 'pt> EvalContext<'a, 's, 'ps, 'g, 'pg, 'c, 'pc, 't, 'pt> {
     /// Create a new [`EvalContext`].
     #[inline(always)]
     #[must_use]
@@ -32,7 +32,7 @@ impl<'a, 's, 'ps, 'g, 'pg, 'c, 't, 'pt> EvalContext<'a, 's, 'ps, 'g, 'pg, 'c, 't
         engine: &'a Engine,
         scope: &'s mut Scope<'ps>,
         global: &'g mut GlobalRuntimeState<'pg>,
-        caches: Option<&'c mut Caches>,
+        caches: Option<&'c mut Caches<'pc>>,
         lib: &'a [&'a Module],
         this_ptr: &'t mut Option<&'pt mut Dynamic>,
         level: usize,

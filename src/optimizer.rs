@@ -55,7 +55,7 @@ struct OptimizerState<'a> {
     /// The global runtime state.
     global: GlobalRuntimeState<'a>,
     /// Function resolution caches.
-    caches: Caches,
+    caches: Caches<'a>,
     /// [Module][crate::Module] containing script-defined functions.
     #[cfg(not(feature = "no_function"))]
     lib: &'a [&'a crate::Module],

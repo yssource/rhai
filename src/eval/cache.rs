@@ -2,9 +2,9 @@
 
 use crate::func::CallableFunction;
 use crate::{Identifier, StaticVec};
-use std::collections::BTreeMap;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
+use std::{collections::BTreeMap, marker::PhantomData};
 
 /// _(internals)_ An entry in a function resolution cache.
 /// Exported under the `internals` feature only.
@@ -29,14 +29,14 @@ pub type FnResolutionCache = BTreeMap<u64, Option<FnResolutionCacheEntry>>;
 /// The following caches are contained inside this type:
 /// * A stack of [function resolution caches][FnResolutionCache]
 #[derive(Debug, Clone)]
-pub struct Caches(StaticVec<FnResolutionCache>);
+pub struct Caches<'a>(StaticVec<FnResolutionCache>, PhantomData<&'a ()>);
 
-impl Caches {
+impl Caches<'_> {
     /// Create an empty [`Caches`].
     #[inline(always)]
     #[must_use]
     pub const fn new() -> Self {
-        Self(StaticVec::new_const())
+        Self(StaticVec::new_const(), PhantomData)
     }
     /// Get the number of function resolution cache(s) in the stack.
     #[inline(always)]
