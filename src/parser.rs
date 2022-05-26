@@ -46,7 +46,7 @@ pub struct ParseState<'e> {
     /// Input stream buffer containing the next character to read.
     pub tokenizer_control: TokenizerControl,
     /// Interned strings.
-    interned_strings: StringsInterner,
+    interned_strings: StringsInterner<'e>,
     /// External [scope][Scope] with constants.
     pub scope: &'e Scope<'e>,
     /// Global runtime state.

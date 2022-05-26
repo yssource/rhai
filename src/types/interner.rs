@@ -1,14 +1,14 @@
 use crate::{Identifier, ImmutableString};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-use std::{collections::BTreeMap, ops::AddAssign};
+use std::{collections::BTreeMap, marker::PhantomData, ops::AddAssign};
 
 /// _(internals)_ A factory of identifiers from text strings.
 /// Exported under the `internals` feature only.
 ///
 /// Normal identifiers, property getters and setters are interned separately.
 #[derive(Debug, Clone, Default, Hash)]
-pub struct StringsInterner {
+pub struct StringsInterner<'a> {
     /// Normal strings.
     strings: BTreeMap<Identifier, ImmutableString>,
     /// Property getters.
@@ -17,9 +17,11 @@ pub struct StringsInterner {
     /// Property setters.
     #[cfg(not(feature = "no_object"))]
     setters: BTreeMap<Identifier, ImmutableString>,
+    /// Take care of the lifetime parameter.
+    dummy: PhantomData<&'a ()>,
 }
 
-impl StringsInterner {
+impl StringsInterner<'_> {
     /// Create a new [`StringsInterner`].
     #[inline]
     #[must_use]
@@ -30,6 +32,7 @@ impl StringsInterner {
             getters: BTreeMap::new(),
             #[cfg(not(feature = "no_object"))]
             setters: BTreeMap::new(),
+            dummy: PhantomData,
         }
     }
     /// Get an identifier from a text string and prefix, adding it to the interner if necessary.
@@ -69,7 +72,7 @@ impl StringsInterner {
     }
 }
 
-impl AddAssign<Self> for StringsInterner {
+impl AddAssign<Self> for StringsInterner<'_> {
     #[inline(always)]
     fn add_assign(&mut self, rhs: Self) {
         self.strings.extend(rhs.strings.into_iter());
@@ -80,7 +83,7 @@ impl AddAssign<Self> for StringsInterner {
     }
 }
 
-impl AddAssign<&Self> for StringsInterner {
+impl AddAssign<&Self> for StringsInterner<'_> {
     #[inline(always)]
     fn add_assign(&mut self, rhs: &Self) {
         self.strings
