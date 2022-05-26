@@ -69,7 +69,7 @@ pub struct Scope<'a> {
     /// Aliases of the entry.
     aliases: SmallVec<[Vec<Identifier>; SCOPE_ENTRIES_INLINED]>,
     /// Phantom to keep the lifetime parameter in order not to break existing code.
-    phantom: PhantomData<&'a ()>,
+    dummy: PhantomData<&'a ()>,
 }
 
 impl fmt::Display for Scope<'_> {
@@ -112,7 +112,7 @@ impl Clone for Scope<'_> {
                 .collect(),
             names: self.names.clone(),
             aliases: self.aliases.clone(),
-            phantom: self.phantom.clone(),
+            dummy: self.dummy.clone(),
         }
     }
 }
@@ -152,7 +152,7 @@ impl Scope<'_> {
             values: SmallVec::new_const(),
             names: SmallVec::new_const(),
             aliases: SmallVec::new_const(),
-            phantom: PhantomData,
+            dummy: PhantomData,
         }
     }
     /// Empty the [`Scope`].
