@@ -27,5 +27,7 @@ pub use stmt::{
 #[cfg(not(feature = "no_float"))]
 pub use expr::FloatWrapper;
 
+/// _(internals)_ Placeholder for a script-defined function.
+/// Exported under the `internals` feature only.
 #[cfg(feature = "no_function")]
-pub struct ScriptFnDef;
+pub type ScriptFnDef = ();
