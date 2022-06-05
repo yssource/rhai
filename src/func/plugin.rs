@@ -10,6 +10,7 @@ pub use crate::{
 use std::prelude::v1::*;
 pub use std::{any::TypeId, mem};
 
+/// Result of a Rhai function.
 pub type RhaiResult = crate::RhaiResult;
 
 #[cfg(not(features = "no_module"))]

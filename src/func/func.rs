@@ -13,6 +13,7 @@ use std::prelude::v1::*;
 ///
 /// Not available under `no_function`.
 pub trait Func<ARGS, RET> {
+    /// The closure's output type.
     type Output;
 
     /// Create a Rust closure from an [`AST`].
