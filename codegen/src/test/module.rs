@@ -323,6 +323,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -330,6 +331,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     if flatten {} else {}
                 }
@@ -358,6 +360,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -365,6 +368,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("get_mystic_number", FnNamespace::Internal, FnAccess::Public,
                              Some(get_mystic_number_token::PARAM_NAMES), &[],
@@ -372,7 +376,9 @@ mod generate_tests {
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct get_mystic_number_token();
+                #[doc(hidden)]
                 impl get_mystic_number_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["INT"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 0usize] { [] }
@@ -426,6 +432,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -433,6 +440,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn_with_comments("get_mystic_number", FnNamespace::Internal, FnAccess::Public,
                              Some(get_mystic_number_token::PARAM_NAMES), &[], &[
@@ -445,7 +453,9 @@ mod generate_tests {
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct get_mystic_number_token();
+                #[doc(hidden)]
                 impl get_mystic_number_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["INT"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 0usize] { [] }
@@ -484,6 +494,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -491,6 +502,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("add_one_to", FnNamespace::Global, FnAccess::Public,
                              Some(add_one_to_token::PARAM_NAMES), &[TypeId::of::<INT>()],
@@ -498,7 +510,9 @@ mod generate_tests {
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct add_one_to_token();
+                #[doc(hidden)]
                 impl add_one_to_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: INT", "INT"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<INT>()] }
@@ -537,6 +551,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -544,6 +559,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("add_one_to", FnNamespace::Internal, FnAccess::Public, Some(add_one_to_token::PARAM_NAMES),
                              &[TypeId::of::<INT>()],
@@ -551,7 +567,9 @@ mod generate_tests {
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct add_one_to_token();
+                #[doc(hidden)]
                 impl add_one_to_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: INT", "INT"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<INT>()] }
@@ -601,6 +619,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -608,6 +627,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("add_n", FnNamespace::Internal, FnAccess::Public, Some(add_one_to_token::PARAM_NAMES),
                              &[TypeId::of::<INT>()],
@@ -618,7 +638,9 @@ mod generate_tests {
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct add_one_to_token();
+                #[doc(hidden)]
                 impl add_one_to_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: INT", "INT"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<INT>()] }
@@ -634,7 +656,9 @@ mod generate_tests {
                 }
 
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct add_n_to_token();
+                #[doc(hidden)]
                 impl add_n_to_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: INT", "y: INT", "INT"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 2usize] { [TypeId::of::<INT>(), TypeId::of::<INT>()] }
@@ -674,6 +698,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -681,6 +706,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("add_together", FnNamespace::Internal, FnAccess::Public, Some(add_together_token::PARAM_NAMES),
                              &[TypeId::of::<INT>(), TypeId::of::<INT>()],
@@ -688,7 +714,9 @@ mod generate_tests {
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct add_together_token();
+                #[doc(hidden)]
                 impl add_together_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: INT", "y: INT", "INT"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 2usize] { [TypeId::of::<INT>(), TypeId::of::<INT>()] }
@@ -729,6 +757,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -736,6 +765,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("add", FnNamespace::Internal, FnAccess::Public, Some(add_together_token::PARAM_NAMES),
                              &[TypeId::of::<INT>(), TypeId::of::<INT>()],
@@ -749,7 +779,9 @@ mod generate_tests {
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct add_together_token();
+                #[doc(hidden)]
                 impl add_together_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: INT", "y: INT", "INT"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 2usize] { [TypeId::of::<INT>(), TypeId::of::<INT>()] }
@@ -803,6 +835,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -810,6 +843,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("get_mystic_number", FnNamespace::Internal, FnAccess::Public,
                              Some(get_mystic_number_token::PARAM_NAMES), &[TypeId::of::<Hello>()],
@@ -820,7 +854,9 @@ mod generate_tests {
                 }
 
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct get_mystic_number_token();
+                #[doc(hidden)]
                 impl get_mystic_number_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut Hello", "INT"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<Hello>()] }
@@ -858,6 +894,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -865,6 +902,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_var("MYSTIC_NUMBER", MYSTIC_NUMBER);
                     if flatten {} else {}
@@ -892,6 +930,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -899,6 +938,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_var("MYSTIC_NUMBER", MYSTIC_NUMBER);
                     if flatten {} else {}
@@ -928,6 +968,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -935,6 +976,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     if flatten {} else {}
                 }
@@ -964,6 +1006,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -971,6 +1014,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     if flatten {} else {}
                 }
@@ -1006,6 +1050,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -1013,6 +1058,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("get_mystic_number", FnNamespace::Internal, FnAccess::Public,
                              Some(get_mystic_number_token::PARAM_NAMES), &[],
@@ -1020,7 +1066,9 @@ mod generate_tests {
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct get_mystic_number_token();
+                #[doc(hidden)]
                 impl get_mystic_number_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["INT"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 0usize] { [] }
@@ -1054,6 +1102,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -1061,6 +1110,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     if flatten {} else {}
                 }
@@ -1089,6 +1139,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -1096,6 +1147,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("print_out_to", FnNamespace::Internal, FnAccess::Public, Some(print_out_to_token::PARAM_NAMES),
                              &[TypeId::of::<ImmutableString>()],
@@ -1103,7 +1155,9 @@ mod generate_tests {
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct print_out_to_token();
+                #[doc(hidden)]
                 impl print_out_to_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: &str", "()"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<ImmutableString>()] }
@@ -1142,6 +1196,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -1149,6 +1204,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("print_out_to", FnNamespace::Internal, FnAccess::Public, Some(print_out_to_token::PARAM_NAMES),
                              &[TypeId::of::<ImmutableString>()],
@@ -1156,7 +1212,9 @@ mod generate_tests {
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct print_out_to_token();
+                #[doc(hidden)]
                 impl print_out_to_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: String", "()"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<ImmutableString>()] }
@@ -1196,6 +1254,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -1203,6 +1262,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("foo", FnNamespace::Internal, FnAccess::Public, Some(foo_token::PARAM_NAMES),
                              &[TypeId::of::<FLOAT>(), TypeId::of::<INT>()],
@@ -1210,7 +1270,9 @@ mod generate_tests {
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct foo_token();
+                #[doc(hidden)]
                 impl foo_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut FLOAT", "y: INT", "FLOAT"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 2usize] { [TypeId::of::<FLOAT>(), TypeId::of::<INT>()] }
@@ -1250,6 +1312,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -1257,6 +1320,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("increment", FnNamespace::Internal, FnAccess::Public, Some(increment_token::PARAM_NAMES),
                              &[TypeId::of::<FLOAT>()],
@@ -1264,7 +1328,9 @@ mod generate_tests {
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct increment_token();
+                #[doc(hidden)]
                 impl increment_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut FLOAT", "()"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<FLOAT>()] }
@@ -1309,6 +1375,7 @@ mod generate_tests {
                     #[allow(unused_imports)]
                     use super::*;
 
+                    #[doc(hidden)]
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
                         rhai_generate_into_module(&mut m, false);
@@ -1316,6 +1383,7 @@ mod generate_tests {
                         m
                     }
                     #[allow(unused_mut)]
+                    #[doc(hidden)]
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                         m.set_fn("increment", FnNamespace::Internal, FnAccess::Public, Some(increment_token::PARAM_NAMES),
                                  &[TypeId::of::<FLOAT>()],
@@ -1323,7 +1391,9 @@ mod generate_tests {
                         if flatten {} else {}
                     }
                     #[allow(non_camel_case_types)]
+                    #[doc(hidden)]
                     pub struct increment_token();
+                    #[doc(hidden)]
                     impl increment_token {
                         pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut FLOAT", "()"];
                         #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<FLOAT>()] }
@@ -1344,6 +1414,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -1351,6 +1422,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     if flatten {
                         { self::it_is::rhai_generate_into_module(m, flatten); }
@@ -1389,6 +1461,7 @@ mod generate_tests {
                     #[allow(unused_imports)]
                     use super::*;
 
+                    #[doc(hidden)]
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
                         rhai_generate_into_module(&mut m, false);
@@ -1396,6 +1469,7 @@ mod generate_tests {
                         m
                     }
                     #[allow(unused_mut)]
+                    #[doc(hidden)]
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                         m.set_fn("increment", FnNamespace::Internal, FnAccess::Public, Some(increment_token::PARAM_NAMES),
                                  &[TypeId::of::<FLOAT>()],
@@ -1403,7 +1477,9 @@ mod generate_tests {
                         if flatten {} else {}
                     }
                     #[allow(non_camel_case_types)]
+                    #[doc(hidden)]
                     pub struct increment_token();
+                    #[doc(hidden)]
                     impl increment_token {
                         pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut FLOAT", "()"];
                         #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<FLOAT>()] }
@@ -1424,6 +1500,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -1431,6 +1508,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     if flatten {
                         {
@@ -1470,6 +1548,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -1477,6 +1556,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("get$square", FnNamespace::Global, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
                              &[TypeId::of::<u64>()],
@@ -1484,7 +1564,9 @@ mod generate_tests {
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct int_foo_token();
+                #[doc(hidden)]
                 impl int_foo_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut u64", "u64"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<u64>()] }
@@ -1527,6 +1609,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -1534,6 +1617,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("square", FnNamespace::Internal, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
                              &[TypeId::of::<u64>()],
@@ -1544,7 +1628,9 @@ mod generate_tests {
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct int_foo_token();
+                #[doc(hidden)]
                 impl int_foo_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut u64", "u64"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<u64>()] }
@@ -1587,6 +1673,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -1594,6 +1681,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("set$squared", FnNamespace::Global, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
                              &[TypeId::of::<u64>(), TypeId::of::<u64>()],
@@ -1601,7 +1689,9 @@ mod generate_tests {
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct int_foo_token();
+                #[doc(hidden)]
                 impl int_foo_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut u64", "y: u64", "()"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 2usize] { [TypeId::of::<u64>(), TypeId::of::<u64>()] }
@@ -1645,6 +1735,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -1652,6 +1743,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("set_sq", FnNamespace::Internal, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
                              &[TypeId::of::<u64>(), TypeId::of::<u64>()],
@@ -1662,7 +1754,9 @@ mod generate_tests {
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct int_foo_token();
+                #[doc(hidden)]
                 impl int_foo_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut u64", "y: u64", "()"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 2usize] { [TypeId::of::<u64>(), TypeId::of::<u64>()] }
@@ -1706,6 +1800,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -1713,6 +1808,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("index$get$", FnNamespace::Global, FnAccess::Public, Some(get_by_index_token::PARAM_NAMES),
                              &[TypeId::of::<MyCollection>(), TypeId::of::<u64>()],
@@ -1720,7 +1816,9 @@ mod generate_tests {
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct get_by_index_token();
+                #[doc(hidden)]
                 impl get_by_index_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut MyCollection", "i: u64", "FLOAT"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 2usize] { [TypeId::of::<MyCollection>(), TypeId::of::<u64>()] }
@@ -1768,6 +1866,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -1775,6 +1874,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     #[cfg(hello)]
                     m.set_fn("index$get$", FnNamespace::Global, FnAccess::Public, Some(get_by_index_token::PARAM_NAMES),
@@ -1784,8 +1884,10 @@ mod generate_tests {
                 }
                 #[cfg(hello)]
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct get_by_index_token();
                 #[cfg(hello)]
+                #[doc(hidden)]
                 impl get_by_index_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut MyCollection", "i: u64", "FLOAT"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 2usize] { [TypeId::of::<MyCollection>(), TypeId::of::<u64>()] }
@@ -1830,6 +1932,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -1837,6 +1940,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("get", FnNamespace::Internal, FnAccess::Public, Some(get_by_index_token::PARAM_NAMES),
                              &[TypeId::of::<MyCollection>(), TypeId::of::<u64>()],
@@ -1847,7 +1951,9 @@ mod generate_tests {
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct get_by_index_token();
+                #[doc(hidden)]
                 impl get_by_index_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut MyCollection", "i: u64", "FLOAT"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 2usize] { [TypeId::of::<MyCollection>(), TypeId::of::<u64>()] }
@@ -1891,6 +1997,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -1898,6 +2005,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("index$set$", FnNamespace::Global, FnAccess::Public, Some(set_by_index_token::PARAM_NAMES),
                              &[TypeId::of::<MyCollection>(), TypeId::of::<u64>(), TypeId::of::<FLOAT>()],
@@ -1905,7 +2013,9 @@ mod generate_tests {
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct set_by_index_token();
+                #[doc(hidden)]
                 impl set_by_index_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut MyCollection", "i: u64", "item: FLOAT", "()"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 3usize] { [TypeId::of::<MyCollection>(), TypeId::of::<u64>(), TypeId::of::<FLOAT>()] }
@@ -1950,6 +2060,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -1957,6 +2068,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("set", FnNamespace::Internal, FnAccess::Public, Some(set_by_index_token::PARAM_NAMES),
                              &[TypeId::of::<MyCollection>(), TypeId::of::<u64>(), TypeId::of::<FLOAT>()],
@@ -1967,7 +2079,9 @@ mod generate_tests {
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
+                #[doc(hidden)]
                 pub struct set_by_index_token();
+                #[doc(hidden)]
                 impl set_by_index_token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut MyCollection", "i: u64", "item: FLOAT", "()"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 3usize] { [TypeId::of::<MyCollection>(), TypeId::of::<u64>(), TypeId::of::<FLOAT>()] }
@@ -2010,6 +2124,7 @@ mod generate_tests {
                     #[allow(unused_imports)]
                     use super::*;
 
+                    #[doc(hidden)]
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
                         rhai_generate_into_module(&mut m, false);
@@ -2017,6 +2132,7 @@ mod generate_tests {
                         m
                     }
                     #[allow(unused_mut)]
+                    #[doc(hidden)]
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                         m.set_var("MYSTIC_NUMBER", MYSTIC_NUMBER);
                         if flatten {} else {}
@@ -2025,6 +2141,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -2032,6 +2149,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     if flatten {
                         { self::it_is::rhai_generate_into_module(m, flatten); }
@@ -2067,6 +2185,7 @@ mod generate_tests {
                     #[allow(unused_imports)]
                     use super::*;
 
+                    #[doc(hidden)]
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
                         rhai_generate_into_module(&mut m, false);
@@ -2074,6 +2193,7 @@ mod generate_tests {
                         m
                     }
                     #[allow(unused_mut)]
+                    #[doc(hidden)]
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                         m.set_var("MYSTIC_NUMBER", MYSTIC_NUMBER);
                         if flatten {} else {}
@@ -2085,6 +2205,7 @@ mod generate_tests {
                     #[allow(unused_imports)]
                     use super::*;
 
+                    #[doc(hidden)]
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
                         rhai_generate_into_module(&mut m, false);
@@ -2092,6 +2213,7 @@ mod generate_tests {
                         m
                     }
                     #[allow(unused_mut)]
+                    #[doc(hidden)]
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                         #[cfg(hello)]
                         m.set_var("SPECIAL_CPU_NUMBER", SPECIAL_CPU_NUMBER);
@@ -2101,6 +2223,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -2108,6 +2231,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     if flatten {
                         { self::first_is::rhai_generate_into_module(m, flatten); }
@@ -2168,6 +2292,7 @@ mod generate_tests {
                             #[allow(unused_imports)]
                             use super::*;
 
+                            #[doc(hidden)]
                             pub fn rhai_module_generate() -> Module {
                                 let mut m = Module::new();
                                 rhai_generate_into_module(&mut m, false);
@@ -2175,6 +2300,7 @@ mod generate_tests {
                                 m
                             }
                             #[allow(unused_mut)]
+                            #[doc(hidden)]
                             pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                                 m.set_var("VALUE", VALUE);
                                 if flatten {} else {}
@@ -2185,6 +2311,7 @@ mod generate_tests {
                             #[allow(unused_imports)]
                             use super::*;
 
+                            #[doc(hidden)]
                             pub fn rhai_module_generate() -> Module {
                                 let mut m = Module::new();
                                 rhai_generate_into_module(&mut m, false);
@@ -2192,6 +2319,7 @@ mod generate_tests {
                                 m
                             }
                             #[allow(unused_mut)]
+                            #[doc(hidden)]
                             pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                                 m.set_var("VALUE", VALUE);
                                 if flatten {} else {}
@@ -2200,6 +2328,7 @@ mod generate_tests {
                         #[allow(unused_imports)]
                         use super::*;
 
+                        #[doc(hidden)]
                         pub fn rhai_module_generate() -> Module {
                             let mut m = Module::new();
                             rhai_generate_into_module(&mut m, false);
@@ -2207,6 +2336,7 @@ mod generate_tests {
                             m
                         }
                         #[allow(unused_mut)]
+                        #[doc(hidden)]
                         pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                             m.set_var("VALUE", VALUE);
 
@@ -2224,6 +2354,7 @@ mod generate_tests {
                         #[allow(unused_imports)]
                         use super::*;
 
+                        #[doc(hidden)]
                         pub fn rhai_module_generate() -> Module {
                             let mut m = Module::new();
                             rhai_generate_into_module(&mut m, false);
@@ -2231,6 +2362,7 @@ mod generate_tests {
                             m
                         }
                         #[allow(unused_mut)]
+                        #[doc(hidden)]
                         pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                             m.set_var("VALUE", VALUE);
                             if flatten {} else {}
@@ -2239,6 +2371,7 @@ mod generate_tests {
                     #[allow(unused_imports)]
                     use super::*;
 
+                    #[doc(hidden)]
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
                         rhai_generate_into_module(&mut m, false);
@@ -2246,6 +2379,7 @@ mod generate_tests {
                         m
                     }
                     #[allow(unused_mut)]
+                    #[doc(hidden)]
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                         m.set_var("VALUE", VALUE);
 
@@ -2265,6 +2399,7 @@ mod generate_tests {
                         #[allow(unused_imports)]
                         use super::*;
 
+                        #[doc(hidden)]
                         pub fn rhai_module_generate() -> Module {
                             let mut m = Module::new();
                             rhai_generate_into_module(&mut m, false);
@@ -2272,6 +2407,7 @@ mod generate_tests {
                             m
                         }
                         #[allow(unused_mut)]
+                        #[doc(hidden)]
                         pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                             m.set_var("VALUE", VALUE);
                             if flatten {} else {}
@@ -2282,6 +2418,7 @@ mod generate_tests {
                         #[allow(unused_imports)]
                         use super::*;
 
+                        #[doc(hidden)]
                         pub fn rhai_module_generate() -> Module {
                             let mut m = Module::new();
                             rhai_generate_into_module(&mut m, false);
@@ -2289,6 +2426,7 @@ mod generate_tests {
                             m
                         }
                         #[allow(unused_mut)]
+                        #[doc(hidden)]
                         pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                             m.set_var("VALUE", VALUE);
                             if flatten {} else {}
@@ -2297,6 +2435,7 @@ mod generate_tests {
                     #[allow(unused_imports)]
                     use super::*;
 
+                    #[doc(hidden)]
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
                         rhai_generate_into_module(&mut m, false);
@@ -2304,6 +2443,7 @@ mod generate_tests {
                         m
                     }
                     #[allow(unused_mut)]
+                    #[doc(hidden)]
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                         m.set_var("VALUE", VALUE);
 
@@ -2319,6 +2459,7 @@ mod generate_tests {
                 #[allow(unused_imports)]
                 use super::*;
 
+                #[doc(hidden)]
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
@@ -2326,6 +2467,7 @@ mod generate_tests {
                     m
                 }
                 #[allow(unused_mut)]
+                #[doc(hidden)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_var("VALUE", VALUE);
 

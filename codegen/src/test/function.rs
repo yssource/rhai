@@ -275,7 +275,9 @@ mod generate_tests {
             #[automatically_derived]
             pub mod rhai_fn_do_nothing {
                 use super::*;
+                #[doc(hidden)]
                 pub struct Token();
+                #[doc(hidden)]
                 impl Token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["()"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 0usize] { [] }
@@ -288,6 +290,7 @@ mod generate_tests {
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
                 }
                 #[allow(unused)]
+                #[doc(hidden)]
                 #[inline(always)] pub fn dynamic_result_fn() -> RhaiResult {
                     Ok(Dynamic::from(do_nothing()))
                 }
@@ -308,7 +311,9 @@ mod generate_tests {
             #[automatically_derived]
             pub mod rhai_fn_do_something {
                 use super::*;
+                #[doc(hidden)]
                 pub struct Token();
+                #[doc(hidden)]
                 impl Token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: usize", "()"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<usize>()] }
@@ -323,6 +328,7 @@ mod generate_tests {
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
                 }
                 #[allow(unused)]
+                #[doc(hidden)]
                 #[inline(always)] pub fn dynamic_result_fn(x: usize) -> RhaiResult {
                     Ok(Dynamic::from(do_something(x)))
                 }
@@ -343,7 +349,9 @@ mod generate_tests {
             #[automatically_derived]
             pub mod rhai_fn_do_something {
                 use super::*;
+                #[doc(hidden)]
                 pub struct Token();
+                #[doc(hidden)]
                 impl Token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: usize", "()"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<usize>()] }
@@ -358,6 +366,7 @@ mod generate_tests {
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
                 }
                 #[allow(unused)]
+                #[doc(hidden)]
                 #[inline(always)] pub fn dynamic_result_fn(context: NativeCallContext, x: usize) -> RhaiResult {
                     Ok(Dynamic::from(do_something(context, x)))
                 }
@@ -381,7 +390,9 @@ mod generate_tests {
             #[automatically_derived]
             pub mod rhai_fn_return_dynamic {
                 use super::*;
+                #[doc(hidden)]
                 pub struct Token();
+                #[doc(hidden)]
                 impl Token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["rhai::Dynamic"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 0usize] { [] }
@@ -395,6 +406,7 @@ mod generate_tests {
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
                 }
                 #[allow(unused)]
+                #[doc(hidden)]
                 #[inline(always)] pub fn dynamic_result_fn() -> RhaiResult {
                     Ok(Dynamic::from(return_dynamic()))
                 }
@@ -412,6 +424,7 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
+            #[doc(hidden)]
             impl TestStruct {
                 pub const PARAM_NAMES: &'static [&'static str] = &["x: usize", "()"];
                 #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<usize>()] }
@@ -441,7 +454,9 @@ mod generate_tests {
             #[automatically_derived]
             pub mod rhai_fn_add_together {
                 use super::*;
+                #[doc(hidden)]
                 pub struct Token();
+                #[doc(hidden)]
                 impl Token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: usize", "y: usize", "usize"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 2usize] { [TypeId::of::<usize>(), TypeId::of::<usize>()] }
@@ -457,6 +472,7 @@ mod generate_tests {
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
                 }
                 #[allow(unused)]
+                #[doc(hidden)]
                 #[inline(always)] pub fn dynamic_result_fn(x: usize, y: usize) -> RhaiResult {
                     Ok(Dynamic::from(add_together(x, y)))
                 }
@@ -477,7 +493,9 @@ mod generate_tests {
             #[automatically_derived]
             pub mod rhai_fn_increment {
                 use super::*;
+                #[doc(hidden)]
                 pub struct Token();
+                #[doc(hidden)]
                 impl Token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut usize", "y: usize", "()"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 2usize] { [TypeId::of::<usize>(), TypeId::of::<usize>()] }
@@ -496,6 +514,7 @@ mod generate_tests {
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
                 }
                 #[allow(unused)]
+                #[doc(hidden)]
                 #[inline(always)] pub fn dynamic_result_fn(x: &mut usize, y: usize) -> RhaiResult {
                     Ok(Dynamic::from(increment(x, y)))
                 }
@@ -517,7 +536,9 @@ mod generate_tests {
             #[automatically_derived]
             pub mod rhai_fn_special_print {
                 use super::*;
+                #[doc(hidden)]
                 pub struct Token();
+                #[doc(hidden)]
                 impl Token {
                     pub const PARAM_NAMES: &'static [&'static str] = &["message: &str", "()"];
                     #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<ImmutableString>()] }
@@ -532,6 +553,7 @@ mod generate_tests {
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
                 }
                 #[allow(unused)]
+                #[doc(hidden)]
                 #[inline(always)] pub fn dynamic_result_fn(message: &str) -> RhaiResult {
                     Ok(Dynamic::from(special_print(message)))
                 }
