@@ -292,6 +292,7 @@ pub struct Span {
 }
 
 impl Span {
+    /// Empty [`Span`].
     pub const NONE: Self = Self::new(Position::NONE, Position::NONE);
 
     /// Create a new [`Span`].
@@ -862,15 +863,15 @@ impl Token {
         })
     }
 
-    // Is this token [`EOF`][Token::EOF]?
+    /// Is this token [`EOF`][Token::EOF]?
     #[inline(always)]
     #[must_use]
     pub const fn is_eof(&self) -> bool {
         matches!(self, Self::EOF)
     }
 
-    // If another operator is after these, it's probably an unary operator
-    // (not sure about `fn` name).
+    /// If another operator is after these, it's probably a unary operator
+    /// (not sure about `fn` name).
     #[must_use]
     pub const fn is_next_unary(&self) -> bool {
         use Token::*;

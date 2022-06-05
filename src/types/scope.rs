@@ -69,7 +69,7 @@ pub struct Scope<'a> {
     /// Aliases of the entry.
     aliases: SmallVec<[Vec<Identifier>; SCOPE_ENTRIES_INLINED]>,
     /// Phantom to keep the lifetime parameter in order not to break existing code.
-    phantom: PhantomData<&'a ()>,
+    dummy: PhantomData<&'a ()>,
 }
 
 impl fmt::Display for Scope<'_> {
@@ -112,7 +112,7 @@ impl Clone for Scope<'_> {
                 .collect(),
             names: self.names.clone(),
             aliases: self.aliases.clone(),
-            phantom: self.phantom.clone(),
+            dummy: self.dummy.clone(),
         }
     }
 }
@@ -152,7 +152,7 @@ impl Scope<'_> {
             values: SmallVec::new_const(),
             names: SmallVec::new_const(),
             aliases: SmallVec::new_const(),
-            phantom: PhantomData,
+            dummy: PhantomData,
         }
     }
     /// Empty the [`Scope`].
@@ -511,9 +511,33 @@ impl Scope<'_> {
         }
         self
     }
+    /// Get a reference to an entry in the [`Scope`].
+    ///
+    /// If the entry by the specified name is not found, [`None`] is returned.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::Scope;
+    ///
+    /// let mut my_scope = Scope::new();
+    ///
+    /// my_scope.push("x", 42_i64);
+    ///
+    /// let value = my_scope.get("x").expect("x should exist");
+    ///
+    /// assert_eq!(value.as_int().unwrap(), 42);
+    ///
+    /// assert!(my_scope.get("z").is_none());
+    /// ```
+    #[inline(always)]
+    #[must_use]
+    pub fn get(&self, name: &str) -> Option<&Dynamic> {
+        self.get_index(name).map(|(index, _)| &self.values[index])
+    }
     /// Get a mutable reference to an entry in the [`Scope`].
     ///
-    /// If the entry by the specified name is not found, of if it is read-only,
+    /// If the entry by the specified name is not found, or if it is read-only,
     /// [`None`] is returned.
     ///
     /// # Example
@@ -531,8 +555,8 @@ impl Scope<'_> {
     ///
     /// assert_eq!(my_scope.get_value::<i64>("x").expect("x should exist"), 123);
     ///
-    /// my_scope.push_constant("Z", 1_i64);
-    /// assert!(my_scope.get_mut("Z").is_none());
+    /// my_scope.push_constant("z", 1_i64);
+    /// assert!(my_scope.get_mut("z").is_none());
     /// ```
     #[inline]
     #[must_use]

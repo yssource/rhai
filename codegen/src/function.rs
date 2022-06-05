@@ -620,6 +620,7 @@ impl ExportedFn {
             #[automatically_derived]
             #vis mod #name {
                 use super::*;
+                #[doc(hidden)]
                 pub struct Token();
                 #impl_block
                 #dyn_result_fn_block
@@ -655,6 +656,9 @@ impl ExportedFn {
             .resolved_at(Span::call_site());
         if self.params.return_raw.is_some() {
             quote_spanned! { return_span =>
+                #[allow(unused)]
+                #[doc(hidden)]
+                #[inline(always)]
                 pub #dynamic_signature {
                     #name(#(#arguments),*).map(Dynamic::from)
                 }
@@ -662,6 +666,7 @@ impl ExportedFn {
         } else {
             quote_spanned! { return_span =>
                 #[allow(unused)]
+                #[doc(hidden)]
                 #[inline(always)]
                 pub #dynamic_signature {
                     Ok(Dynamic::from(#name(#(#arguments),*)))
@@ -864,6 +869,7 @@ impl ExportedFn {
 
         quote! {
             #(#cfg_attrs)*
+            #[doc(hidden)]
             impl #type_name {
                 #param_names
                 #[inline(always)] pub fn param_types() -> [TypeId; #arg_count] { [#(#input_type_exprs),*] }

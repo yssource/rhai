@@ -20,20 +20,20 @@ use std::{
 ///
 /// This type may hold a straight assignment (i.e. not an op-assignment).
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
-pub struct OpAssignment<'a> {
+pub struct OpAssignment {
     /// Hash of the op-assignment call.
     pub hash_op_assign: u64,
     /// Hash of the underlying operator call (for fallback).
     pub hash_op: u64,
     /// Op-assignment operator.
-    pub op_assign: &'a str,
+    pub op_assign: &'static str,
     /// Underlying operator.
-    pub op: &'a str,
+    pub op: &'static str,
     /// [Position] of the op-assignment operator.
     pub pos: Position,
 }
 
-impl OpAssignment<'_> {
+impl OpAssignment {
     /// Create a new [`OpAssignment`] that is only a straight assignment.
     #[must_use]
     #[inline(always)]
@@ -106,7 +106,7 @@ impl OpAssignment<'_> {
     }
 }
 
-impl fmt::Debug for OpAssignment<'_> {
+impl fmt::Debug for OpAssignment {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.is_op_assignment() {
             f.debug_struct("OpAssignment")
@@ -194,7 +194,10 @@ pub type StmtBlockContainer = StaticVec<Stmt>;
 /// _(internals)_ A scoped block of statements.
 /// Exported under the `internals` feature only.
 #[derive(Clone, Hash, Default)]
-pub struct StmtBlock(StmtBlockContainer, Span);
+pub struct StmtBlock {
+    block: StmtBlockContainer,
+    span: Span,
+}
 
 impl StmtBlock {
     /// A [`StmtBlock`] that does not exist.
@@ -215,61 +218,67 @@ impl StmtBlock {
     pub fn new_with_span(statements: impl IntoIterator<Item = Stmt>, span: Span) -> Self {
         let mut statements: smallvec::SmallVec<_> = statements.into_iter().collect();
         statements.shrink_to_fit();
-        Self(statements, span)
+        Self {
+            block: statements,
+            span,
+        }
     }
     /// Create an empty [`StmtBlock`].
     #[inline(always)]
     #[must_use]
     pub const fn empty(pos: Position) -> Self {
-        Self(StmtBlockContainer::new_const(), Span::new(pos, pos))
+        Self {
+            block: StmtBlockContainer::new_const(),
+            span: Span::new(pos, pos),
+        }
     }
     /// Is this statements block empty?
     #[inline(always)]
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.block.is_empty()
     }
     /// Number of statements in this statements block.
     #[inline(always)]
     #[must_use]
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.block.len()
     }
     /// Get the statements of this statements block.
     #[inline(always)]
     #[must_use]
     pub fn statements(&self) -> &[Stmt] {
-        &self.0
+        &self.block
     }
     /// Extract the statements.
     #[inline(always)]
     #[must_use]
     pub(crate) fn take_statements(&mut self) -> StmtBlockContainer {
-        mem::take(&mut self.0)
+        mem::take(&mut self.block)
     }
     /// Get an iterator over the statements of this statements block.
     #[inline(always)]
     #[must_use]
     pub fn iter(&self) -> impl Iterator<Item = &Stmt> {
-        self.0.iter()
+        self.block.iter()
     }
     /// Get the start position (location of the beginning `{`) of this statements block.
     #[inline(always)]
     #[must_use]
     pub const fn position(&self) -> Position {
-        (self.1).start()
+        (self.span).start()
     }
     /// Get the end position (location of the ending `}`) of this statements block.
     #[inline(always)]
     #[must_use]
     pub const fn end_position(&self) -> Position {
-        (self.1).end()
+        (self.span).end()
     }
     /// Get the positions (locations of the beginning `{` and ending `}`) of this statements block.
     #[inline(always)]
     #[must_use]
     pub const fn span(&self) -> Span {
-        self.1
+        self.span
     }
     /// Get the positions (locations of the beginning `{` and ending `}`) of this statements block
     /// or a default.
@@ -277,14 +286,14 @@ impl StmtBlock {
     #[must_use]
     pub const fn span_or_else(&self, def_start_pos: Position, def_end_pos: Position) -> Span {
         Span::new(
-            (self.1).start().or_else(def_start_pos),
-            (self.1).end().or_else(def_end_pos),
+            (self.span).start().or_else(def_start_pos),
+            (self.span).end().or_else(def_end_pos),
         )
     }
     /// Set the positions of this statements block.
     #[inline(always)]
     pub fn set_position(&mut self, start_pos: Position, end_pos: Position) {
-        self.1 = Span::new(start_pos, end_pos);
+        self.span = Span::new(start_pos, end_pos);
     }
 }
 
@@ -293,37 +302,37 @@ impl Deref for StmtBlock {
 
     #[inline(always)]
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.block
     }
 }
 
 impl DerefMut for StmtBlock {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        &mut self.block
     }
 }
 
 impl AsRef<[Stmt]> for StmtBlock {
     #[inline(always)]
     fn as_ref(&self) -> &[Stmt] {
-        &self.0
+        &self.block
     }
 }
 
 impl AsMut<[Stmt]> for StmtBlock {
     #[inline(always)]
     fn as_mut(&mut self) -> &mut [Stmt] {
-        &mut self.0
+        &mut self.block
     }
 }
 
 impl fmt::Debug for StmtBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Block")?;
-        fmt::Debug::fmt(&self.0, f)?;
-        if !self.1.is_none() {
-            write!(f, " @ {:?}", self.1)?;
+        fmt::Debug::fmt(&self.block, f)?;
+        if !self.span.is_none() {
+            write!(f, " @ {:?}", self.span())?;
         }
         Ok(())
     }
@@ -334,10 +343,16 @@ impl From<Stmt> for StmtBlock {
     fn from(stmt: Stmt) -> Self {
         match stmt {
             Stmt::Block(block) => *block,
-            Stmt::Noop(pos) => Self(StmtBlockContainer::new_const(), Span::new(pos, pos)),
+            Stmt::Noop(pos) => Self {
+                block: StmtBlockContainer::new_const(),
+                span: Span::new(pos, pos),
+            },
             _ => {
                 let pos = stmt.position();
-                Self(vec![stmt].into(), Span::new(pos, Position::NONE))
+                Self {
+                    block: vec![stmt].into(),
+                    span: Span::new(pos, Position::NONE),
+                }
             }
         }
     }
@@ -352,14 +367,14 @@ impl IntoIterator for StmtBlock {
 
     #[inline(always)]
     fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+        self.block.into_iter()
     }
 }
 
 impl Extend<Stmt> for StmtBlock {
     #[inline(always)]
     fn extend<T: IntoIterator<Item = Stmt>>(&mut self, iter: T) {
-        self.0.extend(iter)
+        self.block.extend(iter)
     }
 }
 
@@ -401,7 +416,7 @@ pub enum Stmt {
     /// * [`CONSTANT`][ASTFlags::CONSTANT] = `const`
     Var(Box<(Ident, Expr, Option<NonZeroUsize>)>, ASTFlags, Position),
     /// expr op`=` expr
-    Assignment(Box<(OpAssignment<'static>, BinaryExpr)>),
+    Assignment(Box<(OpAssignment, BinaryExpr)>),
     /// func `(` expr `,` ... `)`
     ///
     /// Note - this is a duplicate of [`Expr::FnCall`] to cover the very common pattern of a single

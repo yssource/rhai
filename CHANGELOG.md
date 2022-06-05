@@ -11,6 +11,7 @@ Bug fixes
 * Missing `to_int` from `Decimal` is added.
 * Parsing of index expressions is relaxed and many cases no longer result in an index-type error to allow for custom indexers.
 * Merging or combining a self-contained `AST` into another `AST` now works properly.
+* Plugin modules/functions no longer generate errors under `#![deny(missing_docs)]`.
 
 Deprecated API's
 ----------------
@@ -24,6 +25,7 @@ Enhancements
 * `Engine::def_tag`, `Engine::def_tag_mut` and `Engine::set_tag` are added to manage a default value for the custom evaluation state, accessible via `EvalState::tag()` (which is the same as `NativeCallContext::tag()`).
 * Originally, the debugger's custom state uses the same state as `EvalState::tag()` (which is the same as `NativeCallContext::tag()`).  It is now split into its own variable accessible under `Debugger::state()`.
 * Non-borrowed string keys can now be deserialized for object maps via `serde`.
+* `Scope::get` is added to get a reference to a variable's value.
 
 
 Version 1.7.0

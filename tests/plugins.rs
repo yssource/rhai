@@ -121,8 +121,6 @@ fn test_plugins_package() -> Result<(), Box<EvalAltResult>> {
 fn test_plugins_parameters() -> Result<(), Box<EvalAltResult>> {
     #[export_module]
     mod rhai_std {
-        use rhai::*;
-
         pub fn noop(_: &str) {}
     }
 

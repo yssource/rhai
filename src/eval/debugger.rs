@@ -34,15 +34,15 @@ pub type OnDebuggerCallback = dyn Fn(EvalContext, DebuggerEvent, ASTNode, Option
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 #[non_exhaustive]
 pub enum DebuggerCommand {
-    // Continue normal execution.
+    /// Continue normal execution.
     Continue,
-    // Step into the next expression, diving into functions.
+    /// Step into the next expression, diving into functions.
     StepInto,
-    // Run to the next expression or statement, stepping over functions.
+    /// Run to the next expression or statement, stepping over functions.
     StepOver,
-    // Run to the next statement, skipping over functions.
+    /// Run to the next statement, skipping over functions.
     Next,
-    // Run to the end of the current function call.
+    /// Run to the end of the current function call.
     FunctionExit,
 }
 
@@ -78,17 +78,17 @@ impl DebuggerStatus {
 #[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
 pub enum DebuggerEvent<'a> {
-    // Script evaluation starts.
+    /// Script evaluation starts.
     Start,
-    // Break on next step.
+    /// Break on next step.
     Step,
-    // Break on break-point.
+    /// Break on break-point.
     BreakPoint(usize),
-    // Return from a function with a value.
+    /// Return from a function with a value.
     FunctionExitWithValue(&'a Dynamic),
-    // Return from a function with a value.
+    /// Return from a function with a value.
     FunctionExitWithError(&'a EvalAltResult),
-    // Script evaluation ends.
+    /// Script evaluation ends.
     End,
 }
 
@@ -103,23 +103,39 @@ pub enum BreakPoint {
     /// Source is empty if not available.
     #[cfg(not(feature = "no_position"))]
     AtPosition {
+        /// Source (empty if not available) of the break-point.
         source: Identifier,
+        /// [Position] of the break-point.
         pos: Position,
+        /// Is the break-point enabled?
         enabled: bool,
     },
     /// Break at a particular function call.
-    AtFunctionName { name: Identifier, enabled: bool },
+    AtFunctionName {
+        /// Function name.
+        name: Identifier,
+        /// Is the break-point enabled?
+        enabled: bool,
+    },
     /// Break at a particular function call with a particular number of arguments.
     AtFunctionCall {
+        /// Function name.
         name: Identifier,
+        /// Number of arguments.
         args: usize,
+        /// Is the break-point enabled?
         enabled: bool,
     },
     /// Break at a particular property .
     ///
     /// Not available under `no_object`.
     #[cfg(not(feature = "no_object"))]
-    AtProperty { name: Identifier, enabled: bool },
+    AtProperty {
+        /// Property name.
+        name: Identifier,
+        /// Is the break-point enabled?
+        enabled: bool,
+    },
 }
 
 impl fmt::Display for BreakPoint {

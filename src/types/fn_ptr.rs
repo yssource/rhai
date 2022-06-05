@@ -17,16 +17,19 @@ use std::{
 /// A general function pointer, which may carry additional (i.e. curried) argument values
 /// to be passed onto a function during a call.
 #[derive(Clone, Hash)]
-pub struct FnPtr(Identifier, StaticVec<Dynamic>);
+pub struct FnPtr {
+    name: Identifier,
+    curry: StaticVec<Dynamic>,
+}
 
 impl fmt::Debug for FnPtr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if !self.is_curried() {
             write!(f, "Fn({})", self.fn_name())
         } else {
-            self.1
+            self.curry
                 .iter()
-                .fold(f.debug_tuple("Fn").field(&self.0), |f, curry| {
+                .fold(f.debug_tuple("Fn").field(&self.name), |f, curry| {
                     f.field(curry)
                 })
                 .finish()
@@ -44,7 +47,10 @@ impl FnPtr {
     #[inline(always)]
     #[must_use]
     pub(crate) fn new_unchecked(name: impl Into<Identifier>, curry: StaticVec<Dynamic>) -> Self {
-        Self(name.into(), curry)
+        Self {
+            name: name.into(),
+            curry,
+        }
     }
     /// Get the name of the function.
     #[inline(always)]
@@ -56,37 +62,37 @@ impl FnPtr {
     #[inline(always)]
     #[must_use]
     pub(crate) const fn fn_name_raw(&self) -> &Identifier {
-        &self.0
+        &self.name
     }
     /// Get the underlying data of the function pointer.
     #[inline(always)]
     #[must_use]
     pub(crate) fn take_data(self) -> (Identifier, StaticVec<Dynamic>) {
-        (self.0, self.1)
+        (self.name, self.curry)
     }
     /// Get the curried arguments.
     #[inline(always)]
     #[must_use]
     pub fn curry(&self) -> &[Dynamic] {
-        self.1.as_ref()
+        self.curry.as_ref()
     }
     /// Add a new curried argument.
     #[inline(always)]
     pub fn add_curry(&mut self, value: Dynamic) -> &mut Self {
-        self.1.push(value);
+        self.curry.push(value);
         self
     }
     /// Set curried arguments to the function pointer.
     #[inline]
     pub fn set_curry(&mut self, values: impl IntoIterator<Item = Dynamic>) -> &mut Self {
-        self.1 = values.into_iter().collect();
+        self.curry = values.into_iter().collect();
         self
     }
     /// Is the function pointer curried?
     #[inline(always)]
     #[must_use]
     pub fn is_curried(&self) -> bool {
-        !self.1.is_empty()
+        !self.curry.is_empty()
     }
     /// Does the function pointer refer to an anonymous function?
     ///
@@ -95,7 +101,7 @@ impl FnPtr {
     #[inline(always)]
     #[must_use]
     pub fn is_anonymous(&self) -> bool {
-        self.0.starts_with(crate::engine::FN_ANONYMOUS)
+        self.name.starts_with(crate::engine::FN_ANONYMOUS)
     }
     /// Call the function pointer with curried arguments (if any).
     /// The function may be script-defined (not available under `no_function`) or native Rust.
@@ -234,7 +240,7 @@ impl FnPtr {
 
 impl fmt::Display for FnPtr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Fn({})", self.0)
+        write!(f, "Fn({})", self.fn_name())
     }
 }
 
@@ -244,7 +250,10 @@ impl TryFrom<Identifier> for FnPtr {
     #[inline]
     fn try_from(value: Identifier) -> RhaiResultOf<Self> {
         if is_valid_identifier(value.chars()) {
-            Ok(Self(value, StaticVec::new_const()))
+            Ok(Self {
+                name: value,
+                curry: StaticVec::new_const(),
+            })
         } else {
             Err(ERR::ErrorFunctionNotFound(value.to_string(), Position::NONE).into())
         }

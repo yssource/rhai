@@ -57,6 +57,7 @@
 //! See [The Rhai Book](https://rhai.rs/book) for details on the Rhai scripting engine and language.
 
 #![cfg_attr(feature = "no_std", no_std)]
+#![deny(missing_docs)]
 
 #[cfg(feature = "no_std")]
 extern crate alloc;
