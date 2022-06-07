@@ -401,6 +401,10 @@ pub enum Expr {
     /// func `(` expr `,` ... `)`
     FnCall(Box<FnCallExpr>, Position),
     /// lhs `.` rhs
+    ///
+    /// ### Flags
+    ///
+    /// No flags are defined at this time.  Use [`NONE`][ASTFlags::NONE].
     Dot(Box<BinaryExpr>, ASTFlags, Position),
     /// lhs `[` rhs `]`
     ///

@@ -920,9 +920,7 @@ impl Engine {
 
         // Propagate the changed value back to the source if necessary
         if updated {
-            target
-                .propagate_changed_value()
-                .map_err(|err| err.fill_position(pos))?;
+            target.propagate_changed_value(pos)?;
         }
 
         Ok((result, updated))

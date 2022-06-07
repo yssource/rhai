@@ -184,9 +184,7 @@ impl Engine {
             *target.as_mut() = new_val;
         }
 
-        target
-            .propagate_changed_value()
-            .map_err(|err| err.fill_position(op_info.pos))
+        target.propagate_changed_value(op_info.pos)
     }
 
     /// Evaluate a statement.

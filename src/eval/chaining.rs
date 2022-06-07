@@ -118,7 +118,7 @@ impl ChainArgument {
 
 impl Engine {
     /// Chain-evaluate a dot/index chain.
-    /// [`Position`] in [`EvalAltResult`] is [`NONE`][Position::NONE] and must be set afterwards.
+    /// [`Position`] in [`EvalAltResult`] may be [`NONE`][Position::NONE] and should be set afterwards.
     fn eval_dot_index_chain_helper(
         &self,
         global: &mut GlobalRuntimeState,
@@ -620,11 +620,41 @@ impl Engine {
 
         let idx_values = &mut StaticVec::new_const();
 
-        self.eval_dot_index_chain_arguments(
-            scope, global, caches, lib, this_ptr, rhs, options, chain_type, idx_values, 0, level,
-        )?;
+        match rhs {
+            // Short-circuit for simple property access: {expr}.prop
+            Expr::Property(..) if chain_type == ChainType::Dotting => {
+                idx_values.push(ChainArgument::Property(rhs.position()))
+            }
+            Expr::Property(..) => unreachable!("unexpected Expr::Property for indexing"),
+            // Short-circuit for simple method call: {expr}.func()
+            Expr::FnCall(x, ..) if chain_type == ChainType::Dotting && x.args.is_empty() => {
+                idx_values.push(ChainArgument::MethodCallArgs(
+                    Default::default(),
+                    Position::NONE,
+                ))
+            }
+            // Short-circuit for method call with all literal arguments: {expr}.func(1, 2, 3)
+            Expr::FnCall(x, ..)
+                if chain_type == ChainType::Dotting && x.args.iter().all(Expr::is_constant) =>
+            {
+                let args: Vec<_> = x
+                    .args
+                    .iter()
+                    .map(|expr| expr.get_literal_value().unwrap())
+                    .collect();
 
-        let is_assignment = new_val.is_some();
+                idx_values.push(ChainArgument::MethodCallArgs(
+                    args.into_boxed_slice(),
+                    x.args[0].position(),
+                ))
+            }
+            _ => {
+                self.eval_dot_index_chain_arguments(
+                    scope, global, caches, lib, this_ptr, rhs, options, chain_type, idx_values, 0,
+                    level,
+                )?;
+            }
+        }
 
         match lhs {
             // id.??? or id[???]
@@ -645,11 +675,9 @@ impl Engine {
                     global, caches, lib, &mut None, obj_ptr, root, expr, rhs, options, idx_values,
                     chain_type, level, new_val,
                 )
-                .map(|(v, ..)| v)
-                .map_err(|err| err.fill_position(op_pos))
             }
             // {expr}.??? = ??? or {expr}[???] = ???
-            _ if is_assignment => unreachable!("cannot assign to an expression"),
+            _ if new_val.is_some() => unreachable!("cannot assign to an expression"),
             // {expr}.??? or {expr}[???]
             expr => {
                 let value = self
@@ -657,14 +685,15 @@ impl Engine {
                     .flatten();
                 let obj_ptr = &mut value.into();
                 let root = ("", expr.start_position());
+
                 self.eval_dot_index_chain_helper(
                     global, caches, lib, this_ptr, obj_ptr, root, expr, rhs, options, idx_values,
                     chain_type, level, new_val,
                 )
-                .map(|(v, ..)| if is_assignment { Dynamic::UNIT } else { v })
-                .map_err(|err| err.fill_position(op_pos))
             }
         }
+        .map(|(v, ..)| v)
+        .map_err(|err| err.fill_position(op_pos))
     }
 
     /// Evaluate a chain of indexes and store the results in a [`StaticVec`].
@@ -798,7 +827,6 @@ impl Engine {
     }
 
     /// Call a get indexer.
-    /// [`Position`] in [`EvalAltResult`] may be [`NONE`][Position::NONE] and should be set afterwards.
     #[inline(always)]
     fn call_indexer_get(
         &self,
@@ -822,7 +850,6 @@ impl Engine {
     }
 
     /// Call a set indexer.
-    /// [`Position`] in [`EvalAltResult`] may be [`NONE`][Position::NONE] and should be set afterwards.
     #[inline(always)]
     fn call_indexer_set(
         &self,
