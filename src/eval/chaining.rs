@@ -652,7 +652,9 @@ impl Engine {
             _ if is_assignment => unreachable!("cannot assign to an expression"),
             // {expr}.??? or {expr}[???]
             expr => {
-                let value = self.eval_expr(scope, global, caches, lib, this_ptr, expr, level)?;
+                let value = self
+                    .eval_expr(scope, global, caches, lib, this_ptr, expr, level)?
+                    .flatten();
                 let obj_ptr = &mut value.into();
                 let root = ("", expr.start_position());
                 self.eval_dot_index_chain_helper(
@@ -1041,6 +1043,11 @@ impl Engine {
                     value: ch.into(),
                     index: offset,
                 })
+            }
+
+            #[cfg(not(feature = "no_closure"))]
+            Dynamic(Union::Shared(..)) => {
+                unreachable!("`get_indexed_mut` cannot handle shared values")
             }
 
             _ if use_indexers => self

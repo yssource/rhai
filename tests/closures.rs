@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Engine, EvalAltResult, FnPtr, ParseErrorType, Scope, INT};
+use rhai::{Dynamic, Engine, EvalAltResult, FnPtr, ParseErrorType, Scope, INT};
 use std::any::TypeId;
 use std::cell::RefCell;
 use std::mem::take;
@@ -216,6 +216,34 @@ fn test_closures_sharing() -> Result<(), Box<EvalAltResult>> {
         )?,
         6
     );
+
+    #[cfg(not(feature = "no_object"))]
+    {
+        let mut m = Map::new();
+        m.insert("hello".into(), "world".into());
+        let m = Dynamic::from(m).into_shared();
+
+        engine.register_fn("baz", move || m.clone());
+
+        assert!(!engine.eval::<bool>(
+            "
+                let m = baz();
+                m.is_shared()
+            "
+        )?);
+
+        assert_eq!(
+            engine.eval::<String>(
+                "
+                let m = baz();
+                m.hello
+            "
+            )?,
+            "world"
+        );
+
+        assert_eq!(engine.eval::<String>("baz().hello")?, "world");
+    }
 
     Ok(())
 }

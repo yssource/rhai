@@ -12,6 +12,7 @@ Bug fixes
 * Parsing of index expressions is relaxed and many cases no longer result in an index-type error to allow for custom indexers.
 * Merging or combining a self-contained `AST` into another `AST` now works properly.
 * Plugin modules/functions no longer generate errors under `#![deny(missing_docs)]`.
+* Calling a property on a function call that returns a shared value no longer causes an error.
 
 Deprecated API's
 ----------------
