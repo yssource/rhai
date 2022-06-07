@@ -622,11 +622,14 @@ impl Engine {
 
         match rhs {
             // Short-circuit for simple property access: {expr}.prop
+            #[cfg(not(feature = "no_object"))]
             Expr::Property(..) if chain_type == ChainType::Dotting => {
                 idx_values.push(ChainArgument::Property(rhs.position()))
             }
+            #[cfg(not(feature = "no_object"))]
             Expr::Property(..) => unreachable!("unexpected Expr::Property for indexing"),
             // Short-circuit for simple method call: {expr}.func()
+            #[cfg(not(feature = "no_object"))]
             Expr::FnCall(x, ..) if chain_type == ChainType::Dotting && x.args.is_empty() => {
                 idx_values.push(ChainArgument::MethodCallArgs(
                     Default::default(),
@@ -634,6 +637,7 @@ impl Engine {
                 ))
             }
             // Short-circuit for method call with all literal arguments: {expr}.func(1, 2, 3)
+            #[cfg(not(feature = "no_object"))]
             Expr::FnCall(x, ..)
                 if chain_type == ChainType::Dotting && x.args.iter().all(Expr::is_constant) =>
             {
