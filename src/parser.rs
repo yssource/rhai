@@ -2904,7 +2904,7 @@ impl Engine {
             }
         };
 
-        let mut statements = StaticVec::new();
+        let mut statements = StaticVec::new_const();
 
         let prev_entry_stack_len = state.block_stack_len;
         state.block_stack_len = state.stack.len();

@@ -904,8 +904,8 @@ impl Engine {
             _ => {
                 let mut fn_name = fn_name;
                 let _redirected;
+                let mut _arg_values: FnArgsVec<_>;
                 let mut call_args = call_args;
-                let mut arg_values: FnArgsVec<_>;
 
                 // Check if it is a map method call in OOP style
                 #[cfg(not(feature = "no_object"))]
@@ -917,13 +917,13 @@ impl Engine {
                             fn_name = &_redirected;
                             // Add curried arguments
                             if fn_ptr.is_curried() {
-                                arg_values = fn_ptr
+                                _arg_values = fn_ptr
                                     .curry()
                                     .iter()
                                     .cloned()
                                     .chain(call_args.iter_mut().map(mem::take))
                                     .collect();
-                                call_args = &mut arg_values;
+                                call_args = &mut _arg_values;
                             }
                             // Recalculate the hash based on the new function name and new arguments
                             hash = FnCallHashes::from_all(

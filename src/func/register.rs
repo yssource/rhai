@@ -134,9 +134,9 @@ macro_rules! def_register {
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type() -> TypeId { TypeId::of::<RET>() }
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<RET>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
-                CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
+                CallableFunction::$abi(Box::new(move |_ctx: NativeCallContext, args: &mut FnCallArgs| {
                     // The arguments are assumed to be of the correct number and types!
-                    check_constant!(ctx, args);
+                    check_constant!(_ctx, args);
 
                     let mut _drain = args.iter_mut();
                     $($let $par = ($clone)(_drain.next().expect(EXPECT_ARGS)); )*
@@ -186,9 +186,9 @@ macro_rules! def_register {
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type() -> TypeId { TypeId::of::<RhaiResultOf<RET>>() }
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<RhaiResultOf<RET>>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
-                CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
+                CallableFunction::$abi(Box::new(move |_ctx: NativeCallContext, args: &mut FnCallArgs| {
                     // The arguments are assumed to be of the correct number and types!
-                    check_constant!(ctx, args);
+                    check_constant!(_ctx, args);
 
                     let mut _drain = args.iter_mut();
                     $($let $par = ($clone)(_drain.next().expect(EXPECT_ARGS)); )*

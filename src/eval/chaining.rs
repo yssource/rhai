@@ -550,11 +550,12 @@ impl Engine {
         level: usize,
         new_val: Option<(Dynamic, OpAssignment)>,
     ) -> RhaiResult {
-        let (crate::ast::BinaryExpr { lhs, rhs }, chain_type, options, op_pos) = match expr {
+        let chain_type = ChainType::from(expr);
+        let (crate::ast::BinaryExpr { lhs, rhs }, options, op_pos) = match expr {
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(x, options, pos) => (x.as_ref(), ChainType::Indexing, *options, *pos),
+            Expr::Index(x, options, pos) => (x.as_ref(), *options, *pos),
             #[cfg(not(feature = "no_object"))]
-            Expr::Dot(x, options, pos) => (x.as_ref(), ChainType::Dotting, *options, *pos),
+            Expr::Dot(x, options, pos) => (x.as_ref(), *options, *pos),
             expr => unreachable!("Expr::Index or Expr::Dot expected but gets {:?}", expr),
         };
 
@@ -677,7 +678,7 @@ impl Engine {
             {
                 let crate::ast::BinaryExpr { lhs, rhs, .. } = x.as_ref();
 
-                let mut arg_values = FnArgsVec::new();
+                let mut _arg_values = FnArgsVec::new_const();
 
                 // Evaluate in left-to-right order
                 match lhs {
@@ -690,7 +691,7 @@ impl Engine {
                         if _parent_chain_type == ChainType::Dotting && !x.is_qualified() =>
                     {
                         for arg_expr in x.args.as_ref() {
-                            arg_values.push(
+                            _arg_values.push(
                                 self.get_arg_value(
                                     scope, global, caches, lib, this_ptr, arg_expr, level,
                                 )?
@@ -709,7 +710,7 @@ impl Engine {
                     }
                     #[cfg(not(feature = "no_index"))]
                     _ if _parent_chain_type == ChainType::Indexing => {
-                        arg_values.push(
+                        _arg_values.push(
                             self.eval_expr(scope, global, caches, lib, this_ptr, lhs, level)?
                                 .flatten(),
                         );
@@ -725,7 +726,9 @@ impl Engine {
                     size, level,
                 )?;
 
-                idx_values.extend(arg_values);
+                if !_arg_values.is_empty() {
+                    idx_values.extend(_arg_values);
+                }
             }
 
             #[cfg(not(feature = "no_object"))]

@@ -273,7 +273,7 @@ impl<'a> Target<'a> {
     /// Propagate a changed value back to the original source.
     /// This has no effect for direct references.
     #[inline]
-    pub fn propagate_changed_value(&mut self, pos: Position) -> RhaiResultOf<()> {
+    pub fn propagate_changed_value(&mut self, _pos: Position) -> RhaiResultOf<()> {
         match self {
             Self::RefMut(..) | Self::TempValue(..) => (),
             #[cfg(not(feature = "no_closure"))]
@@ -285,7 +285,7 @@ impl<'a> Target<'a> {
                     Box::new(crate::ERR::ErrorMismatchDataType(
                         "bool".to_string(),
                         err.to_string(),
-                        pos,
+                        _pos,
                     ))
                 })?;
 
@@ -315,7 +315,7 @@ impl<'a> Target<'a> {
                     Box::new(crate::ERR::ErrorMismatchDataType(
                         "integer".to_string(),
                         err.to_string(),
-                        pos,
+                        _pos,
                     ))
                 })?;
 
@@ -336,7 +336,7 @@ impl<'a> Target<'a> {
                     Box::new(crate::ERR::ErrorMismatchDataType(
                         "INT".to_string(),
                         err.to_string(),
-                        pos,
+                        _pos,
                     ))
                 })?;
 
@@ -361,7 +361,7 @@ impl<'a> Target<'a> {
                     Box::new(crate::ERR::ErrorMismatchDataType(
                         "char".to_string(),
                         err.to_string(),
-                        pos,
+                        _pos,
                     ))
                 })?;
 
