@@ -10,7 +10,7 @@ mod target;
 
 pub use cache::{Caches, FnResolutionCache, FnResolutionCacheEntry};
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-pub use chaining::{ChainArgument, ChainType};
+pub use chaining::ChainType;
 #[cfg(feature = "debugging")]
 pub use debugger::{
     BreakPoint, CallStackFrame, Debugger, DebuggerCommand, DebuggerEvent, DebuggerStatus,
