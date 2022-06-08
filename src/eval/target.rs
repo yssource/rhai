@@ -46,7 +46,7 @@ pub fn calc_index<E>(
     length: usize,
     start: crate::INT,
     negative_count_from_end: bool,
-    err: impl Fn() -> Result<usize, E>,
+    err: impl FnOnce() -> Result<usize, E>,
 ) -> Result<usize, E> {
     if start < 0 {
         if negative_count_from_end {

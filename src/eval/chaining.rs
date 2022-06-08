@@ -197,14 +197,16 @@ impl Engine {
                             name, hashes, args, ..
                         } = x.as_ref();
 
-                        let call_args = &mut (
-                            idx_values.drain(idx_values.len() - args.len()..).collect(),
-                            args.get(0).map_or(Position::NONE, Expr::position),
-                        );
+                        let offset = idx_values.len() - args.len();
+                        let call_args = &mut idx_values[offset..];
+                        let pos1 = args.get(0).map_or(Position::NONE, Expr::position);
 
                         let result = self.make_method_call(
-                            global, caches, lib, name, *hashes, target, call_args, *pos, level,
+                            global, caches, lib, name, *hashes, target, call_args, pos1, *pos,
+                            level,
                         );
+
+                        idx_values.truncate(offset);
 
                         #[cfg(feature = "debugging")]
                         global.debugger.reset_status(reset_debugger);
@@ -372,15 +374,16 @@ impl Engine {
                                     name, hashes, args, ..
                                 } = x.as_ref();
 
-                                let call_args = &mut (
-                                    idx_values.drain(idx_values.len() - args.len()..).collect(),
-                                    args.get(0).map_or(Position::NONE, Expr::position),
-                                );
+                                let offset = idx_values.len() - args.len();
+                                let call_args = &mut idx_values[offset..];
+                                let pos1 = args.get(0).map_or(Position::NONE, Expr::position);
 
                                 let result = self.make_method_call(
-                                    global, caches, lib, name, *hashes, target, call_args, pos,
-                                    level,
+                                    global, caches, lib, name, *hashes, target, call_args, pos1,
+                                    pos, level,
                                 );
+
+                                idx_values.truncate(offset);
 
                                 #[cfg(feature = "debugging")]
                                 global.debugger.reset_status(reset_debugger);
@@ -497,15 +500,16 @@ impl Engine {
                                 } = f.as_ref();
                                 let rhs_chain = rhs.into();
 
-                                let call_args = &mut (
-                                    idx_values.drain(idx_values.len() - args.len()..).collect(),
-                                    args.get(0).map_or(Position::NONE, Expr::position),
-                                );
+                                let offset = idx_values.len() - args.len();
+                                let call_args = &mut idx_values[offset..];
+                                let pos1 = args.get(0).map_or(Position::NONE, Expr::position);
 
                                 let result = self.make_method_call(
-                                    global, caches, lib, name, *hashes, target, call_args, pos,
-                                    level,
+                                    global, caches, lib, name, *hashes, target, call_args, pos1,
+                                    pos, level,
                                 );
+
+                                idx_values.truncate(offset);
 
                                 #[cfg(feature = "debugging")]
                                 global.debugger.reset_status(reset_debugger);
@@ -570,11 +574,14 @@ impl Engine {
             Expr::FnCall(x, ..)
                 if chain_type == ChainType::Dotting && x.args.iter().all(Expr::is_constant) =>
             {
-                x.args
-                    .iter()
-                    .map(|expr| expr.get_literal_value().unwrap())
-                    .for_each(|v| idx_values.push(v))
+                idx_values.extend(x.args.iter().map(|expr| expr.get_literal_value().unwrap()))
             }
+            // Short-circuit for indexing with literal: {expr}[1]
+            #[cfg(not(feature = "no_index"))]
+            _ if chain_type == ChainType::Indexing && rhs.is_constant() => {
+                idx_values.push(rhs.get_literal_value().unwrap())
+            }
+            // All other patterns - evaluate the arguments chain
             _ => {
                 self.eval_dot_index_chain_arguments(
                     scope, global, caches, lib, this_ptr, rhs, options, chain_type, idx_values, 0,
@@ -649,9 +656,11 @@ impl Engine {
                 if _parent_chain_type == ChainType::Dotting && !x.is_qualified() =>
             {
                 for arg_expr in x.args.as_ref() {
-                    let (value, _) =
-                        self.get_arg_value(scope, global, caches, lib, this_ptr, arg_expr, level)?;
-                    idx_values.push(value.flatten());
+                    idx_values.push(
+                        self.get_arg_value(scope, global, caches, lib, this_ptr, arg_expr, level)?
+                            .0
+                            .flatten(),
+                    );
                 }
             }
             #[cfg(not(feature = "no_object"))]
@@ -681,10 +690,13 @@ impl Engine {
                         if _parent_chain_type == ChainType::Dotting && !x.is_qualified() =>
                     {
                         for arg_expr in x.args.as_ref() {
-                            let (value, _) = self.get_arg_value(
-                                scope, global, caches, lib, this_ptr, arg_expr, level,
-                            )?;
-                            arg_values.push(value.flatten());
+                            arg_values.push(
+                                self.get_arg_value(
+                                    scope, global, caches, lib, this_ptr, arg_expr, level,
+                                )?
+                                .0
+                                .flatten(),
+                            );
                         }
                     }
                     #[cfg(not(feature = "no_object"))]
