@@ -497,10 +497,14 @@ impl Engine {
                     let root = namespace.root();
                     let index = state.find_module(root);
 
+                    #[cfg(not(feature = "no_function"))]
+                    #[cfg(not(feature = "no_module"))]
+                    let is_global = root == crate::engine::KEYWORD_GLOBAL;
+                    #[cfg(any(feature = "no_function", feature = "no_module"))]
+                    let is_global = false;
+
                     if settings.options.contains(LangOptions::STRICT_VAR) && index.is_none() {
-                        if root != crate::engine::KEYWORD_GLOBAL
-                            && !self.global_sub_modules.contains_key(root)
-                        {
+                        if !is_global && !self.global_sub_modules.contains_key(root) {
                             return Err(PERR::ModuleUndefined(root.to_string())
                                 .into_err(namespace.position()));
                         }
@@ -557,10 +561,14 @@ impl Engine {
                         let root = namespace.root();
                         let index = state.find_module(root);
 
+                        #[cfg(not(feature = "no_function"))]
+                        #[cfg(not(feature = "no_module"))]
+                        let is_global = root == crate::engine::KEYWORD_GLOBAL;
+                        #[cfg(any(feature = "no_function", feature = "no_module"))]
+                        let is_global = false;
+
                         if settings.options.contains(LangOptions::STRICT_VAR) && index.is_none() {
-                            if root != crate::engine::KEYWORD_GLOBAL
-                                && !self.global_sub_modules.contains_key(root)
-                            {
+                            if !is_global && !self.global_sub_modules.contains_key(root) {
                                 return Err(PERR::ModuleUndefined(root.to_string())
                                     .into_err(namespace.position()));
                             }
@@ -1262,7 +1270,9 @@ impl Engine {
             Token::Pipe | Token::Or if settings.options.contains(LangOptions::ANON_FN) => {
                 let mut new_state =
                     ParseState::new(self, state.scope, state.tokenizer_control.clone());
-                new_state.imports = state.imports.clone();
+
+                #[cfg(not(feature = "no_module"))]
+                new_state.imports.clone_from(&state.imports);
 
                 #[cfg(not(feature = "unchecked"))]
                 {
@@ -1676,10 +1686,14 @@ impl Engine {
                     let root = namespace.root();
                     let index = state.find_module(root);
 
+                    #[cfg(not(feature = "no_function"))]
+                    #[cfg(not(feature = "no_module"))]
+                    let is_global = root == crate::engine::KEYWORD_GLOBAL;
+                    #[cfg(any(feature = "no_function", feature = "no_module"))]
+                    let is_global = false;
+
                     if settings.options.contains(LangOptions::STRICT_VAR) && index.is_none() {
-                        if root != crate::engine::KEYWORD_GLOBAL
-                            && !self.global_sub_modules.contains_key(root)
-                        {
+                        if !is_global && !self.global_sub_modules.contains_key(root) {
                             return Err(PERR::ModuleUndefined(root.to_string())
                                 .into_err(namespace.position()));
                         }
@@ -3072,7 +3086,9 @@ impl Engine {
                     (Token::Fn, pos) => {
                         let mut new_state =
                             ParseState::new(self, state.scope, state.tokenizer_control.clone());
-                        new_state.imports = state.imports.clone();
+
+                        #[cfg(not(feature = "no_module"))]
+                        new_state.imports.clone_from(&state.imports);
 
                         #[cfg(not(feature = "unchecked"))]
                         {
