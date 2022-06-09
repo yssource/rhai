@@ -13,6 +13,8 @@ Bug fixes
 * Merging or combining a self-contained `AST` into another `AST` now works properly.
 * Plugin modules/functions no longer generate errors under `#![deny(missing_docs)]`.
 * Calling a property on a function call that returns a shared value no longer causes an error.
+* _Strict Variables Mode_ now checks for module namespaces within functions as well.
+* Module defined via `Engine::register_static_module` are now checked in _Strict Variables Mode_.
 
 Deprecated API's
 ----------------

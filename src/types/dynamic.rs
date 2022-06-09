@@ -52,7 +52,7 @@ pub trait Variant: Any + private::Sealed {
     #[must_use]
     fn as_any_mut(&mut self) -> &mut dyn Any;
 
-    /// Convert this [`Variant`] trait object to [`Box<dyn Any>`].
+    /// Convert this [`Variant`] trait object to [`Box<dyn Any>`][Any].
     #[must_use]
     fn as_boxed_any(self: Box<Self>) -> Box<dyn Any>;
 
@@ -79,7 +79,7 @@ pub trait Variant: Any + Send + Sync + private::Sealed {
     #[must_use]
     fn as_any_mut(&mut self) -> &mut dyn Any;
 
-    /// Convert this [`Variant`] trait object to [`Box<dyn Any>`].
+    /// Convert this [`Variant`] trait object to [`Box<dyn Any>`][Any].
     #[must_use]
     fn as_boxed_any(self: Box<Self>) -> Box<dyn Any>;
 

@@ -57,7 +57,7 @@ pub struct ParseState<'e> {
     pub block_stack_len: usize,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
     #[cfg(not(feature = "no_closure"))]
-    pub external_vars: crate::FnArgsVec<crate::ast::Ident>,
+    pub external_vars: Vec<crate::ast::Ident>,
     /// An indicator that disables variable capturing into externals one single time
     /// up until the nearest consumed Identifier token.
     /// If set to false the next call to [`access_var`][ParseState::access_var] will not capture the variable.
@@ -80,7 +80,7 @@ impl<'e> ParseState<'e> {
         Self {
             tokenizer_control,
             #[cfg(not(feature = "no_closure"))]
-            external_vars: crate::FnArgsVec::new_const(),
+            external_vars: Vec::new(),
             #[cfg(not(feature = "no_closure"))]
             allow_capture: true,
             interned_strings: StringsInterner::new(),
@@ -494,19 +494,16 @@ impl Engine {
 
                 #[cfg(not(feature = "no_module"))]
                 let hash = if !namespace.is_empty() {
-                    let index = state.find_module(namespace.root());
+                    let root = namespace.root();
+                    let index = state.find_module(root);
 
-                    #[cfg(not(feature = "no_function"))]
-                    let relax = settings.is_function_scope;
-                    #[cfg(feature = "no_function")]
-                    let relax = false;
-
-                    if !relax
-                        && settings.options.contains(LangOptions::STRICT_VAR)
-                        && index.is_none()
-                    {
-                        return Err(PERR::ModuleUndefined(namespace.root().to_string())
-                            .into_err(namespace.position()));
+                    if settings.options.contains(LangOptions::STRICT_VAR) && index.is_none() {
+                        if root != crate::engine::KEYWORD_GLOBAL
+                            && !self.global_sub_modules.contains_key(root)
+                        {
+                            return Err(PERR::ModuleUndefined(root.to_string())
+                                .into_err(namespace.position()));
+                        }
                     }
 
                     namespace.set_index(index);
@@ -557,19 +554,16 @@ impl Engine {
 
                     #[cfg(not(feature = "no_module"))]
                     let hash = if !namespace.is_empty() {
-                        let index = state.find_module(namespace.root());
+                        let root = namespace.root();
+                        let index = state.find_module(root);
 
-                        #[cfg(not(feature = "no_function"))]
-                        let relax = settings.is_function_scope;
-                        #[cfg(feature = "no_function")]
-                        let relax = false;
-
-                        if !relax
-                            && settings.options.contains(LangOptions::STRICT_VAR)
-                            && index.is_none()
-                        {
-                            return Err(PERR::ModuleUndefined(namespace.root().to_string())
-                                .into_err(namespace.position()));
+                        if settings.options.contains(LangOptions::STRICT_VAR) && index.is_none() {
+                            if root != crate::engine::KEYWORD_GLOBAL
+                                && !self.global_sub_modules.contains_key(root)
+                            {
+                                return Err(PERR::ModuleUndefined(root.to_string())
+                                    .into_err(namespace.position()));
+                            }
                         }
 
                         namespace.set_index(index);
@@ -1268,6 +1262,7 @@ impl Engine {
             Token::Pipe | Token::Or if settings.options.contains(LangOptions::ANON_FN) => {
                 let mut new_state =
                     ParseState::new(self, state.scope, state.tokenizer_control.clone());
+                new_state.imports = state.imports.clone();
 
                 #[cfg(not(feature = "unchecked"))]
                 {
@@ -1678,19 +1673,16 @@ impl Engine {
 
                 #[cfg(not(feature = "no_module"))]
                 {
-                    let index = state.find_module(namespace.root());
+                    let root = namespace.root();
+                    let index = state.find_module(root);
 
-                    #[cfg(not(feature = "no_function"))]
-                    let relax = settings.is_function_scope;
-                    #[cfg(feature = "no_function")]
-                    let relax = false;
-
-                    if !relax
-                        && settings.options.contains(LangOptions::STRICT_VAR)
-                        && index.is_none()
-                    {
-                        return Err(PERR::ModuleUndefined(namespace.root().to_string())
-                            .into_err(namespace.position()));
+                    if settings.options.contains(LangOptions::STRICT_VAR) && index.is_none() {
+                        if root != crate::engine::KEYWORD_GLOBAL
+                            && !self.global_sub_modules.contains_key(root)
+                        {
+                            return Err(PERR::ModuleUndefined(root.to_string())
+                                .into_err(namespace.position()));
+                        }
                     }
 
                     namespace.set_index(index);
@@ -3080,6 +3072,7 @@ impl Engine {
                     (Token::Fn, pos) => {
                         let mut new_state =
                             ParseState::new(self, state.scope, state.tokenizer_control.clone());
+                        new_state.imports = state.imports.clone();
 
                         #[cfg(not(feature = "unchecked"))]
                         {

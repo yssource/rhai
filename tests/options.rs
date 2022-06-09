@@ -91,17 +91,16 @@ fn test_options_strict_var() -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_function"))]
     assert!(engine.compile("fn foo(x) { x + y }").is_err());
 
+    #[cfg(not(feature = "no_function"))]
     #[cfg(not(feature = "no_module"))]
     {
         assert!(engine.compile("print(h::y::z);").is_err());
-        engine.compile(r#"import "hello" as h; print(h::y::z);"#)?;
+        assert!(engine.compile("fn foo() { h::y::z }").is_err());
+        assert!(engine.compile("fn foo() { h::y::foo() }").is_err());
+        engine.compile(r#"import "hello" as h; fn foo() { h::a::b::c } print(h::y::z);"#)?;
         assert!(engine.compile("let x = h::y::foo();").is_err());
-        engine.compile(r#"import "hello" as h; let x = h::y::foo();"#)?;
+        engine.compile(r#"import "hello" as h; fn foo() { h::a::b::c() } let x = h::y::foo();"#)?;
     }
-
-    #[cfg(not(feature = "no_function"))]
-    #[cfg(not(feature = "no_module"))]
-    engine.compile("fn foo() { h::y::foo() }")?;
 
     #[cfg(not(feature = "no_function"))]
     {
