@@ -57,7 +57,7 @@ pub struct ParseState<'e> {
     pub block_stack_len: usize,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
     #[cfg(not(feature = "no_closure"))]
-    pub external_vars: Vec<crate::ast::Ident>,
+    pub external_vars: crate::FnArgsVec<crate::ast::Ident>,
     /// An indicator that disables variable capturing into externals one single time
     /// up until the nearest consumed Identifier token.
     /// If set to false the next call to [`access_var`][ParseState::access_var] will not capture the variable.
@@ -80,7 +80,7 @@ impl<'e> ParseState<'e> {
         Self {
             tokenizer_control,
             #[cfg(not(feature = "no_closure"))]
-            external_vars: Vec::new(),
+            external_vars: crate::FnArgsVec::new_const(),
             #[cfg(not(feature = "no_closure"))]
             allow_capture: true,
             interned_strings: StringsInterner::new(),
