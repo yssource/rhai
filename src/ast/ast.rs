@@ -811,7 +811,7 @@ impl AST {
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     pub(crate) fn walk(&self, on_node: &mut impl FnMut(&[ASTNode]) -> bool) -> bool {
-        self.walk_raw(on_node)
+        self._walk(on_node)
     }
     /// _(internals)_ Recursively walk the [`AST`], including function bodies (if any).
     /// Return `false` from the callback to terminate the walk.
