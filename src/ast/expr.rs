@@ -400,19 +400,25 @@ pub enum Expr {
     Stmt(Box<StmtBlock>),
     /// func `(` expr `,` ... `)`
     FnCall(Box<FnCallExpr>, Position),
-    /// lhs `.` rhs
+    /// lhs `.` rhs | lhs `?.` rhs
+    ///
+    /// ### Flags
+    ///
+    /// [`NEGATED`][ASTFlags::NEGATED] = `?.` (`.` if unset)
+    /// [`BREAK`][ASTFlags::BREAK] = terminate the chain (recurse into the chain if unset)
     Dot(Box<BinaryExpr>, ASTFlags, Position),
     /// lhs `[` rhs `]`
     ///
     /// ### Flags
     ///
-    /// [`NONE`][ASTFlags::NONE] = recurse into the indexing chain
-    /// [`BREAK`][ASTFlags::BREAK] = terminate the indexing chain
+    /// [`BREAK`][ASTFlags::BREAK] = terminate the chain (recurse into the chain if unset)
     Index(Box<BinaryExpr>, ASTFlags, Position),
     /// lhs `&&` rhs
     And(Box<BinaryExpr>, Position),
     /// lhs `||` rhs
     Or(Box<BinaryExpr>, Position),
+    /// lhs `??` rhs
+    Coalesce(Box<BinaryExpr>, Position),
     /// Custom syntax
     Custom(Box<CustomExpr>, Position),
 }
@@ -480,26 +486,38 @@ impl fmt::Debug for Expr {
                 f.debug_list().entries(x.iter()).finish()
             }
             Self::FnCall(x, ..) => fmt::Debug::fmt(x, f),
-            Self::Index(x, term, pos) => {
+            Self::Index(x, options, pos) => {
                 if !pos.is_none() {
                     display_pos = format!(" @ {:?}", pos);
                 }
 
-                f.debug_struct("Index")
-                    .field("lhs", &x.lhs)
-                    .field("rhs", &x.rhs)
-                    .field("terminate", term)
-                    .finish()
+                let mut f = f.debug_struct("Index");
+
+                f.field("lhs", &x.lhs).field("rhs", &x.rhs);
+                if !options.is_empty() {
+                    f.field("options", options);
+                }
+                f.finish()
             }
-            Self::Dot(x, _, pos) | Self::And(x, pos) | Self::Or(x, pos) => {
+            Self::Dot(x, options, pos) => {
+                if !pos.is_none() {
+                    display_pos = format!(" @ {:?}", pos);
+                }
+
+                let mut f = f.debug_struct("Dot");
+
+                f.field("lhs", &x.lhs).field("rhs", &x.rhs);
+                if !options.is_empty() {
+                    f.field("options", options);
+                }
+                f.finish()
+            }
+            Self::And(x, pos) | Self::Or(x, pos) | Self::Coalesce(x, pos) => {
                 let op_name = match self {
-                    Self::Dot(..) => "Dot",
                     Self::And(..) => "And",
                     Self::Or(..) => "Or",
-                    expr => unreachable!(
-                        "Self::Dot or Self::And or Self::Or expected but gets {:?}",
-                        expr
-                    ),
+                    Self::Coalesce(..) => "Coalesce",
+                    expr => unreachable!("`And`, `Or` or `Coalesce` expected but gets {:?}", expr),
                 };
 
                 if !pos.is_none() {
@@ -681,6 +699,7 @@ impl Expr {
             | Self::Variable(.., pos)
             | Self::And(.., pos)
             | Self::Or(.., pos)
+            | Self::Coalesce(.., pos)
             | Self::Index(.., pos)
             | Self::Dot(.., pos)
             | Self::Custom(.., pos)
@@ -706,10 +725,15 @@ impl Expr {
                     self.position()
                 }
             }
-            Self::And(x, ..) | Self::Or(x, ..) | Self::Index(x, ..) | Self::Dot(x, ..) => {
-                x.lhs.start_position()
-            }
+
+            Self::And(x, ..)
+            | Self::Or(x, ..)
+            | Self::Coalesce(x, ..)
+            | Self::Index(x, ..)
+            | Self::Dot(x, ..) => x.lhs.start_position(),
+
             Self::FnCall(.., pos) => *pos,
+
             _ => self.position(),
         }
     }
@@ -730,6 +754,7 @@ impl Expr {
             | Self::Map(.., pos)
             | Self::And(.., pos)
             | Self::Or(.., pos)
+            | Self::Coalesce(.., pos)
             | Self::Dot(.., pos)
             | Self::Index(.., pos)
             | Self::Variable(.., pos)
@@ -755,7 +780,9 @@ impl Expr {
 
             Self::Map(x, ..) => x.0.iter().map(|(.., v)| v).all(Self::is_pure),
 
-            Self::And(x, ..) | Self::Or(x, ..) => x.lhs.is_pure() && x.rhs.is_pure(),
+            Self::And(x, ..) | Self::Or(x, ..) | Self::Coalesce(x, ..) => {
+                x.lhs.is_pure() && x.rhs.is_pure()
+            }
 
             Self::Stmt(x) => x.iter().all(Stmt::is_pure),
 
@@ -798,7 +825,7 @@ impl Expr {
     pub const fn is_valid_postfix(&self, token: &Token) -> bool {
         match token {
             #[cfg(not(feature = "no_object"))]
-            Token::Period => return true,
+            Token::Period | Token::Elvis => return true,
             #[cfg(not(feature = "no_index"))]
             Token::LeftBracket => return true,
             _ => (),
@@ -813,6 +840,7 @@ impl Expr {
             | Self::CharConstant(..)
             | Self::And(..)
             | Self::Or(..)
+            | Self::Coalesce(..)
             | Self::Unit(..) => false,
 
             Self::IntegerConstant(..)
@@ -877,7 +905,11 @@ impl Expr {
                     }
                 }
             }
-            Self::Index(x, ..) | Self::Dot(x, ..) | Expr::And(x, ..) | Expr::Or(x, ..) => {
+            Self::Index(x, ..)
+            | Self::Dot(x, ..)
+            | Expr::And(x, ..)
+            | Expr::Or(x, ..)
+            | Expr::Coalesce(x, ..) => {
                 if !x.lhs.walk(path, on_node) {
                     return false;
                 }

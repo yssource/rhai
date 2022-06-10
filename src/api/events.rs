@@ -68,7 +68,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[deprecated = "This API is volatile and may change in the future."]
+    #[deprecated = "This API is NOT deprecated, but it is considered volatile and may change in the future."]
     #[inline(always)]
     pub fn on_var(
         &mut self,
@@ -130,7 +130,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[deprecated = "This API is volatile and may change in the future."]
+    #[deprecated = "This API is NOT deprecated, but it is considered volatile and may change in the future."]
     #[inline(always)]
     pub fn on_def_var(
         &mut self,
@@ -188,7 +188,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[deprecated = "This API is volatile and may change in the future."]
+    #[deprecated = "This API is NOT deprecated, but it is considered volatile and may change in the future."]
     #[cfg(feature = "internals")]
     #[inline(always)]
     pub fn on_parse_token(
@@ -343,7 +343,7 @@ impl Engine {
     /// # WARNING - Unstable API
     ///
     /// This API is volatile and may change in the future.
-    #[deprecated = "This API is volatile and may change in the future."]
+    #[deprecated = "This API is NOT deprecated, but it is considered volatile and may change in the future."]
     #[cfg(feature = "debugging")]
     #[inline(always)]
     pub fn register_debugger(

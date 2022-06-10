@@ -782,8 +782,9 @@ impl Engine {
         fn_name: &str,
         mut hash: FnCallHashes,
         target: &mut crate::eval::Target,
-        (call_args, call_arg_pos): &mut (FnArgsVec<Dynamic>, Position),
-        pos: Position,
+        mut call_args: &mut [Dynamic],
+        first_arg_pos: Position,
+        fn_call_pos: Position,
         level: usize,
     ) -> RhaiResultOf<(Dynamic, bool)> {
         let is_ref_mut = target.is_ref();
@@ -806,7 +807,16 @@ impl Engine {
 
                 // Map it to name(args) in function-call style
                 self.exec_fn_call(
-                    None, global, caches, lib, fn_name, new_hash, &mut args, false, false, pos,
+                    None,
+                    global,
+                    caches,
+                    lib,
+                    fn_name,
+                    new_hash,
+                    &mut args,
+                    false,
+                    false,
+                    fn_call_pos,
                     level,
                 )
             }
@@ -814,15 +824,17 @@ impl Engine {
                 if !call_args.is_empty() {
                     if !call_args[0].is::<FnPtr>() {
                         let typ = self.map_type_name(call_args[0].type_name());
-                        return Err(self.make_type_mismatch_err::<FnPtr>(typ, *call_arg_pos));
+                        return Err(self.make_type_mismatch_err::<FnPtr>(typ, first_arg_pos));
                     }
                 } else {
                     let typ = self.map_type_name(target.type_name());
-                    return Err(self.make_type_mismatch_err::<FnPtr>(typ, pos));
+                    return Err(self.make_type_mismatch_err::<FnPtr>(typ, fn_call_pos));
                 }
 
                 // FnPtr call on object
-                let fn_ptr = call_args.remove(0).cast::<FnPtr>();
+                let fn_ptr = mem::take(&mut call_args[0]).cast::<FnPtr>();
+                call_args = &mut call_args[1..];
+
                 // Redirect function name
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
@@ -842,14 +854,23 @@ impl Engine {
 
                 // Map it to name(args) in function-call style
                 self.exec_fn_call(
-                    None, global, caches, lib, fn_name, new_hash, &mut args, is_ref_mut, true, pos,
+                    None,
+                    global,
+                    caches,
+                    lib,
+                    fn_name,
+                    new_hash,
+                    &mut args,
+                    is_ref_mut,
+                    true,
+                    fn_call_pos,
                     level,
                 )
             }
             KEYWORD_FN_PTR_CURRY => {
                 if !target.is::<FnPtr>() {
                     let typ = self.map_type_name(target.type_name());
-                    return Err(self.make_type_mismatch_err::<FnPtr>(typ, pos));
+                    return Err(self.make_type_mismatch_err::<FnPtr>(typ, fn_call_pos));
                 }
 
                 let fn_ptr = target.read_lock::<FnPtr>().expect("`FnPtr`");
@@ -883,6 +904,8 @@ impl Engine {
             _ => {
                 let mut fn_name = fn_name;
                 let _redirected;
+                let mut _arg_values: FnArgsVec<_>;
+                let mut call_args = call_args;
 
                 // Check if it is a map method call in OOP style
                 #[cfg(not(feature = "no_object"))]
@@ -894,7 +917,13 @@ impl Engine {
                             fn_name = &_redirected;
                             // Add curried arguments
                             if fn_ptr.is_curried() {
-                                call_args.insert_many(0, fn_ptr.curry().iter().cloned());
+                                _arg_values = fn_ptr
+                                    .curry()
+                                    .iter()
+                                    .cloned()
+                                    .chain(call_args.iter_mut().map(mem::take))
+                                    .collect();
+                                call_args = &mut _arg_values;
                             }
                             // Recalculate the hash based on the new function name and new arguments
                             hash = FnCallHashes::from_all(
@@ -912,7 +941,16 @@ impl Engine {
                 args.extend(call_args.iter_mut());
 
                 self.exec_fn_call(
-                    None, global, caches, lib, fn_name, hash, &mut args, is_ref_mut, true, pos,
+                    None,
+                    global,
+                    caches,
+                    lib,
+                    fn_name,
+                    hash,
+                    &mut args,
+                    is_ref_mut,
+                    true,
+                    fn_call_pos,
                     level,
                 )
             }
@@ -920,9 +958,7 @@ impl Engine {
 
         // Propagate the changed value back to the source if necessary
         if updated {
-            target
-                .propagate_changed_value()
-                .map_err(|err| err.fill_position(pos))?;
+            target.propagate_changed_value(fn_call_pos)?;
         }
 
         Ok((result, updated))

@@ -6,9 +6,9 @@ use crate::types::dynamic::Variant;
 use crate::{
     Dynamic, Engine, OptimizationLevel, Position, RhaiResult, RhaiResultOf, Scope, AST, ERR,
 };
+use std::any::type_name;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-use std::{any::type_name, mem};
 
 impl Engine {
     /// Evaluate a string.
@@ -222,7 +222,7 @@ impl Engine {
         global.source = ast.source_raw().clone();
 
         #[cfg(not(feature = "no_module"))]
-        let orig_embedded_module_resolver = mem::replace(
+        let orig_embedded_module_resolver = std::mem::replace(
             &mut global.embedded_module_resolver,
             ast.resolver().cloned(),
         );

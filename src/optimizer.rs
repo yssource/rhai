@@ -10,7 +10,7 @@ use crate::tokenizer::{Span, Token};
 use crate::types::dynamic::AccessMode;
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnPtr, Identifier,
-    Position, Scope, StaticVec, AST, INT, INT_BITS,
+    Position, Scope, StaticVec, AST, INT,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -912,9 +912,15 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
                 _ => ()
             }
         }
+        // ()?.rhs
+        #[cfg(not(feature = "no_object"))]
+        Expr::Dot(x, options, ..) if options.contains(ASTFlags::NEGATED) && matches!(x.lhs, Expr::Unit(..)) => {
+            state.set_dirty();
+            *expr = mem::take(&mut x.lhs);
+        }
         // lhs.rhs
         #[cfg(not(feature = "no_object"))]
-        Expr::Dot(x,_, ..) if !_chaining => match (&mut x.lhs, &mut x.rhs) {
+        Expr::Dot(x, ..) if !_chaining => match (&mut x.lhs, &mut x.rhs) {
             // map.string
             (Expr::Map(m, pos), Expr::Property(p, ..)) if m.0.iter().all(|(.., x)| x.is_pure()) => {
                 let prop = p.2.as_str();
@@ -932,7 +938,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
         }
         // ....lhs.rhs
         #[cfg(not(feature = "no_object"))]
-        Expr::Dot(x,_, ..) => { optimize_expr(&mut x.lhs, state, false); optimize_expr(&mut x.rhs, state, _chaining); }
+        Expr::Dot(x,..) => { optimize_expr(&mut x.lhs, state, false); optimize_expr(&mut x.rhs, state, _chaining); }
 
         // lhs[rhs]
         #[cfg(not(feature = "no_index"))]
@@ -966,16 +972,16 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
                             .unwrap_or_else(|| Expr::Unit(*pos));
             }
             // int[int]
-            (Expr::IntegerConstant(n, pos), Expr::IntegerConstant(i, ..)) if *i >= 0 && (*i as usize) < INT_BITS => {
+            (Expr::IntegerConstant(n, pos), Expr::IntegerConstant(i, ..)) if *i >= 0 && (*i as usize) < crate::INT_BITS => {
                 // Bit-field literal indexing - get the bit
                 state.set_dirty();
                 *expr = Expr::BoolConstant((*n & (1 << (*i as usize))) != 0, *pos);
             }
             // int[-int]
-            (Expr::IntegerConstant(n, pos), Expr::IntegerConstant(i, ..)) if *i < 0 && i.checked_abs().map(|i| i as usize <= INT_BITS).unwrap_or(false) => {
+            (Expr::IntegerConstant(n, pos), Expr::IntegerConstant(i, ..)) if *i < 0 && i.checked_abs().map(|i| i as usize <= crate::INT_BITS).unwrap_or(false) => {
                 // Bit-field literal indexing - get the bit
                 state.set_dirty();
-                *expr = Expr::BoolConstant((*n & (1 << (INT_BITS - i.abs() as usize))) != 0, *pos);
+                *expr = Expr::BoolConstant((*n & (1 << (crate::INT_BITS - i.abs() as usize))) != 0, *pos);
             }
             // string[int]
             (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, ..)) if *i >= 0 && (*i as usize) < s.chars().count() => {
@@ -1066,6 +1072,16 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
             (lhs, Expr::BoolConstant(false, ..)) => { state.set_dirty(); optimize_expr(lhs, state, false); *expr = mem::take(lhs); }
             // lhs || rhs
             (lhs, rhs) => { optimize_expr(lhs, state, false); optimize_expr(rhs, state, false); }
+        },
+        // () ?? rhs -> rhs
+        Expr::Coalesce(x, ..) if matches!(x.lhs, Expr::Unit(..)) => {
+            state.set_dirty();
+            *expr = mem::take(&mut x.rhs);
+        },
+        // lhs:constant ?? rhs -> lhs
+        Expr::Coalesce(x, ..) if x.lhs.is_constant() => {
+            state.set_dirty();
+            *expr = mem::take(&mut x.lhs);
         },
 
         // eval!

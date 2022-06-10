@@ -32,13 +32,17 @@ impl Engine {
 
         if let Some(index) = index {
             let offset = global.num_imports() - index.get();
-            Some(global.get_shared_import(offset).unwrap())
-        } else {
-            global
-                .find_import(root)
-                .map(|n| global.get_shared_import(n).unwrap())
-                .or_else(|| self.global_sub_modules.get(root).cloned())
+
+            if let m @ Some(_) = global.get_shared_import(offset) {
+                return m;
+            }
         }
+
+        // Do a text-match search if the index doesn't work
+        global.find_import(root).map_or_else(
+            || self.global_sub_modules.get(root).cloned(),
+            |offset| global.get_shared_import(offset),
+        )
     }
 
     /// Search for a variable within the scope or within imports,
@@ -457,6 +461,17 @@ impl Engine {
                         })
                 } else {
                     lhs.map(Into::into)
+                }
+            }
+
+            Expr::Coalesce(x, ..) => {
+                let lhs = self.eval_expr(scope, global, caches, lib, this_ptr, &x.lhs, level);
+
+                match lhs {
+                    Ok(value) if value.is::<()>() => {
+                        self.eval_expr(scope, global, caches, lib, this_ptr, &x.rhs, level)
+                    }
+                    Ok(_) | Err(_) => lhs,
                 }
             }
 

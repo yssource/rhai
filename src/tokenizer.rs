@@ -420,6 +420,10 @@ pub enum Token {
     Comma,
     /// `.`
     Period,
+    /// `?.`
+    Elvis,
+    /// `??`
+    DoubleQuestion,
     /// `..`
     ExclusiveRange,
     /// `..=`
@@ -576,6 +580,8 @@ impl Token {
             Underscore => "_",
             Comma => ",",
             Period => ".",
+            Elvis => "?.",
+            DoubleQuestion => "??",
             ExclusiveRange => "..",
             InclusiveRange => "..=",
             MapStart => "#{",
@@ -771,6 +777,8 @@ impl Token {
             "_" => Underscore,
             "," => Comma,
             "." => Period,
+            "?." => Elvis,
+            "??" => DoubleQuestion,
             ".." => ExclusiveRange,
             "..=" => InclusiveRange,
             "#{" => MapStart,
@@ -877,11 +885,13 @@ impl Token {
         use Token::*;
 
         match self {
-            LexError(..)      |
+            LexError(..)     |
             SemiColon        | // ; - is unary
             Colon            | // #{ foo: - is unary
             Comma            | // ( ... , -expr ) - is unary
             //Period           |
+            //Elvis            |
+            //DoubleQuestion   |
             ExclusiveRange            | // .. - is unary
             InclusiveRange   | // ..= - is unary
             LeftBrace        | // { -expr } - is unary
@@ -952,6 +962,8 @@ impl Token {
 
             LessThan | LessThanEqualsTo | GreaterThan | GreaterThanEqualsTo => 130,
 
+            DoubleQuestion => 135,
+
             ExclusiveRange | InclusiveRange => 140,
 
             Plus | Minus => 150,
@@ -987,12 +999,12 @@ impl Token {
         match self {
             LeftBrace | RightBrace | LeftParen | RightParen | LeftBracket | RightBracket | Plus
             | UnaryPlus | Minus | UnaryMinus | Multiply | Divide | Modulo | PowerOf | LeftShift
-            | RightShift | SemiColon | Colon | DoubleColon | Comma | Period | ExclusiveRange
-            | InclusiveRange | MapStart | Equals | LessThan | GreaterThan | LessThanEqualsTo
-            | GreaterThanEqualsTo | EqualsTo | NotEqualsTo | Bang | Pipe | Or | XOr | Ampersand
-            | And | PlusAssign | MinusAssign | MultiplyAssign | DivideAssign | LeftShiftAssign
-            | RightShiftAssign | AndAssign | OrAssign | XOrAssign | ModuloAssign
-            | PowerOfAssign => true,
+            | RightShift | SemiColon | Colon | DoubleColon | Comma | Period | Elvis
+            | DoubleQuestion | ExclusiveRange | InclusiveRange | MapStart | Equals | LessThan
+            | GreaterThan | LessThanEqualsTo | GreaterThanEqualsTo | EqualsTo | NotEqualsTo
+            | Bang | Pipe | Or | XOr | Ampersand | And | PlusAssign | MinusAssign
+            | MultiplyAssign | DivideAssign | LeftShiftAssign | RightShiftAssign | AndAssign
+            | OrAssign | XOrAssign | ModuloAssign | PowerOfAssign => true,
 
             _ => false,
         }
@@ -1992,6 +2004,7 @@ fn get_next_token_inner(
 
                 return Some((Token::NotEqualsTo, start_pos));
             }
+            ('!', '.') => return Some((Token::Reserved("!.".into()), start_pos)),
             ('!', ..) => return Some((Token::Bang, start_pos)),
 
             ('|', '|') => {
@@ -2031,6 +2044,16 @@ fn get_next_token_inner(
             ('@', ..) => return Some((Token::Reserved("@".into()), start_pos)),
 
             ('$', ..) => return Some((Token::Reserved("$".into()), start_pos)),
+
+            ('?', '.') => {
+                eat_next(stream, pos);
+                return Some((Token::Elvis, start_pos));
+            }
+            ('?', '?') => {
+                eat_next(stream, pos);
+                return Some((Token::DoubleQuestion, start_pos));
+            }
+            ('?', ..) => return Some((Token::Reserved("?".into()), start_pos)),
 
             (ch, ..) if ch.is_whitespace() => (),
 

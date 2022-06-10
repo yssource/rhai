@@ -130,6 +130,7 @@ const INT_BITS: usize = std::mem::size_of::<INT>() * 8;
 /// Number of bytes that make up an [`INT`].
 ///
 /// It is 8 unless the `only_i32` feature is enabled when it will be 4.
+#[cfg(not(feature = "no_index"))]
 const INT_BYTES: usize = std::mem::size_of::<INT>();
 
 /// The system floating-point type. It is defined as [`f64`].
@@ -155,6 +156,7 @@ pub type FLOAT = f32;
 ///
 /// It is 8 unless the `f32_float` feature is enabled when it will be 4.
 #[cfg(not(feature = "no_float"))]
+#[cfg(not(feature = "no_index"))]
 const FLOAT_BYTES: usize = std::mem::size_of::<FLOAT>();
 
 /// An exclusive integer range.

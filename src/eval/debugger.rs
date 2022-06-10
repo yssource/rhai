@@ -315,7 +315,7 @@ impl Debugger {
     /// Change the current status to [`CONTINUE`][DebuggerStatus::CONTINUE] and return the previous status.
     pub(crate) fn clear_status_if(
         &mut self,
-        filter: impl Fn(&DebuggerStatus) -> bool,
+        filter: impl FnOnce(&DebuggerStatus) -> bool,
     ) -> Option<DebuggerStatus> {
         if filter(&self.status) {
             Some(mem::replace(&mut self.status, DebuggerStatus::CONTINUE))

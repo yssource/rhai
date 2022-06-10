@@ -162,7 +162,7 @@ impl Engine {
     ) -> RhaiResult {
         let mut arg_values = arg_values;
 
-        self.call_fn_internal(
+        self._call_fn(
             scope,
             &mut GlobalRuntimeState::new(self),
             &mut Caches::new(),
@@ -215,7 +215,7 @@ impl Engine {
         this_ptr: Option<&mut Dynamic>,
         arg_values: &mut [Dynamic],
     ) -> RhaiResult {
-        self.call_fn_internal(
+        self._call_fn(
             scope,
             global,
             caches,
@@ -228,7 +228,7 @@ impl Engine {
         )
     }
     /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments.
-    fn call_fn_internal(
+    fn _call_fn(
         &self,
         scope: &mut Scope,
         global: &mut GlobalRuntimeState,

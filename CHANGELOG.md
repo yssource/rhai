@@ -12,15 +12,30 @@ Bug fixes
 * Parsing of index expressions is relaxed and many cases no longer result in an index-type error to allow for custom indexers.
 * Merging or combining a self-contained `AST` into another `AST` now works properly.
 * Plugin modules/functions no longer generate errors under `#![deny(missing_docs)]`.
+* Calling a property on a function call that returns a shared value no longer causes an error.
+* _Strict Variables Mode_ now checks for module namespaces within functions as well.
+* Module defined via `Engine::register_static_module` are now checked in _Strict Variables Mode_.
+
+Reserved Symbols
+----------------
+
+* `?`, `??`, `?.` and `!.` are now reserved symbols.
 
 Deprecated API's
 ----------------
 
 * `FnPtr::num_curried` is deprecated in favor of `FnPtr::curry().len()`.
 
+New features
+------------
+
+* The _Elvis operator_ (`?.`) is now supported for property access and method calls.
+* The _null-coalescing operator_ (`??`) is now supported to short-circuit `()` values.
+
 Enhancements
 ------------
 
+* Indexing and property access are now faster.
 * `EvalAltResult::IndexNotFound` is added to aid in raising errors for indexers.
 * `Engine::def_tag`, `Engine::def_tag_mut` and `Engine::set_tag` are added to manage a default value for the custom evaluation state, accessible via `EvalState::tag()` (which is the same as `NativeCallContext::tag()`).
 * Originally, the debugger's custom state uses the same state as `EvalState::tag()` (which is the same as `NativeCallContext::tag()`).  It is now split into its own variable accessible under `Debugger::state()`.

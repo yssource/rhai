@@ -1,7 +1,7 @@
 //! Type to hold a mutable reference to the target of an evaluation.
 
 use crate::types::dynamic::Variant;
-use crate::{Dynamic, RhaiResultOf};
+use crate::{Dynamic, Position, RhaiResultOf};
 use std::ops::{Deref, DerefMut};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -46,7 +46,7 @@ pub fn calc_index<E>(
     length: usize,
     start: crate::INT,
     negative_count_from_end: bool,
-    err: impl Fn() -> Result<usize, E>,
+    err: impl FnOnce() -> Result<usize, E>,
 ) -> Result<usize, E> {
     if start < 0 {
         if negative_count_from_end {
@@ -272,10 +272,8 @@ impl<'a> Target<'a> {
     }
     /// Propagate a changed value back to the original source.
     /// This has no effect for direct references.
-    ///
-    /// [`Position`] in [`EvalAltResult`] is [`NONE`][Position::NONE] and should be set afterwards.
     #[inline]
-    pub fn propagate_changed_value(&mut self) -> RhaiResultOf<()> {
+    pub fn propagate_changed_value(&mut self, _pos: Position) -> RhaiResultOf<()> {
         match self {
             Self::RefMut(..) | Self::TempValue(..) => (),
             #[cfg(not(feature = "no_closure"))]
@@ -287,7 +285,7 @@ impl<'a> Target<'a> {
                     Box::new(crate::ERR::ErrorMismatchDataType(
                         "bool".to_string(),
                         err.to_string(),
-                        crate::Position::NONE,
+                        _pos,
                     ))
                 })?;
 
@@ -317,7 +315,7 @@ impl<'a> Target<'a> {
                     Box::new(crate::ERR::ErrorMismatchDataType(
                         "integer".to_string(),
                         err.to_string(),
-                        crate::Position::NONE,
+                        _pos,
                     ))
                 })?;
 
@@ -338,7 +336,7 @@ impl<'a> Target<'a> {
                     Box::new(crate::ERR::ErrorMismatchDataType(
                         "INT".to_string(),
                         err.to_string(),
-                        crate::Position::NONE,
+                        _pos,
                     ))
                 })?;
 
@@ -363,7 +361,7 @@ impl<'a> Target<'a> {
                     Box::new(crate::ERR::ErrorMismatchDataType(
                         "char".to_string(),
                         err.to_string(),
-                        crate::Position::NONE,
+                        _pos,
                     ))
                 })?;
 
