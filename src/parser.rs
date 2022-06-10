@@ -1917,8 +1917,8 @@ impl Engine {
                     }
                 }
             }
-            // ??? && ??? = rhs, ??? || ??? = rhs
-            Expr::And(..) | Expr::Or(..) => Err(LexError::ImproperSymbol(
+            // ??? && ??? = rhs, ??? || ??? = rhs, xxx ?? xxx = rhs
+            Expr::And(..) | Expr::Or(..) | Expr::Coalesce(..) => Err(LexError::ImproperSymbol(
                 "=".to_string(),
                 "Possibly a typo of '=='?".to_string(),
             )
@@ -2218,6 +2218,18 @@ impl Engine {
                         BinaryExpr {
                             lhs: current_lhs.ensure_bool_expr()?,
                             rhs: rhs.ensure_bool_expr()?,
+                        }
+                        .into(),
+                        pos,
+                    )
+                }
+                Token::DoubleQuestion => {
+                    let rhs = args.pop().unwrap();
+                    let current_lhs = args.pop().unwrap();
+                    Expr::Coalesce(
+                        BinaryExpr {
+                            lhs: current_lhs,
+                            rhs,
                         }
                         .into(),
                         pos,

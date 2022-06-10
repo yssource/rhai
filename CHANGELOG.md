@@ -19,7 +19,7 @@ Bug fixes
 Reserved Symbols
 ----------------
 
-* `?`, `?.` and `!.` are now reserved symbols.
+* `?`, `??`, `?.` and `!.` are now reserved symbols.
 
 Deprecated API's
 ----------------
@@ -30,6 +30,7 @@ New features
 ------------
 
 * The _Elvis operator_ (`?.`) is now supported for property access and method calls.
+* The _null-coalescing operator_ (`??`) is now supported to short-circuit `()` values.
 
 Enhancements
 ------------

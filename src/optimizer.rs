@@ -1073,6 +1073,16 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
             // lhs || rhs
             (lhs, rhs) => { optimize_expr(lhs, state, false); optimize_expr(rhs, state, false); }
         },
+        // () ?? rhs -> rhs
+        Expr::Coalesce(x, ..) if matches!(x.lhs, Expr::Unit(..)) => {
+            state.set_dirty();
+            *expr = mem::take(&mut x.rhs);
+        },
+        // lhs:constant ?? rhs -> lhs
+        Expr::Coalesce(x, ..) if x.lhs.is_constant() => {
+            state.set_dirty();
+            *expr = mem::take(&mut x.lhs);
+        },
 
         // eval!
         Expr::FnCall(x, ..) if x.name == KEYWORD_EVAL => {

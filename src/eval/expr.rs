@@ -464,6 +464,17 @@ impl Engine {
                 }
             }
 
+            Expr::Coalesce(x, ..) => {
+                let lhs = self.eval_expr(scope, global, caches, lib, this_ptr, &x.lhs, level);
+
+                match lhs {
+                    Ok(value) if value.is::<()>() => {
+                        self.eval_expr(scope, global, caches, lib, this_ptr, &x.rhs, level)
+                    }
+                    Ok(_) | Err(_) => lhs,
+                }
+            }
+
             Expr::Custom(custom, pos) => {
                 let expressions: StaticVec<_> = custom.inputs.iter().map(Into::into).collect();
                 // The first token acts as the custom syntax's key

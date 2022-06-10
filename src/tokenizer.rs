@@ -422,6 +422,8 @@ pub enum Token {
     Period,
     /// `?.`
     Elvis,
+    /// `??`
+    DoubleQuestion,
     /// `..`
     ExclusiveRange,
     /// `..=`
@@ -579,6 +581,7 @@ impl Token {
             Comma => ",",
             Period => ".",
             Elvis => "?.",
+            DoubleQuestion => "??",
             ExclusiveRange => "..",
             InclusiveRange => "..=",
             MapStart => "#{",
@@ -775,6 +778,7 @@ impl Token {
             "," => Comma,
             "." => Period,
             "?." => Elvis,
+            "??" => DoubleQuestion,
             ".." => ExclusiveRange,
             "..=" => InclusiveRange,
             "#{" => MapStart,
@@ -887,6 +891,7 @@ impl Token {
             Comma            | // ( ... , -expr ) - is unary
             //Period           |
             //Elvis            |
+            //DoubleQuestion   |
             ExclusiveRange            | // .. - is unary
             InclusiveRange   | // ..= - is unary
             LeftBrace        | // { -expr } - is unary
@@ -957,6 +962,8 @@ impl Token {
 
             LessThan | LessThanEqualsTo | GreaterThan | GreaterThanEqualsTo => 130,
 
+            DoubleQuestion => 135,
+
             ExclusiveRange | InclusiveRange => 140,
 
             Plus | Minus => 150,
@@ -993,11 +1000,11 @@ impl Token {
             LeftBrace | RightBrace | LeftParen | RightParen | LeftBracket | RightBracket | Plus
             | UnaryPlus | Minus | UnaryMinus | Multiply | Divide | Modulo | PowerOf | LeftShift
             | RightShift | SemiColon | Colon | DoubleColon | Comma | Period | Elvis
-            | ExclusiveRange | InclusiveRange | MapStart | Equals | LessThan | GreaterThan
-            | LessThanEqualsTo | GreaterThanEqualsTo | EqualsTo | NotEqualsTo | Bang | Pipe
-            | Or | XOr | Ampersand | And | PlusAssign | MinusAssign | MultiplyAssign
-            | DivideAssign | LeftShiftAssign | RightShiftAssign | AndAssign | OrAssign
-            | XOrAssign | ModuloAssign | PowerOfAssign => true,
+            | DoubleQuestion | ExclusiveRange | InclusiveRange | MapStart | Equals | LessThan
+            | GreaterThan | LessThanEqualsTo | GreaterThanEqualsTo | EqualsTo | NotEqualsTo
+            | Bang | Pipe | Or | XOr | Ampersand | And | PlusAssign | MinusAssign
+            | MultiplyAssign | DivideAssign | LeftShiftAssign | RightShiftAssign | AndAssign
+            | OrAssign | XOrAssign | ModuloAssign | PowerOfAssign => true,
 
             _ => false,
         }
@@ -2041,6 +2048,10 @@ fn get_next_token_inner(
             ('?', '.') => {
                 eat_next(stream, pos);
                 return Some((Token::Elvis, start_pos));
+            }
+            ('?', '?') => {
+                eat_next(stream, pos);
+                return Some((Token::DoubleQuestion, start_pos));
             }
             ('?', ..) => return Some((Token::Reserved("?".into()), start_pos)),
 

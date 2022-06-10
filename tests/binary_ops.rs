@@ -135,3 +135,13 @@ fn test_binary_ops() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_binary_ops_null_coalesce() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert_eq!(engine.eval::<INT>("let x = 42; x ?? 123")?, 42);
+    assert_eq!(engine.eval::<INT>("let x = (); x ?? 123")?, 123);
+
+    Ok(())
+}
