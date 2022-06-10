@@ -16,6 +16,11 @@ Bug fixes
 * _Strict Variables Mode_ now checks for module namespaces within functions as well.
 * Module defined via `Engine::register_static_module` are now checked in _Strict Variables Mode_.
 
+Reserved Symbols
+----------------
+
+* `?`, `?.` and `!.` are now reserved symbols.
+
 Deprecated API's
 ----------------
 

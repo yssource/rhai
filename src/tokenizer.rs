@@ -1992,6 +1992,7 @@ fn get_next_token_inner(
 
                 return Some((Token::NotEqualsTo, start_pos));
             }
+            ('!', '.') => return Some((Token::Reserved("!.".into()), start_pos)),
             ('!', ..) => return Some((Token::Bang, start_pos)),
 
             ('|', '|') => {
@@ -2031,6 +2032,9 @@ fn get_next_token_inner(
             ('@', ..) => return Some((Token::Reserved("@".into()), start_pos)),
 
             ('$', ..) => return Some((Token::Reserved("$".into()), start_pos)),
+
+            ('?', '.') => return Some((Token::Reserved("?.".into()), start_pos)),
+            ('?', ..) => return Some((Token::Reserved("?".into()), start_pos)),
 
             (ch, ..) if ch.is_whitespace() => (),
 
