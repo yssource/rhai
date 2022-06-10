@@ -26,6 +26,11 @@ Deprecated API's
 
 * `FnPtr::num_curried` is deprecated in favor of `FnPtr::curry().len()`.
 
+New features
+------------
+
+* The _Elvis operator_ (`?.`) is now supported for property access and method calls.
+
 Enhancements
 ------------
 

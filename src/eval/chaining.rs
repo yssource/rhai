@@ -186,6 +186,11 @@ impl Engine {
 
             #[cfg(not(feature = "no_object"))]
             ChainType::Dotting => {
+                // Check for existence with the Elvis operator
+                if _parent_options.contains(ASTFlags::NEGATED) && target.is::<()>() {
+                    return Ok((Dynamic::UNIT, false));
+                }
+
                 match rhs {
                     // xxx.fn_name(arg_expr_list)
                     Expr::MethodCall(x, pos) if !x.is_qualified() && new_val.is_none() => {

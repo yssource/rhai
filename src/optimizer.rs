@@ -912,9 +912,15 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
                 _ => ()
             }
         }
+        // ()?.rhs
+        #[cfg(not(feature = "no_object"))]
+        Expr::Dot(x, options, ..) if options.contains(ASTFlags::NEGATED) && matches!(x.lhs, Expr::Unit(..)) => {
+            state.set_dirty();
+            *expr = mem::take(&mut x.lhs);
+        }
         // lhs.rhs
         #[cfg(not(feature = "no_object"))]
-        Expr::Dot(x,_, ..) if !_chaining => match (&mut x.lhs, &mut x.rhs) {
+        Expr::Dot(x, ..) if !_chaining => match (&mut x.lhs, &mut x.rhs) {
             // map.string
             (Expr::Map(m, pos), Expr::Property(p, ..)) if m.0.iter().all(|(.., x)| x.is_pure()) => {
                 let prop = p.2.as_str();
@@ -932,7 +938,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
         }
         // ....lhs.rhs
         #[cfg(not(feature = "no_object"))]
-        Expr::Dot(x,_, ..) => { optimize_expr(&mut x.lhs, state, false); optimize_expr(&mut x.rhs, state, _chaining); }
+        Expr::Dot(x,..) => { optimize_expr(&mut x.lhs, state, false); optimize_expr(&mut x.rhs, state, _chaining); }
 
         // lhs[rhs]
         #[cfg(not(feature = "no_index"))]

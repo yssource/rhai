@@ -400,18 +400,18 @@ pub enum Expr {
     Stmt(Box<StmtBlock>),
     /// func `(` expr `,` ... `)`
     FnCall(Box<FnCallExpr>, Position),
-    /// lhs `.` rhs
+    /// lhs `.` rhs | lhs `?.` rhs
     ///
     /// ### Flags
     ///
-    /// No flags are defined at this time.  Use [`NONE`][ASTFlags::NONE].
+    /// [`NEGATED`][ASTFlags::NEGATED] = `?.` (`.` if unset)
+    /// [`BREAK`][ASTFlags::BREAK] = terminate the chain (recurse into the chain if unset)
     Dot(Box<BinaryExpr>, ASTFlags, Position),
     /// lhs `[` rhs `]`
     ///
     /// ### Flags
     ///
-    /// [`NONE`][ASTFlags::NONE] = recurse into the indexing chain
-    /// [`BREAK`][ASTFlags::BREAK] = terminate the indexing chain
+    /// [`BREAK`][ASTFlags::BREAK] = terminate the chain (recurse into the chain if unset)
     Index(Box<BinaryExpr>, ASTFlags, Position),
     /// lhs `&&` rhs
     And(Box<BinaryExpr>, Position),
@@ -484,26 +484,37 @@ impl fmt::Debug for Expr {
                 f.debug_list().entries(x.iter()).finish()
             }
             Self::FnCall(x, ..) => fmt::Debug::fmt(x, f),
-            Self::Index(x, term, pos) => {
+            Self::Index(x, options, pos) => {
                 if !pos.is_none() {
                     display_pos = format!(" @ {:?}", pos);
                 }
 
-                f.debug_struct("Index")
-                    .field("lhs", &x.lhs)
-                    .field("rhs", &x.rhs)
-                    .field("terminate", term)
-                    .finish()
+                let mut f = f.debug_struct("Index");
+
+                f.field("lhs", &x.lhs).field("rhs", &x.rhs);
+                if !options.is_empty() {
+                    f.field("options", options);
+                }
+                f.finish()
             }
-            Self::Dot(x, _, pos) | Self::And(x, pos) | Self::Or(x, pos) => {
+            Self::Dot(x, options, pos) => {
+                if !pos.is_none() {
+                    display_pos = format!(" @ {:?}", pos);
+                }
+
+                let mut f = f.debug_struct("Dot");
+
+                f.field("lhs", &x.lhs).field("rhs", &x.rhs);
+                if !options.is_empty() {
+                    f.field("options", options);
+                }
+                f.finish()
+            }
+            Self::And(x, pos) | Self::Or(x, pos) => {
                 let op_name = match self {
-                    Self::Dot(..) => "Dot",
                     Self::And(..) => "And",
                     Self::Or(..) => "Or",
-                    expr => unreachable!(
-                        "Self::Dot or Self::And or Self::Or expected but gets {:?}",
-                        expr
-                    ),
+                    expr => unreachable!("Self::And or Self::Or expected but gets {:?}", expr),
                 };
 
                 if !pos.is_none() {
@@ -802,7 +813,7 @@ impl Expr {
     pub const fn is_valid_postfix(&self, token: &Token) -> bool {
         match token {
             #[cfg(not(feature = "no_object"))]
-            Token::Period => return true,
+            Token::Period | Token::Elvis => return true,
             #[cfg(not(feature = "no_index"))]
             Token::LeftBracket => return true,
             _ => (),

@@ -1639,7 +1639,7 @@ impl Engine {
                 }
                 // Property access
                 #[cfg(not(feature = "no_object"))]
-                (expr, Token::Period) => {
+                (expr, op @ Token::Period) | (expr, op @ Token::Elvis) => {
                     // Expression after dot must start with an identifier
                     match input.peek().expect(NEVER_ENDS) {
                         (Token::Identifier(..), ..) => {
@@ -1654,7 +1654,12 @@ impl Engine {
                     }
 
                     let rhs = self.parse_primary(input, state, lib, settings.level_up())?;
-                    Self::make_dot_expr(state, expr, ASTFlags::NONE, rhs, tail_pos)?
+                    let op_flags = match op {
+                        Token::Period => ASTFlags::NONE,
+                        Token::Elvis => ASTFlags::NEGATED,
+                        _ => unreachable!(),
+                    };
+                    Self::make_dot_expr(state, expr, rhs, ASTFlags::NONE, op_flags, tail_pos)?
                 }
                 // Unknown postfix operator
                 (expr, token) => unreachable!(
@@ -1959,14 +1964,22 @@ impl Engine {
     fn make_dot_expr(
         state: &mut ParseState,
         lhs: Expr,
-        parent_options: ASTFlags,
         rhs: Expr,
+        parent_options: ASTFlags,
+        op_flags: ASTFlags,
         op_pos: Position,
     ) -> ParseResult<Expr> {
         match (lhs, rhs) {
             // lhs[idx_expr].rhs
             (Expr::Index(mut x, options, pos), rhs) => {
-                x.rhs = Self::make_dot_expr(state, x.rhs, options | parent_options, rhs, op_pos)?;
+                x.rhs = Self::make_dot_expr(
+                    state,
+                    x.rhs,
+                    rhs,
+                    options | parent_options,
+                    op_flags,
+                    op_pos,
+                )?;
                 Ok(Expr::Index(x, ASTFlags::NONE, pos))
             }
             // lhs.module::id - syntax error
@@ -1977,16 +1990,12 @@ impl Engine {
             // lhs.id
             (lhs, var_expr @ Expr::Variable(..)) => {
                 let rhs = var_expr.into_property(state);
-                Ok(Expr::Dot(
-                    BinaryExpr { lhs, rhs }.into(),
-                    ASTFlags::NONE,
-                    op_pos,
-                ))
+                Ok(Expr::Dot(BinaryExpr { lhs, rhs }.into(), op_flags, op_pos))
             }
             // lhs.prop
             (lhs, prop @ Expr::Property(..)) => Ok(Expr::Dot(
                 BinaryExpr { lhs, rhs: prop }.into(),
-                ASTFlags::NONE,
+                op_flags,
                 op_pos,
             )),
             // lhs.nnn::func(...) - syntax error
@@ -2023,17 +2032,13 @@ impl Engine {
                 );
 
                 let rhs = Expr::MethodCall(func, func_pos);
-                Ok(Expr::Dot(
-                    BinaryExpr { lhs, rhs }.into(),
-                    ASTFlags::NONE,
-                    op_pos,
-                ))
+                Ok(Expr::Dot(BinaryExpr { lhs, rhs }.into(), op_flags, op_pos))
             }
             // lhs.dot_lhs.dot_rhs or lhs.dot_lhs[idx_rhs]
             (lhs, rhs @ (Expr::Dot(..) | Expr::Index(..))) => {
-                let (x, term, pos, is_dot) = match rhs {
-                    Expr::Dot(x, term, pos) => (x, term, pos, true),
-                    Expr::Index(x, term, pos) => (x, term, pos, false),
+                let (x, options, pos, is_dot) = match rhs {
+                    Expr::Dot(x, options, pos) => (x, options, pos, true),
+                    Expr::Index(x, options, pos) => (x, options, pos, false),
                     expr => unreachable!("Expr::Dot or Expr::Index expected but gets {:?}", expr),
                 };
 
@@ -2050,22 +2055,18 @@ impl Engine {
                     }
                     // lhs.id.dot_rhs or lhs.id[idx_rhs]
                     Expr::Variable(..) | Expr::Property(..) => {
-                        let new_lhs = BinaryExpr {
+                        let new_binary = BinaryExpr {
                             lhs: x.lhs.into_property(state),
                             rhs: x.rhs,
                         }
                         .into();
 
                         let rhs = if is_dot {
-                            Expr::Dot(new_lhs, term, pos)
+                            Expr::Dot(new_binary, options, pos)
                         } else {
-                            Expr::Index(new_lhs, term, pos)
+                            Expr::Index(new_binary, options, pos)
                         };
-                        Ok(Expr::Dot(
-                            BinaryExpr { lhs, rhs }.into(),
-                            ASTFlags::NONE,
-                            op_pos,
-                        ))
+                        Ok(Expr::Dot(BinaryExpr { lhs, rhs }.into(), op_flags, op_pos))
                     }
                     // lhs.func().dot_rhs or lhs.func()[idx_rhs]
                     Expr::FnCall(mut func, func_pos) => {
@@ -2083,15 +2084,11 @@ impl Engine {
                         .into();
 
                         let rhs = if is_dot {
-                            Expr::Dot(new_lhs, term, pos)
+                            Expr::Dot(new_lhs, options, pos)
                         } else {
-                            Expr::Index(new_lhs, term, pos)
+                            Expr::Index(new_lhs, options, pos)
                         };
-                        Ok(Expr::Dot(
-                            BinaryExpr { lhs, rhs }.into(),
-                            ASTFlags::NONE,
-                            op_pos,
-                        ))
+                        Ok(Expr::Dot(BinaryExpr { lhs, rhs }.into(), op_flags, op_pos))
                     }
                     expr => unreachable!("invalid dot expression: {:?}", expr),
                 }

@@ -390,3 +390,15 @@ fn test_get_set_indexer() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_get_set_elvis() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert_eq!(engine.eval::<()>("let x = (); x?.foo.bar.baz")?, ());
+    assert_eq!(engine.eval::<()>("let x = (); x?.foo(1,2,3)")?, ());
+    assert_eq!(engine.eval::<()>("let x = #{a:()}; x.a?.foo.bar.baz")?, ());
+    assert_eq!(engine.eval::<String>("let x = 'x'; x?.type_of()")?, "char");
+
+    Ok(())
+}
