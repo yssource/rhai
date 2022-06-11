@@ -1,6 +1,6 @@
 #![cfg(not(feature = "no_function"))]
 use rhai::{Dynamic, Engine, EvalAltResult, FnPtr, Func, FuncArgs, Scope, AST, INT};
-use std::{any::TypeId, iter::once};
+use std::any::TypeId;
 
 #[test]
 fn test_call_fn() -> Result<(), Box<EvalAltResult>> {
@@ -107,9 +107,9 @@ struct Options {
 
 impl FuncArgs for Options {
     fn parse<C: Extend<Dynamic>>(self, container: &mut C) {
-        container.extend(once(self.foo.into()));
-        container.extend(once(self.bar.into()));
-        container.extend(once(self.baz.into()));
+        container.extend(Some(self.foo.into()));
+        container.extend(Some(self.bar.into()));
+        container.extend(Some(self.baz.into()));
     }
 }
 

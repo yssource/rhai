@@ -123,9 +123,7 @@ impl Engine {
         let param_type_names: crate::StaticVec<_> = F::param_names()
             .iter()
             .map(|ty| format!("_: {}", self.format_type_name(ty)))
-            .chain(std::iter::once(
-                self.format_type_name(F::return_type_name()).into(),
-            ))
+            .chain(Some(self.format_type_name(F::return_type_name()).into()))
             .collect();
 
         #[cfg(feature = "metadata")]

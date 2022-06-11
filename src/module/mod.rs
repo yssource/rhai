@@ -17,7 +17,6 @@ use std::{
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet},
     fmt,
-    iter::{empty, once},
     ops::{Add, AddAssign},
 };
 
@@ -214,7 +213,7 @@ impl FuncInfo {
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
 #[inline]
 pub fn calc_native_fn_hash<'a>(
-    modules: impl Iterator<Item = &'a str>,
+    modules: impl IntoIterator<Item = &'a str>,
     fn_name: &str,
     params: &[TypeId],
 ) -> u64 {
@@ -626,7 +625,7 @@ impl Module {
         let value = Dynamic::from(value);
 
         if self.indexed {
-            let hash_var = crate::calc_qualified_var_hash(once(""), &ident);
+            let hash_var = crate::calc_qualified_var_hash(Some(""), &ident);
             self.all_variables.insert(hash_var, value.clone());
         }
         self.variables.insert(ident, value);
@@ -981,7 +980,7 @@ impl Module {
             (names, return_type)
         };
 
-        let hash_fn = calc_native_fn_hash(empty::<&str>(), name.as_ref(), &param_types);
+        let hash_fn = calc_native_fn_hash(None, name.as_ref(), &param_types);
 
         self.functions.insert(
             hash_fn,

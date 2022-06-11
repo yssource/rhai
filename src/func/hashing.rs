@@ -5,7 +5,6 @@ use std::prelude::v1::*;
 use std::{
     any::TypeId,
     hash::{BuildHasher, Hash, Hasher},
-    iter::empty,
 };
 
 /// Dummy hash value to map zeros to. This value can be anything.
@@ -87,12 +86,16 @@ pub fn get_hasher() -> ahash::AHasher {
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
 #[inline]
 #[must_use]
-pub fn calc_qualified_var_hash<'a>(modules: impl Iterator<Item = &'a str>, var_name: &str) -> u64 {
+pub fn calc_qualified_var_hash<'a>(
+    modules: impl IntoIterator<Item = &'a str>,
+    var_name: &str,
+) -> u64 {
     let s = &mut get_hasher();
 
     // We always skip the first module
     let mut len = 0;
     modules
+        .into_iter()
         .inspect(|_| len += 1)
         .skip(1)
         .for_each(|m| m.hash(s));
@@ -121,7 +124,7 @@ pub fn calc_qualified_var_hash<'a>(modules: impl Iterator<Item = &'a str>, var_n
 #[inline]
 #[must_use]
 pub fn calc_qualified_fn_hash<'a>(
-    modules: impl Iterator<Item = &'a str>,
+    modules: impl IntoIterator<Item = &'a str>,
     fn_name: &str,
     num: usize,
 ) -> u64 {
@@ -130,6 +133,7 @@ pub fn calc_qualified_fn_hash<'a>(
     // We always skip the first module
     let mut len = 0;
     modules
+        .into_iter()
         .inspect(|_| len += 1)
         .skip(1)
         .for_each(|m| m.hash(s));
@@ -154,7 +158,7 @@ pub fn calc_qualified_fn_hash<'a>(
 #[inline(always)]
 #[must_use]
 pub fn calc_fn_hash(fn_name: &str, num: usize) -> u64 {
-    calc_qualified_fn_hash(empty(), fn_name, num)
+    calc_qualified_fn_hash(None, fn_name, num)
 }
 
 /// Calculate a non-zero [`u64`] hash key from a list of parameter types.
@@ -166,10 +170,13 @@ pub fn calc_fn_hash(fn_name: &str, num: usize) -> u64 {
 /// If the hash happens to be zero, it is mapped to `DEFAULT_HASH`.
 #[inline]
 #[must_use]
-pub fn calc_fn_params_hash(params: impl Iterator<Item = TypeId>) -> u64 {
+pub fn calc_fn_params_hash(params: impl IntoIterator<Item = TypeId>) -> u64 {
     let s = &mut get_hasher();
     let mut len = 0;
-    params.inspect(|_| len += 1).for_each(|t| t.hash(s));
+    params
+        .into_iter()
+        .inspect(|_| len += 1)
+        .for_each(|t| t.hash(s));
     len.hash(s);
 
     match s.finish() {
