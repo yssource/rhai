@@ -60,6 +60,11 @@ impl Engine {
         match chain_type {
             #[cfg(not(feature = "no_index"))]
             ChainType::Indexing => {
+                // Check for existence with the null conditional operator
+                if _parent_options.contains(ASTFlags::NEGATED) && target.is::<()>() {
+                    return Ok((Dynamic::UNIT, false));
+                }
+
                 let pos = rhs.start_position();
 
                 match rhs {

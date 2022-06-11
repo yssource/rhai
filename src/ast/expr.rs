@@ -411,6 +411,7 @@ pub enum Expr {
     ///
     /// ### Flags
     ///
+    /// [`NEGATED`][ASTFlags::NEGATED] = `?[` ... `]` (`[` ... `]` if unset)
     /// [`BREAK`][ASTFlags::BREAK] = terminate the chain (recurse into the chain if unset)
     Index(Box<BinaryExpr>, ASTFlags, Position),
     /// lhs `&&` rhs
@@ -827,7 +828,7 @@ impl Expr {
             #[cfg(not(feature = "no_object"))]
             Token::Period | Token::Elvis => return true,
             #[cfg(not(feature = "no_index"))]
-            Token::LeftBracket => return true,
+            Token::LeftBracket | Token::QuestionBracket => return true,
             _ => (),
         }
 

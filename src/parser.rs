@@ -641,6 +641,7 @@ impl Engine {
         state: &mut ParseState,
         lib: &mut FnLib,
         lhs: Expr,
+        options: ASTFlags,
         check_index_type: bool,
         settings: ParseSettings,
     ) -> ParseResult<Expr> {
@@ -756,29 +757,35 @@ impl Engine {
                 // Any more indexing following?
                 match input.peek().expect(NEVER_ENDS) {
                     // If another indexing level, right-bind it
-                    (Token::LeftBracket, ..) => {
+                    (Token::LeftBracket, ..) | (Token::QuestionBracket, ..) => {
+                        let (token, pos) = input.next().expect(NEVER_ENDS);
                         let prev_pos = settings.pos;
-                        settings.pos = eat_token(input, Token::LeftBracket);
+                        settings.pos = pos;
                         // Recursively parse the indexing chain, right-binding each
                         let idx_expr = self.parse_index_chain(
                             input,
                             state,
                             lib,
                             idx_expr,
+                            match token {
+                                Token::LeftBracket => ASTFlags::NONE,
+                                Token::QuestionBracket => ASTFlags::NEGATED,
+                                _ => unreachable!(),
+                            },
                             false,
                             settings.level_up(),
                         )?;
                         // Indexing binds to right
                         Ok(Expr::Index(
                             BinaryExpr { lhs, rhs: idx_expr }.into(),
-                            ASTFlags::NONE,
+                            options,
                             prev_pos,
                         ))
                     }
                     // Otherwise terminate the indexing chain
                     _ => Ok(Expr::Index(
                         BinaryExpr { lhs, rhs: idx_expr }.into(),
-                        ASTFlags::BREAK,
+                        options | ASTFlags::BREAK,
                         settings.pos,
                     )),
                 }
@@ -1634,8 +1641,13 @@ impl Engine {
                 }
                 // Indexing
                 #[cfg(not(feature = "no_index"))]
-                (expr, Token::LeftBracket) => {
-                    self.parse_index_chain(input, state, lib, expr, true, settings.level_up())?
+                (expr, token @ Token::LeftBracket) | (expr, token @ Token::QuestionBracket) => {
+                    let opt = match token {
+                        Token::LeftBracket => ASTFlags::NONE,
+                        Token::QuestionBracket => ASTFlags::NEGATED,
+                        _ => unreachable!(),
+                    };
+                    self.parse_index_chain(input, state, lib, expr, opt, true, settings.level_up())?
                 }
                 // Property access
                 #[cfg(not(feature = "no_object"))]

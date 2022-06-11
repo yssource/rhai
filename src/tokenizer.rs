@@ -421,9 +421,17 @@ pub enum Token {
     /// `.`
     Period,
     /// `?.`
+    ///
+    /// Reserved under the `no_object` feature.
+    #[cfg(not(feature = "no_object"))]
     Elvis,
     /// `??`
     DoubleQuestion,
+    /// `?[`
+    ///
+    /// Reserved under the `no_object` feature.
+    #[cfg(not(feature = "no_index"))]
+    QuestionBracket,
     /// `..`
     ExclusiveRange,
     /// `..=`
@@ -580,8 +588,11 @@ impl Token {
             Underscore => "_",
             Comma => ",",
             Period => ".",
+            #[cfg(not(feature = "no_object"))]
             Elvis => "?.",
             DoubleQuestion => "??",
+            #[cfg(not(feature = "no_index"))]
+            QuestionBracket => "?[",
             ExclusiveRange => "..",
             InclusiveRange => "..=",
             MapStart => "#{",
@@ -777,8 +788,11 @@ impl Token {
             "_" => Underscore,
             "," => Comma,
             "." => Period,
+            #[cfg(not(feature = "no_object"))]
             "?." => Elvis,
             "??" => DoubleQuestion,
+            #[cfg(not(feature = "no_index"))]
+            "?[" => QuestionBracket,
             ".." => ExclusiveRange,
             "..=" => InclusiveRange,
             "#{" => MapStart,
@@ -892,6 +906,7 @@ impl Token {
             //Period           |
             //Elvis            |
             //DoubleQuestion   |
+            //QuestionBracket  |
             ExclusiveRange            | // .. - is unary
             InclusiveRange   | // ..= - is unary
             LeftBrace        | // { -expr } - is unary
@@ -999,12 +1014,18 @@ impl Token {
         match self {
             LeftBrace | RightBrace | LeftParen | RightParen | LeftBracket | RightBracket | Plus
             | UnaryPlus | Minus | UnaryMinus | Multiply | Divide | Modulo | PowerOf | LeftShift
-            | RightShift | SemiColon | Colon | DoubleColon | Comma | Period | Elvis
-            | DoubleQuestion | ExclusiveRange | InclusiveRange | MapStart | Equals | LessThan
-            | GreaterThan | LessThanEqualsTo | GreaterThanEqualsTo | EqualsTo | NotEqualsTo
-            | Bang | Pipe | Or | XOr | Ampersand | And | PlusAssign | MinusAssign
-            | MultiplyAssign | DivideAssign | LeftShiftAssign | RightShiftAssign | AndAssign
-            | OrAssign | XOrAssign | ModuloAssign | PowerOfAssign => true,
+            | RightShift | SemiColon | Colon | DoubleColon | Comma | Period | DoubleQuestion
+            | ExclusiveRange | InclusiveRange | MapStart | Equals | LessThan | GreaterThan
+            | LessThanEqualsTo | GreaterThanEqualsTo | EqualsTo | NotEqualsTo | Bang | Pipe
+            | Or | XOr | Ampersand | And | PlusAssign | MinusAssign | MultiplyAssign
+            | DivideAssign | LeftShiftAssign | RightShiftAssign | AndAssign | OrAssign
+            | XOrAssign | ModuloAssign | PowerOfAssign => true,
+
+            #[cfg(not(feature = "no_object"))]
+            Elvis => true,
+
+            #[cfg(not(feature = "no_index"))]
+            QuestionBracket => true,
 
             _ => false,
         }
@@ -2047,11 +2068,27 @@ fn get_next_token_inner(
 
             ('?', '.') => {
                 eat_next(stream, pos);
-                return Some((Token::Elvis, start_pos));
+                return Some((
+                    #[cfg(not(feature = "no_object"))]
+                    Token::Elvis,
+                    #[cfg(feature = "no_object")]
+                    Token::Reserved("?.".into()),
+                    start_pos,
+                ));
             }
             ('?', '?') => {
                 eat_next(stream, pos);
                 return Some((Token::DoubleQuestion, start_pos));
+            }
+            ('?', '[') => {
+                eat_next(stream, pos);
+                return Some((
+                    #[cfg(not(feature = "no_index"))]
+                    Token::QuestionBracket,
+                    #[cfg(feature = "no_index")]
+                    Token::Reserved("?[".into()),
+                    start_pos,
+                ));
             }
             ('?', ..) => return Some((Token::Reserved("?".into()), start_pos)),
 

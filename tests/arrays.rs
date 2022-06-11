@@ -405,3 +405,14 @@ fn test_arrays_map_reduce() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_arrays_elvis() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert_eq!(engine.eval::<()>("let x = (); x?[2]")?, ());
+
+    engine.run("let x = (); x?[2] = 42")?;
+
+    Ok(())
+}

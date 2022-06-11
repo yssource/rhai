@@ -940,6 +940,12 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
         #[cfg(not(feature = "no_object"))]
         Expr::Dot(x,..) => { optimize_expr(&mut x.lhs, state, false); optimize_expr(&mut x.rhs, state, _chaining); }
 
+        // ()?[rhs]
+        #[cfg(not(feature = "no_index"))]
+        Expr::Index(x, options, ..) if options.contains(ASTFlags::NEGATED) && matches!(x.lhs, Expr::Unit(..)) => {
+            state.set_dirty();
+            *expr = mem::take(&mut x.lhs);
+        }
         // lhs[rhs]
         #[cfg(not(feature = "no_index"))]
         Expr::Index(x, ..) if !_chaining => match (&mut x.lhs, &mut x.rhs) {
