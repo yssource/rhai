@@ -76,7 +76,7 @@ pub fn main() {
     states.insert("bool_state".into(), Dynamic::FALSE);
 
     // Add the main states-holding object map and call it 'state'
-    scope.push("state", Map::new());
+    scope.push("state", states);
 
     // Compile the handler script.
     println!("> Loading script file: {}", path);
