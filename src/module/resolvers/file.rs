@@ -2,7 +2,7 @@
 #![cfg(not(target_family = "wasm"))]
 
 use crate::eval::GlobalRuntimeState;
-use crate::func::native::{locked_read, locked_write};
+use crate::func::{locked_read, locked_write};
 use crate::{
     Engine, Identifier, Module, ModuleResolver, Position, RhaiResultOf, Scope, Shared, ERR,
 };
