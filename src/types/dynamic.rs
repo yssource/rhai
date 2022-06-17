@@ -455,11 +455,11 @@ impl Hash for Dynamic {
             #[cfg(feature = "decimal")]
             Union::Decimal(ref d, ..) => d.hash(state),
             #[cfg(not(feature = "no_index"))]
-            Union::Array(ref a, ..) => a.as_ref().hash(state),
+            Union::Array(ref a, ..) => a.hash(state),
             #[cfg(not(feature = "no_index"))]
-            Union::Blob(ref a, ..) => a.as_ref().hash(state),
+            Union::Blob(ref a, ..) => a.hash(state),
             #[cfg(not(feature = "no_object"))]
-            Union::Map(ref m, ..) => m.as_ref().hash(state),
+            Union::Map(ref m, ..) => m.hash(state),
             Union::FnPtr(ref f, ..) => f.hash(state),
 
             #[cfg(not(feature = "no_closure"))]
@@ -470,51 +470,7 @@ impl Hash for Dynamic {
             #[cfg(feature = "sync")]
             Union::Shared(ref cell, ..) => (*cell.read().unwrap()).hash(state),
 
-            Union::Variant(ref _v, ..) => {
-                #[cfg(not(feature = "only_i32"))]
-                #[cfg(not(feature = "only_i64"))]
-                {
-                    let value_any = (***_v).as_any();
-                    let type_id = value_any.type_id();
-
-                    if type_id == TypeId::of::<u8>() {
-                        TypeId::of::<u8>().hash(state);
-                        value_any.downcast_ref::<u8>().expect(CHECKED).hash(state);
-                    } else if type_id == TypeId::of::<u16>() {
-                        TypeId::of::<u16>().hash(state);
-                        value_any.downcast_ref::<u16>().expect(CHECKED).hash(state);
-                    } else if type_id == TypeId::of::<u32>() {
-                        TypeId::of::<u32>().hash(state);
-                        value_any.downcast_ref::<u32>().expect(CHECKED).hash(state);
-                    } else if type_id == TypeId::of::<u64>() {
-                        TypeId::of::<u64>().hash(state);
-                        value_any.downcast_ref::<u64>().expect(CHECKED).hash(state);
-                    } else if type_id == TypeId::of::<i8>() {
-                        TypeId::of::<i8>().hash(state);
-                        value_any.downcast_ref::<i8>().expect(CHECKED).hash(state);
-                    } else if type_id == TypeId::of::<i16>() {
-                        TypeId::of::<i16>().hash(state);
-                        value_any.downcast_ref::<i16>().expect(CHECKED).hash(state);
-                    } else if type_id == TypeId::of::<i32>() {
-                        TypeId::of::<i32>().hash(state);
-                        value_any.downcast_ref::<i32>().expect(CHECKED).hash(state);
-                    } else if type_id == TypeId::of::<i64>() {
-                        TypeId::of::<i64>().hash(state);
-                        value_any.downcast_ref::<i64>().expect(CHECKED).hash(state);
-                    }
-
-                    #[cfg(not(target_family = "wasm"))]
-                    if type_id == TypeId::of::<u128>() {
-                        TypeId::of::<u128>().hash(state);
-                        value_any.downcast_ref::<u128>().expect(CHECKED).hash(state);
-                    } else if type_id == TypeId::of::<i128>() {
-                        TypeId::of::<i128>().hash(state);
-                        value_any.downcast_ref::<i128>().expect(CHECKED).hash(state);
-                    }
-                }
-
-                unimplemented!("a custom type cannot be hashed")
-            }
+            Union::Variant(..) => unimplemented!("{} cannot be hashed", self.type_name()),
 
             #[cfg(not(feature = "no_std"))]
             Union::TimeStamp(..) => unimplemented!("{} cannot be hashed", self.type_name()),
@@ -550,49 +506,47 @@ impl fmt::Display for Dynamic {
 
                 #[cfg(not(feature = "only_i32"))]
                 #[cfg(not(feature = "only_i64"))]
-                if _type_id == TypeId::of::<u8>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<u8>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<u16>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<u16>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<u32>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<u32>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<u64>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<u64>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<i8>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<i8>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<i16>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<i16>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<i32>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<i32>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<i64>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<i64>().expect(CHECKED), f);
+                if let Some(value) = _value_any.downcast_ref::<u8>() {
+                    return fmt::Display::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<u16>() {
+                    return fmt::Display::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<u32>() {
+                    return fmt::Display::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<u64>() {
+                    return fmt::Display::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<i8>() {
+                    return fmt::Display::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<i16>() {
+                    return fmt::Display::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<i32>() {
+                    return fmt::Display::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<i64>() {
+                    return fmt::Display::fmt(value, f);
                 }
 
                 #[cfg(not(feature = "no_float"))]
                 #[cfg(not(feature = "f32_float"))]
-                if _type_id == TypeId::of::<f32>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<f32>().expect(CHECKED), f);
+                if let Some(value) = _value_any.downcast_ref::<f32>() {
+                    return fmt::Display::fmt(value, f);
                 }
                 #[cfg(not(feature = "no_float"))]
                 #[cfg(feature = "f32_float")]
-                if _type_id == TypeId::of::<f64>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<f64>().expect(CHECKED), f);
+                if let Some(value) = _value_any.downcast_ref::<f64>() {
+                    return fmt::Display::fmt(value, f);
                 }
 
                 #[cfg(not(feature = "only_i32"))]
                 #[cfg(not(feature = "only_i64"))]
                 #[cfg(not(target_family = "wasm"))]
-                if _type_id == TypeId::of::<u128>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<u128>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<i128>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<i128>().expect(CHECKED), f);
+                if let Some(value) = _value_any.downcast_ref::<u128>() {
+                    return fmt::Display::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<i128>() {
+                    return fmt::Display::fmt(value, f);
                 }
 
-                if _type_id == TypeId::of::<ExclusiveRange>() {
-                    let range = _value_any.downcast_ref::<ExclusiveRange>().expect(CHECKED);
+                if let Some(range) = _value_any.downcast_ref::<ExclusiveRange>() {
                     return write!(f, "{}..{}", range.start, range.end);
-                } else if _type_id == TypeId::of::<InclusiveRange>() {
-                    let range = _value_any.downcast_ref::<InclusiveRange>().expect(CHECKED);
+                } else if let Some(range) = _value_any.downcast_ref::<InclusiveRange>() {
                     return write!(f, "{}..={}", range.start(), range.end());
                 }
 
@@ -655,49 +609,47 @@ impl fmt::Debug for Dynamic {
 
                 #[cfg(not(feature = "only_i32"))]
                 #[cfg(not(feature = "only_i64"))]
-                if _type_id == TypeId::of::<u8>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<u8>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<u16>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<u16>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<u32>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<u32>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<u64>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<u64>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<i8>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<i8>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<i16>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<i16>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<i32>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<i32>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<i64>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<i64>().expect(CHECKED), f);
+                if let Some(value) = _value_any.downcast_ref::<u8>() {
+                    return fmt::Debug::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<u16>() {
+                    return fmt::Debug::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<u32>() {
+                    return fmt::Debug::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<u64>() {
+                    return fmt::Debug::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<i8>() {
+                    return fmt::Debug::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<i16>() {
+                    return fmt::Debug::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<i32>() {
+                    return fmt::Debug::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<i64>() {
+                    return fmt::Debug::fmt(value, f);
                 }
 
                 #[cfg(not(feature = "no_float"))]
                 #[cfg(not(feature = "f32_float"))]
-                if _type_id == TypeId::of::<f32>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<f32>().expect(CHECKED), f);
+                if let Some(value) = _value_any.downcast_ref::<f32>() {
+                    return fmt::Debug::fmt(value, f);
                 }
                 #[cfg(not(feature = "no_float"))]
                 #[cfg(feature = "f32_float")]
-                if _type_id == TypeId::of::<f64>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<f64>().expect(CHECKED), f);
+                if let Some(value) = _value_any.downcast_ref::<f64>() {
+                    return fmt::Debug::fmt(value, f);
                 }
 
                 #[cfg(not(feature = "only_i32"))]
                 #[cfg(not(feature = "only_i64"))]
                 #[cfg(not(target_family = "wasm"))]
-                if _type_id == TypeId::of::<u128>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<u128>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<i128>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<i128>().expect(CHECKED), f);
+                if let Some(value) = _value_any.downcast_ref::<u128>() {
+                    return fmt::Debug::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<i128>() {
+                    return fmt::Debug::fmt(value, f);
                 }
 
-                if _type_id == TypeId::of::<ExclusiveRange>() {
-                    let range = _value_any.downcast_ref::<ExclusiveRange>().expect(CHECKED);
+                if let Some(range) = _value_any.downcast_ref::<ExclusiveRange>() {
                     return write!(f, "{}..{}", range.start, range.end);
-                } else if _type_id == TypeId::of::<InclusiveRange>() {
-                    let range = _value_any.downcast_ref::<InclusiveRange>().expect(CHECKED);
+                } else if let Some(range) = _value_any.downcast_ref::<InclusiveRange>() {
                     return write!(f, "{}..={}", range.start(), range.end());
                 }
 
