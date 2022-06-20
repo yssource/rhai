@@ -86,7 +86,7 @@ fn map_std_type_name(name: &str, shorthands: bool) -> &str {
     }
 
     #[cfg(not(feature = "no_float"))]
-    if name == type_name::<crate::packages::iter_basic::float::StepFloatRange>() {
+    if name == type_name::<crate::packages::iter_basic::StepRange<crate::FLOAT>>() {
         return if shorthands {
             "range"
         } else {
@@ -94,7 +94,7 @@ fn map_std_type_name(name: &str, shorthands: bool) -> &str {
         };
     }
     #[cfg(feature = "decimal")]
-    if name == type_name::<crate::packages::iter_basic::decimal::StepDecimalRange>() {
+    if name == type_name::<crate::packages::iter_basic::StepRange<rust_decimal::Decimal>>() {
         return if shorthands {
             "range"
         } else {
