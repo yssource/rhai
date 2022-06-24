@@ -7,7 +7,7 @@ use crate::func::{
 };
 use crate::types::{dynamic::Variant, CustomTypesCollection};
 use crate::{
-    calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes, Dynamic, Identifier,
+    calc_fn_hash, calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes, Dynamic, Identifier,
     ImmutableString, NativeCallContext, RhaiResultOf, Shared, StaticVec,
 };
 #[cfg(feature = "no_std")]
@@ -241,11 +241,13 @@ pub struct Module {
     variables: BTreeMap<Identifier, Dynamic>,
     /// Flattened collection of all [`Module`] variables, including those in sub-modules.
     all_variables: BTreeMap<u64, Dynamic>,
-    /// External Rust functions.
+    /// Functions (both native Rust and scripted).
     functions: BTreeMap<u64, Box<FuncInfo>>,
-    /// Flattened collection of all external Rust functions, native or scripted.
+    /// Flattened collection of all functions, native Rust and scripted.
     /// including those in sub-modules.
     all_functions: BTreeMap<u64, CallableFunction>,
+    /// Native Rust functions (in scripted hash format) that contain [`Dynamic`] parameters.
+    dynamic_functions: BTreeSet<u64>,
     /// Iterator functions, keyed by the type producing the iterator.
     type_iterators: BTreeMap<TypeId, Shared<IteratorFn>>,
     /// Flattened collection of iterator functions, including those in sub-modules.
@@ -348,6 +350,7 @@ impl Module {
             all_variables: BTreeMap::new(),
             functions: BTreeMap::new(),
             all_functions: BTreeMap::new(),
+            dynamic_functions: BTreeSet::new(),
             type_iterators: BTreeMap::new(),
             all_type_iterators: BTreeMap::new(),
             indexed: true,
@@ -415,6 +418,25 @@ impl Module {
     pub fn clear_id(&mut self) -> &mut Self {
         self.id.clear();
         self
+    }
+
+    /// Clear the [`Module`].
+    #[inline(always)]
+    pub fn clear(&mut self) {
+        self.id.clear();
+        self.internal = false;
+        self.standard = false;
+        self.custom_types.clear();
+        self.modules.clear();
+        self.variables.clear();
+        self.all_variables.clear();
+        self.functions.clear();
+        self.all_functions.clear();
+        self.dynamic_functions.clear();
+        self.type_iterators.clear();
+        self.all_type_iterators.clear();
+        self.indexed = false;
+        self.contains_indexed_global_functions = false;
     }
 
     /// Map a custom type to a friendly display name.
@@ -964,6 +986,10 @@ impl Module {
             .collect();
         param_types.shrink_to_fit();
 
+        let is_dynamic = param_types
+            .iter()
+            .any(|&type_id| type_id == TypeId::of::<Dynamic>());
+
         #[cfg(feature = "metadata")]
         let (param_names, return_type_name) = {
             let mut names = _arg_names
@@ -981,6 +1007,11 @@ impl Module {
         };
 
         let hash_fn = calc_native_fn_hash(None, name.as_ref(), &param_types);
+
+        if is_dynamic {
+            self.dynamic_functions
+                .insert(calc_fn_hash(name.as_ref(), param_types.len()));
+        }
 
         self.functions.insert(
             hash_fn,
@@ -1444,16 +1475,27 @@ impl Module {
         )
     }
 
-    /// Get a Rust function.
+    /// Look up a Rust function by hash.
     ///
     /// The [`u64`] hash is returned by the [`set_native_fn`][Module::set_native_fn] call.
     #[inline]
     #[must_use]
-    pub(crate) fn get_fn(&self, hash_fn: u64) -> Option<&CallableFunction> {
+    pub(crate) fn get_fn(&self, hash_native: u64) -> Option<&CallableFunction> {
         if !self.functions.is_empty() {
-            self.functions.get(&hash_fn).map(|f| &f.func)
+            self.functions.get(&hash_native).map(|f| &f.func)
         } else {
             None
+        }
+    }
+
+    /// Does the particular function with [`Dynamic`] parameter(s) exist in the [`Module`]?
+    #[inline(always)]
+    #[must_use]
+    pub(crate) fn contains_dynamic_fn(&self, hash_script: u64) -> bool {
+        if !self.dynamic_functions.is_empty() {
+            self.dynamic_functions.contains(&hash_script)
+        } else {
+            false
         }
     }
 
