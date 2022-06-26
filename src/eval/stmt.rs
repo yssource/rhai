@@ -146,7 +146,7 @@ impl Engine {
             let target_is_shared = false;
 
             if target_is_shared {
-                lock_guard = target.write_lock::<Dynamic>().expect("`Dynamic`");
+                lock_guard = target.write_lock::<Dynamic>().unwrap();
                 lhs_ptr_inner = &mut *lock_guard;
             } else {
                 lhs_ptr_inner = &mut *target;
@@ -181,7 +181,20 @@ impl Engine {
             }
         } else {
             // Normal assignment
-            *target.as_mut() = new_val;
+
+            #[cfg(not(feature = "no_closure"))]
+            if target.is_shared() {
+                // Handle case where target is a `Dynamic` shared value
+                // (returned by a variable resolver, for example)
+                *target.write_lock::<Dynamic>().unwrap() = new_val;
+            } else {
+                *target.as_mut() = new_val;
+            }
+
+            #[cfg(feature = "no_closure")]
+            {
+                *target.as_mut() = new_val;
+            }
         }
 
         target.propagate_changed_value(op_info.pos)
@@ -251,8 +264,8 @@ impl Engine {
                         let var_name = lhs.get_variable_name(false).expect("`Expr::Variable`");
 
                         #[cfg(not(feature = "no_closure"))]
-                        // Temp results from expressions are flattened so should never be shared.
-                        // A shared value may be provided by a variable resolver, however.
+                        // Also handle case where target is a `Dynamic` shared value
+                        // (returned by a variable resolver, for example)
                         let is_temp_result = !lhs_ptr.is_ref() && !lhs_ptr.is_shared();
                         #[cfg(feature = "no_closure")]
                         let is_temp_result = !lhs_ptr.is_ref();

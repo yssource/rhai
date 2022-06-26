@@ -1520,7 +1520,7 @@ fn get_next_token_inner(
                         }
                         #[cfg(any(not(feature = "no_float"), feature = "decimal"))]
                         '.' => {
-                            stream.get_next().expect("`.`");
+                            stream.get_next().unwrap();
 
                             // Check if followed by digits or something that cannot start a property name
                             match stream.peek_next().unwrap_or('\0') {
@@ -1567,7 +1567,7 @@ fn get_next_token_inner(
                                 '+' | '-' => {
                                     result.push(next_char);
                                     pos.advance();
-                                    result.push(stream.get_next().expect("`+` or `-`"));
+                                    result.push(stream.get_next().unwrap());
                                     pos.advance();
                                 }
                                 // Not a floating-point number

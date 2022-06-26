@@ -196,13 +196,14 @@ fn test_var_resolver() -> Result<(), Box<EvalAltResult>> {
 
     #[cfg(not(feature = "no_closure"))]
     {
-        assert_eq!(engine.eval_with_scope::<INT>(&mut scope, "HELLO")?, 1);
+        assert_eq!(engine.eval::<INT>("HELLO")?, 1);
         *base.write_lock::<INT>().unwrap() = 42;
-        assert_eq!(engine.eval_with_scope::<INT>(&mut scope, "HELLO")?, 42);
-        assert_eq!(
-            engine.eval_with_scope::<INT>(&mut scope, "HELLO = HELLO * 2; HELLO")?,
-            84
-        );
+        assert_eq!(engine.eval::<INT>("HELLO")?, 42);
+        engine.run("HELLO = 123")?;
+        assert_eq!(base.as_int().unwrap(), 123);
+        assert_eq!(engine.eval::<INT>("HELLO = HELLO + 1; HELLO")?, 124);
+        assert_eq!(engine.eval::<INT>("HELLO = HELLO * 2; HELLO")?, 248);
+        assert_eq!(base.as_int().unwrap(), 248);
     }
 
     assert_eq!(engine.eval_with_scope::<INT>(&mut scope, "chameleon")?, 1);

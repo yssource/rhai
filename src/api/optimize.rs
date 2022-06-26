@@ -56,12 +56,7 @@ impl Engine {
             .shared_lib()
             .iter_fn()
             .filter(|f| f.func.is_script())
-            .map(|f| {
-                f.func
-                    .get_script_fn_def()
-                    .expect("script-defined function")
-                    .clone()
-            })
+            .map(|f| f.func.get_script_fn_def().unwrap().clone())
             .collect();
 
         crate::optimizer::optimize_into_ast(
