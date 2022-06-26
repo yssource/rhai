@@ -41,6 +41,7 @@ Enhancements
 * Originally, the debugger's custom state uses the same state as `EvalState::tag()` (which is the same as `NativeCallContext::tag()`).  It is now split into its own variable accessible under `Debugger::state()`.
 * Non-borrowed string keys can now be deserialized for object maps via `serde`.
 * `Scope::get` is added to get a reference to a variable's value.
+* Variable resolvers can now return a _shared_ value which can be mutated.
 
 
 Version 1.7.0

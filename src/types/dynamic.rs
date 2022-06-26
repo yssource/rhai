@@ -1003,18 +1003,25 @@ impl Dynamic {
     ///
     /// Constant [`Dynamic`] values are read-only.
     ///
-    /// If a [`&mut Dynamic`][Dynamic] to such a constant is passed to a Rust function, the function
-    /// can use this information to return an error of
-    /// [`ErrorAssignmentToConstant`][crate::EvalAltResult::ErrorAssignmentToConstant] if its value
-    /// is going to be modified.
+    /// # Usage
     ///
-    /// This safe-guards constant values from being modified from within Rust functions.
+    /// If a [`&mut Dynamic`][Dynamic] to such a constant is passed to a Rust function, the function
+    /// can use this information to return the error
+    /// [`ErrorAssignmentToConstant`][crate::EvalAltResult::ErrorAssignmentToConstant] if its value
+    /// will be modified.
+    ///
+    /// This safe-guards constant values from being modified within Rust functions.
+    ///
+    /// # Shared Values
+    ///
+    /// If a [`Dynamic`] holds a _shared_ value, then it is read-only only if the shared value
+    /// itself is read-only.
     #[must_use]
     pub fn is_read_only(&self) -> bool {
         #[cfg(not(feature = "no_closure"))]
         match self.0 {
-            Union::Shared(.., ReadOnly) => return true,
-
+            // Shared values do not consider the current access mode
+            //Union::Shared(.., ReadOnly) => return true,
             Union::Shared(ref cell, ..) => {
                 return match locked_read(cell).access_mode() {
                     ReadWrite => false,
