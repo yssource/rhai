@@ -1222,7 +1222,7 @@ impl Engine {
                 let (mut target, _pos) =
                     self.search_namespace(scope, global, lib, this_ptr, first_expr, level)?;
 
-                if target.as_ref().is_read_only() {
+                if target.is_read_only() {
                     target = target.into_owned();
                 }
 

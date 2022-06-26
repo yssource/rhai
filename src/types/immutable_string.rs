@@ -1,6 +1,6 @@
 //! The `ImmutableString` type.
 
-use crate::func::native::{shared_get_mut, shared_make_mut, shared_take};
+use crate::func::{shared_get_mut, shared_make_mut, shared_take};
 use crate::{Shared, SmartString};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;

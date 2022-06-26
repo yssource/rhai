@@ -991,7 +991,7 @@ impl Engine {
             if !name.contains(separator.as_ref()) {
                 if !module.is_indexed() {
                     // Index the module (making a clone copy if necessary) if it is not indexed
-                    let mut module = crate::func::native::shared_take_or_clone(module);
+                    let mut module = crate::func::shared_take_or_clone(module);
                     module.build_index();
                     root.insert(name.into(), module.into());
                 } else {
@@ -1009,7 +1009,7 @@ impl Engine {
                     root.insert(sub_module.into(), m.into());
                 } else {
                     let m = root.remove(sub_module).expect("contains sub-module");
-                    let mut m = crate::func::native::shared_take_or_clone(m);
+                    let mut m = crate::func::shared_take_or_clone(m);
                     register_static_module_raw(m.sub_modules_mut(), remainder, module);
                     m.build_index();
                     root.insert(sub_module.into(), m.into());

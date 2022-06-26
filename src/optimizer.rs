@@ -1343,7 +1343,7 @@ pub fn optimize_into_ast(
             let lib2 = &[&lib2];
 
             for fn_def in functions {
-                let mut fn_def = crate::func::native::shared_take_or_clone(fn_def);
+                let mut fn_def = crate::func::shared_take_or_clone(fn_def);
 
                 // Optimize the function body
                 let body = mem::take(&mut *fn_def.body);

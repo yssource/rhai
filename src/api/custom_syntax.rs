@@ -1,7 +1,7 @@
 //! Module implementing custom syntax for [`Engine`].
 
 use crate::ast::Expr;
-use crate::func::native::SendSync;
+use crate::func::SendSync;
 use crate::parser::ParseResult;
 use crate::tokenizer::{is_valid_identifier, Token};
 use crate::types::dynamic::Variant;
