@@ -1323,6 +1323,7 @@ impl Dynamic {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(cell, ..) => crate::func::shared_try_take(cell).map_or_else(
                 |ref cell| locked_read(cell).clone(),
+                #[cfg(not(feature = "sync"))]
                 |value| value.into_inner(),
                 #[cfg(feature = "sync")]
                 |value| value.into_inner().unwrap(),
