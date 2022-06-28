@@ -1533,6 +1533,8 @@ impl Module {
         self.modules.extend(other.modules.into_iter());
         self.variables.extend(other.variables.into_iter());
         self.functions.extend(other.functions.into_iter());
+        self.dynamic_functions
+            .extend(other.dynamic_functions.into_iter());
         self.type_iterators.extend(other.type_iterators.into_iter());
         self.all_functions.clear();
         self.all_variables.clear();
@@ -1552,6 +1554,8 @@ impl Module {
         }
         self.variables.extend(other.variables.into_iter());
         self.functions.extend(other.functions.into_iter());
+        self.dynamic_functions
+            .extend(other.dynamic_functions.into_iter());
         self.type_iterators.extend(other.type_iterators.into_iter());
         self.all_functions.clear();
         self.all_variables.clear();
@@ -1578,6 +1582,8 @@ impl Module {
         for (&k, v) in &other.functions {
             self.functions.entry(k).or_insert_with(|| v.clone());
         }
+        self.dynamic_functions
+            .extend(other.dynamic_functions.iter().cloned());
         for (&k, v) in &other.type_iterators {
             self.type_iterators.entry(k).or_insert_with(|| v.clone());
         }
@@ -1612,6 +1618,7 @@ impl Module {
 
         self.variables
             .extend(other.variables.iter().map(|(k, v)| (k.clone(), v.clone())));
+
         self.functions.extend(
             other
                 .functions
@@ -1627,6 +1634,9 @@ impl Module {
                 })
                 .map(|(&k, v)| (k, v.clone())),
         );
+        // This may introduce entries that are superfluous because the function has been filtered away.
+        self.dynamic_functions
+            .extend(other.dynamic_functions.iter().cloned());
 
         self.type_iterators
             .extend(other.type_iterators.iter().map(|(&k, v)| (k, v.clone())));
@@ -1662,6 +1672,7 @@ impl Module {
             .collect();
 
         self.all_functions.clear();
+        self.dynamic_functions.clear();
         self.all_variables.clear();
         self.all_type_iterators.clear();
         self.indexed = false;
