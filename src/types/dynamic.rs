@@ -1,7 +1,7 @@
 //! Helper module which defines the [`Dynamic`] data type and the
 //! [`Any`] trait to to allow custom type handling.
 
-use crate::func::native::SendSync;
+use crate::func::{locked_read, SendSync};
 use crate::{reify, ExclusiveRange, FnPtr, ImmutableString, InclusiveRange, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -26,7 +26,7 @@ pub use instant::Instant;
 const CHECKED: &str = "data type was checked";
 
 mod private {
-    use crate::func::native::SendSync;
+    use crate::func::SendSync;
     use std::any::Any;
 
     /// A sealed trait that prevents other crates from implementing [`Variant`].
@@ -384,12 +384,7 @@ impl Dynamic {
             Union::Variant(ref v, ..) => (***v).type_id(),
 
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "sync"))]
-            Union::Shared(ref cell, ..) => (*cell.borrow()).type_id(),
-
-            #[cfg(not(feature = "no_closure"))]
-            #[cfg(feature = "sync")]
-            Union::Shared(ref cell, ..) => (*cell.read().unwrap()).type_id(),
+            Union::Shared(ref cell, ..) => (*locked_read(cell)).type_id(),
         }
     }
     /// Get the name of the type of the value held by this [`Dynamic`].
@@ -455,66 +450,17 @@ impl Hash for Dynamic {
             #[cfg(feature = "decimal")]
             Union::Decimal(ref d, ..) => d.hash(state),
             #[cfg(not(feature = "no_index"))]
-            Union::Array(ref a, ..) => a.as_ref().hash(state),
+            Union::Array(ref a, ..) => a.hash(state),
             #[cfg(not(feature = "no_index"))]
-            Union::Blob(ref a, ..) => a.as_ref().hash(state),
+            Union::Blob(ref a, ..) => a.hash(state),
             #[cfg(not(feature = "no_object"))]
-            Union::Map(ref m, ..) => m.as_ref().hash(state),
+            Union::Map(ref m, ..) => m.hash(state),
             Union::FnPtr(ref f, ..) => f.hash(state),
 
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "sync"))]
-            Union::Shared(ref cell, ..) => (*cell.borrow()).hash(state),
+            Union::Shared(ref cell, ..) => (*locked_read(cell)).hash(state),
 
-            #[cfg(not(feature = "no_closure"))]
-            #[cfg(feature = "sync")]
-            Union::Shared(ref cell, ..) => (*cell.read().unwrap()).hash(state),
-
-            Union::Variant(ref _v, ..) => {
-                #[cfg(not(feature = "only_i32"))]
-                #[cfg(not(feature = "only_i64"))]
-                {
-                    let value_any = (***_v).as_any();
-                    let type_id = value_any.type_id();
-
-                    if type_id == TypeId::of::<u8>() {
-                        TypeId::of::<u8>().hash(state);
-                        value_any.downcast_ref::<u8>().expect(CHECKED).hash(state);
-                    } else if type_id == TypeId::of::<u16>() {
-                        TypeId::of::<u16>().hash(state);
-                        value_any.downcast_ref::<u16>().expect(CHECKED).hash(state);
-                    } else if type_id == TypeId::of::<u32>() {
-                        TypeId::of::<u32>().hash(state);
-                        value_any.downcast_ref::<u32>().expect(CHECKED).hash(state);
-                    } else if type_id == TypeId::of::<u64>() {
-                        TypeId::of::<u64>().hash(state);
-                        value_any.downcast_ref::<u64>().expect(CHECKED).hash(state);
-                    } else if type_id == TypeId::of::<i8>() {
-                        TypeId::of::<i8>().hash(state);
-                        value_any.downcast_ref::<i8>().expect(CHECKED).hash(state);
-                    } else if type_id == TypeId::of::<i16>() {
-                        TypeId::of::<i16>().hash(state);
-                        value_any.downcast_ref::<i16>().expect(CHECKED).hash(state);
-                    } else if type_id == TypeId::of::<i32>() {
-                        TypeId::of::<i32>().hash(state);
-                        value_any.downcast_ref::<i32>().expect(CHECKED).hash(state);
-                    } else if type_id == TypeId::of::<i64>() {
-                        TypeId::of::<i64>().hash(state);
-                        value_any.downcast_ref::<i64>().expect(CHECKED).hash(state);
-                    }
-
-                    #[cfg(not(target_family = "wasm"))]
-                    if type_id == TypeId::of::<u128>() {
-                        TypeId::of::<u128>().hash(state);
-                        value_any.downcast_ref::<u128>().expect(CHECKED).hash(state);
-                    } else if type_id == TypeId::of::<i128>() {
-                        TypeId::of::<i128>().hash(state);
-                        value_any.downcast_ref::<i128>().expect(CHECKED).hash(state);
-                    }
-                }
-
-                unimplemented!("a custom type cannot be hashed")
-            }
+            Union::Variant(..) => unimplemented!("{} cannot be hashed", self.type_name()),
 
             #[cfg(not(feature = "no_std"))]
             Union::TimeStamp(..) => unimplemented!("{} cannot be hashed", self.type_name()),
@@ -550,49 +496,47 @@ impl fmt::Display for Dynamic {
 
                 #[cfg(not(feature = "only_i32"))]
                 #[cfg(not(feature = "only_i64"))]
-                if _type_id == TypeId::of::<u8>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<u8>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<u16>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<u16>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<u32>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<u32>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<u64>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<u64>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<i8>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<i8>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<i16>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<i16>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<i32>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<i32>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<i64>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<i64>().expect(CHECKED), f);
+                if let Some(value) = _value_any.downcast_ref::<u8>() {
+                    return fmt::Display::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<u16>() {
+                    return fmt::Display::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<u32>() {
+                    return fmt::Display::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<u64>() {
+                    return fmt::Display::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<i8>() {
+                    return fmt::Display::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<i16>() {
+                    return fmt::Display::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<i32>() {
+                    return fmt::Display::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<i64>() {
+                    return fmt::Display::fmt(value, f);
                 }
 
                 #[cfg(not(feature = "no_float"))]
                 #[cfg(not(feature = "f32_float"))]
-                if _type_id == TypeId::of::<f32>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<f32>().expect(CHECKED), f);
+                if let Some(value) = _value_any.downcast_ref::<f32>() {
+                    return fmt::Display::fmt(value, f);
                 }
                 #[cfg(not(feature = "no_float"))]
                 #[cfg(feature = "f32_float")]
-                if _type_id == TypeId::of::<f64>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<f64>().expect(CHECKED), f);
+                if let Some(value) = _value_any.downcast_ref::<f64>() {
+                    return fmt::Display::fmt(value, f);
                 }
 
                 #[cfg(not(feature = "only_i32"))]
                 #[cfg(not(feature = "only_i64"))]
                 #[cfg(not(target_family = "wasm"))]
-                if _type_id == TypeId::of::<u128>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<u128>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<i128>() {
-                    return fmt::Display::fmt(_value_any.downcast_ref::<i128>().expect(CHECKED), f);
+                if let Some(value) = _value_any.downcast_ref::<u128>() {
+                    return fmt::Display::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<i128>() {
+                    return fmt::Display::fmt(value, f);
                 }
 
-                if _type_id == TypeId::of::<ExclusiveRange>() {
-                    let range = _value_any.downcast_ref::<ExclusiveRange>().expect(CHECKED);
+                if let Some(range) = _value_any.downcast_ref::<ExclusiveRange>() {
                     return write!(f, "{}..{}", range.start, range.end);
-                } else if _type_id == TypeId::of::<InclusiveRange>() {
-                    let range = _value_any.downcast_ref::<InclusiveRange>().expect(CHECKED);
+                } else if let Some(range) = _value_any.downcast_ref::<InclusiveRange>() {
                     return write!(f, "{}..={}", range.start(), range.end());
                 }
 
@@ -655,49 +599,47 @@ impl fmt::Debug for Dynamic {
 
                 #[cfg(not(feature = "only_i32"))]
                 #[cfg(not(feature = "only_i64"))]
-                if _type_id == TypeId::of::<u8>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<u8>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<u16>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<u16>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<u32>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<u32>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<u64>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<u64>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<i8>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<i8>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<i16>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<i16>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<i32>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<i32>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<i64>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<i64>().expect(CHECKED), f);
+                if let Some(value) = _value_any.downcast_ref::<u8>() {
+                    return fmt::Debug::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<u16>() {
+                    return fmt::Debug::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<u32>() {
+                    return fmt::Debug::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<u64>() {
+                    return fmt::Debug::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<i8>() {
+                    return fmt::Debug::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<i16>() {
+                    return fmt::Debug::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<i32>() {
+                    return fmt::Debug::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<i64>() {
+                    return fmt::Debug::fmt(value, f);
                 }
 
                 #[cfg(not(feature = "no_float"))]
                 #[cfg(not(feature = "f32_float"))]
-                if _type_id == TypeId::of::<f32>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<f32>().expect(CHECKED), f);
+                if let Some(value) = _value_any.downcast_ref::<f32>() {
+                    return fmt::Debug::fmt(value, f);
                 }
                 #[cfg(not(feature = "no_float"))]
                 #[cfg(feature = "f32_float")]
-                if _type_id == TypeId::of::<f64>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<f64>().expect(CHECKED), f);
+                if let Some(value) = _value_any.downcast_ref::<f64>() {
+                    return fmt::Debug::fmt(value, f);
                 }
 
                 #[cfg(not(feature = "only_i32"))]
                 #[cfg(not(feature = "only_i64"))]
                 #[cfg(not(target_family = "wasm"))]
-                if _type_id == TypeId::of::<u128>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<u128>().expect(CHECKED), f);
-                } else if _type_id == TypeId::of::<i128>() {
-                    return fmt::Debug::fmt(_value_any.downcast_ref::<i128>().expect(CHECKED), f);
+                if let Some(value) = _value_any.downcast_ref::<u128>() {
+                    return fmt::Debug::fmt(value, f);
+                } else if let Some(value) = _value_any.downcast_ref::<i128>() {
+                    return fmt::Debug::fmt(value, f);
                 }
 
-                if _type_id == TypeId::of::<ExclusiveRange>() {
-                    let range = _value_any.downcast_ref::<ExclusiveRange>().expect(CHECKED);
+                if let Some(range) = _value_any.downcast_ref::<ExclusiveRange>() {
                     return write!(f, "{}..{}", range.start, range.end);
-                } else if _type_id == TypeId::of::<InclusiveRange>() {
-                    let range = _value_any.downcast_ref::<InclusiveRange>().expect(CHECKED);
+                } else if let Some(range) = _value_any.downcast_ref::<InclusiveRange>() {
                     return write!(f, "{}..={}", range.start(), range.end());
                 }
 
@@ -1061,28 +1003,27 @@ impl Dynamic {
     ///
     /// Constant [`Dynamic`] values are read-only.
     ///
-    /// If a [`&mut Dynamic`][Dynamic] to such a constant is passed to a Rust function, the function
-    /// can use this information to return an error of
-    /// [`ErrorAssignmentToConstant`][crate::EvalAltResult::ErrorAssignmentToConstant] if its value
-    /// is going to be modified.
+    /// # Usage
     ///
-    /// This safe-guards constant values from being modified from within Rust functions.
+    /// If a [`&mut Dynamic`][Dynamic] to such a constant is passed to a Rust function, the function
+    /// can use this information to return the error
+    /// [`ErrorAssignmentToConstant`][crate::EvalAltResult::ErrorAssignmentToConstant] if its value
+    /// will be modified.
+    ///
+    /// This safe-guards constant values from being modified within Rust functions.
+    ///
+    /// # Shared Values
+    ///
+    /// If a [`Dynamic`] holds a _shared_ value, then it is read-only only if the shared value
+    /// itself is read-only.
     #[must_use]
     pub fn is_read_only(&self) -> bool {
         #[cfg(not(feature = "no_closure"))]
         match self.0 {
-            Union::Shared(.., ReadOnly) => return true,
-
-            #[cfg(not(feature = "sync"))]
+            // Shared values do not consider the current access mode
+            //Union::Shared(.., ReadOnly) => return true,
             Union::Shared(ref cell, ..) => {
-                return match cell.borrow().access_mode() {
-                    ReadWrite => false,
-                    ReadOnly => true,
-                }
-            }
-            #[cfg(feature = "sync")]
-            Union::Shared(ref cell, ..) => {
-                return match cell.read().unwrap().access_mode() {
+                return match locked_read(cell).access_mode() {
                     ReadWrite => false,
                     ReadOnly => true,
                 }
@@ -1114,12 +1055,7 @@ impl Dynamic {
             Union::Map(..) => true,
 
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "sync"))]
-            Union::Shared(ref cell, ..) => cell.borrow().is_hashable(),
-
-            #[cfg(not(feature = "no_closure"))]
-            #[cfg(feature = "sync")]
-            Union::Shared(ref cell, ..) => cell.read().unwrap().is_hashable(),
+            Union::Shared(ref cell, ..) => locked_read(cell).is_hashable(),
 
             _ => false,
         }
@@ -1370,11 +1306,7 @@ impl Dynamic {
     pub fn flatten_clone(&self) -> Self {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "sync"))]
-            Union::Shared(ref cell, ..) => cell.borrow().clone(),
-            #[cfg(not(feature = "no_closure"))]
-            #[cfg(feature = "sync")]
-            Union::Shared(ref cell, ..) => cell.read().unwrap().clone(),
+            Union::Shared(ref cell, ..) => locked_read(cell).clone(),
             _ => self.clone(),
         }
     }
@@ -1389,11 +1321,8 @@ impl Dynamic {
     pub fn flatten(self) -> Self {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(cell, ..) => crate::func::native::shared_try_take(cell).map_or_else(
-                #[cfg(not(feature = "sync"))]
-                |cell| cell.borrow().clone(),
-                #[cfg(feature = "sync")]
-                |cell| cell.read().unwrap().clone(),
+            Union::Shared(cell, ..) => crate::func::shared_try_take(cell).map_or_else(
+                |ref cell| locked_read(cell).clone(),
                 #[cfg(not(feature = "sync"))]
                 |value| value.into_inner(),
                 #[cfg(feature = "sync")]
@@ -1414,11 +1343,8 @@ impl Dynamic {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(ref mut cell, ..) => {
                 let cell = mem::take(cell);
-                *self = crate::func::native::shared_try_take(cell).map_or_else(
-                    #[cfg(not(feature = "sync"))]
-                    |cell| cell.borrow().clone(),
-                    #[cfg(feature = "sync")]
-                    |cell| cell.read().unwrap().clone(),
+                *self = crate::func::shared_try_take(cell).map_or_else(
+                    |ref cell| locked_read(cell).clone(),
                     #[cfg(not(feature = "sync"))]
                     |value| value.into_inner(),
                     #[cfg(feature = "sync")]
@@ -1470,10 +1396,7 @@ impl Dynamic {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(ref cell, ..) => {
-                #[cfg(not(feature = "sync"))]
-                let value = cell.borrow();
-                #[cfg(feature = "sync")]
-                let value = cell.read().unwrap();
+                let value = locked_read(cell);
 
                 if (*value).type_id() != TypeId::of::<T>()
                     && TypeId::of::<Dynamic>() != TypeId::of::<T>()
@@ -1505,7 +1428,7 @@ impl Dynamic {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(ref cell, ..) => {
-                let guard = crate::func::native::locked_write(cell);
+                let guard = crate::func::locked_write(cell);
 
                 if (*guard).type_id() != TypeId::of::<T>()
                     && TypeId::of::<Dynamic>() != TypeId::of::<T>()
@@ -1820,11 +1743,8 @@ impl Dynamic {
         match self.0 {
             Union::Str(s, ..) => Ok(s),
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(cell, ..) => {
-                #[cfg(not(feature = "sync"))]
-                let value = cell.borrow();
-                #[cfg(feature = "sync")]
-                let value = cell.read().unwrap();
+            Union::Shared(ref cell, ..) => {
+                let value = locked_read(cell);
 
                 match value.0 {
                     Union::Str(ref s, ..) => Ok(s.clone()),
@@ -1842,11 +1762,8 @@ impl Dynamic {
         match self.0 {
             Union::Array(a, ..) => Ok(*a),
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(cell, ..) => {
-                #[cfg(not(feature = "sync"))]
-                let value = cell.borrow();
-                #[cfg(feature = "sync")]
-                let value = cell.read().unwrap();
+            Union::Shared(ref cell, ..) => {
+                let value = locked_read(cell);
 
                 match value.0 {
                     Union::Array(ref a, ..) => Ok(a.as_ref().clone()),
@@ -1880,11 +1797,8 @@ impl Dynamic {
                 .collect(),
             Union::Blob(..) if TypeId::of::<T>() == TypeId::of::<u8>() => Ok(self.cast::<Vec<T>>()),
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(cell, ..) => {
-                #[cfg(not(feature = "sync"))]
-                let value = cell.borrow();
-                #[cfg(feature = "sync")]
-                let value = cell.read().unwrap();
+            Union::Shared(ref cell, ..) => {
+                let value = locked_read(cell);
 
                 match value.0 {
                     Union::Array(ref a, ..) => {
@@ -1921,11 +1835,8 @@ impl Dynamic {
         match self.0 {
             Union::Blob(a, ..) => Ok(*a),
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(cell, ..) => {
-                #[cfg(not(feature = "sync"))]
-                let value = cell.borrow();
-                #[cfg(feature = "sync")]
-                let value = cell.read().unwrap();
+            Union::Shared(ref cell, ..) => {
+                let value = locked_read(cell);
 
                 match value.0 {
                     Union::Blob(ref a, ..) => Ok(a.as_ref().clone()),

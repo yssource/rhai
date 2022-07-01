@@ -28,9 +28,9 @@ pub trait FuncArgs {
     ///
     /// impl FuncArgs for Options {
     ///     fn parse<ARGS: Extend<Dynamic>>(self, args: &mut ARGS) {
-    ///         args.extend(std::iter::once(self.foo.into()));
-    ///         args.extend(std::iter::once(self.bar.into()));
-    ///         args.extend(std::iter::once(self.baz.into()));
+    ///         args.extend(Some(self.foo.into()));
+    ///         args.extend(Some(self.bar.into()));
+    ///         args.extend(Some(self.baz.into()));
     ///     }
     /// }
     ///

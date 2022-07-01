@@ -2,7 +2,7 @@
 #![cfg(not(target_family = "wasm"))]
 
 use crate::eval::GlobalRuntimeState;
-use crate::func::native::{locked_read, locked_write};
+use crate::func::{locked_read, locked_write};
 use crate::{
     Engine, Identifier, Module, ModuleResolver, Position, RhaiResultOf, Scope, Shared, ERR,
 };
@@ -307,12 +307,7 @@ impl FileModuleResolver {
         let file_path = self.get_file_path(path, source_path);
 
         if self.is_cache_enabled() {
-            #[cfg(not(feature = "sync"))]
-            let c = self.cache.borrow();
-            #[cfg(feature = "sync")]
-            let c = self.cache.read().unwrap();
-
-            if let Some(module) = c.get(&file_path) {
+            if let Some(module) = locked_read(&self.cache).get(&file_path) {
                 return Ok(module.clone());
             }
         }

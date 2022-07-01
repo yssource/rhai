@@ -7,7 +7,7 @@ use crate::func::{
 };
 use crate::types::{dynamic::Variant, CustomTypesCollection};
 use crate::{
-    calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes, Dynamic, Identifier,
+    calc_fn_hash, calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes, Dynamic, Identifier,
     ImmutableString, NativeCallContext, RhaiResultOf, Shared, StaticVec,
 };
 #[cfg(feature = "no_std")]
@@ -17,7 +17,6 @@ use std::{
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet},
     fmt,
-    iter::{empty, once},
     ops::{Add, AddAssign},
 };
 
@@ -214,7 +213,7 @@ impl FuncInfo {
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
 #[inline]
 pub fn calc_native_fn_hash<'a>(
-    modules: impl Iterator<Item = &'a str>,
+    modules: impl IntoIterator<Item = &'a str>,
     fn_name: &str,
     params: &[TypeId],
 ) -> u64 {
@@ -242,11 +241,13 @@ pub struct Module {
     variables: BTreeMap<Identifier, Dynamic>,
     /// Flattened collection of all [`Module`] variables, including those in sub-modules.
     all_variables: BTreeMap<u64, Dynamic>,
-    /// External Rust functions.
+    /// Functions (both native Rust and scripted).
     functions: BTreeMap<u64, Box<FuncInfo>>,
-    /// Flattened collection of all external Rust functions, native or scripted.
+    /// Flattened collection of all functions, native Rust and scripted.
     /// including those in sub-modules.
     all_functions: BTreeMap<u64, CallableFunction>,
+    /// Native Rust functions (in scripted hash format) that contain [`Dynamic`] parameters.
+    dynamic_functions: BTreeSet<u64>,
     /// Iterator functions, keyed by the type producing the iterator.
     type_iterators: BTreeMap<TypeId, Shared<IteratorFn>>,
     /// Flattened collection of iterator functions, including those in sub-modules.
@@ -349,6 +350,7 @@ impl Module {
             all_variables: BTreeMap::new(),
             functions: BTreeMap::new(),
             all_functions: BTreeMap::new(),
+            dynamic_functions: BTreeSet::new(),
             type_iterators: BTreeMap::new(),
             all_type_iterators: BTreeMap::new(),
             indexed: true,
@@ -416,6 +418,25 @@ impl Module {
     pub fn clear_id(&mut self) -> &mut Self {
         self.id.clear();
         self
+    }
+
+    /// Clear the [`Module`].
+    #[inline(always)]
+    pub fn clear(&mut self) {
+        self.id.clear();
+        self.internal = false;
+        self.standard = false;
+        self.custom_types.clear();
+        self.modules.clear();
+        self.variables.clear();
+        self.all_variables.clear();
+        self.functions.clear();
+        self.all_functions.clear();
+        self.dynamic_functions.clear();
+        self.type_iterators.clear();
+        self.all_type_iterators.clear();
+        self.indexed = false;
+        self.contains_indexed_global_functions = false;
     }
 
     /// Map a custom type to a friendly display name.
@@ -626,7 +647,7 @@ impl Module {
         let value = Dynamic::from(value);
 
         if self.indexed {
-            let hash_var = crate::calc_qualified_var_hash(once(""), &ident);
+            let hash_var = crate::calc_qualified_var_hash(Some(""), &ident);
             self.all_variables.insert(hash_var, value.clone());
         }
         self.variables.insert(ident, value);
@@ -965,6 +986,10 @@ impl Module {
             .collect();
         param_types.shrink_to_fit();
 
+        let is_dynamic = param_types
+            .iter()
+            .any(|&type_id| type_id == TypeId::of::<Dynamic>());
+
         #[cfg(feature = "metadata")]
         let (param_names, return_type_name) = {
             let mut names = _arg_names
@@ -981,7 +1006,12 @@ impl Module {
             (names, return_type)
         };
 
-        let hash_fn = calc_native_fn_hash(empty::<&str>(), name.as_ref(), &param_types);
+        let hash_fn = calc_native_fn_hash(None, name.as_ref(), &param_types);
+
+        if is_dynamic {
+            self.dynamic_functions
+                .insert(calc_fn_hash(name.as_ref(), param_types.len()));
+        }
 
         self.functions.insert(
             hash_fn,
@@ -1445,16 +1475,27 @@ impl Module {
         )
     }
 
-    /// Get a Rust function.
+    /// Look up a Rust function by hash.
     ///
     /// The [`u64`] hash is returned by the [`set_native_fn`][Module::set_native_fn] call.
     #[inline]
     #[must_use]
-    pub(crate) fn get_fn(&self, hash_fn: u64) -> Option<&CallableFunction> {
+    pub(crate) fn get_fn(&self, hash_native: u64) -> Option<&CallableFunction> {
         if !self.functions.is_empty() {
-            self.functions.get(&hash_fn).map(|f| &f.func)
+            self.functions.get(&hash_native).map(|f| &f.func)
         } else {
             None
+        }
+    }
+
+    /// Does the particular function with [`Dynamic`] parameter(s) exist in the [`Module`]?
+    #[inline(always)]
+    #[must_use]
+    pub(crate) fn contains_dynamic_fn(&self, hash_script: u64) -> bool {
+        if !self.dynamic_functions.is_empty() {
+            self.dynamic_functions.contains(&hash_script)
+        } else {
+            false
         }
     }
 
@@ -1492,6 +1533,8 @@ impl Module {
         self.modules.extend(other.modules.into_iter());
         self.variables.extend(other.variables.into_iter());
         self.functions.extend(other.functions.into_iter());
+        self.dynamic_functions
+            .extend(other.dynamic_functions.into_iter());
         self.type_iterators.extend(other.type_iterators.into_iter());
         self.all_functions.clear();
         self.all_variables.clear();
@@ -1511,6 +1554,8 @@ impl Module {
         }
         self.variables.extend(other.variables.into_iter());
         self.functions.extend(other.functions.into_iter());
+        self.dynamic_functions
+            .extend(other.dynamic_functions.into_iter());
         self.type_iterators.extend(other.type_iterators.into_iter());
         self.all_functions.clear();
         self.all_variables.clear();
@@ -1537,6 +1582,8 @@ impl Module {
         for (&k, v) in &other.functions {
             self.functions.entry(k).or_insert_with(|| v.clone());
         }
+        self.dynamic_functions
+            .extend(other.dynamic_functions.iter().cloned());
         for (&k, v) in &other.type_iterators {
             self.type_iterators.entry(k).or_insert_with(|| v.clone());
         }
@@ -1571,6 +1618,7 @@ impl Module {
 
         self.variables
             .extend(other.variables.iter().map(|(k, v)| (k.clone(), v.clone())));
+
         self.functions.extend(
             other
                 .functions
@@ -1586,6 +1634,9 @@ impl Module {
                 })
                 .map(|(&k, v)| (k, v.clone())),
         );
+        // This may introduce entries that are superfluous because the function has been filtered away.
+        self.dynamic_functions
+            .extend(other.dynamic_functions.iter().cloned());
 
         self.type_iterators
             .extend(other.type_iterators.iter().map(|(&k, v)| (k, v.clone())));
@@ -1621,6 +1672,7 @@ impl Module {
             .collect();
 
         self.all_functions.clear();
+        self.dynamic_functions.clear();
         self.all_variables.clear();
         self.all_type_iterators.clear();
         self.indexed = false;

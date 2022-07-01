@@ -19,7 +19,7 @@ Bug fixes
 Reserved Symbols
 ----------------
 
-* `?`, `??`, `?.` and `!.` are now reserved symbols.
+* `?`, `??`, `?.`, `?[` and `!.` are now reserved symbols.
 
 Deprecated API's
 ----------------
@@ -29,7 +29,7 @@ Deprecated API's
 New features
 ------------
 
-* The _Elvis operator_ (`?.`) is now supported for property access and method calls.
+* The _Elvis operators_ (`?.` and `?[`) are now supported for property access, method calls and indexing.
 * The _null-coalescing operator_ (`??`) is now supported to short-circuit `()` values.
 
 Enhancements
@@ -41,6 +41,7 @@ Enhancements
 * Originally, the debugger's custom state uses the same state as `EvalState::tag()` (which is the same as `NativeCallContext::tag()`).  It is now split into its own variable accessible under `Debugger::state()`.
 * Non-borrowed string keys can now be deserialized for object maps via `serde`.
 * `Scope::get` is added to get a reference to a variable's value.
+* Variable resolvers can now return a _shared_ value which can be mutated.
 
 
 Version 1.7.0

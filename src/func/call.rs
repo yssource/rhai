@@ -165,7 +165,7 @@ impl Engine {
         )
     }
 
-    /// Resolve a function call.
+    /// Resolve a normal (non-qualified) function call.
     ///
     /// Search order:
     /// 1) AST - script functions in the AST
@@ -201,11 +201,8 @@ impl Engine {
             .entry(hash)
             .or_insert_with(|| {
                 let num_args = args.as_ref().map_or(0, |a| a.len());
-                let max_bitmask = if !allow_dynamic {
-                    0
-                } else {
-                    1usize << usize::min(num_args, MAX_DYNAMIC_PARAMETERS)
-                };
+                let mut max_bitmask = 0; // One above maximum bitmask based on number of parameters.
+                                         // Set later when a specific matching function is not found.
                 let mut bitmask = 1usize; // Bitmask of which parameter to replace with `Dynamic`
 
                 loop {
@@ -247,62 +244,85 @@ impl Engine {
                             })
                         });
 
-                    match func {
-                        // Specific version found
-                        Some(f) => return Some(f),
+                    // Specific version found
+                    if let Some(f) = func {
+                        return Some(f);
+                    }
 
-                        // Stop when all permutations are exhausted
-                        None if bitmask >= max_bitmask => {
-                            if num_args != 2 {
-                                return None;
-                            }
+                    // Check `Dynamic` parameters for functions with parameters
+                    if allow_dynamic && max_bitmask == 0 && num_args > 0 {
+                        let is_dynamic = lib.iter().any(|&m| m.contains_dynamic_fn(hash_script))
+                            || self
+                                .global_modules
+                                .iter()
+                                .any(|m| m.contains_dynamic_fn(hash_script));
 
-                            return args.and_then(|args| {
-                                if !is_op_assignment {
-                                    get_builtin_binary_op_fn(fn_name, &args[0], &args[1]).map(|f| {
-                                        FnResolutionCacheEntry {
-                                            func: CallableFunction::from_method(
-                                                Box::new(f) as Box<FnAny>
-                                            ),
-                                            source: None,
-                                        }
-                                    })
-                                } else {
-                                    let (first_arg, rest_args) = args.split_first().unwrap();
+                        #[cfg(not(feature = "no_module"))]
+                        let is_dynamic = is_dynamic
+                            || _global
+                                .iter_imports_raw()
+                                .any(|(_, m)| m.contains_dynamic_fn(hash_script))
+                            || self
+                                .global_sub_modules
+                                .values()
+                                .any(|m| m.contains_dynamic_fn(hash_script));
 
-                                    get_builtin_op_assignment_fn(fn_name, *first_arg, rest_args[0])
-                                        .map(|f| FnResolutionCacheEntry {
-                                            func: CallableFunction::from_method(
-                                                Box::new(f) as Box<FnAny>
-                                            ),
-                                            source: None,
-                                        })
-                                }
-                            });
-                        }
-
-                        // Try all permutations with `Dynamic` wildcards
-                        None => {
-                            let hash_params = calc_fn_params_hash(
-                                args.as_ref()
-                                    .expect("no permutations")
-                                    .iter()
-                                    .enumerate()
-                                    .map(|(i, a)| {
-                                        let mask = 1usize << (num_args - i - 1);
-                                        if bitmask & mask != 0 {
-                                            // Replace with `Dynamic`
-                                            TypeId::of::<Dynamic>()
-                                        } else {
-                                            a.type_id()
-                                        }
-                                    }),
-                            );
-                            hash = combine_hashes(hash_script, hash_params);
-
-                            bitmask += 1;
+                        // Set maximum bitmask when there are dynamic versions of the function
+                        if is_dynamic {
+                            max_bitmask = 1usize << usize::min(num_args, MAX_DYNAMIC_PARAMETERS);
                         }
                     }
+
+                    // Stop when all permutations are exhausted
+                    if bitmask >= max_bitmask {
+                        if num_args != 2 {
+                            return None;
+                        }
+
+                        return args.and_then(|args| {
+                            if !is_op_assignment {
+                                get_builtin_binary_op_fn(fn_name, &args[0], &args[1]).map(|f| {
+                                    FnResolutionCacheEntry {
+                                        func: CallableFunction::from_method(
+                                            Box::new(f) as Box<FnAny>
+                                        ),
+                                        source: None,
+                                    }
+                                })
+                            } else {
+                                let (first_arg, rest_args) = args.split_first().unwrap();
+
+                                get_builtin_op_assignment_fn(fn_name, *first_arg, rest_args[0]).map(
+                                    |f| FnResolutionCacheEntry {
+                                        func: CallableFunction::from_method(
+                                            Box::new(f) as Box<FnAny>
+                                        ),
+                                        source: None,
+                                    },
+                                )
+                            }
+                        });
+                    }
+
+                    // Try all permutations with `Dynamic` wildcards
+                    let hash_params = calc_fn_params_hash(
+                        args.as_ref()
+                            .expect("no permutations")
+                            .iter()
+                            .enumerate()
+                            .map(|(i, a)| {
+                                let mask = 1usize << (num_args - i - 1);
+                                if bitmask & mask != 0 {
+                                    // Replace with `Dynamic`
+                                    TypeId::of::<Dynamic>()
+                                } else {
+                                    a.type_id()
+                                }
+                            }),
+                    );
+                    hash = combine_hashes(hash_script, hash_params);
+
+                    bitmask += 1;
                 }
             });
 
@@ -1202,7 +1222,7 @@ impl Engine {
                 let (mut target, _pos) =
                     self.search_namespace(scope, global, lib, this_ptr, first_expr, level)?;
 
-                if target.as_ref().is_read_only() {
+                if target.is_read_only() {
                     target = target.into_owned();
                 }
 

@@ -1397,11 +1397,11 @@ pub mod array_functions {
     /// ```rhai
     /// let x = [1, 2, 3, 4, 5];
     ///
-    /// let y = x.reduce(|r, v| v + if r == () { 0 } else { r });
+    /// let y = x.reduce(|r, v| v + (r ?? 0));
     ///
     /// print(y);       // prints 15
     ///
-    /// let y = x.reduce(|r, v, i| v + i + if r == () { 0 } else { r });
+    /// let y = x.reduce(|r, v, i| v + i + (r ?? 0));
     ///
     /// print(y);       // prints 25
     /// ```
@@ -1423,10 +1423,10 @@ pub mod array_functions {
     ///
     /// ```rhai
     /// fn process(r, x) {
-    ///     x + if r == () { 0 } else { r }
+    ///     x + (r ?? 0)
     /// }
     /// fn process_extra(r, x, i) {
-    ///     x + i + if r == () { 0 } else { r }
+    ///     x + i + (r ?? 0)
     /// }
     ///
     /// let x = [1, 2, 3, 4, 5];
@@ -1556,11 +1556,11 @@ pub mod array_functions {
     /// ```rhai
     /// let x = [1, 2, 3, 4, 5];
     ///
-    /// let y = x.reduce_rev(|r, v| v + if r == () { 0 } else { r });
+    /// let y = x.reduce_rev(|r, v| v + (r ?? 0));
     ///
     /// print(y);       // prints 15
     ///
-    /// let y = x.reduce_rev(|r, v, i| v + i + if r == () { 0 } else { r });
+    /// let y = x.reduce_rev(|r, v, i| v + i + (r ?? 0));
     ///
     /// print(y);       // prints 25
     /// ```
@@ -1583,10 +1583,10 @@ pub mod array_functions {
     ///
     /// ```rhai
     /// fn process(r, x) {
-    ///     x + if r == () { 0 } else { r }
+    ///     x + (r ?? 0)
     /// }
     /// fn process_extra(r, x, i) {
-    ///     x + i + if r == () { 0 } else { r }
+    ///     x + i + (r ?? 0)
     /// }
     ///
     /// let x = [1, 2, 3, 4, 5];

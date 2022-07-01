@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, ParseErrorType, Position, Scope, INT};
+use rhai::{Dynamic, Engine, EvalAltResult, ParseErrorType, Position, Scope, INT};
 
 #[test]
 fn test_var_scope() -> Result<(), Box<EvalAltResult>> {
@@ -162,9 +162,16 @@ fn test_var_resolver() -> Result<(), Box<EvalAltResult>> {
     scope.push("chameleon", 123 as INT);
     scope.push("DO_NOT_USE", 999 as INT);
 
-    engine.on_var(|name, _, context| {
+    #[cfg(not(feature = "no_closure"))]
+    let mut base = Dynamic::ONE.into_shared();
+    #[cfg(not(feature = "no_closure"))]
+    let shared = base.clone();
+
+    engine.on_var(move |name, _, context| {
         match name {
             "MYSTIC_NUMBER" => Ok(Some((42 as INT).into())),
+            #[cfg(not(feature = "no_closure"))]
+            "HELLO" => Ok(Some(shared.clone())),
             // Override a variable - make it not found even if it exists!
             "DO_NOT_USE" => {
                 Err(EvalAltResult::ErrorVariableNotFound(name.to_string(), Position::NONE).into())
@@ -186,6 +193,19 @@ fn test_var_resolver() -> Result<(), Box<EvalAltResult>> {
         engine.eval_with_scope::<INT>(&mut scope, "MYSTIC_NUMBER")?,
         42
     );
+
+    #[cfg(not(feature = "no_closure"))]
+    {
+        assert_eq!(engine.eval::<INT>("HELLO")?, 1);
+        *base.write_lock::<INT>().unwrap() = 42;
+        assert_eq!(engine.eval::<INT>("HELLO")?, 42);
+        engine.run("HELLO = 123")?;
+        assert_eq!(base.as_int().unwrap(), 123);
+        assert_eq!(engine.eval::<INT>("HELLO = HELLO + 1; HELLO")?, 124);
+        assert_eq!(engine.eval::<INT>("HELLO = HELLO * 2; HELLO")?, 248);
+        assert_eq!(base.as_int().unwrap(), 248);
+    }
+
     assert_eq!(engine.eval_with_scope::<INT>(&mut scope, "chameleon")?, 1);
     assert!(
         matches!(*engine.eval_with_scope::<INT>(&mut scope, "DO_NOT_USE").expect_err("should error"),

@@ -11,7 +11,7 @@
 //!
 //! ## Contents of `my_script.rhai`
 //!
-//! ```ignore
+//! ```rhai
 //! /// Brute force factorial function
 //! fn factorial(x) {
 //!     if x == 1 { return 1; }

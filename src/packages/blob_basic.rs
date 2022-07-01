@@ -953,7 +953,7 @@ mod parse_int_functions {
     /// * If number of bytes in `range` < number of bytes for `INT`, zeros are padded.
     /// * If number of bytes in `range` > number of bytes for `INT`, extra bytes are ignored.
     ///
-    /// ```ignore
+    /// ```rhai
     /// let b = blob();
     ///
     /// b += 1; b += 2; b += 3; b += 4; b += 5;
@@ -974,7 +974,7 @@ mod parse_int_functions {
     /// * If number of bytes in `range` < number of bytes for `INT`, zeros are padded.
     /// * If number of bytes in `range` > number of bytes for `INT`, extra bytes are ignored.
     ///
-    /// ```ignore
+    /// ```rhai
     /// let b = blob();
     ///
     /// b += 1; b += 2; b += 3; b += 4; b += 5;
@@ -1001,7 +1001,7 @@ mod parse_int_functions {
     /// * If number of bytes in range < number of bytes for `INT`, zeros are padded.
     /// * If number of bytes in range > number of bytes for `INT`, extra bytes are ignored.
     ///
-    /// ```ignore
+    /// ```rhai
     /// let b = blob();
     ///
     /// b += 1; b += 2; b += 3; b += 4; b += 5;
@@ -1019,7 +1019,7 @@ mod parse_int_functions {
     /// * If number of bytes in `range` < number of bytes for `INT`, zeros are padded.
     /// * If number of bytes in `range` > number of bytes for `INT`, extra bytes are ignored.
     ///
-    /// ```ignore
+    /// ```rhai
     /// let b = blob();
     ///
     /// b += 1; b += 2; b += 3; b += 4; b += 5;
@@ -1040,7 +1040,7 @@ mod parse_int_functions {
     /// * If number of bytes in `range` < number of bytes for `INT`, zeros are padded.
     /// * If number of bytes in `range` > number of bytes for `INT`, extra bytes are ignored.
     ///
-    /// ```ignore
+    /// ```rhai
     /// let b = blob();
     ///
     /// b += 1; b += 2; b += 3; b += 4; b += 5;
@@ -1067,7 +1067,7 @@ mod parse_int_functions {
     /// * If number of bytes in range < number of bytes for `INT`, zeros are padded.
     /// * If number of bytes in range > number of bytes for `INT`, extra bytes are ignored.
     ///
-    /// ```ignore
+    /// ```rhai
     /// let b = blob();
     ///
     /// b += 1; b += 2; b += 3; b += 4; b += 5;
@@ -1213,7 +1213,7 @@ mod write_int_functions {
     /// * If number of bytes in `range` < number of bytes for `INT`, extra bytes in `INT` are not written.
     /// * If number of bytes in `range` > number of bytes for `INT`, extra bytes in `range` are not modified.
     ///
-    /// ```ignore
+    /// ```rhai
     /// let b = blob(8);
     ///
     /// b.write_le_int(1..3, 0x12345678);
@@ -1232,7 +1232,7 @@ mod write_int_functions {
     /// * If number of bytes in `range` < number of bytes for `INT`, extra bytes in `INT` are not written.
     /// * If number of bytes in `range` > number of bytes for `INT`, extra bytes in `range` are not modified.
     ///
-    /// ```ignore
+    /// ```rhai
     /// let b = blob(8);
     ///
     /// b.write_le_int(1..=3, 0x12345678);
@@ -1257,7 +1257,7 @@ mod write_int_functions {
     /// * If number of bytes in `range` < number of bytes for `INT`, extra bytes in `INT` are not written.
     /// * If number of bytes in `range` > number of bytes for `INT`, extra bytes in `range` are not modified.
     ///
-    /// ```ignore
+    /// ```rhai
     /// let b = blob(8);
     ///
     /// b.write_le_int(1, 3, 0x12345678);
@@ -1274,7 +1274,7 @@ mod write_int_functions {
     /// * If number of bytes in `range` < number of bytes for `INT`, extra bytes in `INT` are not written.
     /// * If number of bytes in `range` > number of bytes for `INT`, extra bytes in `range` are not modified.
     ///
-    /// ```ignore
+    /// ```rhai
     /// let b = blob(8, 0x42);
     ///
     /// b.write_be_int(1..3, 0x99);
@@ -1293,7 +1293,7 @@ mod write_int_functions {
     /// * If number of bytes in `range` < number of bytes for `INT`, extra bytes in `INT` are not written.
     /// * If number of bytes in `range` > number of bytes for `INT`, extra bytes in `range` are not modified.
     ///
-    /// ```ignore
+    /// ```rhai
     /// let b = blob(8, 0x42);
     ///
     /// b.write_be_int(1..=3, 0x99);
@@ -1318,7 +1318,7 @@ mod write_int_functions {
     /// * If number of bytes in `range` < number of bytes for `INT`, extra bytes in `INT` are not written.
     /// * If number of bytes in `range` > number of bytes for `INT`, extra bytes in `range` are not modified.
     ///
-    /// ```ignore
+    /// ```rhai
     /// let b = blob(8, 0x42);
     ///
     /// b.write_be_int(1, 3, 0x99);
@@ -1464,7 +1464,7 @@ mod write_string_functions {
     /// * If number of bytes in `range` < length of `string`, extra bytes in `string` are not written.
     /// * If number of bytes in `range` > length of `string`, extra bytes in `range` are not modified.
     ///
-    /// ```ignore
+    /// ```rhai
     /// let b = blob(8);
     ///
     /// b.write_utf8(1..5, "朝には紅顔ありて夕べには白骨となる");
@@ -1482,7 +1482,7 @@ mod write_string_functions {
     /// * If number of bytes in `range` < length of `string`, extra bytes in `string` are not written.
     /// * If number of bytes in `range` > length of `string`, extra bytes in `range` are not modified.
     ///
-    /// ```ignore
+    /// ```rhai
     /// let b = blob(8);
     ///
     /// b.write_utf8(1..=5, "朝には紅顔ありて夕べには白骨となる");
@@ -1506,7 +1506,7 @@ mod write_string_functions {
     /// * If number of bytes in `range` < length of `string`, extra bytes in `string` are not written.
     /// * If number of bytes in `range` > length of `string`, extra bytes in `range` are not modified.
     ///
-    /// ```ignore
+    /// ```rhai
     /// let b = blob(8);
     ///
     /// b.write_utf8(1, 5, "朝には紅顔ありて夕べには白骨となる");
@@ -1525,7 +1525,7 @@ mod write_string_functions {
     /// * If number of bytes in `range` < length of `string`, extra bytes in `string` are not written.
     /// * If number of bytes in `range` > length of `string`, extra bytes in `range` are not modified.
     ///
-    /// ```ignore
+    /// ```rhai
     /// let b = blob(8);
     ///
     /// b.write_ascii(1..5, "hello, world!");
@@ -1546,7 +1546,7 @@ mod write_string_functions {
     /// * If number of bytes in `range` < length of `string`, extra bytes in `string` are not written.
     /// * If number of bytes in `range` > length of `string`, extra bytes in `range` are not modified.
     ///
-    /// ```ignore
+    /// ```rhai
     /// let b = blob(8);
     ///
     /// b.write_ascii(1..=5, "hello, world!");
@@ -1574,7 +1574,7 @@ mod write_string_functions {
     /// * If number of bytes in `range` < length of `string`, extra bytes in `string` are not written.
     /// * If number of bytes in `range` > length of `string`, extra bytes in `range` are not modified.
     ///
-    /// ```ignore
+    /// ```rhai
     /// let b = blob(8);
     ///
     /// b.write_ascii(1, 5, "hello, world!");

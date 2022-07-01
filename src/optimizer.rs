@@ -578,7 +578,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
 
             // Then check ranges
             if value.is::<INT>() && !ranges.is_empty() {
-                let value = value.as_int().expect("`INT`");
+                let value = value.as_int().unwrap();
 
                 // Only one range or all ranges without conditions
                 if ranges.len() == 1
@@ -940,6 +940,12 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
         #[cfg(not(feature = "no_object"))]
         Expr::Dot(x,..) => { optimize_expr(&mut x.lhs, state, false); optimize_expr(&mut x.rhs, state, _chaining); }
 
+        // ()?[rhs]
+        #[cfg(not(feature = "no_index"))]
+        Expr::Index(x, options, ..) if options.contains(ASTFlags::NEGATED) && matches!(x.lhs, Expr::Unit(..)) => {
+            state.set_dirty();
+            *expr = mem::take(&mut x.lhs);
+        }
         // lhs[rhs]
         #[cfg(not(feature = "no_index"))]
         Expr::Index(x, ..) if !_chaining => match (&mut x.lhs, &mut x.rhs) {
@@ -1337,7 +1343,7 @@ pub fn optimize_into_ast(
             let lib2 = &[&lib2];
 
             for fn_def in functions {
-                let mut fn_def = crate::func::native::shared_take_or_clone(fn_def);
+                let mut fn_def = crate::func::shared_take_or_clone(fn_def);
 
                 // Optimize the function body
                 let body = mem::take(&mut *fn_def.body);

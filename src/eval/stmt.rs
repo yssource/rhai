@@ -146,7 +146,7 @@ impl Engine {
             let target_is_shared = false;
 
             if target_is_shared {
-                lock_guard = target.write_lock::<Dynamic>().expect("`Dynamic`");
+                lock_guard = target.write_lock::<Dynamic>().unwrap();
                 lhs_ptr_inner = &mut *lock_guard;
             } else {
                 lhs_ptr_inner = &mut *target;
@@ -181,7 +181,20 @@ impl Engine {
             }
         } else {
             // Normal assignment
-            *target.as_mut() = new_val;
+
+            #[cfg(not(feature = "no_closure"))]
+            if target.is_shared() {
+                // Handle case where target is a `Dynamic` shared value
+                // (returned by a variable resolver, for example)
+                *target.write_lock::<Dynamic>().unwrap() = new_val;
+            } else {
+                *target.as_mut() = new_val;
+            }
+
+            #[cfg(feature = "no_closure")]
+            {
+                *target.as_mut() = new_val;
+            }
         }
 
         target.propagate_changed_value(op_info.pos)
@@ -250,7 +263,15 @@ impl Engine {
 
                         let var_name = lhs.get_variable_name(false).expect("`Expr::Variable`");
 
-                        if !lhs_ptr.is_ref() {
+                        #[cfg(not(feature = "no_closure"))]
+                        // Also handle case where target is a `Dynamic` shared value
+                        // (returned by a variable resolver, for example)
+                        let is_temp_result = !lhs_ptr.is_ref() && !lhs_ptr.is_shared();
+                        #[cfg(feature = "no_closure")]
+                        let is_temp_result = !lhs_ptr.is_ref();
+
+                        // Cannot assign to temp result from expression
+                        if is_temp_result {
                             return Err(
                                 ERR::ErrorAssignmentToConstant(var_name.to_string(), pos).into()
                             );
@@ -950,7 +971,7 @@ impl Engine {
                         if !export.is_empty() {
                             if !module.is_indexed() {
                                 // Index the module (making a clone copy if necessary) if it is not indexed
-                                let mut m = crate::func::native::shared_take_or_clone(module);
+                                let mut m = crate::func::shared_take_or_clone(module);
                                 m.build_index();
                                 global.push_import(export.name.clone(), m);
                             } else {

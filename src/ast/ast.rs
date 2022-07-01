@@ -615,8 +615,7 @@ impl AST {
 
         #[cfg(not(feature = "no_function"))]
         if !other.lib.is_empty() {
-            crate::func::native::shared_make_mut(&mut self.lib)
-                .merge_filtered(&other.lib, &_filter);
+            crate::func::shared_make_mut(&mut self.lib).merge_filtered(&other.lib, &_filter);
         }
 
         #[cfg(not(feature = "no_module"))]
@@ -629,10 +628,8 @@ impl AST {
                 self.set_resolver(other.resolver.unwrap());
             }
             (_, _) => {
-                let resolver =
-                    crate::func::native::shared_make_mut(self.resolver.as_mut().unwrap());
-                let other_resolver =
-                    crate::func::native::shared_take_or_clone(other.resolver.unwrap());
+                let resolver = crate::func::shared_make_mut(self.resolver.as_mut().unwrap());
+                let other_resolver = crate::func::shared_take_or_clone(other.resolver.unwrap());
                 for (k, v) in other_resolver {
                     resolver.insert(k, crate::func::shared_take_or_clone(v));
                 }
@@ -673,7 +670,7 @@ impl AST {
         filter: impl Fn(FnNamespace, FnAccess, &str, usize) -> bool,
     ) -> &mut Self {
         if !self.lib.is_empty() {
-            crate::func::native::shared_make_mut(&mut self.lib).retain_script_functions(filter);
+            crate::func::shared_make_mut(&mut self.lib).retain_script_functions(filter);
         }
         self
     }

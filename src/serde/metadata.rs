@@ -7,7 +7,7 @@ use crate::{calc_fn_hash, Engine, AST};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-use std::{borrow::Cow, cmp::Ordering, collections::BTreeMap, iter::empty};
+use std::{borrow::Cow, cmp::Ordering, collections::BTreeMap};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -106,7 +106,7 @@ impl<'a> From<&'a FuncInfo> for FnMetadata<'a> {
         } else {
             (
                 FnType::Native,
-                calc_native_fn_hash(empty::<&str>(), &info.metadata.name, &info.param_types),
+                calc_native_fn_hash(None, &info.metadata.name, &info.param_types),
             )
         };
 
