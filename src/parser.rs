@@ -76,18 +76,22 @@ pub struct ParseState<'e> {
 
 impl fmt::Debug for ParseState<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ParseState")
-            .field("tokenizer_control", &self.tokenizer_control)
+        let mut f = f.debug_struct("ParseState");
+
+        f.field("tokenizer_control", &self.tokenizer_control)
             .field("interned_strings", &self.interned_strings)
             .field("scope", &self.scope)
             .field("global", &self.global)
             .field("stack", &self.stack)
-            .field("block_stack_len", &self.block_stack_len)
-            .field("external_vars", &self.external_vars)
-            .field("allow_capture", &self.allow_capture)
-            .field("imports", &self.imports)
-            .field("max_expr_depth", &self.max_expr_depth)
-            .finish()
+            .field("block_stack_len", &self.block_stack_len);
+        #[cfg(not(feature = "no_closure"))]
+        f.field("external_vars", &self.external_vars)
+            .field("allow_capture", &self.allow_capture);
+        #[cfg(not(feature = "no_module"))]
+        f.field("imports", &self.imports);
+        #[cfg(not(feature = "unchecked"))]
+        f.field("max_expr_depth", &self.max_expr_depth);
+        f.finish()
     }
 }
 
