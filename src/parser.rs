@@ -5,7 +5,7 @@ use crate::api::events::VarDefInfo;
 use crate::api::options::LangOptions;
 use crate::ast::{
     ASTFlags, BinaryExpr, ConditionalStmtBlock, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident,
-    OpAssignment, ScriptFnDef, Stmt, StmtBlock, StmtBlockContainer, SwitchCases, TryCatchBlock,
+    OpAssignment, RangeCase, ScriptFnDef, Stmt, StmtBlockContainer, SwitchCases, TryCatchBlock,
 };
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::eval::GlobalRuntimeState;
@@ -25,6 +25,7 @@ use crate::{
 use std::prelude::v1::*;
 use std::{
     collections::BTreeMap,
+    fmt,
     hash::{Hash, Hasher},
     num::{NonZeroU8, NonZeroUsize},
 };
@@ -41,7 +42,6 @@ const NEVER_ENDS: &str = "`Token`";
 
 /// _(internals)_ A type that encapsulates the current state of the parser.
 /// Exported under the `internals` feature only.
-#[derive(Debug)]
 pub struct ParseState<'e> {
     /// Input stream buffer containing the next character to read.
     pub tokenizer_control: TokenizerControl,
@@ -55,6 +55,8 @@ pub struct ParseState<'e> {
     pub stack: Scope<'e>,
     /// Size of the local variables stack upon entry of the current block scope.
     pub block_stack_len: usize,
+    /// Controls whether parsing of an expression should stop given the next token.
+    pub expr_filter: fn(&Token) -> bool,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
     #[cfg(not(feature = "no_closure"))]
     pub external_vars: Vec<crate::ast::Ident>,
@@ -72,6 +74,23 @@ pub struct ParseState<'e> {
     pub max_expr_depth: usize,
 }
 
+impl fmt::Debug for ParseState<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ParseState")
+            .field("tokenizer_control", &self.tokenizer_control)
+            .field("interned_strings", &self.interned_strings)
+            .field("scope", &self.scope)
+            .field("global", &self.global)
+            .field("stack", &self.stack)
+            .field("block_stack_len", &self.block_stack_len)
+            .field("external_vars", &self.external_vars)
+            .field("allow_capture", &self.allow_capture)
+            .field("imports", &self.imports)
+            .field("max_expr_depth", &self.max_expr_depth)
+            .finish()
+    }
+}
+
 impl<'e> ParseState<'e> {
     /// Create a new [`ParseState`].
     #[inline(always)]
@@ -79,6 +98,7 @@ impl<'e> ParseState<'e> {
     pub fn new(engine: &Engine, scope: &'e Scope, tokenizer_control: TokenizerControl) -> Self {
         Self {
             tokenizer_control,
+            expr_filter: |_| true,
             #[cfg(not(feature = "no_closure"))]
             external_vars: Vec::new(),
             #[cfg(not(feature = "no_closure"))]
@@ -1027,15 +1047,16 @@ impl Engine {
             }
         }
 
-        let mut cases = BTreeMap::<u64, Box<ConditionalStmtBlock>>::new();
-        let mut ranges = StaticVec::<(INT, INT, bool, Box<ConditionalStmtBlock>)>::new();
+        let mut blocks = StaticVec::<ConditionalStmtBlock>::new();
+        let mut cases = BTreeMap::<u64, usize>::new();
+        let mut ranges = StaticVec::<RangeCase>::new();
         let mut def_pos = Position::NONE;
         let mut def_stmt = None;
 
         loop {
             const MISSING_RBRACE: &str = "to end this switch block";
 
-            let (expr, condition) = match input.peek().expect(NEVER_ENDS) {
+            let (case_expr_list, condition) = match input.peek().expect(NEVER_ENDS) {
                 (Token::RightBrace, ..) => {
                     eat_token(input, Token::RightBrace);
                     break;
@@ -1056,7 +1077,7 @@ impl Engine {
                         return Err(PERR::WrongSwitchCaseCondition.into_err(if_pos));
                     }
 
-                    (None, Expr::BoolConstant(true, Position::NONE))
+                    (Default::default(), Expr::BoolConstant(true, Position::NONE))
                 }
                 (Token::Underscore, pos) => return Err(PERR::DuplicatedSwitchCase.into_err(*pos)),
 
@@ -1065,8 +1086,25 @@ impl Engine {
                 }
 
                 _ => {
-                    let case_expr =
-                        Some(self.parse_expr(input, state, lib, settings.level_up())?);
+                    let mut case_expr_list = StaticVec::new();
+
+                    loop {
+                        let filter = state.expr_filter;
+                        state.expr_filter = |t| t != &Token::Pipe;
+                        let expr = self.parse_expr(input, state, lib, settings.level_up());
+                        state.expr_filter = filter;
+
+                        match expr {
+                            Ok(expr) => case_expr_list.push(expr),
+                            Err(err) => {
+                                return Err(PERR::ExprExpected("literal".into()).into_err(err.1))
+                            }
+                        }
+
+                        if !match_token(input, Token::Pipe).0 {
+                            break;
+                        }
+                    }
 
                     let condition = if match_token(input, Token::If).0 {
                         ensure_not_statement_expr(input, "a boolean")?;
@@ -1078,35 +1116,8 @@ impl Engine {
                     } else {
                         Expr::BoolConstant(true, Position::NONE)
                     };
-                    (case_expr, condition)
+                    (case_expr_list, condition)
                 }
-            };
-
-            let (hash, range) = if let Some(expr) = expr {
-                let value = expr.get_literal_value().ok_or_else(|| {
-                    PERR::ExprExpected("a literal".to_string()).into_err(expr.start_position())
-                })?;
-
-                let guard = value.read_lock::<ExclusiveRange>();
-
-                if let Some(range) = guard {
-                    (None, Some((range.start, range.end, false)))
-                } else if let Some(range) = value.read_lock::<InclusiveRange>() {
-                    (None, Some((*range.start(), *range.end(), true)))
-                } else if value.is::<INT>() && !ranges.is_empty() {
-                    return Err(PERR::WrongSwitchIntegerCase.into_err(expr.start_position()));
-                } else {
-                    let hasher = &mut get_hasher();
-                    value.hash(hasher);
-                    let hash = hasher.finish();
-
-                    if !cases.is_empty() && cases.contains_key(&hash) {
-                        return Err(PERR::DuplicatedSwitchCase.into_err(expr.start_position()));
-                    }
-                    (Some(hash), None)
-                }
-            } else {
-                (None, None)
             };
 
             match input.next().expect(NEVER_ENDS) {
@@ -1122,48 +1133,61 @@ impl Engine {
             };
 
             let stmt = self.parse_stmt(input, state, lib, settings.level_up())?;
-
             let need_comma = !stmt.is_self_terminated();
 
-            def_stmt = match (hash, range) {
-                (None, Some(range)) => {
-                    let is_empty = if range.2 {
-                        (range.0..=range.1).is_empty()
-                    } else {
-                        (range.0..range.1).is_empty()
-                    };
+            blocks.push((condition, stmt).into());
+            let index = blocks.len() - 1;
 
-                    if !is_empty {
-                        match (range.1.checked_sub(range.0), range.2) {
-                            // Unroll single range
-                            (Some(1), false) | (Some(0), true) => {
-                                let value = Dynamic::from_int(range.0);
+            if !case_expr_list.is_empty() {
+                for expr in case_expr_list {
+                    let value = expr.get_literal_value().ok_or_else(|| {
+                        PERR::ExprExpected("a literal".to_string()).into_err(expr.start_position())
+                    })?;
+
+                    let mut range_value: Option<RangeCase> = None;
+
+                    let guard = value.read_lock::<ExclusiveRange>();
+                    if let Some(range) = guard {
+                        range_value = Some(range.clone().into());
+                    } else if let Some(range) = value.read_lock::<InclusiveRange>() {
+                        range_value = Some(range.clone().into());
+                    }
+
+                    if let Some(mut r) = range_value {
+                        if !r.is_empty() {
+                            if let Some(n) = r.single_int() {
+                                // Unroll single range
+                                let value = Dynamic::from_int(n);
                                 let hasher = &mut get_hasher();
                                 value.hash(hasher);
                                 let hash = hasher.finish();
 
-                                cases.entry(hash).or_insert_with(|| {
-                                    let block: ConditionalStmtBlock = (condition, stmt).into();
-                                    block.into()
-                                });
-                            }
-                            // Other range
-                            _ => {
-                                let block: ConditionalStmtBlock = (condition, stmt).into();
-                                ranges.push((range.0, range.1, range.2, block.into()))
+                                cases.entry(hash).or_insert(index);
+                            } else {
+                                // Other range
+                                r.set_index(index);
+                                ranges.push(r);
                             }
                         }
+                        continue;
                     }
-                    None
+
+                    if value.is::<INT>() && !ranges.is_empty() {
+                        return Err(PERR::WrongSwitchIntegerCase.into_err(expr.start_position()));
+                    }
+
+                    let hasher = &mut get_hasher();
+                    value.hash(hasher);
+                    let hash = hasher.finish();
+
+                    if cases.contains_key(&hash) {
+                        return Err(PERR::DuplicatedSwitchCase.into_err(expr.start_position()));
+                    }
+                    cases.insert(hash, index);
                 }
-                (Some(hash), None) => {
-                    let block: ConditionalStmtBlock = (condition, stmt).into();
-                    cases.insert(hash, block.into());
-                    None
-                }
-                (None, None) => Some(Box::new(stmt.into())),
-                _ => unreachable!("both hash and range in switch statement case"),
-            };
+            } else {
+                def_stmt = Some(index);
+            }
 
             match input.peek().expect(NEVER_ENDS) {
                 (Token::Comma, ..) => {
@@ -1188,9 +1212,15 @@ impl Engine {
             }
         }
 
+        let def_case = def_stmt.unwrap_or_else(|| {
+            blocks.push(Default::default());
+            blocks.len() - 1
+        });
+
         let cases = SwitchCases {
+            blocks,
             cases,
-            def_case: def_stmt.unwrap_or_else(|| StmtBlock::NONE.into()),
+            def_case,
             ranges,
         };
 
@@ -1214,6 +1244,12 @@ impl Engine {
         settings.pos = *token_pos;
 
         let root_expr = match token {
+            _ if !(state.expr_filter)(token) => {
+                return Err(
+                    LexError::UnexpectedInput(token.syntax().to_string()).into_err(settings.pos)
+                )
+            }
+
             Token::EOF => return Err(PERR::UnexpectedEOF.into_err(settings.pos)),
 
             Token::Unit => {
@@ -1538,6 +1574,10 @@ impl Engine {
             }
         };
 
+        if !(state.expr_filter)(&input.peek().expect(NEVER_ENDS).0) {
+            return Ok(root_expr);
+        }
+
         self.parse_postfix(input, state, lib, root_expr, settings)
     }
 
@@ -1737,6 +1777,10 @@ impl Engine {
         settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
         let (token, token_pos) = input.peek().expect(NEVER_ENDS);
+
+        if !(state.expr_filter)(token) {
+            return Err(LexError::UnexpectedInput(token.syntax().to_string()).into_err(*token_pos));
+        }
 
         let mut settings = settings;
         settings.pos = *token_pos;
@@ -2130,6 +2174,11 @@ impl Engine {
 
         loop {
             let (current_op, current_pos) = input.peek().expect(NEVER_ENDS);
+
+            if !(state.expr_filter)(current_op) {
+                return Ok(root);
+            }
+
             let precedence = match current_op {
                 Token::Custom(c) => self
                     .custom_keywords

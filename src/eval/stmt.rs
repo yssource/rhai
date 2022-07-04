@@ -394,6 +394,7 @@ impl Engine {
                 let (
                     expr,
                     SwitchCases {
+                        blocks,
                         cases,
                         def_case,
                         ranges,
@@ -410,7 +411,9 @@ impl Engine {
                         let hash = hasher.finish();
 
                         // First check hashes
-                        if let Some(case_block) = cases.get(&hash) {
+                        if let Some(&case_block) = cases.get(&hash) {
+                            let case_block = &blocks[case_block];
+
                             let cond_result = match case_block.condition {
                                 Expr::BoolConstant(b, ..) => Ok(b),
                                 ref c => self
@@ -432,12 +435,9 @@ impl Engine {
                             let value = value.as_int().expect("`INT`");
                             let mut result = Ok(None);
 
-                            for (.., block) in
-                                ranges.iter().filter(|&&(start, end, inclusive, ..)| {
-                                    (!inclusive && (start..end).contains(&value))
-                                        || (inclusive && (start..=end).contains(&value))
-                                })
-                            {
+                            for r in ranges.iter().filter(|r| r.contains(value)) {
+                                let block = &blocks[r.index()];
+
                                 let cond_result = match block.condition {
                                     Expr::BoolConstant(b, ..) => Ok(b),
                                     ref c => self
@@ -481,6 +481,8 @@ impl Engine {
                         }
                     } else if let Ok(None) = stmt_block_result {
                         // Default match clause
+                        let def_case = &blocks[*def_case].statements;
+
                         if !def_case.is_empty() {
                             self.eval_stmt_block(
                                 scope, global, caches, lib, this_ptr, def_case, true, level,

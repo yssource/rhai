@@ -283,12 +283,18 @@ impl AddAssign for Position {
 
 /// _(internals)_ A span consisting of a starting and an ending [positions][Position].
 /// Exported under the `internals` feature only.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, Default)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
 pub struct Span {
     /// Starting [position][Position].
     start: Position,
     /// Ending [position][Position].
     end: Position,
+}
+
+impl Default for Span {
+    fn default() -> Self {
+        Self::NONE
+    }
 }
 
 impl Span {

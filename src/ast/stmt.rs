@@ -12,7 +12,7 @@ use std::{
     hash::Hash,
     mem,
     num::NonZeroUsize,
-    ops::{Deref, DerefMut},
+    ops::{Deref, DerefMut, Range, RangeInclusive},
 };
 
 /// _(internals)_ An op-assignment operator.
@@ -125,7 +125,7 @@ impl fmt::Debug for OpAssignment {
 /// A statements block with a condition.
 ///
 /// The condition may simply be [`Expr::BoolConstant`] with `true` if there is actually no condition.
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Default, Hash)]
 pub struct ConditionalStmtBlock {
     /// Condition.
     pub condition: Expr,
@@ -153,16 +153,110 @@ impl<B: Into<StmtBlock>> From<(Expr, B)> for ConditionalStmtBlock {
     }
 }
 
+/// _(internals)_ A type containing a range case for a `switch` statement.
+/// Exported under the `internals` feature only.
+#[derive(Clone, Hash)]
+pub enum RangeCase {
+    /// Exclusive range.
+    ExclusiveInt(Range<INT>, usize),
+    /// Inclusive range.
+    InclusiveInt(RangeInclusive<INT>, usize),
+}
+
+impl fmt::Debug for RangeCase {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ExclusiveInt(r, n) => write!(f, "{}..{} => {}", r.start, r.end, n),
+            Self::InclusiveInt(r, n) => write!(f, "{}..={} => {}", *r.start(), *r.end(), n),
+        }
+    }
+}
+
+impl From<Range<INT>> for RangeCase {
+    #[inline(always)]
+    fn from(value: Range<INT>) -> Self {
+        Self::ExclusiveInt(value, 0)
+    }
+}
+
+impl From<RangeInclusive<INT>> for RangeCase {
+    #[inline(always)]
+    fn from(value: RangeInclusive<INT>) -> Self {
+        Self::InclusiveInt(value, 0)
+    }
+}
+
+impl RangeCase {
+    /// Is the range empty?
+    #[inline(always)]
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::ExclusiveInt(r, ..) => r.is_empty(),
+            Self::InclusiveInt(r, ..) => r.is_empty(),
+        }
+    }
+    /// Is the specified number within this range?
+    #[inline(always)]
+    #[must_use]
+    pub fn contains(&self, n: INT) -> bool {
+        match self {
+            Self::ExclusiveInt(r, ..) => r.contains(&n),
+            Self::InclusiveInt(r, ..) => r.contains(&n),
+        }
+    }
+    /// If the range contains only of a single [`INT`], return it;
+    /// otherwise return [`None`].
+    #[inline(always)]
+    #[must_use]
+    pub fn single_int(&self) -> Option<INT> {
+        match self {
+            Self::ExclusiveInt(r, ..) if r.end.checked_sub(r.start) == Some(1) => Some(r.start),
+            Self::InclusiveInt(r, ..) if r.end().checked_sub(*r.start()) == Some(0) => {
+                Some(*r.start())
+            }
+            _ => None,
+        }
+    }
+    /// Is the specified range inclusive?
+    #[inline(always)]
+    #[must_use]
+    pub fn is_inclusive(&self) -> bool {
+        match self {
+            Self::ExclusiveInt(..) => false,
+            Self::InclusiveInt(..) => true,
+        }
+    }
+    /// Get the index to the [`ConditionalStmtBlock`].
+    #[inline(always)]
+    #[must_use]
+    pub fn index(&self) -> usize {
+        match self {
+            Self::ExclusiveInt(.., n) | Self::InclusiveInt(.., n) => *n,
+        }
+    }
+    /// Set the index to the [`ConditionalStmtBlock`].
+    #[inline(always)]
+    pub fn set_index(&mut self, index: usize) {
+        match self {
+            Self::ExclusiveInt(.., n) | Self::InclusiveInt(.., n) => *n = index,
+        }
+    }
+}
+
 /// _(internals)_ A type containing all cases for a `switch` statement.
 /// Exported under the `internals` feature only.
 #[derive(Debug, Clone, Hash)]
 pub struct SwitchCases {
+    /// List of [`ConditionalStmtBlock`]'s.
+    pub blocks: StaticVec<ConditionalStmtBlock>,
     /// Dictionary mapping value hashes to [`ConditionalStmtBlock`]'s.
-    pub cases: BTreeMap<u64, Box<ConditionalStmtBlock>>,
+    pub cases: BTreeMap<u64, usize>,
     /// Statements block for the default case (there can be no condition for the default case).
-    pub def_case: Box<StmtBlock>,
+    pub def_case: usize,
     /// List of range cases.
-    pub ranges: StaticVec<(INT, INT, bool, Box<ConditionalStmtBlock>)>,
+    pub ranges: StaticVec<RangeCase>,
 }
 
 /// _(internals)_ A `try-catch` block.
@@ -195,7 +289,9 @@ pub type StmtBlockContainer = StaticVec<Stmt>;
 /// Exported under the `internals` feature only.
 #[derive(Clone, Hash, Default)]
 pub struct StmtBlock {
+    /// List of [statements][Stmt].
     block: StmtBlockContainer,
+    /// [Position] of the statements block.
     span: Span,
 }
 
@@ -634,14 +730,17 @@ impl Stmt {
                 x.0.is_pure() && x.1.iter().all(Stmt::is_pure) && x.2.iter().all(Stmt::is_pure)
             }
             Self::Switch(x, ..) => {
-                x.0.is_pure()
-                    && x.1.cases.values().all(|block| {
+                let (expr, sw) = x.as_ref();
+                expr.is_pure()
+                    && sw.cases.values().all(|&c| {
+                        let block = &sw.blocks[c];
                         block.condition.is_pure() && block.statements.iter().all(Stmt::is_pure)
                     })
-                    && x.1.ranges.iter().all(|(.., block)| {
+                    && sw.ranges.iter().all(|r| {
+                        let block = &sw.blocks[r.index()];
                         block.condition.is_pure() && block.statements.iter().all(Stmt::is_pure)
                     })
-                    && x.1.def_case.iter().all(Stmt::is_pure)
+                    && sw.blocks[sw.def_case].statements.iter().all(Stmt::is_pure)
             }
 
             // Loops that exit can be pure because it can never be infinite.
@@ -777,30 +876,36 @@ impl Stmt {
                 }
             }
             Self::Switch(x, ..) => {
-                if !x.0.walk(path, on_node) {
+                let (expr, sw) = x.as_ref();
+
+                if !expr.walk(path, on_node) {
                     return false;
                 }
-                for b in x.1.cases.values() {
-                    if !b.condition.walk(path, on_node) {
+                for (.., &b) in sw.cases.iter() {
+                    let block = &sw.blocks[b];
+
+                    if !block.condition.walk(path, on_node) {
                         return false;
                     }
-                    for s in b.statements.iter() {
+                    for s in block.statements.iter() {
                         if !s.walk(path, on_node) {
                             return false;
                         }
                     }
                 }
-                for (.., b) in &x.1.ranges {
-                    if !b.condition.walk(path, on_node) {
+                for r in sw.ranges.iter() {
+                    let block = &sw.blocks[r.index()];
+
+                    if !block.condition.walk(path, on_node) {
                         return false;
                     }
-                    for s in b.statements.iter() {
+                    for s in block.statements.iter() {
                         if !s.walk(path, on_node) {
                             return false;
                         }
                     }
                 }
-                for s in x.1.def_case.iter() {
+                for s in sw.blocks[sw.def_case].statements.iter() {
                     if !s.walk(path, on_node) {
                         return false;
                     }

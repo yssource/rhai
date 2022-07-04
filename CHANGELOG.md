@@ -1,6 +1,15 @@
 Rhai Release Notes
 ==================
 
+Version 1.9.0
+=============
+
+Enhancements
+------------
+
+* `switch` cases can now include multiple values separated by `|`.
+
+
 Version 1.8.0
 =============
 
