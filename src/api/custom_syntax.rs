@@ -1,4 +1,5 @@
 //! Module implementing custom syntax for [`Engine`].
+#![cfg(not(feature = "no_custom_syntax"))]
 
 use crate::ast::Expr;
 use crate::func::SendSync;
@@ -153,6 +154,8 @@ pub struct CustomSyntax {
 impl Engine {
     /// Register a custom syntax with the [`Engine`].
     ///
+    /// Not available under `no_custom_syntax`.
+    ///
     /// * `symbols` holds a slice of strings that define the custom syntax.  
     /// * `scope_may_be_changed` specifies variables _may_ be added/removed by this custom syntax.
     /// * `func` is the implementation function.
@@ -295,6 +298,8 @@ impl Engine {
         Ok(self)
     }
     /// Register a custom syntax with the [`Engine`].
+    ///
+    /// Not available under `no_custom_syntax`.
     ///
     /// # WARNING - Low Level API
     ///

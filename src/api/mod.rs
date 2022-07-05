@@ -28,9 +28,10 @@ pub mod custom_syntax;
 
 pub mod deprecated;
 
-use crate::engine::Precedence;
-use crate::tokenizer::Token;
 use crate::{Dynamic, Engine, Identifier};
+
+#[cfg(not(feature = "no_custom_syntax"))]
+use crate::{engine::Precedence, tokenizer::Token};
 
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -121,6 +122,8 @@ impl Engine {
 
     /// Register a custom operator with a precedence into the language.
     ///
+    /// Not available under `no_custom_syntax`.
+    ///
     /// The operator can be a valid identifier, a reserved symbol, a disabled operator or a disabled keyword.
     ///
     /// The precedence cannot be zero.
@@ -147,6 +150,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(not(feature = "no_custom_syntax"))]
     pub fn register_custom_operator(
         &mut self,
         keyword: impl AsRef<str>,
@@ -161,8 +165,11 @@ impl Engine {
         let keyword = keyword.as_ref();
 
         match Token::lookup_from_syntax(keyword) {
-            // Standard identifiers, reserved keywords and custom keywords are OK
-            None | Some(Token::Reserved(..)) | Some(Token::Custom(..)) => (),
+            // Standard identifiers and reserved keywords are OK
+            None | Some(Token::Reserved(..)) => (),
+            // custom keywords are OK
+            #[cfg(not(feature = "no_custom_syntax"))]
+            Some(Token::Custom(..)) => (),
             // Active standard keywords cannot be made custom
             // Disabled keywords are OK
             Some(token) if token.is_standard_keyword() => {

@@ -48,6 +48,9 @@ impl From<(Expr, Expr)> for BinaryExpr {
 
 /// _(internals)_ A custom syntax expression.
 /// Exported under the `internals` feature only.
+///
+/// Not available under `no_custom_syntax`.
+#[cfg(not(feature = "no_custom_syntax"))]
 #[derive(Debug, Clone, Hash)]
 pub struct CustomExpr {
     /// List of keywords.
@@ -61,6 +64,7 @@ pub struct CustomExpr {
     pub self_terminated: bool,
 }
 
+#[cfg(not(feature = "no_custom_syntax"))]
 impl CustomExpr {
     /// Is this custom syntax self-terminated (i.e. no need for a semicolon terminator)?
     ///
@@ -421,6 +425,7 @@ pub enum Expr {
     /// lhs `??` rhs
     Coalesce(Box<BinaryExpr>, Position),
     /// Custom syntax
+    #[cfg(not(feature = "no_custom_syntax"))]
     Custom(Box<CustomExpr>, Position),
 }
 
@@ -530,6 +535,7 @@ impl fmt::Debug for Expr {
                     .field("rhs", &x.rhs)
                     .finish()
             }
+            #[cfg(not(feature = "no_custom_syntax"))]
             Self::Custom(x, ..) => f.debug_tuple("Custom").field(x).finish(),
         }?;
 
@@ -703,9 +709,11 @@ impl Expr {
             | Self::Coalesce(.., pos)
             | Self::Index(.., pos)
             | Self::Dot(.., pos)
-            | Self::Custom(.., pos)
             | Self::InterpolatedString(.., pos)
             | Self::Property(.., pos) => *pos,
+
+            #[cfg(not(feature = "no_custom_syntax"))]
+            Self::Custom(.., pos) => *pos,
 
             Self::FnCall(x, ..) | Self::MethodCall(x, ..) => x.pos,
 
@@ -761,9 +769,11 @@ impl Expr {
             | Self::Variable(.., pos)
             | Self::FnCall(.., pos)
             | Self::MethodCall(.., pos)
-            | Self::Custom(.., pos)
             | Self::InterpolatedString(.., pos)
             | Self::Property(.., pos) => *pos = new_pos,
+
+            #[cfg(not(feature = "no_custom_syntax"))]
+            Self::Custom(.., pos) => *pos = new_pos,
 
             Self::Stmt(x) => x.set_position(new_pos, Position::NONE),
         }
@@ -853,8 +863,10 @@ impl Expr {
             | Self::Dot(..)
             | Self::Index(..)
             | Self::Array(..)
-            | Self::Map(..)
-            | Self::Custom(..) => false,
+            | Self::Map(..) => false,
+
+            #[cfg(not(feature = "no_custom_syntax"))]
+            Self::Custom(..) => false,
 
             Self::Variable(..) => match token {
                 Token::LeftParen => true,
@@ -925,6 +937,7 @@ impl Expr {
                     }
                 }
             }
+            #[cfg(not(feature = "no_custom_syntax"))]
             Self::Custom(x, ..) => {
                 for e in &x.inputs {
                     if !e.walk(path, on_node) {

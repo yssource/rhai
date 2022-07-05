@@ -1,10 +1,9 @@
 //! Main module defining the lexer and parser.
 
-use crate::api::custom_syntax::{markers::*, CustomSyntax};
 use crate::api::events::VarDefInfo;
 use crate::api::options::LangOptions;
 use crate::ast::{
-    ASTFlags, BinaryExpr, ConditionalStmtBlock, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident,
+    ASTFlags, BinaryExpr, ConditionalStmtBlock, Expr, FnCallExpr, FnCallHashes, Ident,
     OpAssignment, RangeCase, ScriptFnDef, Stmt, StmtBlockContainer, SwitchCases, TryCatchBlock,
 };
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
@@ -428,6 +427,7 @@ fn parse_var_name(input: &mut TokenStream) -> ParseResult<(SmartString, Position
 }
 
 /// Parse a symbol.
+#[cfg(not(feature = "no_custom_syntax"))]
 #[inline]
 fn parse_symbol(input: &mut TokenStream) -> ParseResult<(SmartString, Position)> {
     match input.next().expect(NEVER_ENDS) {
@@ -1449,6 +1449,7 @@ impl Engine {
             Token::MapStart => self.parse_map_literal(input, state, lib, settings.level_up())?,
 
             // Custom syntax.
+            #[cfg(not(feature = "no_custom_syntax"))]
             Token::Custom(key) | Token::Reserved(key) | Token::Identifier(key)
                 if !self.custom_syntax.is_empty() && self.custom_syntax.contains_key(&**key) =>
             {
@@ -2184,6 +2185,7 @@ impl Engine {
             }
 
             let precedence = match current_op {
+                #[cfg(not(feature = "no_custom_syntax"))]
                 Token::Custom(c) => self
                     .custom_keywords
                     .get(c)
@@ -2208,6 +2210,7 @@ impl Engine {
 
             let (next_op, next_pos) = input.peek().expect(NEVER_ENDS);
             let next_precedence = match next_op {
+                #[cfg(not(feature = "no_custom_syntax"))]
                 Token::Custom(c) => self
                     .custom_keywords
                     .get(c)
@@ -2317,6 +2320,7 @@ impl Engine {
                     .into_fn_call_expr(pos)
                 }
 
+                #[cfg(not(feature = "no_custom_syntax"))]
                 Token::Custom(s)
                     if self
                         .custom_keywords
@@ -2347,6 +2351,7 @@ impl Engine {
     }
 
     /// Parse a custom syntax.
+    #[cfg(not(feature = "no_custom_syntax"))]
     fn parse_custom_syntax(
         &self,
         input: &mut TokenStream,
@@ -2354,9 +2359,11 @@ impl Engine {
         lib: &mut FnLib,
         settings: ParseSettings,
         key: impl Into<ImmutableString>,
-        syntax: &CustomSyntax,
+        syntax: &crate::api::custom_syntax::CustomSyntax,
         pos: Position,
     ) -> ParseResult<Expr> {
+        use crate::api::custom_syntax::markers::*;
+
         let mut settings = settings;
         let mut inputs = StaticVec::<Expr>::new();
         let mut segments = StaticVec::new_const();
@@ -2520,7 +2527,7 @@ impl Engine {
         };
 
         Ok(Expr::Custom(
-            CustomExpr {
+            crate::ast::CustomExpr {
                 inputs,
                 tokens,
                 scope_may_be_changed: syntax.scope_may_be_changed,

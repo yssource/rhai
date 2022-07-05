@@ -1,12 +1,12 @@
 //! Evaluation context.
 
 use super::{Caches, GlobalRuntimeState};
-use crate::{Dynamic, Engine, Expression, Module, RhaiResult, Scope};
+use crate::{Dynamic, Engine, Module, Scope};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
 /// Context of a script evaluation process.
-#[derive(Debug)]
+#[allow(dead_code)]
 pub struct EvalContext<'a, 's, 'ps, 'g, 'pg, 'c, 'pc, 't, 'pt> {
     /// The current [`Engine`].
     engine: &'a Engine,
@@ -142,13 +142,14 @@ impl<'a, 's, 'ps, 'g, 'pg, 'c, 'pc, 't, 'pt> EvalContext<'a, 's, 'ps, 'g, 'pg, '
         self.level
     }
 
-    /// Evaluate an [expression tree][Expression] within this [evaluation context][`EvalContext`].
+    /// Evaluate an [expression tree][crate::Expression] within this [evaluation context][`EvalContext`].
     ///
     /// # WARNING - Low Level API
     ///
     /// This function is very low level.  It evaluates an expression from an [`AST`][crate::AST].
+    #[cfg(not(feature = "no_custom_syntax"))]
     #[inline(always)]
-    pub fn eval_expression_tree(&mut self, expr: &Expression) -> RhaiResult {
+    pub fn eval_expression_tree(&mut self, expr: &crate::Expression) -> crate::RhaiResult {
         let mut new_caches = Caches::new();
 
         let caches = match self.caches.as_mut() {

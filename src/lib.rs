@@ -165,7 +165,6 @@ type ExclusiveRange = std::ops::Range<INT>;
 /// An inclusive integer range.
 type InclusiveRange = std::ops::RangeInclusive<INT>;
 
-pub use api::custom_syntax::Expression;
 pub use api::events::VarDefInfo;
 pub use ast::{FnAccess, AST};
 pub use engine::{Engine, OP_CONTAINS, OP_EQUALS};
@@ -178,6 +177,9 @@ pub use types::Instant;
 pub use types::{
     Dynamic, EvalAltResult, FnPtr, ImmutableString, LexError, ParseError, ParseErrorType, Scope,
 };
+
+#[cfg(not(feature = "no_custom_syntax"))]
+pub use api::custom_syntax::Expression;
 
 /// _(debugging)_ Module containing types for debugging.
 /// Exported under the `debugging` feature only.
@@ -282,10 +284,13 @@ pub use parser::ParseState;
 
 #[cfg(feature = "internals")]
 pub use ast::{
-    ASTFlags, ASTNode, BinaryExpr, ConditionalStmtBlock, CustomExpr, Expr, FnCallExpr,
-    FnCallHashes, Ident, OpAssignment, RangeCase, ScriptFnDef, Stmt, StmtBlock, SwitchCases,
-    TryCatchBlock,
+    ASTFlags, ASTNode, BinaryExpr, ConditionalStmtBlock, Expr, FnCallExpr, FnCallHashes, Ident,
+    OpAssignment, RangeCase, ScriptFnDef, Stmt, StmtBlock, SwitchCases, TryCatchBlock,
 };
+
+#[cfg(feature = "internals")]
+#[cfg(not(feature = "no_custom_syntax"))]
+pub use ast::CustomExpr;
 
 #[cfg(feature = "internals")]
 #[cfg(not(feature = "no_module"))]

@@ -1231,6 +1231,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
         }
 
         // Custom syntax
+        #[cfg(not(feature = "no_custom_syntax"))]
         Expr::Custom(x, ..) => {
             if x.scope_may_be_changed {
                 state.propagate_constants = false;

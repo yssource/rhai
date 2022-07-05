@@ -4,6 +4,11 @@ Rhai Release Notes
 Version 1.9.0
 =============
 
+New features
+------------
+
+* A new feature, `no_custom_syntax`, is added to remove custom syntax support from Rhai for applications that do not require it (which should be most).
+
 Enhancements
 ------------
 

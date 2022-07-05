@@ -562,6 +562,9 @@ pub enum Token {
     /// A reserved symbol.
     Reserved(SmartString),
     /// A custom keyword.
+    ///
+    /// Not available under the `no_custom_syntax` feature.
+    #[cfg(not(feature = "no_custom_syntax"))]
     Custom(SmartString),
     /// End of the input stream.
     EOF,
@@ -682,6 +685,7 @@ impl Token {
             CharConstant(c) => c.to_string().into(),
             Identifier(s) => s.to_string().into(),
             Reserved(s) => s.to_string().into(),
+            #[cfg(not(feature = "no_custom_syntax"))]
             Custom(s) => s.to_string().into(),
             LexError(err) => err.to_string().into(),
             Comment(s) => s.to_string().into(),
@@ -1069,12 +1073,15 @@ impl Token {
     #[inline]
     pub(crate) fn into_function_name_for_override(self) -> Result<SmartString, Self> {
         match self {
-            Self::Custom(s) | Self::Identifier(s) if is_valid_function_name(&s) => Ok(s),
+            #[cfg(not(feature = "no_custom_syntax"))]
+            Self::Custom(s) if is_valid_function_name(&s) => Ok(s),
+            Self::Identifier(s) if is_valid_function_name(&s) => Ok(s),
             _ => Err(self),
         }
     }
 
     /// Is this token a custom keyword?
+    #[cfg(not(feature = "no_custom_syntax"))]
     #[inline(always)]
     #[must_use]
     pub const fn is_custom(&self) -> bool {
@@ -2329,7 +2336,12 @@ impl<'a> Iterator for TokenIterator<'a> {
             }
             // Reserved keyword/symbol
             Some((Token::Reserved(s), pos)) => (match
-                (&*s, !self.engine.custom_keywords.is_empty() && self.engine.custom_keywords.contains_key(&*s))
+                (&*s, 
+                    #[cfg(not(feature = "no_custom_syntax"))]
+                    (!self.engine.custom_keywords.is_empty() && self.engine.custom_keywords.contains_key(&*s)),
+                    #[cfg(feature = "no_custom_syntax")]
+                    false
+                )
             {
                 ("===", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
                     "'===' is not a valid operator. This is not JavaScript! Should it be '=='?".to_string(),
@@ -2358,7 +2370,10 @@ impl<'a> Iterator for TokenIterator<'a> {
                     "'#' is not a valid symbol. Should it be '#{'?".to_string(),
                 ).into()),
                 // Reserved keyword/operator that is custom.
+                #[cfg(not(feature = "no_custom_syntax"))]
                 (.., true) => Token::Custom(s),
+                #[cfg(feature = "no_custom_syntax")]
+                (.., true) => unreachable!("no custom operators"),
                 // Reserved keyword that is not custom and disabled.
                 (token, false) if !self.engine.disabled_symbols.is_empty() && self.engine.disabled_symbols.contains(token) => {
                     let msg = format!("reserved {} '{}' is disabled", if is_valid_identifier(token.chars()) { "keyword"} else {"symbol"}, token);
@@ -2368,10 +2383,12 @@ impl<'a> Iterator for TokenIterator<'a> {
                 (.., false) => Token::Reserved(s),
             }, pos),
             // Custom keyword
+            #[cfg(not(feature = "no_custom_syntax"))]
             Some((Token::Identifier(s), pos)) if !self.engine.custom_keywords.is_empty() && self.engine.custom_keywords.contains_key(&*s) => {
                 (Token::Custom(s), pos)
             }
             // Custom keyword/symbol - must be disabled
+            #[cfg(not(feature = "no_custom_syntax"))]
             Some((token, pos)) if !self.engine.custom_keywords.is_empty() && self.engine.custom_keywords.contains_key(token.literal_syntax()) => {
                 if !self.engine.disabled_symbols.is_empty() && self.engine.disabled_symbols.contains(token.literal_syntax()) {
                     // Disabled standard keyword/symbol

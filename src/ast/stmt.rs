@@ -713,6 +713,7 @@ impl Stmt {
             Self::Noop(..) => false,
 
             Self::Expr(e) => match &**e {
+                #[cfg(not(feature = "no_custom_syntax"))]
                 Expr::Custom(x, ..) if x.is_self_terminated() => true,
                 _ => false,
             },

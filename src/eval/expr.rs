@@ -4,7 +4,7 @@ use super::{Caches, EvalContext, GlobalRuntimeState, Target};
 use crate::ast::{Expr, FnCallExpr, OpAssignment};
 use crate::engine::{KEYWORD_THIS, OP_CONCAT};
 use crate::types::dynamic::AccessMode;
-use crate::{Dynamic, Engine, Module, Position, RhaiResult, RhaiResultOf, Scope, StaticVec, ERR};
+use crate::{Dynamic, Engine, Module, Position, RhaiResult, RhaiResultOf, Scope, ERR};
 use std::num::NonZeroUsize;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -475,8 +475,10 @@ impl Engine {
                 }
             }
 
+            #[cfg(not(feature = "no_custom_syntax"))]
             Expr::Custom(custom, pos) => {
-                let expressions: StaticVec<_> = custom.inputs.iter().map(Into::into).collect();
+                let expressions: crate::StaticVec<_> =
+                    custom.inputs.iter().map(Into::into).collect();
                 // The first token acts as the custom syntax's key
                 let key_token = custom.tokens.first().unwrap();
                 // The key should exist, unless the AST is compiled in a different Engine

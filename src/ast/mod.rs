@@ -9,7 +9,9 @@ pub mod script_fn;
 pub mod stmt;
 
 pub use ast::{ASTNode, AST};
-pub use expr::{BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes};
+#[cfg(not(feature = "no_custom_syntax"))]
+pub use expr::CustomExpr;
+pub use expr::{BinaryExpr, Expr, FnCallExpr, FnCallHashes};
 pub use flags::{ASTFlags, FnAccess};
 pub use ident::Ident;
 #[cfg(not(feature = "no_module"))]

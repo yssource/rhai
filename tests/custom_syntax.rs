@@ -1,3 +1,5 @@
+#![cfg(not(feature = "no_custom_syntax"))]
+
 use rhai::{
     Dynamic, Engine, EvalAltResult, ImmutableString, LexError, ParseErrorType, Position, Scope, INT,
 };

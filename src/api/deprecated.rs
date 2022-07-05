@@ -1,8 +1,8 @@
 //! Module containing all deprecated API that will be removed in the next major version.
 
 use crate::{
-    Dynamic, Engine, EvalAltResult, Expression, FnPtr, ImmutableString, NativeCallContext,
-    Position, RhaiResult, RhaiResultOf, Scope, AST,
+    Dynamic, Engine, EvalAltResult, FnPtr, ImmutableString, NativeCallContext, Position,
+    RhaiResult, RhaiResultOf, Scope, AST,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -312,7 +312,8 @@ impl FnPtr {
     }
 }
 
-impl Expression<'_> {
+#[cfg(not(feature = "no_custom_syntax"))]
+impl crate::Expression<'_> {
     /// If this expression is a variable name, return it.  Otherwise [`None`].
     ///
     /// # Deprecated
