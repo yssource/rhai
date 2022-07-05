@@ -178,7 +178,7 @@ impl CallableFunction {
     #[must_use]
     pub fn get_iter_fn(&self) -> Option<&IteratorFn> {
         match self {
-            Self::Iterator(f) => Some(f.as_ref()),
+            Self::Iterator(f) => Some(&**f),
             Self::Pure(..) | Self::Method(..) | Self::Plugin(..) => None,
 
             #[cfg(not(feature = "no_function"))]

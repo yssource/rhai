@@ -158,7 +158,9 @@ impl Engine {
             return Err("precedence cannot be zero".into());
         }
 
-        match Token::lookup_from_syntax(keyword.as_ref()) {
+        let keyword = keyword.as_ref();
+
+        match Token::lookup_from_syntax(keyword) {
             // Standard identifiers, reserved keywords and custom keywords are OK
             None | Some(Token::Reserved(..)) | Some(Token::Custom(..)) => (),
             // Active standard keywords cannot be made custom
@@ -167,7 +169,7 @@ impl Engine {
                 if self.disabled_symbols.is_empty()
                     || !self.disabled_symbols.contains(&*token.syntax())
                 {
-                    return Err(format!("'{}' is a reserved keyword", keyword.as_ref()));
+                    return Err(format!("'{}' is a reserved keyword", keyword));
                 }
             }
             // Active standard symbols cannot be made custom
@@ -175,7 +177,7 @@ impl Engine {
                 if self.disabled_symbols.is_empty()
                     || !self.disabled_symbols.contains(&*token.syntax())
                 {
-                    return Err(format!("'{}' is a reserved operator", keyword.as_ref()));
+                    return Err(format!("'{}' is a reserved operator", keyword));
                 }
             }
             // Active standard symbols cannot be made custom
@@ -183,15 +185,14 @@ impl Engine {
                 if self.disabled_symbols.is_empty()
                     || !self.disabled_symbols.contains(&*token.syntax()) =>
             {
-                return Err(format!("'{}' is a reserved symbol", keyword.as_ref()))
+                return Err(format!("'{}' is a reserved symbol", keyword))
             }
             // Disabled symbols are OK
             Some(_) => (),
         }
 
         // Add to custom keywords
-        self.custom_keywords
-            .insert(keyword.as_ref().into(), precedence);
+        self.custom_keywords.insert(keyword.into(), precedence);
 
         Ok(self)
     }

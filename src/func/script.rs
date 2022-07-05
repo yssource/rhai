@@ -131,7 +131,7 @@ impl Engine {
                     lib
                 } else {
                     caches.push_fn_resolution_cache();
-                    lib_merged.push(fn_lib.as_ref());
+                    lib_merged.push(&**fn_lib);
                     lib_merged.extend(lib.iter().cloned());
                     &lib_merged
                 },

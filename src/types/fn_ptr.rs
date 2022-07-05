@@ -56,7 +56,7 @@ impl FnPtr {
     #[inline(always)]
     #[must_use]
     pub fn fn_name(&self) -> &str {
-        self.fn_name_raw().as_ref()
+        self.fn_name_raw().as_str()
     }
     /// Get the name of the function.
     #[inline(always)]
@@ -223,7 +223,7 @@ impl FnPtr {
             args_data = StaticVec::with_capacity(self.curry().len() + arg_values.len());
             args_data.extend(self.curry().iter().cloned());
             args_data.extend(arg_values.iter_mut().map(mem::take));
-            arg_values = args_data.as_mut();
+            arg_values = &mut *args_data;
         };
 
         let is_method = this_ptr.is_some();

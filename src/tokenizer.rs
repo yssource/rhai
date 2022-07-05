@@ -329,20 +329,20 @@ impl Span {
 
 impl fmt::Display for Span {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match (self.start().is_none(), self.end().is_none()) {
-            (false, false) if self.start().line() != self.end().line() => {
-                write!(f, "{:?}-{:?}", self.start(), self.end())
+        match (self.start(), self.end()) {
+            (Position::NONE, Position::NONE) => write!(f, "{:?}", Position::NONE),
+            (Position::NONE, end) => write!(f, "..{:?}", end),
+            (start, Position::NONE) => write!(f, "{:?}", start),
+            (start, end) if start.line() != end.line() => {
+                write!(f, "{:?}-{:?}", start, end)
             }
-            (false, false) => write!(
+            (start, end) => write!(
                 f,
                 "{}:{}-{}",
-                self.start().line().unwrap(),
-                self.start().position().unwrap_or(0),
-                self.end().position().unwrap_or(0)
+                start.line().unwrap(),
+                start.position().unwrap_or(0),
+                end.position().unwrap_or(0)
             ),
-            (true, false) => write!(f, "..{:?}", self.end()),
-            (false, true) => write!(f, "{:?}", self.start()),
-            (true, true) => write!(f, "{:?}", Position::NONE),
         }
     }
 }

@@ -1729,9 +1729,9 @@ impl Engine {
         // Cache the hash key for namespace-qualified variables
         #[cfg(not(feature = "no_module"))]
         let namespaced_variable = match lhs {
-            Expr::Variable(ref mut x, ..) if !x.1.is_empty() => Some(x.as_mut()),
+            Expr::Variable(ref mut x, ..) if !x.1.is_empty() => Some(&mut **x),
             Expr::Index(ref mut x, ..) | Expr::Dot(ref mut x, ..) => match x.lhs {
-                Expr::Variable(ref mut x, ..) if !x.1.is_empty() => Some(x.as_mut()),
+                Expr::Variable(ref mut x, ..) if !x.1.is_empty() => Some(&mut **x),
                 _ => None,
             },
             _ => None,
@@ -1933,7 +1933,7 @@ impl Engine {
             }
             // var (indexed) = rhs
             Expr::Variable(ref x, i, var_pos) => {
-                let (index, .., name) = x.as_ref();
+                let (index, .., name) = &**x;
                 let index = i.map_or_else(
                     || index.expect("either long or short index is `None`").get(),
                     |n| n.get() as usize,
@@ -2067,7 +2067,7 @@ impl Engine {
             (.., Expr::FnCall(func, func_pos))
                 if func.args.is_empty()
                     && [crate::engine::KEYWORD_FN_PTR, crate::engine::KEYWORD_EVAL]
-                        .contains(&func.name.as_ref()) =>
+                        .contains(&func.name.as_str()) =>
             {
                 let err_msg = format!(
                     "'{}' should not be called in method style. Try {}(...);",
@@ -2370,7 +2370,7 @@ impl Engine {
             state.stack.push(marker, ());
         }
 
-        let parse_func = syntax.parse.as_ref();
+        let parse_func = &*syntax.parse;
         let mut required_token: ImmutableString = key.into();
 
         tokens.push(required_token.clone().into());

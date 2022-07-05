@@ -512,7 +512,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
         }
         // if expr { if_block } else { else_block }
         Stmt::If(x, ..) => {
-            let (condition, body, other) = x.as_mut();
+            let (condition, body, other) = &mut **x;
             optimize_expr(condition, state, false);
             **body =
                 optimize_stmt_block(mem::take(&mut **body), state, preserve_result, true, false);
@@ -530,7 +530,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                     ranges,
                     def_case,
                 },
-            ) = x.as_mut();
+            ) = &mut **x;
 
             let value = match_expr.get_literal_value().unwrap();
             let hasher = &mut get_hasher();
@@ -640,7 +640,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                         state.set_dirty();
                     }
 
-                    for r in ranges.iter() {
+                    for r in &*ranges {
                         let block = &mut blocks_list[r.index()];
                         let statements = mem::take(&mut *block.statements);
                         *block.statements =
@@ -679,7 +679,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                     def_case,
                     ..
                 },
-            ) = x.as_mut();
+            ) = &mut **x;
 
             optimize_expr(match_expr, state, false);
 
@@ -738,7 +738,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
         },
         // while expr { block }
         Stmt::While(x, ..) => {
-            let (condition, body) = x.as_mut();
+            let (condition, body) = &mut **x;
             optimize_expr(condition, state, false);
             if let Expr::BoolConstant(true, pos) = condition {
                 *condition = Expr::Unit(*pos);
@@ -846,7 +846,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
         Stmt::Expr(expr) => {
             optimize_expr(expr, state, false);
 
-            match expr.as_mut() {
+            match &mut **expr {
                 // func(...)
                 Expr::FnCall(x, pos) => {
                     state.set_dirty();
@@ -892,7 +892,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
             ***x = optimize_stmt_block(mem::take(&mut **x), state, true, true, false);
 
             // { Stmt(Expr) } - promote
-            match x.as_mut().as_mut() {
+            match &mut ****x {
                 [ Stmt::Expr(e) ] => { state.set_dirty(); *expr = mem::take(e); }
                 _ => ()
             }
@@ -1129,7 +1129,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
                     return;
                 }
                 // Overloaded operators can override built-in.
-                _ if x.args.len() == 2 && !has_native_fn_override(state.engine, x.hashes.native, arg_types.as_ref()) => {
+                _ if x.args.len() == 2 && !has_native_fn_override(state.engine, x.hashes.native, &arg_types) => {
                     if let Some(result) = get_builtin_binary_op_fn(&x.name, &arg_values[0], &arg_values[1])
                         .and_then(|f| {
                             #[cfg(not(feature = "no_function"))]

@@ -60,7 +60,7 @@ impl Engine {
             Expr::Variable(_, Some(_), _) => {
                 self.search_scope_only(scope, global, lib, this_ptr, expr, level)
             }
-            Expr::Variable(v, None, _var_pos) => match v.as_ref() {
+            Expr::Variable(v, None, _var_pos) => match &**v {
                 // Normal variable access
                 #[cfg(not(feature = "no_module"))]
                 (_, ns, ..) if ns.is_empty() => {
@@ -323,7 +323,7 @@ impl Engine {
                 let mut op_info = OpAssignment::new_op_assignment(OP_CONCAT, Position::NONE);
                 let root = ("", Position::NONE);
 
-                for expr in x.iter() {
+                for expr in &**x {
                     let item =
                         match self.eval_expr(scope, global, caches, lib, this_ptr, expr, level) {
                             Ok(r) => r,
@@ -354,7 +354,7 @@ impl Engine {
                 #[cfg(not(feature = "unchecked"))]
                 let mut sizes = (0, 0, 0);
 
-                for item_expr in x.iter() {
+                for item_expr in &**x {
                     let value = match self
                         .eval_expr(scope, global, caches, lib, this_ptr, item_expr, level)
                     {
@@ -392,7 +392,7 @@ impl Engine {
                 #[cfg(not(feature = "unchecked"))]
                 let mut sizes = (0, 0, 0);
 
-                for (key, value_expr) in x.0.iter() {
+                for (key, value_expr) in &x.0 {
                     let value = match self
                         .eval_expr(scope, global, caches, lib, this_ptr, value_expr, level)
                     {

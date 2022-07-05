@@ -146,10 +146,10 @@ impl<'a> From<&'a FuncInfo> for FnMetadata<'a> {
                     .expect("script-defined function")
                     .comments
                     .iter()
-                    .map(Box::as_ref)
+                    .map(<_>::as_ref)
                     .collect()
             } else {
-                info.metadata.comments.iter().map(Box::as_ref).collect()
+                info.metadata.comments.iter().map(<_>::as_ref).collect()
             },
         }
     }

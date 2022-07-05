@@ -137,7 +137,7 @@ impl Parse for Module {
                     Ok(vec)
                 })?;
             // Gather and parse constants definitions.
-            for item in content.iter() {
+            for item in &*content {
                 match item {
                     syn::Item::Const(syn::ItemConst {
                         vis: syn::Visibility::Public(..),
@@ -156,7 +156,7 @@ impl Parse for Module {
                 }
             }
             // Gather and parse type definitions.
-            for item in content.iter() {
+            for item in &*content {
                 match item {
                     syn::Item::Type(syn::ItemType {
                         vis: syn::Visibility::Public(..),

@@ -54,7 +54,7 @@ impl fmt::Debug for AST {
 
         #[cfg(not(feature = "no_function"))]
         if !self.lib.is_empty() {
-            for (.., ref fn_def) in self.lib.iter_script_fn() {
+            for (.., fn_def) in self.lib.iter_script_fn() {
                 let sig = fn_def.to_string();
                 fp.field(&sig, &fn_def.body.as_slice());
             }
@@ -523,19 +523,19 @@ impl AST {
 
         #[cfg(not(feature = "no_module"))]
         match (
-            self.resolver().map_or(0, |r| r.len()),
-            other.resolver().map_or(0, |r| r.len()),
+            self.resolver().map_or(true, |r| r.is_empty()),
+            other.resolver().map_or(true, |r| r.is_empty()),
         ) {
-            (0, 0) => (),
-            (_, 0) => {
+            (true, true) => (),
+            (false, true) => {
                 _ast.set_resolver(self.resolver().unwrap().clone());
             }
-            (0, _) => {
+            (true, false) => {
                 _ast.set_resolver(other.resolver().unwrap().clone());
             }
-            (_, _) => {
-                let mut resolver = (**self.resolver().unwrap()).clone();
-                let other_resolver = (**other.resolver().unwrap()).clone();
+            (false, false) => {
+                let mut resolver = self.resolver().unwrap().as_ref().clone();
+                let other_resolver = other.resolver().unwrap().as_ref().clone();
                 for (k, v) in other_resolver {
                     resolver.insert(k, crate::func::shared_take_or_clone(v));
                 }
@@ -611,29 +611,29 @@ impl AST {
         other: Self,
         _filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> &mut Self {
-        self.body.extend(other.body.into_iter());
-
-        #[cfg(not(feature = "no_function"))]
-        if !other.lib.is_empty() {
-            crate::func::shared_make_mut(&mut self.lib).merge_filtered(&other.lib, &_filter);
-        }
-
         #[cfg(not(feature = "no_module"))]
         match (
-            self.resolver.as_ref().map_or(0, |r| r.len()),
-            other.resolver.as_ref().map_or(0, |r| r.len()),
+            self.resolver().map_or(true, |r| r.is_empty()),
+            other.resolver().map_or(true, |r| r.is_empty()),
         ) {
-            (_, 0) => (),
-            (0, _) => {
+            (_, true) => (),
+            (true, false) => {
                 self.set_resolver(other.resolver.unwrap());
             }
-            (_, _) => {
+            (false, false) => {
                 let resolver = crate::func::shared_make_mut(self.resolver.as_mut().unwrap());
                 let other_resolver = crate::func::shared_take_or_clone(other.resolver.unwrap());
                 for (k, v) in other_resolver {
                     resolver.insert(k, crate::func::shared_take_or_clone(v));
                 }
             }
+        }
+
+        self.body.extend(other.body.into_iter());
+
+        #[cfg(not(feature = "no_function"))]
+        if !other.lib.is_empty() {
+            crate::func::shared_make_mut(&mut self.lib).merge_filtered(&other.lib, &_filter);
         }
 
         self
@@ -792,7 +792,7 @@ impl AST {
                 if options.contains(ASTFlags::CONSTANT) && include_constants
                     || !options.contains(ASTFlags::CONSTANT) && include_variables =>
             {
-                let (name, expr, ..) = x.as_ref();
+                let (name, expr, ..) = &**x;
                 if let Some(value) = expr.get_literal_value() {
                     Some((name.as_str(), options.contains(ASTFlags::CONSTANT), value))
                 } else {

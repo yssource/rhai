@@ -197,7 +197,7 @@ impl GlobalRuntimeState<'_> {
             .iter()
             .rev()
             .zip(self.modules.iter().rev())
-            .map(|(name, module)| (name.as_str(), module.as_ref()))
+            .map(|(name, module)| (name.as_str(), &**module))
     }
     /// Get an iterator to the stack of globally-imported [modules][crate::Module] in reverse order.
     ///
@@ -324,6 +324,21 @@ impl IntoIterator for GlobalRuntimeState<'_> {
             .into_iter()
             .rev()
             .zip(self.modules.into_iter().rev())
+    }
+}
+
+#[cfg(not(feature = "no_module"))]
+impl<'a> IntoIterator for &'a GlobalRuntimeState<'_> {
+    type Item = (&'a Identifier, &'a crate::Shared<crate::Module>);
+    type IntoIter = std::iter::Zip<
+        std::iter::Rev<std::slice::Iter<'a, Identifier>>,
+        std::iter::Rev<std::slice::Iter<'a, crate::Shared<crate::Module>>>,
+    >;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        let x = self.keys.iter().rev().zip(self.modules.iter().rev());
+        x
     }
 }
 

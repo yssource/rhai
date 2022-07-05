@@ -110,7 +110,7 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized, S: AsRef<str> + 'a + ?Sized>
         Self {
             engine: value.0,
             fn_name: value.1.as_ref(),
-            source: value.2.map(S::as_ref),
+            source: value.2.map(<_>::as_ref),
             global: Some(value.3),
             lib: value.4.as_ref(),
             pos: value.5,

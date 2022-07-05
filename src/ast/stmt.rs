@@ -175,6 +175,7 @@ impl fmt::Debug for RangeCase {
 
 impl From<Range<INT>> for RangeCase {
     #[inline(always)]
+    #[must_use]
     fn from(value: Range<INT>) -> Self {
         Self::ExclusiveInt(value, 0)
     }
@@ -182,6 +183,7 @@ impl From<Range<INT>> for RangeCase {
 
 impl From<RangeInclusive<INT>> for RangeCase {
     #[inline(always)]
+    #[must_use]
     fn from(value: RangeInclusive<INT>) -> Self {
         Self::InclusiveInt(value, 0)
     }
@@ -467,6 +469,17 @@ impl IntoIterator for StmtBlock {
     }
 }
 
+impl<'a> IntoIterator for &'a StmtBlock {
+    type Item = &'a Stmt;
+    type IntoIter = std::slice::Iter<'a, Stmt>;
+
+    #[inline(always)]
+    fn into_iter(self) -> Self::IntoIter {
+        let x = self.block.iter();
+        x
+    }
+}
+
 impl Extend<Stmt> for StmtBlock {
     #[inline(always)]
     fn extend<T: IntoIterator<Item = Stmt>>(&mut self, iter: T) {
@@ -730,7 +743,7 @@ impl Stmt {
                 x.0.is_pure() && x.1.iter().all(Stmt::is_pure) && x.2.iter().all(Stmt::is_pure)
             }
             Self::Switch(x, ..) => {
-                let (expr, sw) = x.as_ref();
+                let (expr, sw) = &**x;
                 expr.is_pure()
                     && sw.cases.values().all(|&c| {
                         let block = &sw.blocks[c];
@@ -814,7 +827,7 @@ impl Stmt {
         match self {
             Self::Var(x, ..) => x.1.is_pure(),
 
-            Self::Expr(e) => match e.as_ref() {
+            Self::Expr(e) => match &**e {
                 Expr::Stmt(s) => s.iter().all(Stmt::is_internally_pure),
                 _ => self.is_pure(),
             },
@@ -864,48 +877,48 @@ impl Stmt {
                 if !x.0.walk(path, on_node) {
                     return false;
                 }
-                for s in x.1.iter() {
+                for s in &x.1 {
                     if !s.walk(path, on_node) {
                         return false;
                     }
                 }
-                for s in x.2.iter() {
+                for s in &x.2 {
                     if !s.walk(path, on_node) {
                         return false;
                     }
                 }
             }
             Self::Switch(x, ..) => {
-                let (expr, sw) = x.as_ref();
+                let (expr, sw) = &**x;
 
                 if !expr.walk(path, on_node) {
                     return false;
                 }
-                for (.., &b) in sw.cases.iter() {
+                for (.., &b) in &sw.cases {
                     let block = &sw.blocks[b];
 
                     if !block.condition.walk(path, on_node) {
                         return false;
                     }
-                    for s in block.statements.iter() {
+                    for s in &block.statements {
                         if !s.walk(path, on_node) {
                             return false;
                         }
                     }
                 }
-                for r in sw.ranges.iter() {
+                for r in &sw.ranges {
                     let block = &sw.blocks[r.index()];
 
                     if !block.condition.walk(path, on_node) {
                         return false;
                     }
-                    for s in block.statements.iter() {
+                    for s in &block.statements {
                         if !s.walk(path, on_node) {
                             return false;
                         }
                     }
                 }
-                for s in sw.blocks[sw.def_case].statements.iter() {
+                for s in &sw.blocks[sw.def_case].statements {
                     if !s.walk(path, on_node) {
                         return false;
                     }
@@ -925,7 +938,7 @@ impl Stmt {
                 if !x.2.walk(path, on_node) {
                     return false;
                 }
-                for s in x.3.iter() {
+                for s in &x.3 {
                     if !s.walk(path, on_node) {
                         return false;
                     }
@@ -954,12 +967,12 @@ impl Stmt {
                 }
             }
             Self::TryCatch(x, ..) => {
-                for s in x.try_block.iter() {
+                for s in &x.try_block {
                     if !s.walk(path, on_node) {
                         return false;
                     }
                 }
-                for s in x.catch_block.iter() {
+                for s in &x.catch_block {
                     if !s.walk(path, on_node) {
                         return false;
                     }

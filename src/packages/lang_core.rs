@@ -273,12 +273,12 @@ fn collect_fn_metadata(
                     crate::tokenizer::Token::DoubleColon.literal_syntax(),
                     ns
                 );
-                scan_module(list, dict, ns.into(), m.as_ref(), filter)
+                scan_module(list, dict, ns.into(), &**m, filter)
             }
         }
 
         for (ns, m) in ctx.iter_imports_raw() {
-            scan_module(&mut list, &dict, ns.clone(), m.as_ref(), filter)
+            scan_module(&mut list, &dict, ns.clone(), &**m, filter)
         }
     }
 

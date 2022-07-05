@@ -123,7 +123,7 @@ impl<'a> From<&'a ScriptFnDef> for ScriptFnMetadata<'a> {
             params: value.params.iter().map(|s| s.as_str()).collect(),
             access: value.access,
             #[cfg(feature = "metadata")]
-            comments: value.comments.iter().map(Box::as_ref).collect(),
+            comments: value.comments.iter().map(<_>::as_ref).collect(),
         }
     }
 }

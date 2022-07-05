@@ -132,6 +132,21 @@ impl IntoIterator for Scope<'_> {
     }
 }
 
+impl<'a> IntoIterator for &'a Scope<'_> {
+    type Item = (&'a Identifier, &'a Dynamic, &'a Vec<Identifier>);
+    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        Box::new(
+            self.values
+                .iter()
+                .zip(self.names.iter().zip(self.aliases.iter()))
+                .map(|(value, (name, alias))| (name, value, alias)),
+        )
+    }
+}
+
 impl Scope<'_> {
     /// Create a new [`Scope`].
     ///
@@ -686,7 +701,7 @@ impl Scope<'_> {
         self.names
             .iter()
             .zip(self.values.iter())
-            .map(|(name, value)| (name.as_ref(), value.is_read_only(), value))
+            .map(|(name, value)| (name.as_str(), value.is_read_only(), value))
     }
     /// Get a reverse iterator to entries in the [`Scope`].
     /// Shared values are not expanded.
@@ -696,7 +711,7 @@ impl Scope<'_> {
             .iter()
             .rev()
             .zip(self.values.iter().rev())
-            .map(|(name, value)| (name.as_ref(), value.is_read_only(), value))
+            .map(|(name, value)| (name.as_str(), value.is_read_only(), value))
     }
     /// Remove a range of entries within the [`Scope`].
     ///

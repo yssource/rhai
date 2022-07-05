@@ -886,14 +886,14 @@ impl Expr {
 
         match self {
             Self::Stmt(x) => {
-                for s in x.iter() {
+                for s in &**x {
                     if !s.walk(path, on_node) {
                         return false;
                     }
                 }
             }
             Self::InterpolatedString(x, ..) | Self::Array(x, ..) => {
-                for e in x.as_ref() {
+                for e in &**x {
                     if !e.walk(path, on_node) {
                         return false;
                     }

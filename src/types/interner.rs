@@ -51,7 +51,10 @@ impl StringsInterner<'_> {
     #[inline]
     #[must_use]
     pub fn get(&mut self, prefix: impl AsRef<str>, text: impl AsRef<str>) -> ImmutableString {
-        let (dict, mapper): (_, fn(&str) -> Identifier) = match prefix.as_ref() {
+        let prefix = prefix.as_ref();
+        let text = text.as_ref();
+
+        let (dict, mapper): (_, fn(&str) -> Identifier) = match prefix {
             "" => (&mut self.strings, |s| s.into()),
 
             #[cfg(not(feature = "no_object"))]
@@ -59,14 +62,14 @@ impl StringsInterner<'_> {
             #[cfg(not(feature = "no_object"))]
             crate::engine::FN_SET => (&mut self.setters, crate::engine::make_setter),
 
-            _ => unreachable!("unsupported prefix {}", prefix.as_ref()),
+            _ => unreachable!("unsupported prefix {}", prefix),
         };
 
-        if !dict.is_empty() && dict.contains_key(text.as_ref()) {
-            dict.get(text.as_ref()).unwrap().clone()
+        if !dict.is_empty() && dict.contains_key(text) {
+            dict.get(text).unwrap().clone()
         } else {
-            let value: ImmutableString = mapper(text.as_ref()).into();
-            dict.insert(text.as_ref().into(), value.clone());
+            let value: ImmutableString = mapper(text).into();
+            dict.insert(text.into(), value.clone());
             value
         }
     }

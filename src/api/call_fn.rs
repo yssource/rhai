@@ -259,7 +259,7 @@ impl Engine {
         }
 
         let mut this_ptr = this_ptr;
-        let mut args: StaticVec<_> = arg_values.as_mut().iter_mut().collect();
+        let mut args: StaticVec<_> = arg_values.iter_mut().collect();
 
         // Check for data race.
         #[cfg(not(feature = "no_closure"))]
