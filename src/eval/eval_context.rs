@@ -184,7 +184,7 @@ impl<'a, 's, 'ps, 'g, 'pg, 'c, 'pc, 't, 'pt> EvalContext<'a, 's, 'ps, 'g, 'pg, '
         };
 
         match expr {
-            crate::Expr::Stmt(statements) => self.engine.eval_stmt_block(
+            crate::ast::Expr::Stmt(statements) => self.engine.eval_stmt_block(
                 self.scope,
                 self.global,
                 caches,
