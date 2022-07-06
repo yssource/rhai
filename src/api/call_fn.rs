@@ -185,6 +185,10 @@ impl Engine {
     ///
     /// Not available under `no_function`.
     ///
+    /// # WARNING - Unstable API
+    ///
+    /// This API is volatile and may change in the future.
+    ///
     /// # WARNING - Low Level API
     ///
     /// This function is _extremely_ low level.
@@ -202,6 +206,7 @@ impl Engine {
     /// Do not use the arguments after this call. If they are needed afterwards, clone them _before_
     /// calling this function.
     #[cfg(feature = "internals")]
+    #[deprecated = "This API is NOT deprecated, but it is considered volatile and may change in the future."]
     #[inline(always)]
     pub fn call_fn_raw_raw(
         &self,

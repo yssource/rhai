@@ -13,6 +13,7 @@ Enhancements
 ------------
 
 * `switch` cases can now include multiple values separated by `|`.
+* `EvalContext::eval_expression_tree_raw` and `Expression::eval_with_context_raw` are added to allow for not rewinding the `Scope` at the end of a statements block.
 
 
 Version 1.8.0

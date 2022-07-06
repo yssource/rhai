@@ -74,6 +74,28 @@ impl Expression<'_> {
     pub fn eval_with_context(&self, context: &mut EvalContext) -> RhaiResult {
         context.eval_expression_tree(self)
     }
+    /// Evaluate this [expression tree][Expression] within an [evaluation context][`EvalContext`].
+    ///
+    /// The following option is available:
+    ///
+    /// * whether to rewind the [`Scope`] after evaluation if the expression is a [`StmtBlock`][crate::ast::StmtBlock]
+    ///
+    /// # WARNING - Unstable API
+    ///
+    /// This API is volatile and may change in the future.
+    ///
+    /// # WARNING - Low Level API
+    ///
+    /// This function is _extremely_ low level.  It evaluates an expression from an [`AST`][crate::AST].
+    #[inline(always)]
+    pub fn eval_with_context_raw(
+        &self,
+        context: &mut EvalContext,
+        rewind_scope: bool,
+    ) -> RhaiResult {
+        #[allow(deprecated)]
+        context.eval_expression_tree_raw(self, rewind_scope)
+    }
     /// Get the value of this expression if it is a variable name or a string constant.
     ///
     /// Returns [`None`] also if the constant is not of the specified type.

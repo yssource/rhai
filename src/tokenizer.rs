@@ -2336,7 +2336,7 @@ impl<'a> Iterator for TokenIterator<'a> {
             }
             // Reserved keyword/symbol
             Some((Token::Reserved(s), pos)) => (match
-                (&*s, 
+                (&*s,
                     #[cfg(not(feature = "no_custom_syntax"))]
                     (!self.engine.custom_keywords.is_empty() && self.engine.custom_keywords.contains_key(&*s)),
                     #[cfg(feature = "no_custom_syntax")]

@@ -1236,7 +1236,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
             if x.scope_may_be_changed {
                 state.propagate_constants = false;
             }
-            x.inputs.iter_mut().for_each(|expr| optimize_expr(expr, state, false));
+            // Do not optimize custom syntax expressions as you won't know how they would be called
         }
 
         // All other expressions - skip
