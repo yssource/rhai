@@ -781,7 +781,7 @@ impl Module {
     #[must_use]
     pub fn get_sub_module(&self, name: &str) -> Option<&Module> {
         if !self.modules.is_empty() {
-            self.modules.get(name).map(|m| m.as_ref())
+            self.modules.get(name).map(|m| &**m)
         } else {
             None
         }
@@ -1006,18 +1006,19 @@ impl Module {
             (names, return_type)
         };
 
-        let hash_fn = calc_native_fn_hash(None, name.as_ref(), &param_types);
+        let name = name.as_ref();
+        let hash_fn = calc_native_fn_hash(None, name, &param_types);
 
         if is_dynamic {
             self.dynamic_functions
-                .insert(calc_fn_hash(name.as_ref(), param_types.len()));
+                .insert(calc_fn_hash(name, param_types.len()));
         }
 
         self.functions.insert(
             hash_fn,
             FuncInfo {
                 metadata: FnMetadata {
-                    name: name.as_ref().into(),
+                    name: name.into(),
                     namespace,
                     access,
                     params: param_types.len(),
@@ -1549,7 +1550,7 @@ impl Module {
     /// Sub-modules are flattened onto the root [`Module`], with higher level overriding lower level.
     #[inline]
     pub fn combine_flatten(&mut self, other: Self) -> &mut Self {
-        for (.., m) in other.modules.into_iter() {
+        for (.., m) in other.modules {
             self.combine_flatten(shared_take_or_clone(m));
         }
         self.variables.extend(other.variables.into_iter());
@@ -1707,7 +1708,7 @@ impl Module {
     #[inline]
     #[allow(dead_code)]
     pub(crate) fn iter_fn(&self) -> impl Iterator<Item = &FuncInfo> {
-        self.functions.values().map(Box::as_ref)
+        self.functions.values().map(<_>::as_ref)
     }
 
     /// Get an iterator over all script-defined functions in the [`Module`].
@@ -2154,7 +2155,7 @@ impl Module {
     #[must_use]
     pub(crate) fn get_qualified_iter(&self, id: TypeId) -> Option<&IteratorFn> {
         if !self.all_type_iterators.is_empty() {
-            self.all_type_iterators.get(&id).map(|f| f.as_ref())
+            self.all_type_iterators.get(&id).map(|f| &**f)
         } else {
             None
         }
@@ -2165,7 +2166,7 @@ impl Module {
     #[must_use]
     pub(crate) fn get_iter(&self, id: TypeId) -> Option<&IteratorFn> {
         if !self.type_iterators.is_empty() {
-            self.type_iterators.get(&id).map(|f| f.as_ref())
+            self.type_iterators.get(&id).map(|f| &**f)
         } else {
             None
         }

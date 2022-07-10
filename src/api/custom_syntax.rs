@@ -1,4 +1,5 @@
 //! Module implementing custom syntax for [`Engine`].
+#![cfg(not(feature = "no_custom_syntax"))]
 
 use crate::ast::Expr;
 use crate::func::SendSync;
@@ -72,6 +73,28 @@ impl Expression<'_> {
     #[inline(always)]
     pub fn eval_with_context(&self, context: &mut EvalContext) -> RhaiResult {
         context.eval_expression_tree(self)
+    }
+    /// Evaluate this [expression tree][Expression] within an [evaluation context][`EvalContext`].
+    ///
+    /// The following option is available:
+    ///
+    /// * whether to rewind the [`Scope`] after evaluation if the expression is a [`StmtBlock`][crate::ast::StmtBlock]
+    ///
+    /// # WARNING - Unstable API
+    ///
+    /// This API is volatile and may change in the future.
+    ///
+    /// # WARNING - Low Level API
+    ///
+    /// This function is _extremely_ low level.  It evaluates an expression from an [`AST`][crate::AST].
+    #[inline(always)]
+    pub fn eval_with_context_raw(
+        &self,
+        context: &mut EvalContext,
+        rewind_scope: bool,
+    ) -> RhaiResult {
+        #[allow(deprecated)]
+        context.eval_expression_tree_raw(self, rewind_scope)
     }
     /// Get the value of this expression if it is a variable name or a string constant.
     ///
@@ -152,6 +175,8 @@ pub struct CustomSyntax {
 
 impl Engine {
     /// Register a custom syntax with the [`Engine`].
+    ///
+    /// Not available under `no_custom_syntax`.
     ///
     /// * `symbols` holds a slice of strings that define the custom syntax.  
     /// * `scope_may_be_changed` specifies variables _may_ be added/removed by this custom syntax.
@@ -295,6 +320,8 @@ impl Engine {
         Ok(self)
     }
     /// Register a custom syntax with the [`Engine`].
+    ///
+    /// Not available under `no_custom_syntax`.
     ///
     /// # WARNING - Low Level API
     ///

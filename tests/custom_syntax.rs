@@ -1,3 +1,5 @@
+#![cfg(not(feature = "no_custom_syntax"))]
+
 use rhai::{
     Dynamic, Engine, EvalAltResult, ImmutableString, LexError, ParseErrorType, Position, Scope, INT,
 };
@@ -50,7 +52,13 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
                     break;
                 }
 
-                context.eval_expression_tree(stmt)?;
+                // Do not rewind if the variable is upper-case
+                if var_name.to_uppercase() == var_name {
+                    context.eval_expression_tree_raw(stmt, false)?;
+                } else {
+                    context.eval_expression_tree(stmt)?;
+                }
+
                 count += 1;
 
                 context
@@ -122,6 +130,26 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
             "
         )?,
         144
+    );
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                let foo = 123;
+                exec [x<15] -> { let foo = x; x += 1; } while x < 42;
+                foo
+            "
+        )?,
+        123
+    );
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                let foo = 123;
+                exec [ABC<15] -> { let foo = ABC; ABC += 1; } while ABC < 42;
+                foo
+            "
+        )?,
+        14
     );
 
     // The first symbol must be an identifier

@@ -4,7 +4,7 @@ use super::{Caches, EvalContext, GlobalRuntimeState, Target};
 use crate::ast::{Expr, FnCallExpr, OpAssignment};
 use crate::engine::{KEYWORD_THIS, OP_CONCAT};
 use crate::types::dynamic::AccessMode;
-use crate::{Dynamic, Engine, Module, Position, RhaiResult, RhaiResultOf, Scope, StaticVec, ERR};
+use crate::{Dynamic, Engine, Module, Position, RhaiResult, RhaiResultOf, Scope, ERR};
 use std::num::NonZeroUsize;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -60,7 +60,7 @@ impl Engine {
             Expr::Variable(_, Some(_), _) => {
                 self.search_scope_only(scope, global, lib, this_ptr, expr, level)
             }
-            Expr::Variable(v, None, _var_pos) => match v.as_ref() {
+            Expr::Variable(v, None, _var_pos) => match &**v {
                 // Normal variable access
                 #[cfg(not(feature = "no_module"))]
                 (_, ns, ..) if ns.is_empty() => {
@@ -323,7 +323,7 @@ impl Engine {
                 let mut op_info = OpAssignment::new_op_assignment(OP_CONCAT, Position::NONE);
                 let root = ("", Position::NONE);
 
-                for expr in x.iter() {
+                for expr in &**x {
                     let item =
                         match self.eval_expr(scope, global, caches, lib, this_ptr, expr, level) {
                             Ok(r) => r,
@@ -354,7 +354,7 @@ impl Engine {
                 #[cfg(not(feature = "unchecked"))]
                 let mut sizes = (0, 0, 0);
 
-                for item_expr in x.iter() {
+                for item_expr in &**x {
                     let value = match self
                         .eval_expr(scope, global, caches, lib, this_ptr, item_expr, level)
                     {
@@ -392,7 +392,7 @@ impl Engine {
                 #[cfg(not(feature = "unchecked"))]
                 let mut sizes = (0, 0, 0);
 
-                for (key, value_expr) in x.0.iter() {
+                for (key, value_expr) in &x.0 {
                     let value = match self
                         .eval_expr(scope, global, caches, lib, this_ptr, value_expr, level)
                     {
@@ -475,8 +475,10 @@ impl Engine {
                 }
             }
 
+            #[cfg(not(feature = "no_custom_syntax"))]
             Expr::Custom(custom, pos) => {
-                let expressions: StaticVec<_> = custom.inputs.iter().map(Into::into).collect();
+                let expressions: crate::StaticVec<_> =
+                    custom.inputs.iter().map(Into::into).collect();
                 // The first token acts as the custom syntax's key
                 let key_token = custom.tokens.first().unwrap();
                 // The key should exist, unless the AST is compiled in a different Engine

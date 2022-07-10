@@ -512,7 +512,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
         }
         // if expr { if_block } else { else_block }
         Stmt::If(x, ..) => {
-            let (condition, body, other) = x.as_mut();
+            let (condition, body, other) = &mut **x;
             optimize_expr(condition, state, false);
             **body =
                 optimize_stmt_block(mem::take(&mut **body), state, preserve_result, true, false);
@@ -525,11 +525,12 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
             let (
                 match_expr,
                 SwitchCases {
+                    blocks: blocks_list,
                     cases,
                     ranges,
                     def_case,
                 },
-            ) = x.as_mut();
+            ) = &mut **x;
 
             let value = match_expr.get_literal_value().unwrap();
             let hasher = &mut get_hasher();
@@ -537,34 +538,30 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
             let hash = hasher.finish();
 
             // First check hashes
-            if let Some(block) = cases.get_mut(&hash) {
-                match mem::take(&mut block.condition) {
+            if let Some(block) = cases.remove(&hash) {
+                let mut block = mem::take(&mut blocks_list[block]);
+                cases.clear();
+
+                match block.condition {
                     Expr::BoolConstant(true, ..) => {
                         // Promote the matched case
-                        let statements = optimize_stmt_block(
-                            mem::take(&mut block.statements),
-                            state,
-                            true,
-                            true,
-                            false,
-                        );
+                        let statements: StmtBlockContainer = mem::take(&mut block.statements);
+                        let statements = optimize_stmt_block(statements, state, true, true, false);
                         *stmt = (statements, block.statements.span()).into();
                     }
-                    mut condition => {
+                    ref mut condition => {
                         // switch const { case if condition => stmt, _ => def } => if condition { stmt } else { def }
-                        optimize_expr(&mut condition, state, false);
+                        optimize_expr(condition, state, false);
 
-                        let def_stmt =
-                            optimize_stmt_block(mem::take(def_case), state, true, true, false);
-
+                        let def_case = &mut blocks_list[*def_case].statements;
+                        let def_span = def_case.span_or_else(*pos, Position::NONE);
+                        let def_case: StmtBlockContainer = mem::take(def_case);
+                        let def_stmt = optimize_stmt_block(def_case, state, true, true, false);
                         *stmt = Stmt::If(
                             (
-                                condition,
+                                mem::take(condition),
                                 mem::take(&mut block.statements),
-                                StmtBlock::new_with_span(
-                                    def_stmt,
-                                    def_case.span_or_else(*pos, Position::NONE),
-                                ),
+                                StmtBlock::new_with_span(def_stmt, def_span),
                             )
                                 .into(),
                             match_expr.start_position(),
@@ -582,21 +579,20 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
 
                 // Only one range or all ranges without conditions
                 if ranges.len() == 1
-                    || ranges
-                        .iter()
-                        .all(|(.., c)| matches!(c.condition, Expr::BoolConstant(true, ..)))
+                    || ranges.iter().all(|r| {
+                        matches!(
+                            blocks_list[r.index()].condition,
+                            Expr::BoolConstant(true, ..)
+                        )
+                    })
                 {
-                    for (.., block) in
-                        ranges
-                            .iter_mut()
-                            .filter(|&&mut (start, end, inclusive, ..)| {
-                                (!inclusive && (start..end).contains(&value))
-                                    || (inclusive && (start..=end).contains(&value))
-                            })
-                    {
-                        match mem::take(&mut block.condition) {
+                    for r in ranges.iter().filter(|r| r.contains(value)) {
+                        let condition = mem::take(&mut blocks_list[r.index()].condition);
+
+                        match condition {
                             Expr::BoolConstant(true, ..) => {
                                 // Promote the matched case
+                                let block = &mut blocks_list[r.index()];
                                 let statements = mem::take(&mut *block.statements);
                                 let statements =
                                     optimize_stmt_block(statements, state, true, true, false);
@@ -606,21 +602,19 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                                 // switch const { range if condition => stmt, _ => def } => if condition { stmt } else { def }
                                 optimize_expr(&mut condition, state, false);
 
-                                let def_stmt = optimize_stmt_block(
-                                    mem::take(def_case),
-                                    state,
-                                    true,
-                                    true,
-                                    false,
-                                );
+                                let def_case = &mut blocks_list[*def_case].statements;
+                                let def_span = def_case.span_or_else(*pos, Position::NONE);
+                                let def_case: StmtBlockContainer = mem::take(def_case);
+                                let def_stmt =
+                                    optimize_stmt_block(def_case, state, true, true, false);
+
+                                let statements = mem::take(&mut blocks_list[r.index()].statements);
+
                                 *stmt = Stmt::If(
                                     (
                                         condition,
-                                        mem::take(&mut block.statements),
-                                        StmtBlock::new_with_span(
-                                            def_stmt,
-                                            def_case.span_or_else(*pos, Position::NONE),
-                                        ),
+                                        statements,
+                                        StmtBlock::new_with_span(def_stmt, def_span),
                                     )
                                         .into(),
                                     match_expr.start_position(),
@@ -640,16 +634,14 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
 
                     let old_ranges_len = ranges.len();
 
-                    ranges.retain(|&mut (start, end, inclusive, ..)| {
-                        (!inclusive && (start..end).contains(&value))
-                            || (inclusive && (start..=end).contains(&value))
-                    });
+                    ranges.retain(|r| r.contains(value));
 
                     if ranges.len() != old_ranges_len {
                         state.set_dirty();
                     }
 
-                    for (.., block) in ranges.iter_mut() {
+                    for r in &*ranges {
+                        let block = &mut blocks_list[r.index()];
                         let statements = mem::take(&mut *block.statements);
                         *block.statements =
                             optimize_stmt_block(statements, state, preserve_result, true, false);
@@ -670,25 +662,29 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
 
             // Promote the default case
             state.set_dirty();
-            let def_stmt = optimize_stmt_block(mem::take(def_case), state, true, true, false);
-            *stmt = (def_stmt, def_case.span_or_else(*pos, Position::NONE)).into();
+            let def_case = &mut blocks_list[*def_case].statements;
+            let def_span = def_case.span_or_else(*pos, Position::NONE);
+            let def_case: StmtBlockContainer = mem::take(def_case);
+            let def_stmt = optimize_stmt_block(def_case, state, true, true, false);
+            *stmt = (def_stmt, def_span).into();
         }
         // switch
         Stmt::Switch(x, ..) => {
             let (
                 match_expr,
                 SwitchCases {
+                    blocks: blocks_list,
                     cases,
                     ranges,
                     def_case,
                     ..
                 },
-            ) = x.as_mut();
+            ) = &mut **x;
 
             optimize_expr(match_expr, state, false);
 
-            // Optimize cases
-            for block in cases.values_mut() {
+            // Optimize blocks
+            for block in blocks_list.iter_mut() {
                 let statements = mem::take(&mut *block.statements);
                 *block.statements =
                     optimize_stmt_block(statements, state, preserve_result, true, false);
@@ -699,39 +695,27 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                     Expr::Unit(pos) => {
                         block.condition = Expr::BoolConstant(true, pos);
                         state.set_dirty();
+                    }
+                    Expr::BoolConstant(false, ..) => {
+                        if !block.statements.is_empty() {
+                            block.statements = StmtBlock::NONE;
+                            state.set_dirty();
+                        }
                     }
                     _ => (),
                 }
             }
 
             // Remove false cases
-            cases.retain(|_, block| match block.condition {
+            cases.retain(|_, &mut block| match blocks_list[block].condition {
                 Expr::BoolConstant(false, ..) => {
                     state.set_dirty();
                     false
                 }
                 _ => true,
             });
-
-            // Optimize ranges
-            for (.., block) in ranges.iter_mut() {
-                let statements = mem::take(&mut *block.statements);
-                *block.statements =
-                    optimize_stmt_block(statements, state, preserve_result, true, false);
-
-                optimize_expr(&mut block.condition, state, false);
-
-                match block.condition {
-                    Expr::Unit(pos) => {
-                        block.condition = Expr::BoolConstant(true, pos);
-                        state.set_dirty();
-                    }
-                    _ => (),
-                }
-            }
-
             // Remove false ranges
-            ranges.retain(|(.., block)| match block.condition {
+            ranges.retain(|r| match blocks_list[r.index()].condition {
                 Expr::BoolConstant(false, ..) => {
                     state.set_dirty();
                     false
@@ -739,8 +723,9 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                 _ => true,
             });
 
-            let def_block = mem::take(&mut ***def_case);
-            ***def_case = optimize_stmt_block(def_block, state, preserve_result, true, false);
+            let def_case = &mut blocks_list[*def_case].statements;
+            let def_block = mem::take(&mut **def_case);
+            **def_case = optimize_stmt_block(def_block, state, preserve_result, true, false);
         }
 
         // while false { block } -> Noop
@@ -753,7 +738,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
         },
         // while expr { block }
         Stmt::While(x, ..) => {
-            let (condition, body) = x.as_mut();
+            let (condition, body) = &mut **x;
             optimize_expr(condition, state, false);
             if let Expr::BoolConstant(true, pos) = condition {
                 *condition = Expr::Unit(*pos);
@@ -861,7 +846,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
         Stmt::Expr(expr) => {
             optimize_expr(expr, state, false);
 
-            match expr.as_mut() {
+            match &mut **expr {
                 // func(...)
                 Expr::FnCall(x, pos) => {
                     state.set_dirty();
@@ -907,7 +892,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
             ***x = optimize_stmt_block(mem::take(&mut **x), state, true, true, false);
 
             // { Stmt(Expr) } - promote
-            match x.as_mut().as_mut() {
+            match &mut ****x {
                 [ Stmt::Expr(e) ] => { state.set_dirty(); *expr = mem::take(e); }
                 _ => ()
             }
@@ -1144,7 +1129,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
                     return;
                 }
                 // Overloaded operators can override built-in.
-                _ if x.args.len() == 2 && !has_native_fn_override(state.engine, x.hashes.native, arg_types.as_ref()) => {
+                _ if x.args.len() == 2 && !has_native_fn_override(state.engine, x.hashes.native, &arg_types) => {
                     if let Some(result) = get_builtin_binary_op_fn(&x.name, &arg_values[0], &arg_values[1])
                         .and_then(|f| {
                             #[cfg(not(feature = "no_function"))]
@@ -1246,11 +1231,12 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
         }
 
         // Custom syntax
+        #[cfg(not(feature = "no_custom_syntax"))]
         Expr::Custom(x, ..) => {
             if x.scope_may_be_changed {
                 state.propagate_constants = false;
             }
-            x.inputs.iter_mut().for_each(|expr| optimize_expr(expr, state, false));
+            // Do not optimize custom syntax expressions as you won't know how they would be called
         }
 
         // All other expressions - skip

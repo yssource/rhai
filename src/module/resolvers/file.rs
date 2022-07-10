@@ -172,7 +172,7 @@ impl FileModuleResolver {
     #[inline(always)]
     #[must_use]
     pub fn base_path(&self) -> Option<&Path> {
-        self.base_path.as_ref().map(PathBuf::as_ref)
+        self.base_path.as_ref().map(<_>::as_ref)
     }
     /// Set the base path for script files.
     #[inline(always)]

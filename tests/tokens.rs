@@ -30,6 +30,7 @@ fn test_tokens_disabled() {
     ));
 }
 
+#[cfg(not(feature = "no_custom_syntax"))]
 #[test]
 fn test_tokens_custom_operator_identifiers() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
@@ -60,6 +61,7 @@ fn test_tokens_custom_operator_identifiers() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
+#[cfg(not(feature = "no_custom_syntax"))]
 #[test]
 fn test_tokens_custom_operator_symbol() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();

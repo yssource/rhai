@@ -357,7 +357,7 @@ impl Debugger {
                     ASTNode::Expr(Expr::FnCall(x, ..)) | ASTNode::Stmt(Stmt::FnCall(x, ..)) => {
                         x.name == *name
                     }
-                    ASTNode::Stmt(Stmt::Expr(e)) => match e.as_ref() {
+                    ASTNode::Stmt(Stmt::Expr(e)) => match &**e {
                         Expr::FnCall(x, ..) => x.name == *name,
                         _ => false,
                     },
@@ -367,7 +367,7 @@ impl Debugger {
                     ASTNode::Expr(Expr::FnCall(x, ..)) | ASTNode::Stmt(Stmt::FnCall(x, ..)) => {
                         x.args.len() == *args && x.name == *name
                     }
-                    ASTNode::Stmt(Stmt::Expr(e)) => match e.as_ref() {
+                    ASTNode::Stmt(Stmt::Expr(e)) => match &**e {
                         Expr::FnCall(x, ..) => x.args.len() == *args && x.name == *name,
                         _ => false,
                     },
@@ -560,7 +560,7 @@ impl Engine {
                         ASTNode::Expr(Expr::FnCall(..)) | ASTNode::Stmt(Stmt::FnCall(..)) => {
                             level + 1
                         }
-                        ASTNode::Stmt(Stmt::Expr(e)) if matches!(e.as_ref(), Expr::FnCall(..)) => {
+                        ASTNode::Stmt(Stmt::Expr(e)) if matches!(**e, Expr::FnCall(..)) => {
                             level + 1
                         }
                         _ => level,

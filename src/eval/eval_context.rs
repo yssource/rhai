@@ -1,12 +1,12 @@
 //! Evaluation context.
 
 use super::{Caches, GlobalRuntimeState};
-use crate::{Dynamic, Engine, Expression, Module, RhaiResult, Scope};
+use crate::{Dynamic, Engine, Module, Scope};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
 /// Context of a script evaluation process.
-#[derive(Debug)]
+#[allow(dead_code)]
 pub struct EvalContext<'a, 's, 'ps, 'g, 'pg, 'c, 'pc, 't, 'pt> {
     /// The current [`Engine`].
     engine: &'a Engine,
@@ -142,13 +142,40 @@ impl<'a, 's, 'ps, 'g, 'pg, 'c, 'pc, 't, 'pt> EvalContext<'a, 's, 'ps, 'g, 'pg, '
         self.level
     }
 
-    /// Evaluate an [expression tree][Expression] within this [evaluation context][`EvalContext`].
+    /// Evaluate an [expression tree][crate::Expression] within this [evaluation context][`EvalContext`].
     ///
     /// # WARNING - Low Level API
     ///
     /// This function is very low level.  It evaluates an expression from an [`AST`][crate::AST].
+    #[cfg(not(feature = "no_custom_syntax"))]
     #[inline(always)]
-    pub fn eval_expression_tree(&mut self, expr: &Expression) -> RhaiResult {
+    pub fn eval_expression_tree(&mut self, expr: &crate::Expression) -> crate::RhaiResult {
+        #[allow(deprecated)]
+        self.eval_expression_tree_raw(expr, true)
+    }
+    /// Evaluate an [expression tree][crate::Expression] within this [evaluation context][`EvalContext`].
+    ///
+    /// The following option is available:
+    ///
+    /// * whether to rewind the [`Scope`] after evaluation if the expression is a [`StmtBlock`][crate::ast::StmtBlock]
+    ///
+    /// # WARNING - Unstable API
+    ///
+    /// This API is volatile and may change in the future.
+    ///
+    /// # WARNING - Low Level API
+    ///
+    /// This function is _extremely_ low level.  It evaluates an expression from an [`AST`][crate::AST].
+    #[cfg(not(feature = "no_custom_syntax"))]
+    #[deprecated = "This API is NOT deprecated, but it is considered volatile and may change in the future."]
+    #[inline]
+    pub fn eval_expression_tree_raw(
+        &mut self,
+        expr: &crate::Expression,
+        rewind_scope: bool,
+    ) -> crate::RhaiResult {
+        let expr: &crate::ast::Expr = expr;
+
         let mut new_caches = Caches::new();
 
         let caches = match self.caches.as_mut() {
@@ -156,14 +183,26 @@ impl<'a, 's, 'ps, 'g, 'pg, 'c, 'pc, 't, 'pt> EvalContext<'a, 's, 'ps, 'g, 'pg, '
             None => &mut new_caches,
         };
 
-        self.engine.eval_expr(
-            self.scope,
-            self.global,
-            caches,
-            self.lib,
-            self.this_ptr,
-            expr,
-            self.level,
-        )
+        match expr {
+            crate::ast::Expr::Stmt(statements) => self.engine.eval_stmt_block(
+                self.scope,
+                self.global,
+                caches,
+                self.lib,
+                self.this_ptr,
+                &statements,
+                rewind_scope,
+                self.level,
+            ),
+            _ => self.engine.eval_expr(
+                self.scope,
+                self.global,
+                caches,
+                self.lib,
+                self.this_ptr,
+                expr,
+                self.level,
+            ),
+        }
     }
 }

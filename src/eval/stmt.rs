@@ -248,7 +248,7 @@ impl Engine {
             self.inc_operations(&mut global.num_operations, stmt.position())?;
 
             let result = if x.1.lhs.is_variable_access(false) {
-                let (op_info, BinaryExpr { lhs, rhs }) = x.as_ref();
+                let (op_info, BinaryExpr { lhs, rhs }) = &**x;
 
                 let rhs_result = self
                     .eval_expr(scope, global, caches, lib, this_ptr, rhs, level)
@@ -294,7 +294,7 @@ impl Engine {
                     rhs_result
                 }
             } else {
-                let (op_info, BinaryExpr { lhs, rhs }) = x.as_ref();
+                let (op_info, BinaryExpr { lhs, rhs }) = &**x;
 
                 let rhs_result = self
                     .eval_expr(scope, global, caches, lib, this_ptr, rhs, level)
@@ -356,7 +356,7 @@ impl Engine {
 
             // If statement
             Stmt::If(x, ..) => {
-                let (expr, if_block, else_block) = x.as_ref();
+                let (expr, if_block, else_block) = &**x;
 
                 let guard_val = self
                     .eval_expr(scope, global, caches, lib, this_ptr, expr, level)
@@ -394,11 +394,12 @@ impl Engine {
                 let (
                     expr,
                     SwitchCases {
+                        blocks,
                         cases,
                         def_case,
                         ranges,
                     },
-                ) = x.as_ref();
+                ) = &**x;
 
                 let value_result =
                     self.eval_expr(scope, global, caches, lib, this_ptr, expr, level);
@@ -410,7 +411,9 @@ impl Engine {
                         let hash = hasher.finish();
 
                         // First check hashes
-                        if let Some(case_block) = cases.get(&hash) {
+                        if let Some(&case_block) = cases.get(&hash) {
+                            let case_block = &blocks[case_block];
+
                             let cond_result = match case_block.condition {
                                 Expr::BoolConstant(b, ..) => Ok(b),
                                 ref c => self
@@ -432,12 +435,9 @@ impl Engine {
                             let value = value.as_int().expect("`INT`");
                             let mut result = Ok(None);
 
-                            for (.., block) in
-                                ranges.iter().filter(|&&(start, end, inclusive, ..)| {
-                                    (!inclusive && (start..end).contains(&value))
-                                        || (inclusive && (start..=end).contains(&value))
-                                })
-                            {
+                            for r in ranges.iter().filter(|r| r.contains(value)) {
+                                let block = &blocks[r.index()];
+
                                 let cond_result = match block.condition {
                                     Expr::BoolConstant(b, ..) => Ok(b),
                                     ref c => self
@@ -481,6 +481,8 @@ impl Engine {
                         }
                     } else if let Ok(None) = stmt_block_result {
                         // Default match clause
+                        let def_case = &blocks[*def_case].statements;
+
                         if !def_case.is_empty() {
                             self.eval_stmt_block(
                                 scope, global, caches, lib, this_ptr, def_case, true, level,
@@ -498,7 +500,7 @@ impl Engine {
 
             // Loop
             Stmt::While(x, ..) if matches!(x.0, Expr::Unit(..)) => loop {
-                let (.., body) = x.as_ref();
+                let (.., body) = &**x;
 
                 if !body.is_empty() {
                     match self
@@ -519,7 +521,7 @@ impl Engine {
 
             // While loop
             Stmt::While(x, ..) => loop {
-                let (expr, body) = x.as_ref();
+                let (expr, body) = &**x;
 
                 let condition = self
                     .eval_expr(scope, global, caches, lib, this_ptr, expr, level)
@@ -550,7 +552,7 @@ impl Engine {
 
             // Do loop
             Stmt::Do(x, options, ..) => loop {
-                let (expr, body) = x.as_ref();
+                let (expr, body) = &**x;
                 let is_while = !options.contains(ASTFlags::NEGATED);
 
                 if !body.is_empty() {
@@ -583,7 +585,7 @@ impl Engine {
 
             // For loop
             Stmt::For(x, ..) => {
-                let (var_name, counter, expr, statements) = x.as_ref();
+                let (var_name, counter, expr, statements) = &**x;
 
                 let iter_result = self
                     .eval_expr(scope, global, caches, lib, this_ptr, expr, level)
@@ -726,7 +728,7 @@ impl Engine {
                             name: catch_var, ..
                         },
                     catch_block,
-                } = x.as_ref();
+                } = &**x;
 
                 let result = self
                     .eval_stmt_block(scope, global, caches, lib, this_ptr, try_block, true, level)
@@ -830,7 +832,7 @@ impl Engine {
             }
             // Let/const statement
             Stmt::Var(x, options, pos) => {
-                let (var_name, expr, index) = x.as_ref();
+                let (var_name, expr, index) = &**x;
 
                 let access = if options.contains(ASTFlags::CONSTANT) {
                     AccessMode::ReadOnly
@@ -924,7 +926,7 @@ impl Engine {
             // Import statement
             #[cfg(not(feature = "no_module"))]
             Stmt::Import(x, _pos) => {
-                let (expr, export) = x.as_ref();
+                let (expr, export) = &**x;
 
                 // Guard against too many modules
                 #[cfg(not(feature = "unchecked"))]
@@ -993,7 +995,7 @@ impl Engine {
             // Export statement
             #[cfg(not(feature = "no_module"))]
             Stmt::Export(x, ..) => {
-                let (Ident { name, pos, .. }, alias) = x.as_ref();
+                let (Ident { name, pos, .. }, alias) = &**x;
                 // Mark scope variables as public
                 if let Some((index, ..)) = scope.get_index(name) {
                     let alias = if alias.is_empty() { name } else { alias }.clone();

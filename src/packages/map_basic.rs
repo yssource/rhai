@@ -191,7 +191,7 @@ mod map_functions {
         if !map1.is_empty() {
             let mut map2 = map2;
 
-            for (m1, v1) in map1.iter_mut() {
+            for (m1, v1) in map1 {
                 if let Some(v2) = map2.get_mut(m1) {
                     let equals = ctx
                         .call_fn_raw(OP_EQUALS, true, false, &mut [v1, v2])?

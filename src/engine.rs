@@ -1,6 +1,5 @@
 //! Main module defining the script evaluation [`Engine`].
 
-use crate::api::custom_syntax::CustomSyntax;
 use crate::api::options::LangOptions;
 use crate::func::native::{
     OnDebugCallback, OnDefVarCallback, OnParseTokenCallback, OnPrintCallback, OnVarCallback,
@@ -111,9 +110,11 @@ pub struct Engine {
     /// A set of symbols to disable.
     pub(crate) disabled_symbols: BTreeSet<Identifier>,
     /// A map containing custom keywords and precedence to recognize.
+    #[cfg(not(feature = "no_custom_syntax"))]
     pub(crate) custom_keywords: BTreeMap<Identifier, Option<Precedence>>,
     /// Custom syntax.
-    pub(crate) custom_syntax: BTreeMap<Identifier, CustomSyntax>,
+    #[cfg(not(feature = "no_custom_syntax"))]
+    pub(crate) custom_syntax: BTreeMap<Identifier, crate::api::custom_syntax::CustomSyntax>,
     /// Callback closure for filtering variable definition.
     pub(crate) def_var_filter: Option<Box<OnDefVarCallback>>,
     /// Callback closure for resolving variable access.
@@ -160,17 +161,19 @@ impl fmt::Debug for Engine {
         #[cfg(not(feature = "no_module"))]
         f.field("global_sub_modules", &self.global_sub_modules);
 
-        f.field("disabled_symbols", &self.disabled_symbols)
-            .field("custom_keywords", &self.custom_keywords)
-            .field(
-                "custom_syntax",
-                &self
-                    .custom_syntax
-                    .keys()
-                    .map(|s| s.as_str())
-                    .collect::<String>(),
-            )
-            .field("def_var_filter", &self.def_var_filter.is_some())
+        f.field("disabled_symbols", &self.disabled_symbols);
+
+        #[cfg(not(feature = "no_custom_syntax"))]
+        f.field("custom_keywords", &self.custom_keywords).field(
+            "custom_syntax",
+            &self
+                .custom_syntax
+                .keys()
+                .map(|s| s.as_str())
+                .collect::<String>(),
+        );
+
+        f.field("def_var_filter", &self.def_var_filter.is_some())
             .field("resolve_var", &self.resolve_var.is_some())
             .field("token_mapper", &self.token_mapper.is_some());
 
@@ -268,7 +271,9 @@ impl Engine {
 
             empty_string: ImmutableString::new(),
             disabled_symbols: BTreeSet::new(),
+            #[cfg(not(feature = "no_custom_syntax"))]
             custom_keywords: BTreeMap::new(),
+            #[cfg(not(feature = "no_custom_syntax"))]
             custom_syntax: BTreeMap::new(),
 
             def_var_filter: None,

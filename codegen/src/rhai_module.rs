@@ -300,7 +300,7 @@ pub fn check_rename_collisions(fns: &[ExportedFn]) -> Result<(), syn::Error> {
     let mut renames = BTreeMap::new();
     let mut fn_defs = BTreeMap::new();
 
-    for item_fn in fns.iter() {
+    for item_fn in fns {
         if !item_fn.params().name.is_empty() || item_fn.params().special != FnSpecialAccess::None {
             let mut names: Vec<_> = item_fn
                 .params()

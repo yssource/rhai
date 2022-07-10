@@ -3,7 +3,11 @@ use crate::{
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-use std::{collections::btree_map::IntoIter, collections::BTreeMap, ops::AddAssign};
+use std::{
+    collections::btree_map::{IntoIter, Iter},
+    collections::BTreeMap,
+    ops::AddAssign,
+};
 
 /// A static [module][Module] resolution service that serves [modules][Module] added into it.
 ///
@@ -122,8 +126,19 @@ impl IntoIterator for StaticModuleResolver {
     type Item = (Identifier, Shared<Module>);
     type IntoIter = IntoIter<SmartString, Shared<Module>>;
 
+    #[inline(always)]
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a StaticModuleResolver {
+    type Item = (&'a Identifier, &'a Shared<Module>);
+    type IntoIter = Iter<'a, SmartString, Shared<Module>>;
+
+    #[inline(always)]
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
     }
 }
 

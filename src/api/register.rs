@@ -987,8 +987,9 @@ impl Engine {
             module: Shared<Module>,
         ) {
             let separator = crate::tokenizer::Token::DoubleColon.syntax();
+            let separator = separator.as_ref();
 
-            if !name.contains(separator.as_ref()) {
+            if !name.contains(separator) {
                 if !module.is_indexed() {
                     // Index the module (making a clone copy if necessary) if it is not indexed
                     let mut module = crate::func::shared_take_or_clone(module);
@@ -998,7 +999,7 @@ impl Engine {
                     root.insert(name.into(), module);
                 }
             } else {
-                let mut iter = name.splitn(2, separator.as_ref());
+                let mut iter = name.splitn(2, separator);
                 let sub_module = iter.next().expect("contains separator").trim();
                 let remainder = iter.next().expect("contains separator").trim();
 

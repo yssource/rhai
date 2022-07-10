@@ -205,7 +205,7 @@ impl Engine {
 
                         let crate::ast::FnCallExpr {
                             name, hashes, args, ..
-                        } = x.as_ref();
+                        } = &**x;
 
                         let offset = idx_values.len() - args.len();
                         let call_args = &mut idx_values[offset..];
@@ -266,7 +266,7 @@ impl Engine {
                         #[cfg(feature = "debugging")]
                         self.run_debugger(scope, global, lib, this_ptr, rhs, level)?;
 
-                        let ((getter, hash_get), (setter, hash_set), name) = x.as_ref();
+                        let ((getter, hash_get), (setter, hash_set), name) = &**x;
                         let (mut new_val, op_info) = new_val.expect("`Some`");
 
                         if op_info.is_op_assignment() {
@@ -331,7 +331,7 @@ impl Engine {
                         #[cfg(feature = "debugging")]
                         self.run_debugger(scope, global, lib, this_ptr, rhs, level)?;
 
-                        let ((getter, hash_get), _, name) = x.as_ref();
+                        let ((getter, hash_get), _, name) = &**x;
                         let args = &mut [target.as_mut()];
                         self.call_native_fn(
                             global, caches, lib, getter, *hash_get, args, is_ref_mut, false, *pos,
@@ -382,7 +382,7 @@ impl Engine {
 
                                 let crate::ast::FnCallExpr {
                                     name, hashes, args, ..
-                                } = x.as_ref();
+                                } = &**x;
 
                                 let offset = idx_values.len() - args.len();
                                 let call_args = &mut idx_values[offset..];
@@ -425,7 +425,7 @@ impl Engine {
                                 #[cfg(feature = "debugging")]
                                 self.run_debugger(scope, global, lib, this_ptr, _node, level)?;
 
-                                let ((getter, hash_get), (setter, hash_set), name) = p.as_ref();
+                                let ((getter, hash_get), (setter, hash_set), name) = &**p;
                                 let rhs_chain = rhs.into();
                                 let mut arg_values = [target.as_mut(), &mut Dynamic::UNIT.clone()];
                                 let args = &mut arg_values[..1];
@@ -507,7 +507,7 @@ impl Engine {
 
                                 let crate::ast::FnCallExpr {
                                     name, hashes, args, ..
-                                } = f.as_ref();
+                                } = &**f;
                                 let rhs_chain = rhs.into();
 
                                 let offset = idx_values.len() - args.len();
@@ -563,9 +563,9 @@ impl Engine {
         let chain_type = ChainType::from(expr);
         let (crate::ast::BinaryExpr { lhs, rhs }, options, op_pos) = match expr {
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(x, options, pos) => (x.as_ref(), *options, *pos),
+            Expr::Index(x, options, pos) => (&**x, *options, *pos),
             #[cfg(not(feature = "no_object"))]
-            Expr::Dot(x, options, pos) => (x.as_ref(), *options, *pos),
+            Expr::Dot(x, options, pos) => (&**x, *options, *pos),
             expr => unreachable!("Expr::Index or Expr::Dot expected but gets {:?}", expr),
         };
 
@@ -666,7 +666,7 @@ impl Engine {
             Expr::MethodCall(x, ..)
                 if _parent_chain_type == ChainType::Dotting && !x.is_qualified() =>
             {
-                for arg_expr in x.args.as_ref() {
+                for arg_expr in &x.args {
                     idx_values.push(
                         self.get_arg_value(scope, global, caches, lib, this_ptr, arg_expr, level)?
                             .0
@@ -686,7 +686,7 @@ impl Engine {
             Expr::Index(x, options, ..) | Expr::Dot(x, options, ..)
                 if !parent_options.contains(ASTFlags::BREAK) =>
             {
-                let crate::ast::BinaryExpr { lhs, rhs, .. } = x.as_ref();
+                let crate::ast::BinaryExpr { lhs, rhs, .. } = &**x;
 
                 let mut _arg_values = FnArgsVec::new_const();
 
@@ -700,7 +700,7 @@ impl Engine {
                     Expr::MethodCall(x, ..)
                         if _parent_chain_type == ChainType::Dotting && !x.is_qualified() =>
                     {
-                        for arg_expr in x.args.as_ref() {
+                        for arg_expr in &x.args {
                             _arg_values.push(
                                 self.get_arg_value(
                                     scope, global, caches, lib, this_ptr, arg_expr, level,
