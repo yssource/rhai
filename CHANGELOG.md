@@ -4,6 +4,8 @@ Rhai Release Notes
 Version 1.9.0
 =============
 
+The minimum Rust version is now `1.60.0` in order to use the `dep:` syntax for dependencies.
+
 New features
 ------------
 
