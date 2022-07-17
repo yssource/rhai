@@ -194,7 +194,7 @@ fn setup_editor() -> Editor<()> {
         .indent_size(4)
         .bracketed_paste(true)
         .build();
-    let mut rl = Editor::<()>::with_config(config);
+    let mut rl = Editor::<()>::with_config(config).unwrap();
 
     // Bind more keys
 
