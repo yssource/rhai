@@ -287,7 +287,7 @@ macro_rules! reg_range {
                 "/// Return an iterator over the exclusive range of `from..to`, each iteration increasing by `step`.",
                 "/// The value `to` is never included.",
                 "///",
-                "/// If `from` > `to` and `step` < 0, the iteration goes backwards.",
+                "/// If `from` > `to` and `step` < 0, iteration goes backwards.",
                 "///",
                 "/// If `from` > `to` and `step` > 0 or `from` < `to` and `step` < 0, an empty iterator is returned.",
                 "///",
@@ -301,6 +301,35 @@ macro_rules! reg_range {
                 "///",
                 "/// // prints all values down from 18 to 9 in steps of -3",
                 "/// for n in range(18, 8, -3) {",
+                "///     print(n);",
+                "/// }",
+                "/// ```"
+            ]);
+
+            let _hash = $lib.set_native_fn($x, |range: std::ops::Range<$y>, step: $y| StepRange::new(range.start, range.end, step, $add));
+
+            #[cfg(feature = "metadata")]
+            $lib.update_fn_metadata_with_comments(_hash, [
+                    concat!("range: Range<", stringify!($y), ">"),
+                    concat!("step: ", stringify!($y)),
+                    concat!("Iterator<Item=", stringify!($y), ">")
+            ], [
+                "/// Return an iterator over an exclusive range, each iteration increasing by `step`.",
+                "///",
+                "/// If `range` is reversed and `step` < 0, iteration goes backwards.",
+                "///",
+                "/// Otherwise, if `range` is empty, an empty iterator is returned.",
+                "///",
+                "/// # Example",
+                "///",
+                "/// ```rhai",
+                "/// // prints all values from 8 to 17 in steps of 3",
+                "/// for n in range(8..18, 3) {",
+                "///     print(n);",
+                "/// }",
+                "///",
+                "/// // prints all values down from 18 to 9 in steps of -3",
+                "/// for n in range(18..8, -3) {",
                 "///     print(n);",
                 "/// }",
                 "/// ```"
