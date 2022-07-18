@@ -153,6 +153,27 @@ impl<B: Into<StmtBlock>> From<(Expr, B)> for ConditionalStmtBlock {
     }
 }
 
+impl ConditionalStmtBlock {
+    /// Is this conditional statements block always `true`?
+    #[inline(always)]
+    #[must_use]
+    pub fn is_always_true(&self) -> bool {
+        match self.condition {
+            Expr::BoolConstant(true, ..) => true,
+            _ => false,
+        }
+    }
+    /// Is this conditional statements block always `false`?
+    #[inline(always)]
+    #[must_use]
+    pub fn is_always_false(&self) -> bool {
+        match self.condition {
+            Expr::BoolConstant(false, ..) => true,
+            _ => false,
+        }
+    }
+}
+
 /// _(internals)_ A type containing a range case for a `switch` statement.
 /// Exported under the `internals` feature only.
 #[derive(Clone, Hash)]

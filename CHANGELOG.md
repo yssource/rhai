@@ -6,6 +6,11 @@ Version 1.9.0
 
 The minimum Rust version is now `1.60.0` in order to use the `dep:` syntax for dependencies.
 
+Bug fixes
+---------
+
+* `switch` cases with conditions that evaluate to constant `()` no longer optimize to `false` (should raise a type error during runtime).
+
 New features
 ------------
 
