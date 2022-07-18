@@ -176,14 +176,14 @@ impl fmt::Debug for RangeCase {
 impl From<Range<INT>> for RangeCase {
     #[inline(always)]
     fn from(value: Range<INT>) -> Self {
-        Self::ExclusiveInt(value, 0)
+        Self::ExclusiveInt(value, usize::MAX)
     }
 }
 
 impl From<RangeInclusive<INT>> for RangeCase {
     #[inline(always)]
     fn from(value: RangeInclusive<INT>) -> Self {
-        Self::InclusiveInt(value, 0)
+        Self::InclusiveInt(value, usize::MAX)
     }
 }
 
@@ -256,14 +256,16 @@ impl RangeCase {
     }
 }
 
+pub type CaseBlocksList = smallvec::SmallVec<[usize; 1]>;
+
 /// _(internals)_ A type containing all cases for a `switch` statement.
 /// Exported under the `internals` feature only.
 #[derive(Debug, Clone, Hash)]
-pub struct SwitchCases {
+pub struct SwitchCasesCollection {
     /// List of [`ConditionalStmtBlock`]'s.
-    pub blocks: StaticVec<ConditionalStmtBlock>,
+    pub case_blocks: StaticVec<ConditionalStmtBlock>,
     /// Dictionary mapping value hashes to [`ConditionalStmtBlock`]'s.
-    pub cases: BTreeMap<u64, usize>,
+    pub cases: BTreeMap<u64, CaseBlocksList>,
     /// Statements block for the default case (there can be no condition for the default case).
     pub def_case: usize,
     /// List of range cases.
@@ -512,7 +514,7 @@ pub enum Stmt {
     /// 0) Hash table for (condition, block)
     /// 1) Default block
     /// 2) List of ranges: (start, end, inclusive, condition, statement)
-    Switch(Box<(Expr, SwitchCases)>, Position),
+    Switch(Box<(Expr, SwitchCasesCollection)>, Position),
     /// `while` expr `{` stmt `}` | `loop` `{` stmt `}`
     ///
     /// If the guard expression is [`UNIT`][Expr::Unit], then it is a `loop` statement.
@@ -755,15 +757,18 @@ impl Stmt {
             Self::Switch(x, ..) => {
                 let (expr, sw) = &**x;
                 expr.is_pure()
-                    && sw.cases.values().all(|&c| {
-                        let block = &sw.blocks[c];
+                    && sw.cases.values().flat_map(|cases| cases.iter()).all(|&c| {
+                        let block = &sw.case_blocks[c];
                         block.condition.is_pure() && block.statements.iter().all(Stmt::is_pure)
                     })
                     && sw.ranges.iter().all(|r| {
-                        let block = &sw.blocks[r.index()];
+                        let block = &sw.case_blocks[r.index()];
                         block.condition.is_pure() && block.statements.iter().all(Stmt::is_pure)
                     })
-                    && sw.blocks[sw.def_case].statements.iter().all(Stmt::is_pure)
+                    && sw.case_blocks[sw.def_case]
+                        .statements
+                        .iter()
+                        .all(Stmt::is_pure)
             }
 
             // Loops that exit can be pure because it can never be infinite.
@@ -904,20 +909,22 @@ impl Stmt {
                 if !expr.walk(path, on_node) {
                     return false;
                 }
-                for (.., &b) in &sw.cases {
-                    let block = &sw.blocks[b];
+                for (.., blocks) in &sw.cases {
+                    for &b in blocks {
+                        let block = &sw.case_blocks[b];
 
-                    if !block.condition.walk(path, on_node) {
-                        return false;
-                    }
-                    for s in &block.statements {
-                        if !s.walk(path, on_node) {
+                        if !block.condition.walk(path, on_node) {
                             return false;
+                        }
+                        for s in &block.statements {
+                            if !s.walk(path, on_node) {
+                                return false;
+                            }
                         }
                     }
                 }
                 for r in &sw.ranges {
-                    let block = &sw.blocks[r.index()];
+                    let block = &sw.case_blocks[r.index()];
 
                     if !block.condition.walk(path, on_node) {
                         return false;
@@ -928,7 +935,7 @@ impl Stmt {
                         }
                     }
                 }
-                for s in &sw.blocks[sw.def_case].statements {
+                for s in &sw.case_blocks[sw.def_case].statements {
                     if !s.walk(path, on_node) {
                         return false;
                     }

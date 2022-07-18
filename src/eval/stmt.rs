@@ -3,7 +3,7 @@
 use super::{Caches, EvalContext, GlobalRuntimeState, Target};
 use crate::api::events::VarDefInfo;
 use crate::ast::{
-    ASTFlags, BinaryExpr, Expr, Ident, OpAssignment, Stmt, SwitchCases, TryCatchBlock,
+    ASTFlags, BinaryExpr, Expr, Ident, OpAssignment, Stmt, SwitchCasesCollection, TryCatchBlock,
 };
 use crate::func::get_hasher;
 use crate::types::dynamic::{AccessMode, Union};
@@ -393,8 +393,8 @@ impl Engine {
             Stmt::Switch(x, ..) => {
                 let (
                     expr,
-                    SwitchCases {
-                        blocks,
+                    SwitchCasesCollection {
+                        case_blocks,
                         cases,
                         def_case,
                         ranges,
@@ -411,32 +411,49 @@ impl Engine {
                         let hash = hasher.finish();
 
                         // First check hashes
-                        if let Some(&case_block) = cases.get(&hash) {
-                            let case_block = &blocks[case_block];
+                        if let Some(case_blocks_list) = cases.get(&hash) {
+                            assert!(!case_blocks_list.is_empty());
 
-                            let cond_result = match case_block.condition {
-                                Expr::BoolConstant(b, ..) => Ok(b),
-                                ref c => self
-                                    .eval_expr(scope, global, caches, lib, this_ptr, c, level)
-                                    .and_then(|v| {
-                                        v.as_bool().map_err(|typ| {
-                                            self.make_type_mismatch_err::<bool>(typ, c.position())
-                                        })
-                                    }),
-                            };
+                            let mut result = Ok(None);
 
-                            match cond_result {
-                                Ok(true) => Ok(Some(&case_block.statements)),
-                                Ok(false) => Ok(None),
-                                _ => cond_result.map(|_| None),
+                            for &index in case_blocks_list {
+                                let block = &case_blocks[index];
+
+                                let cond_result = match block.condition {
+                                    Expr::BoolConstant(b, ..) => Ok(b),
+                                    ref c => self
+                                        .eval_expr(scope, global, caches, lib, this_ptr, c, level)
+                                        .and_then(|v| {
+                                            v.as_bool().map_err(|typ| {
+                                                self.make_type_mismatch_err::<bool>(
+                                                    typ,
+                                                    c.position(),
+                                                )
+                                            })
+                                        }),
+                                };
+
+                                match cond_result {
+                                    Ok(true) => {
+                                        result = Ok(Some(&block.statements));
+                                        break;
+                                    }
+                                    Ok(false) => (),
+                                    _ => {
+                                        result = cond_result.map(|_| None);
+                                        break;
+                                    }
+                                }
                             }
+
+                            result
                         } else if value.is::<INT>() && !ranges.is_empty() {
                             // Then check integer ranges
                             let value = value.as_int().expect("`INT`");
                             let mut result = Ok(None);
 
                             for r in ranges.iter().filter(|r| r.contains(value)) {
-                                let block = &blocks[r.index()];
+                                let block = &case_blocks[r.index()];
 
                                 let cond_result = match block.condition {
                                     Expr::BoolConstant(b, ..) => Ok(b),
@@ -481,7 +498,7 @@ impl Engine {
                         }
                     } else if let Ok(None) = stmt_block_result {
                         // Default match clause
-                        let def_case = &blocks[*def_case].statements;
+                        let def_case = &case_blocks[*def_case].statements;
 
                         if !def_case.is_empty() {
                             self.eval_stmt_block(

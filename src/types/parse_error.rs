@@ -97,6 +97,14 @@ pub enum ParseErrorType {
     /// A map definition has duplicated property names. Wrapped value is the property name.
     DuplicatedProperty(String),
     /// A `switch` case is duplicated.
+    ///
+    /// # Deprecated
+    ///
+    /// This error variant is deprecated. It never occurs and will be removed in the next major version.
+    #[deprecated(
+        since = "1.9.0",
+        note = "This error variant is deprecated. It never occurs and will be removed in the next major version."
+    )]
     DuplicatedSwitchCase,
     /// A variable name is duplicated. Wrapped value is the variable name.
     DuplicatedVariable(String),
@@ -211,6 +219,7 @@ impl fmt::Display for ParseErrorType {
             Self::FnDuplicatedParam(s, arg) => write!(f, "Duplicated parameter {} for function {}", arg, s),
 
             Self::DuplicatedProperty(s) => write!(f, "Duplicated property for object map literal: {}", s),
+            #[allow(deprecated)]
             Self::DuplicatedSwitchCase => f.write_str("Duplicated switch case"),
             Self::DuplicatedVariable(s) => write!(f, "Duplicated variable name: {}", s),
 
