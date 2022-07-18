@@ -32,7 +32,6 @@ fn test_switch() -> Result<(), Box<EvalAltResult>> {
         )?,
         'a'
     );
-
     assert_eq!(
         engine.eval_with_scope::<bool>(&mut scope, "switch x { 1 => (), 2 => 'a', 42 => true }")?,
         true
@@ -98,6 +97,16 @@ fn test_switch() -> Result<(), Box<EvalAltResult>> {
         3
     );
 
+    assert_eq!(
+        engine.eval_with_scope::<INT>(&mut scope, "switch 42 { 42 => 123, 42 => 999 }")?,
+        123
+    );
+
+    assert_eq!(
+        engine.eval_with_scope::<INT>(&mut scope, "switch x { 42 => 123, 42 => 999 }")?,
+        123
+    );
+
     Ok(())
 }
 
@@ -105,13 +114,6 @@ fn test_switch() -> Result<(), Box<EvalAltResult>> {
 fn test_switch_errors() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
-    assert!(matches!(
-        *engine
-            .compile("switch x { 1 => 123, 1 => 42 }")
-            .expect_err("should error")
-            .0,
-        ParseErrorType::DuplicatedSwitchCase
-    ));
     assert!(matches!(
         *engine
             .compile("switch x { _ => 123, 1 => 42 }")
@@ -159,23 +161,22 @@ fn test_switch_condition() -> Result<(), Box<EvalAltResult>> {
         9
     );
 
-    assert!(matches!(
-        *engine
-            .compile(
-                "
-                    switch x {
-                        21 if x < 40 => 1,
-                        21 if x == 10 => 10,
-                        0 if x < 100 => 2,
-                        1 => 3,
-                        _ => 9
-                    }
-                "
-            )
-            .expect_err("should error")
-            .0,
-        ParseErrorType::DuplicatedSwitchCase
-    ));
+    assert_eq!(
+        engine.eval_with_scope::<INT>(
+            &mut scope,
+            "
+                switch x {
+                    42 if x < 40 => 1,
+                    42 if x > 40 => 7,
+                    0 if x < 100 => 2,
+                    1 => 3,
+                    42 if x == 10 => 10,
+                    _ => 9
+                }
+            "
+        )?,
+        7
+    );
 
     assert!(matches!(
         *engine
@@ -289,6 +290,49 @@ fn test_switch_ranges() -> Result<(), Box<EvalAltResult>> {
             "
         )?,
         'x'
+    );
+    assert_eq!(
+        engine.eval_with_scope::<INT>(
+            &mut scope,
+            "
+                switch 5 {
+                    'a' => true,
+                    0..10 => 123,
+                    2..12 => 'z',
+                    _ => 'x'
+                }
+            "
+        )?,
+        123
+    );
+    assert_eq!(
+        engine.eval_with_scope::<INT>(
+            &mut scope,
+            "
+                switch 5 {
+                    'a' => true,
+                    4 | 5 | 6 => 42,
+                    0..10 => 123,
+                    2..12 => 'z',
+                    _ => 'x'
+                }
+            "
+        )?,
+        42
+    );
+    assert_eq!(
+        engine.eval_with_scope::<char>(
+            &mut scope,
+            "
+                switch 5 {
+                    'a' => true,
+                    2..12 => 'z',
+                    0..10 if x+2==1+2 => print(40+2),
+                    _ => 'x'
+                }
+            "
+        )?,
+        'z'
     );
     assert_eq!(
         engine.eval_with_scope::<char>(

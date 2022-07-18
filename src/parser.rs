@@ -3,8 +3,9 @@
 use crate::api::events::VarDefInfo;
 use crate::api::options::LangOptions;
 use crate::ast::{
-    ASTFlags, BinaryExpr, ConditionalStmtBlock, Expr, FnCallExpr, FnCallHashes, Ident,
-    OpAssignment, RangeCase, ScriptFnDef, Stmt, StmtBlockContainer, SwitchCases, TryCatchBlock,
+    ASTFlags, BinaryExpr, CaseBlocksList, ConditionalStmtBlock, Expr, FnCallExpr, FnCallHashes,
+    Ident, OpAssignment, RangeCase, ScriptFnDef, Stmt, StmtBlockContainer, SwitchCasesCollection,
+    TryCatchBlock,
 };
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::eval::GlobalRuntimeState;
@@ -38,6 +39,9 @@ const SCOPE_SEARCH_BARRIER_MARKER: &str = "$ BARRIER $";
 
 /// The message: `TokenStream` never ends
 const NEVER_ENDS: &str = "`Token`";
+
+/// Unroll `switch` ranges no larger than this.
+const SMALL_SWITCH_RANGE: usize = 16;
 
 /// _(internals)_ A type that encapsulates the current state of the parser.
 /// Exported under the `internals` feature only.
@@ -1051,11 +1055,11 @@ impl Engine {
             }
         }
 
-        let mut blocks = StaticVec::<ConditionalStmtBlock>::new();
-        let mut cases = BTreeMap::<u64, usize>::new();
+        let mut case_blocks = StaticVec::<ConditionalStmtBlock>::new();
+        let mut cases = BTreeMap::<u64, CaseBlocksList>::new();
         let mut ranges = StaticVec::<RangeCase>::new();
-        let mut def_pos = Position::NONE;
-        let mut def_stmt = None;
+        let mut def_stmt_pos = Position::NONE;
+        let mut def_stmt_index = None;
 
         loop {
             const MISSING_RBRACE: &str = "to end this switch block";
@@ -1071,8 +1075,8 @@ impl Engine {
                             .into_err(*pos),
                     )
                 }
-                (Token::Underscore, pos) if def_stmt.is_none() => {
-                    def_pos = *pos;
+                (Token::Underscore, pos) if def_stmt_index.is_none() => {
+                    def_stmt_pos = *pos;
                     eat_token(input, Token::Underscore);
 
                     let (if_clause, if_pos) = match_token(input, Token::If);
@@ -1083,10 +1087,8 @@ impl Engine {
 
                     (Default::default(), Expr::BoolConstant(true, Position::NONE))
                 }
-                (Token::Underscore, pos) => return Err(PERR::DuplicatedSwitchCase.into_err(*pos)),
-
-                _ if def_stmt.is_some() => {
-                    return Err(PERR::WrongSwitchDefaultCase.into_err(def_pos))
+                _ if def_stmt_index.is_some() => {
+                    return Err(PERR::WrongSwitchDefaultCase.into_err(def_stmt_pos))
                 }
 
                 _ => {
@@ -1138,9 +1140,10 @@ impl Engine {
 
             let stmt = self.parse_stmt(input, state, lib, settings.level_up())?;
             let need_comma = !stmt.is_self_terminated();
+            let has_condition = !matches!(condition, Expr::BoolConstant(true, ..));
 
-            blocks.push((condition, stmt).into());
-            let index = blocks.len() - 1;
+            case_blocks.push((condition, stmt).into());
+            let index = case_blocks.len() - 1;
 
             if !case_expr_list.is_empty() {
                 for expr in case_expr_list {
@@ -1159,14 +1162,18 @@ impl Engine {
 
                     if let Some(mut r) = range_value {
                         if !r.is_empty() {
-                            if let Some(n) = r.single_int() {
-                                // Unroll single range
-                                let value = Dynamic::from_int(n);
-                                let hasher = &mut get_hasher();
-                                value.hash(hasher);
-                                let hash = hasher.finish();
-
-                                cases.entry(hash).or_insert(index);
+                            // Do not unroll ranges if there are previous non-unrolled ranges
+                            if !has_condition && ranges.is_empty() && r.len() <= SMALL_SWITCH_RANGE
+                            {
+                                // Unroll small range
+                                for n in r {
+                                    let hasher = &mut get_hasher();
+                                    Dynamic::from_int(n).hash(hasher);
+                                    cases
+                                        .entry(hasher.finish())
+                                        .and_modify(|cases| cases.push(index))
+                                        .or_insert_with(|| [index].into());
+                                }
                             } else {
                                 // Other range
                                 r.set_index(index);
@@ -1184,13 +1191,13 @@ impl Engine {
                     value.hash(hasher);
                     let hash = hasher.finish();
 
-                    if cases.contains_key(&hash) {
-                        return Err(PERR::DuplicatedSwitchCase.into_err(expr.start_position()));
-                    }
-                    cases.insert(hash, index);
+                    cases
+                        .entry(hash)
+                        .and_modify(|cases| cases.push(index))
+                        .or_insert_with(|| [index].into());
                 }
             } else {
-                def_stmt = Some(index);
+                def_stmt_index = Some(index);
             }
 
             match input.peek().expect(NEVER_ENDS) {
@@ -1216,13 +1223,13 @@ impl Engine {
             }
         }
 
-        let def_case = def_stmt.unwrap_or_else(|| {
-            blocks.push(Default::default());
-            blocks.len() - 1
+        let def_case = def_stmt_index.unwrap_or_else(|| {
+            case_blocks.push(Default::default());
+            case_blocks.len() - 1
         });
 
-        let cases = SwitchCases {
-            blocks,
+        let cases = SwitchCasesCollection {
+            case_blocks,
             cases,
             def_case,
             ranges,

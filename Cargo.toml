@@ -4,7 +4,7 @@ members = [".", "codegen"]
 [package]
 name = "rhai"
 version = "1.8.0"
-rust-version = "1.60"
+rust-version = "1.60.0"
 edition = "2018"
 authors = ["Jonathan Turner", "Lukáš Hozda", "Stephen Chung", "jhwgh1968"]
 description = "Embedded scripting for Rust"
@@ -12,7 +12,7 @@ homepage = "https://rhai.rs"
 repository = "https://github.com/rhaiscript"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
-include = ["**/*.rs", "scripts/*.rhai", "**/*.md", "Cargo.toml"]
+include = ["/src/**/*.rs", "/Cargo.toml", "/README.md"]
 keywords = ["scripting", "scripting-engine", "scripting-language", "embedded"]
 categories = ["no-std", "embedded", "wasm", "parser-implementations"]
 
@@ -31,7 +31,7 @@ serde = { version = "1.0", default-features = false, features = ["derive", "allo
 serde_json = { version = "1.0", default-features = false, features = ["alloc"], optional = true }
 unicode-xid = { version = "0.2", default-features = false, optional = true }
 rust_decimal = { version = "1.16", default-features = false, features = ["maths"], optional = true }
-rustyline = { version = "9", optional = true }
+rustyline = { version = "10", optional = true }
 
 [dev-dependencies]
 serde_bytes = "0.11"
@@ -96,4 +96,4 @@ features = ["metadata", "serde", "internals", "decimal", "debugging"]
 [patch.crates-io]
 # Notice that a custom modified version of `rustyline` is used which supports bracketed paste on Windows.
 # This can be moved to the official version when bracketed paste is added.
-rustyline = { git = "https://github.com/schungx/rustyline" }
+rustyline = { git = "https://github.com/schungx/rustyline", branch = "v10" }
