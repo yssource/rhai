@@ -78,7 +78,7 @@ impl Expression<'_> {
     ///
     /// The following option is available:
     ///
-    /// * whether to rewind the [`Scope`] after evaluation if the expression is a [`StmtBlock`][crate::ast::StmtBlock]
+    /// * whether to rewind the [`Scope`][crate::Scope] after evaluation if the expression is a [`StmtBlock`][crate::ast::StmtBlock]
     ///
     /// # WARNING - Unstable API
     ///
