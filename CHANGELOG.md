@@ -17,6 +17,7 @@ Enhancements
 * `switch` cases can now include multiple values separated by `|`.
 * `EvalContext::eval_expression_tree_raw` and `Expression::eval_with_context_raw` are added to allow for not rewinding the `Scope` at the end of a statements block.
 * A new `range` function variant that takes an exclusive range with a step.
+* Ranges in `switch` statements that are small (currently no more than 16 items) are unrolled if possible.
 
 
 Version 1.8.0

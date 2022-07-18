@@ -291,6 +291,49 @@ fn test_switch_ranges() -> Result<(), Box<EvalAltResult>> {
         'x'
     );
     assert_eq!(
+        engine.eval_with_scope::<INT>(
+            &mut scope,
+            "
+                switch 5 {
+                    'a' => true,
+                    0..10 => 123,
+                    2..12 => 'z',
+                    _ => 'x'
+                }
+            "
+        )?,
+        123
+    );
+    assert_eq!(
+        engine.eval_with_scope::<INT>(
+            &mut scope,
+            "
+                switch 5 {
+                    'a' => true,
+                    4 | 5 | 6 => 42,
+                    0..10 => 123,
+                    2..12 => 'z',
+                    _ => 'x'
+                }
+            "
+        )?,
+        42
+    );
+    assert_eq!(
+        engine.eval_with_scope::<char>(
+            &mut scope,
+            "
+                switch 5 {
+                    'a' => true,
+                    2..12 => 'z',
+                    0..10 if x+2==1+2 => print(40+2),
+                    _ => 'x'
+                }
+            "
+        )?,
+        'z'
+    );
+    assert_eq!(
         engine.eval_with_scope::<char>(
             &mut scope,
             "

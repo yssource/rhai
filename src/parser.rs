@@ -39,6 +39,9 @@ const SCOPE_SEARCH_BARRIER_MARKER: &str = "$ BARRIER $";
 /// The message: `TokenStream` never ends
 const NEVER_ENDS: &str = "`Token`";
 
+/// Unroll `switch` ranges no larger than this.
+const SMALL_SWITCH_RANGE: usize = 16;
+
 /// _(internals)_ A type that encapsulates the current state of the parser.
 /// Exported under the `internals` feature only.
 pub struct ParseState<'e> {
@@ -1138,6 +1141,7 @@ impl Engine {
 
             let stmt = self.parse_stmt(input, state, lib, settings.level_up())?;
             let need_comma = !stmt.is_self_terminated();
+            let has_condition = !matches!(condition, Expr::BoolConstant(true, ..));
 
             blocks.push((condition, stmt).into());
             let index = blocks.len() - 1;
@@ -1159,14 +1163,15 @@ impl Engine {
 
                     if let Some(mut r) = range_value {
                         if !r.is_empty() {
-                            if let Some(n) = r.single_int() {
-                                // Unroll single range
-                                let value = Dynamic::from_int(n);
-                                let hasher = &mut get_hasher();
-                                value.hash(hasher);
-                                let hash = hasher.finish();
-
-                                cases.entry(hash).or_insert(index);
+                            // Do not unroll ranges if there are previous non-unrolled ranges
+                            if !has_condition && ranges.is_empty() && r.len() <= SMALL_SWITCH_RANGE
+                            {
+                                // Unroll small range
+                                for n in r {
+                                    let hasher = &mut get_hasher();
+                                    Dynamic::from_int(n).hash(hasher);
+                                    cases.entry(hasher.finish()).or_insert(index);
+                                }
                             } else {
                                 // Other range
                                 r.set_index(index);

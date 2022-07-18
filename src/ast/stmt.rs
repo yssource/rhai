@@ -175,7 +175,6 @@ impl fmt::Debug for RangeCase {
 
 impl From<Range<INT>> for RangeCase {
     #[inline(always)]
-    #[must_use]
     fn from(value: Range<INT>) -> Self {
         Self::ExclusiveInt(value, 0)
     }
@@ -183,9 +182,21 @@ impl From<Range<INT>> for RangeCase {
 
 impl From<RangeInclusive<INT>> for RangeCase {
     #[inline(always)]
-    #[must_use]
     fn from(value: RangeInclusive<INT>) -> Self {
         Self::InclusiveInt(value, 0)
+    }
+}
+
+impl IntoIterator for RangeCase {
+    type Item = INT;
+    type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
+
+    #[inline(always)]
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            Self::ExclusiveInt(r, ..) => Box::new(r.into_iter()),
+            Self::InclusiveInt(r, ..) => Box::new(r.into_iter()),
+        }
     }
 }
 
@@ -199,6 +210,17 @@ impl RangeCase {
             Self::InclusiveInt(r, ..) => r.is_empty(),
         }
     }
+    /// Size of the range.
+    #[inline(always)]
+    #[must_use]
+    pub fn len(&self) -> usize {
+        match self {
+            Self::ExclusiveInt(r, ..) if r.is_empty() => 0,
+            Self::ExclusiveInt(r, ..) => (r.end - r.start) as usize,
+            Self::InclusiveInt(r, ..) if r.is_empty() => 0,
+            Self::InclusiveInt(r, ..) => (*r.end() - *r.start()) as usize,
+        }
+    }
     /// Is the specified number within this range?
     #[inline(always)]
     #[must_use]
@@ -206,19 +228,6 @@ impl RangeCase {
         match self {
             Self::ExclusiveInt(r, ..) => r.contains(&n),
             Self::InclusiveInt(r, ..) => r.contains(&n),
-        }
-    }
-    /// If the range contains only of a single [`INT`], return it;
-    /// otherwise return [`None`].
-    #[inline(always)]
-    #[must_use]
-    pub fn single_int(&self) -> Option<INT> {
-        match self {
-            Self::ExclusiveInt(r, ..) if r.end.checked_sub(r.start) == Some(1) => Some(r.start),
-            Self::InclusiveInt(r, ..) if r.end().checked_sub(*r.start()) == Some(0) => {
-                Some(*r.start())
-            }
-            _ => None,
         }
     }
     /// Is the specified range inclusive?
