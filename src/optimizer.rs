@@ -559,16 +559,22 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                                 // switch const { case if condition => stmt, _ => def } => if condition { stmt } else { def }
                                 optimize_expr(condition, state, false);
 
-                                let def_case = &mut case_blocks[*def_case].statements;
-                                let def_span = def_case.span_or_else(*pos, Position::NONE);
-                                let def_case: StmtBlockContainer = mem::take(def_case);
-                                let def_stmt =
-                                    optimize_stmt_block(def_case, state, true, true, false);
+                                let else_stmt = if let Some(index) = def_case {
+                                    let def_case = &mut case_blocks[*index].statements;
+                                    let def_span = def_case.span_or_else(*pos, Position::NONE);
+                                    let def_case: StmtBlockContainer = mem::take(def_case);
+                                    let def_stmt =
+                                        optimize_stmt_block(def_case, state, true, true, false);
+                                    StmtBlock::new_with_span(def_stmt, def_span)
+                                } else {
+                                    StmtBlock::NONE
+                                };
+
                                 *stmt = Stmt::If(
                                     (
                                         mem::take(condition),
                                         mem::take(&mut b.statements),
-                                        StmtBlock::new_with_span(def_stmt, def_span),
+                                        else_stmt,
                                     )
                                         .into(),
                                     match_expr.start_position(),
@@ -630,21 +636,21 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                                 // switch const { range if condition => stmt, _ => def } => if condition { stmt } else { def }
                                 optimize_expr(&mut condition, state, false);
 
-                                let def_case = &mut case_blocks[*def_case].statements;
-                                let def_span = def_case.span_or_else(*pos, Position::NONE);
-                                let def_case: StmtBlockContainer = mem::take(def_case);
-                                let def_stmt =
-                                    optimize_stmt_block(def_case, state, true, true, false);
+                                let else_stmt = if let Some(index) = def_case {
+                                    let def_case = &mut case_blocks[*index].statements;
+                                    let def_span = def_case.span_or_else(*pos, Position::NONE);
+                                    let def_case: StmtBlockContainer = mem::take(def_case);
+                                    let def_stmt =
+                                        optimize_stmt_block(def_case, state, true, true, false);
+                                    StmtBlock::new_with_span(def_stmt, def_span)
+                                } else {
+                                    StmtBlock::NONE
+                                };
 
                                 let statements = mem::take(&mut case_blocks[r.index()].statements);
 
                                 *stmt = Stmt::If(
-                                    (
-                                        condition,
-                                        statements,
-                                        StmtBlock::new_with_span(def_stmt, def_span),
-                                    )
-                                        .into(),
+                                    (condition, statements, else_stmt).into(),
                                     match_expr.start_position(),
                                 );
                             }
@@ -690,11 +696,16 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
 
             // Promote the default case
             state.set_dirty();
-            let def_case = &mut case_blocks[*def_case].statements;
-            let def_span = def_case.span_or_else(*pos, Position::NONE);
-            let def_case: StmtBlockContainer = mem::take(def_case);
-            let def_stmt = optimize_stmt_block(def_case, state, true, true, false);
-            *stmt = (def_stmt, def_span).into();
+
+            if let Some(index) = def_case {
+                let def_case = &mut case_blocks[*index].statements;
+                let def_span = def_case.span_or_else(*pos, Position::NONE);
+                let def_case: StmtBlockContainer = mem::take(def_case);
+                let def_stmt = optimize_stmt_block(def_case, state, true, true, false);
+                *stmt = (def_stmt, def_span).into();
+            } else {
+                *stmt = StmtBlock::empty(*pos).into();
+            }
         }
         // switch
         Stmt::Switch(x, ..) => {
@@ -735,11 +746,13 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
             }
 
             // Remove false cases
-            let cases_len = cases.len();
             cases.retain(|_, list| {
                 // Remove all entries that have false conditions
                 list.retain(|index| match case_blocks[*index].condition {
-                    Expr::BoolConstant(false, ..) => false,
+                    Expr::BoolConstant(false, ..) => {
+                        state.set_dirty();
+                        false
+                    }
                     _ => true,
                 });
                 // Remove all entries after a `true` condition
@@ -750,14 +763,21 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                         _ => false,
                     })
                 {
-                    list.truncate(n + 1);
+                    if n + 1 < list.len() {
+                        state.set_dirty();
+                        list.truncate(n + 1);
+                    }
                 }
                 // Remove if no entry left
-                !list.is_empty()
+                match list.is_empty() {
+                    true => {
+                        state.set_dirty();
+                        false
+                    }
+                    false => true,
+                }
             });
-            if cases.len() != cases_len {
-                state.set_dirty();
-            }
+
             // Remove false ranges
             ranges.retain(|r| match case_blocks[r.index()].condition {
                 Expr::BoolConstant(false, ..) => {
@@ -767,13 +787,16 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                 _ => true,
             });
 
-            let def_stmt_block = &mut case_blocks[*def_case].statements;
-            let def_block = mem::take(&mut **def_stmt_block);
-            **def_stmt_block = optimize_stmt_block(def_block, state, preserve_result, true, false);
+            if let Some(index) = def_case {
+                let def_stmt_block = &mut case_blocks[*index].statements;
+                let def_block = mem::take(&mut **def_stmt_block);
+                **def_stmt_block =
+                    optimize_stmt_block(def_block, state, preserve_result, true, false);
+            }
 
             // Remove unused block statements
             for index in 0..case_blocks.len() {
-                if *def_case == index
+                if *def_case == Some(index)
                     || cases.values().flat_map(|c| c.iter()).any(|&n| n == index)
                     || ranges.iter().any(|r| r.index() == index)
                 {

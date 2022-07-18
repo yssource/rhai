@@ -498,12 +498,16 @@ impl Engine {
                         }
                     } else if let Ok(None) = stmt_block_result {
                         // Default match clause
-                        let def_case = &case_blocks[*def_case].statements;
+                        if let Some(index) = def_case {
+                            let def_case = &case_blocks[*index].statements;
 
-                        if !def_case.is_empty() {
-                            self.eval_stmt_block(
-                                scope, global, caches, lib, this_ptr, def_case, true, level,
-                            )
+                            if !def_case.is_empty() {
+                                self.eval_stmt_block(
+                                    scope, global, caches, lib, this_ptr, def_case, true, level,
+                                )
+                            } else {
+                                Ok(Dynamic::UNIT)
+                            }
                         } else {
                             Ok(Dynamic::UNIT)
                         }

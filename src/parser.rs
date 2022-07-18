@@ -1058,8 +1058,8 @@ impl Engine {
         let mut case_blocks = StaticVec::<ConditionalStmtBlock>::new();
         let mut cases = BTreeMap::<u64, CaseBlocksList>::new();
         let mut ranges = StaticVec::<RangeCase>::new();
-        let mut def_stmt_pos = Position::NONE;
-        let mut def_stmt_index = None;
+        let mut def_case = None;
+        let mut def_case_pos = Position::NONE;
 
         loop {
             const MISSING_RBRACE: &str = "to end this switch block";
@@ -1075,8 +1075,8 @@ impl Engine {
                             .into_err(*pos),
                     )
                 }
-                (Token::Underscore, pos) if def_stmt_index.is_none() => {
-                    def_stmt_pos = *pos;
+                (Token::Underscore, pos) if def_case.is_none() => {
+                    def_case_pos = *pos;
                     eat_token(input, Token::Underscore);
 
                     let (if_clause, if_pos) = match_token(input, Token::If);
@@ -1087,8 +1087,8 @@ impl Engine {
 
                     (Default::default(), Expr::BoolConstant(true, Position::NONE))
                 }
-                _ if def_stmt_index.is_some() => {
-                    return Err(PERR::WrongSwitchDefaultCase.into_err(def_stmt_pos))
+                _ if def_case.is_some() => {
+                    return Err(PERR::WrongSwitchDefaultCase.into_err(def_case_pos))
                 }
 
                 _ => {
@@ -1197,7 +1197,7 @@ impl Engine {
                         .or_insert_with(|| [index].into());
                 }
             } else {
-                def_stmt_index = Some(index);
+                def_case = Some(index);
             }
 
             match input.peek().expect(NEVER_ENDS) {
@@ -1222,11 +1222,6 @@ impl Engine {
                 _ => (),
             }
         }
-
-        let def_case = def_stmt_index.unwrap_or_else(|| {
-            case_blocks.push(Default::default());
-            case_blocks.len() - 1
-        });
 
         let cases = SwitchCasesCollection {
             case_blocks,

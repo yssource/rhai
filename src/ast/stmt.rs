@@ -266,10 +266,10 @@ pub struct SwitchCasesCollection {
     pub case_blocks: StaticVec<ConditionalStmtBlock>,
     /// Dictionary mapping value hashes to [`ConditionalStmtBlock`]'s.
     pub cases: BTreeMap<u64, CaseBlocksList>,
-    /// Statements block for the default case (there can be no condition for the default case).
-    pub def_case: usize,
     /// List of range cases.
     pub ranges: StaticVec<RangeCase>,
+    /// Statements block for the default case (there can be no condition for the default case).
+    pub def_case: Option<usize>,
 }
 
 /// _(internals)_ A `try-catch` block.
@@ -765,7 +765,8 @@ impl Stmt {
                         let block = &sw.case_blocks[r.index()];
                         block.condition.is_pure() && block.statements.iter().all(Stmt::is_pure)
                     })
-                    && sw.case_blocks[sw.def_case]
+                    && sw.def_case.is_some()
+                    && sw.case_blocks[sw.def_case.unwrap()]
                         .statements
                         .iter()
                         .all(Stmt::is_pure)
@@ -935,9 +936,11 @@ impl Stmt {
                         }
                     }
                 }
-                for s in &sw.case_blocks[sw.def_case].statements {
-                    if !s.walk(path, on_node) {
-                        return false;
+                if let Some(index) = sw.def_case {
+                    for s in &sw.case_blocks[index].statements {
+                        if !s.walk(path, on_node) {
+                            return false;
+                        }
                     }
                 }
             }
