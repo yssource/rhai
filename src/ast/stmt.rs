@@ -122,39 +122,39 @@ impl fmt::Debug for OpAssignment {
     }
 }
 
-/// A statements block with a condition.
+/// An expression with a condition.
 ///
 /// The condition may simply be [`Expr::BoolConstant`] with `true` if there is actually no condition.
 #[derive(Debug, Clone, Default, Hash)]
-pub struct ConditionalStmtBlock {
+pub struct ConditionalExpr {
     /// Condition.
     pub condition: Expr,
-    /// Statements block.
-    pub statements: StmtBlock,
+    /// Expression.
+    pub expr: Expr,
 }
 
-impl<B: Into<StmtBlock>> From<B> for ConditionalStmtBlock {
+impl<E: Into<Expr>> From<E> for ConditionalExpr {
     #[inline(always)]
-    fn from(value: B) -> Self {
+    fn from(value: E) -> Self {
         Self {
             condition: Expr::BoolConstant(true, Position::NONE),
-            statements: value.into(),
+            expr: value.into(),
         }
     }
 }
 
-impl<B: Into<StmtBlock>> From<(Expr, B)> for ConditionalStmtBlock {
+impl<E: Into<Expr>> From<(Expr, E)> for ConditionalExpr {
     #[inline(always)]
-    fn from(value: (Expr, B)) -> Self {
+    fn from(value: (Expr, E)) -> Self {
         Self {
             condition: value.0,
-            statements: value.1.into(),
+            expr: value.1.into(),
         }
     }
 }
 
-impl ConditionalStmtBlock {
-    /// Is this conditional statements block always `true`?
+impl ConditionalExpr {
+    /// Is the condition always `true`?
     #[inline(always)]
     #[must_use]
     pub fn is_always_true(&self) -> bool {
@@ -163,7 +163,7 @@ impl ConditionalStmtBlock {
             _ => false,
         }
     }
-    /// Is this conditional statements block always `false`?
+    /// Is the condition always `false`?
     #[inline(always)]
     #[must_use]
     pub fn is_always_false(&self) -> bool {
@@ -283,9 +283,9 @@ pub type CaseBlocksList = smallvec::SmallVec<[usize; 1]>;
 /// Exported under the `internals` feature only.
 #[derive(Debug, Clone, Hash)]
 pub struct SwitchCasesCollection {
-    /// List of [`ConditionalStmtBlock`]'s.
-    pub case_blocks: StaticVec<ConditionalStmtBlock>,
-    /// Dictionary mapping value hashes to [`ConditionalStmtBlock`]'s.
+    /// List of [`ConditionalExpr`]'s.
+    pub expressions: StaticVec<ConditionalExpr>,
+    /// Dictionary mapping value hashes to [`ConditionalExpr`]'s.
     pub cases: BTreeMap<u64, CaseBlocksList>,
     /// List of range cases.
     pub ranges: StaticVec<RangeCase>,
@@ -779,18 +779,15 @@ impl Stmt {
                 let (expr, sw) = &**x;
                 expr.is_pure()
                     && sw.cases.values().flat_map(|cases| cases.iter()).all(|&c| {
-                        let block = &sw.case_blocks[c];
-                        block.condition.is_pure() && block.statements.iter().all(Stmt::is_pure)
+                        let block = &sw.expressions[c];
+                        block.condition.is_pure() && block.expr.is_pure()
                     })
                     && sw.ranges.iter().all(|r| {
-                        let block = &sw.case_blocks[r.index()];
-                        block.condition.is_pure() && block.statements.iter().all(Stmt::is_pure)
+                        let block = &sw.expressions[r.index()];
+                        block.condition.is_pure() && block.expr.is_pure()
                     })
                     && sw.def_case.is_some()
-                    && sw.case_blocks[sw.def_case.unwrap()]
-                        .statements
-                        .iter()
-                        .all(Stmt::is_pure)
+                    && sw.expressions[sw.def_case.unwrap()].expr.is_pure()
             }
 
             // Loops that exit can be pure because it can never be infinite.
@@ -933,35 +930,29 @@ impl Stmt {
                 }
                 for (.., blocks) in &sw.cases {
                     for &b in blocks {
-                        let block = &sw.case_blocks[b];
+                        let block = &sw.expressions[b];
 
                         if !block.condition.walk(path, on_node) {
                             return false;
                         }
-                        for s in &block.statements {
-                            if !s.walk(path, on_node) {
-                                return false;
-                            }
+                        if !block.expr.walk(path, on_node) {
+                            return false;
                         }
                     }
                 }
                 for r in &sw.ranges {
-                    let block = &sw.case_blocks[r.index()];
+                    let block = &sw.expressions[r.index()];
 
                     if !block.condition.walk(path, on_node) {
                         return false;
                     }
-                    for s in &block.statements {
-                        if !s.walk(path, on_node) {
-                            return false;
-                        }
+                    if !block.expr.walk(path, on_node) {
+                        return false;
                     }
                 }
                 if let Some(index) = sw.def_case {
-                    for s in &sw.case_blocks[index].statements {
-                        if !s.walk(path, on_node) {
-                            return false;
-                        }
+                    if !sw.expressions[index].expr.walk(path, on_node) {
+                        return false;
                     }
                 }
             }

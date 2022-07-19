@@ -3,9 +3,9 @@
 use crate::api::events::VarDefInfo;
 use crate::api::options::LangOptions;
 use crate::ast::{
-    ASTFlags, BinaryExpr, CaseBlocksList, ConditionalStmtBlock, Expr, FnCallExpr, FnCallHashes,
-    Ident, OpAssignment, RangeCase, ScriptFnDef, Stmt, StmtBlockContainer, SwitchCasesCollection,
-    TryCatchBlock,
+    ASTFlags, BinaryExpr, CaseBlocksList, ConditionalExpr, Expr, FnCallExpr, FnCallHashes, Ident,
+    OpAssignment, RangeCase, ScriptFnDef, Stmt, StmtBlock, StmtBlockContainer,
+    SwitchCasesCollection, TryCatchBlock,
 };
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::eval::GlobalRuntimeState;
@@ -1055,7 +1055,7 @@ impl Engine {
             }
         }
 
-        let mut case_blocks = StaticVec::<ConditionalStmtBlock>::new();
+        let mut expressions = StaticVec::<ConditionalExpr>::new();
         let mut cases = BTreeMap::<u64, CaseBlocksList>::new();
         let mut ranges = StaticVec::<RangeCase>::new();
         let mut def_case = None;
@@ -1142,8 +1142,9 @@ impl Engine {
             let need_comma = !stmt.is_self_terminated();
             let has_condition = !matches!(condition, Expr::BoolConstant(true, ..));
 
-            case_blocks.push((condition, stmt).into());
-            let index = case_blocks.len() - 1;
+            let stmt_block: StmtBlock = stmt.into();
+            expressions.push((condition, Expr::Stmt(stmt_block.into())).into());
+            let index = expressions.len() - 1;
 
             if !case_expr_list.is_empty() {
                 for expr in case_expr_list {
@@ -1224,7 +1225,7 @@ impl Engine {
         }
 
         let cases = SwitchCasesCollection {
-            case_blocks,
+            expressions,
             cases,
             def_case,
             ranges,

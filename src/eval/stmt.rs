@@ -394,7 +394,7 @@ impl Engine {
                 let (
                     expr,
                     SwitchCasesCollection {
-                        case_blocks,
+                        expressions,
                         cases,
                         def_case,
                         ranges,
@@ -405,7 +405,7 @@ impl Engine {
                     self.eval_expr(scope, global, caches, lib, this_ptr, expr, level);
 
                 if let Ok(value) = value_result {
-                    let stmt_block_result = if value.is_hashable() {
+                    let expr_result = if value.is_hashable() {
                         let hasher = &mut get_hasher();
                         value.hash(hasher);
                         let hash = hasher.finish();
@@ -417,7 +417,7 @@ impl Engine {
                             let mut result = Ok(None);
 
                             for &index in case_blocks_list {
-                                let block = &case_blocks[index];
+                                let block = &expressions[index];
 
                                 let cond_result = match block.condition {
                                     Expr::BoolConstant(b, ..) => Ok(b),
@@ -435,7 +435,7 @@ impl Engine {
 
                                 match cond_result {
                                     Ok(true) => {
-                                        result = Ok(Some(&block.statements));
+                                        result = Ok(Some(&block.expr));
                                         break;
                                     }
                                     Ok(false) => (),
@@ -453,7 +453,7 @@ impl Engine {
                             let mut result = Ok(None);
 
                             for r in ranges.iter().filter(|r| r.contains(value)) {
-                                let block = &case_blocks[r.index()];
+                                let block = &expressions[r.index()];
 
                                 let cond_result = match block.condition {
                                     Expr::BoolConstant(b, ..) => Ok(b),
@@ -470,7 +470,7 @@ impl Engine {
                                 };
 
                                 match cond_result {
-                                    Ok(true) => result = Ok(Some(&block.statements)),
+                                    Ok(true) => result = Ok(Some(&block.expr)),
                                     Ok(false) => continue,
                                     _ => result = cond_result.map(|_| None),
                                 }
@@ -488,31 +488,18 @@ impl Engine {
                         Ok(None)
                     };
 
-                    if let Ok(Some(statements)) = stmt_block_result {
-                        if !statements.is_empty() {
-                            self.eval_stmt_block(
-                                scope, global, caches, lib, this_ptr, statements, true, level,
-                            )
-                        } else {
-                            Ok(Dynamic::UNIT)
-                        }
-                    } else if let Ok(None) = stmt_block_result {
+                    if let Ok(Some(expr)) = expr_result {
+                        self.eval_expr(scope, global, caches, lib, this_ptr, expr, level)
+                    } else if let Ok(None) = expr_result {
                         // Default match clause
                         if let Some(index) = def_case {
-                            let def_case = &case_blocks[*index].statements;
-
-                            if !def_case.is_empty() {
-                                self.eval_stmt_block(
-                                    scope, global, caches, lib, this_ptr, def_case, true, level,
-                                )
-                            } else {
-                                Ok(Dynamic::UNIT)
-                            }
+                            let def_expr = &expressions[*index].expr;
+                            self.eval_expr(scope, global, caches, lib, this_ptr, def_expr, level)
                         } else {
                             Ok(Dynamic::UNIT)
                         }
                     } else {
-                        stmt_block_result.map(|_| Dynamic::UNIT)
+                        expr_result.map(|_| Dynamic::UNIT)
                     }
                 } else {
                     value_result
