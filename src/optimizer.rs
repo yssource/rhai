@@ -884,6 +884,21 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                 optimize_stmt_block(mem::take(&mut *x.catch_block), state, false, true, false);
         }
 
+        // expr(stmt)
+        Stmt::Expr(expr) if matches!(**expr, Expr::Stmt(..)) => {
+            state.set_dirty();
+            match expr.as_mut() {
+                Expr::Stmt(block) if !block.is_empty() => {
+                    let mut stmt_block = *mem::take(block);
+                    *stmt_block =
+                        optimize_stmt_block(mem::take(&mut *stmt_block), state, true, true, false);
+                    *stmt = stmt_block.into();
+                }
+                Expr::Stmt(..) => *stmt = Stmt::Noop(expr.position()),
+                _ => unreachable!(),
+            }
+        }
+
         Stmt::Expr(expr) => {
             optimize_expr(expr, state, false);
 
@@ -928,6 +943,16 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
     match expr {
         // {}
         Expr::Stmt(x) if x.is_empty() => { state.set_dirty(); *expr = Expr::Unit(x.position()) }
+        Expr::Stmt(x) if x.len() == 1 && matches!(x.statements()[0], Stmt::Expr(..)) => {
+            state.set_dirty();
+            match x.take_statements().remove(0) {
+                Stmt::Expr(mut e) => {
+                    optimize_expr(&mut e, state, false);
+                    *expr = *e;
+                }
+                _ => unreachable!()
+            }
+        }
         // { stmt; ... } - do not count promotion as dirty because it gets turned back into an array
         Expr::Stmt(x) => {
             ***x = optimize_stmt_block(mem::take(&mut **x), state, true, true, false);
