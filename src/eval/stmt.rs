@@ -161,7 +161,7 @@ impl Engine {
             ) {
                 Ok(_) => {
                     #[cfg(not(feature = "unchecked"))]
-                    self.check_data_size(&args[0], root.1)?;
+                    self.check_data_size(args[0], root.1)?;
                 }
                 Err(err) if matches!(*err, ERR::ErrorFunctionNotFound(ref f, ..) if f.starts_with(op_assign)) =>
                 {
@@ -586,7 +586,7 @@ impl Engine {
                 }
 
                 let condition = self
-                    .eval_expr(scope, global, caches, lib, this_ptr, &expr, level)
+                    .eval_expr(scope, global, caches, lib, this_ptr, expr, level)
                     .and_then(|v| {
                         v.as_bool().map_err(|typ| {
                             self.make_type_mismatch_err::<bool>(typ, expr.position())
@@ -952,7 +952,7 @@ impl Engine {
                 }
 
                 let path_result = self
-                    .eval_expr(scope, global, caches, lib, this_ptr, &expr, level)
+                    .eval_expr(scope, global, caches, lib, this_ptr, expr, level)
                     .and_then(|v| {
                         let typ = v.type_name();
                         v.try_cast::<crate::ImmutableString>().ok_or_else(|| {

@@ -45,8 +45,8 @@ pub fn generate_body(
         ..
     } in consts
     {
-        let const_literal = syn::LitStr::new(&const_name, Span::call_site());
-        let const_ref = syn::Ident::new(&const_name, Span::call_site());
+        let const_literal = syn::LitStr::new(const_name, Span::call_site());
+        let const_ref = syn::Ident::new(const_name, Span::call_site());
 
         let cfg_attrs: Vec<_> = cfg_attrs
             .iter()
@@ -69,7 +69,7 @@ pub fn generate_body(
         ..
     } in custom_types
     {
-        let const_literal = syn::LitStr::new(&name, Span::call_site());
+        let const_literal = syn::LitStr::new(name, Span::call_site());
 
         let cfg_attrs: Vec<_> = cfg_attrs
             .iter()
@@ -86,7 +86,7 @@ pub fn generate_body(
     }
 
     for item_mod in sub_modules {
-        item_mod.update_scope(&parent_scope);
+        item_mod.update_scope(parent_scope);
         if item_mod.skipped() {
             continue;
         }
@@ -117,7 +117,7 @@ pub fn generate_body(
     let mut gen_fn_tokens = Vec::new();
 
     for function in fns {
-        function.update_scope(&parent_scope);
+        function.update_scope(parent_scope);
         if function.skipped() {
             continue;
         }
