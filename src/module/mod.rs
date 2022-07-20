@@ -693,7 +693,7 @@ impl Module {
                     #[cfg(feature = "metadata")]
                     comments: Box::default(),
                 },
-                func: Into::<CallableFunction>::into(fn_def).into(),
+                func: fn_def.into(),
                 param_types: StaticVec::new_const(),
             }
             .into(),
@@ -1029,7 +1029,7 @@ impl Module {
                     #[cfg(feature = "metadata")]
                     comments: Box::default(),
                 },
-                func: func.into(),
+                func,
                 param_types,
             }
             .into(),

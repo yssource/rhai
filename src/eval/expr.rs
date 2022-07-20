@@ -99,7 +99,7 @@ impl Engine {
                                 let mut target: Target = value.clone().into();
                                 // Module variables are constant
                                 target.set_access_mode(AccessMode::ReadOnly);
-                                return Ok((target.into(), *_var_pos));
+                                return Ok((target, *_var_pos));
                             }
                         }
 

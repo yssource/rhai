@@ -1485,7 +1485,7 @@ fn get_next_token_inner(
         let return_comment = return_comment || is_doc_comment(comment.as_ref().expect("`Some`"));
 
         if return_comment {
-            return Some((Token::Comment(comment.expect("`Some`").into()), start_pos));
+            return Some((Token::Comment(comment.expect("`Some`")), start_pos));
         }
         if state.comment_level > 0 {
             // Reached EOF without ending comment block
