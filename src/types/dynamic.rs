@@ -186,7 +186,6 @@ pub enum Union {
     TimeStamp(Box<Instant>, Tag, AccessMode),
 
     /// Any type as a trait object.
-    #[allow(clippy::redundant_allocation)]
     Variant(Box<Box<dyn Variant>>, Tag, AccessMode),
 
     /// A _shared_ value of any type.
