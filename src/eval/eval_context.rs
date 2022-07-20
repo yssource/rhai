@@ -190,7 +190,7 @@ impl<'a, 's, 'ps, 'g, 'pg, 'c, 'pc, 't, 'pt> EvalContext<'a, 's, 'ps, 'g, 'pg, '
                 caches,
                 self.lib,
                 self.this_ptr,
-                &statements,
+                statements,
                 rewind_scope,
                 self.level,
             ),

@@ -215,8 +215,8 @@ impl IntoIterator for RangeCase {
     #[inline(always)]
     fn into_iter(self) -> Self::IntoIter {
         match self {
-            Self::ExclusiveInt(r, ..) => Box::new(r.into_iter()),
-            Self::InclusiveInt(r, ..) => Box::new(r.into_iter()),
+            Self::ExclusiveInt(r, ..) => Box::new(r),
+            Self::InclusiveInt(r, ..) => Box::new(r),
         }
     }
 }
@@ -507,8 +507,7 @@ impl<'a> IntoIterator for &'a StmtBlock {
 
     #[inline(always)]
     fn into_iter(self) -> Self::IntoIter {
-        let x = self.block.iter();
-        x
+        self.block.iter()
     }
 }
 

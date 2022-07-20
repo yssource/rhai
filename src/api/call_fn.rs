@@ -268,7 +268,7 @@ impl Engine {
 
         // Check for data race.
         #[cfg(not(feature = "no_closure"))]
-        crate::func::call::ensure_no_data_race(name, &mut args, false)?;
+        crate::func::call::ensure_no_data_race(name, &args, false)?;
 
         let lib = &[ast.as_ref()];
         let fn_def = ast

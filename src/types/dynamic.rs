@@ -218,7 +218,7 @@ impl<'d, T: Any + Clone> Deref for DynamicReadLock<'d, T> {
     #[inline]
     fn deref(&self) -> &Self::Target {
         match self.0 {
-            DynamicReadLockInner::Reference(ref reference) => *reference,
+            DynamicReadLockInner::Reference(reference) => reference,
             #[cfg(not(feature = "no_closure"))]
             DynamicReadLockInner::Guard(ref guard) => guard.downcast_ref().expect(CHECKED),
         }

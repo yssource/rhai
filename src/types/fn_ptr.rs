@@ -181,7 +181,7 @@ impl FnPtr {
         let mut arg_values = crate::StaticVec::new_const();
         args.parse(&mut arg_values);
 
-        let result = self.call_raw(&context, None, arg_values)?;
+        let result = self.call_raw(context, None, arg_values)?;
 
         let typ = context.engine().map_type_name(result.type_name());
 

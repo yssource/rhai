@@ -151,7 +151,7 @@ impl<'a> OptimizerState<'a> {
                 &mut self.caches,
                 lib,
                 fn_name,
-                calc_fn_hash(&fn_name, arg_values.len()),
+                calc_fn_hash(fn_name, arg_values.len()),
                 &mut arg_values.iter_mut().collect::<StaticVec<_>>(),
                 false,
                 false,
@@ -1421,7 +1421,7 @@ pub fn optimize_into_ast(
             OptimizationLevel::Simple | OptimizationLevel::Full => optimize_top_level(
                 statements,
                 engine,
-                &scope,
+                scope,
                 #[cfg(not(feature = "no_function"))]
                 &[&lib],
                 optimization_level,
