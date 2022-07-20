@@ -293,10 +293,15 @@ pub fn get_builtin_binary_op_fn(op: &str, x: &Dynamic, y: &Dynamic) -> Option<Fn
                 _ => None,
             };
         }
-        if type1 == type2 {
+        if type2 == TypeId::of::<char>() {
             return match op {
-                "==" => Some(impl_op!(Blob == Blob)),
-                "!=" => Some(impl_op!(Blob != Blob)),
+                "+" => Some(|_, args| {
+                    let mut buf = [0_u8; 4];
+                    let mut blob = args[0].read_lock::<Blob>().expect(BUILTIN).clone();
+                    let x = args[1].as_char().expect("`char`").encode_utf8(&mut buf);
+                    blob.extend(x.as_bytes());
+                    Ok(Dynamic::from_blob(blob))
+                }),
                 _ => None,
             };
         }
@@ -503,6 +508,33 @@ pub fn get_builtin_binary_op_fn(op: &str, x: &Dynamic, y: &Dynamic) -> Option<Fn
         };
     }
 
+    #[cfg(not(feature = "no_index"))]
+    if type1 == TypeId::of::<crate::Blob>() {
+        use crate::Blob;
+
+        return match op {
+            "+" => Some(|_, args| {
+                let blob1 = &*args[0].read_lock::<Blob>().expect(BUILTIN);
+                let blob2 = &*args[1].read_lock::<Blob>().expect(BUILTIN);
+
+                Ok(Dynamic::from_blob(if !blob2.is_empty() {
+                    if blob1.is_empty() {
+                        blob2.clone()
+                    } else {
+                        let mut blob = blob1.clone();
+                        blob.extend(blob2);
+                        blob
+                    }
+                } else {
+                    blob1.clone()
+                }))
+            }),
+            "==" => Some(impl_op!(Blob == Blob)),
+            "!=" => Some(impl_op!(Blob != Blob)),
+            _ => None,
+        };
+    }
+
     if type1 == TypeId::of::<()>() {
         return match op {
             "==" => Some(|_, _| Ok(Dynamic::TRUE)),
@@ -684,71 +716,39 @@ pub fn get_builtin_op_assignment_fn(op: &str, x: &Dynamic, y: &Dynamic) -> Optio
 
     #[cfg(not(feature = "no_index"))]
     {
-        // string op= blob
-        if types_pair == (TypeId::of::<ImmutableString>(), TypeId::of::<crate::Blob>()) {
-            return match op {
-                "+=" => Some(|_, args| {
-                    let buf = {
-                        let x = args[1].read_lock::<crate::Blob>().expect(BUILTIN);
-                        if x.is_empty() {
-                            return Ok(Dynamic::UNIT);
-                        }
-                        let s = args[0].read_lock::<ImmutableString>().expect(BUILTIN);
-                        let mut buf = crate::SmartString::from(s.as_str());
-                        buf.push_str(&String::from_utf8_lossy(&x));
-                        buf
-                    };
-                    let mut s = args[0].write_lock::<ImmutableString>().expect(BUILTIN);
-                    *s = buf.into();
-                    Ok(Dynamic::UNIT)
-                }),
-                _ => None,
-            };
-        }
-        // blob op= int
-        if types_pair == (TypeId::of::<crate::Blob>(), TypeId::of::<INT>()) {
-            use crate::Blob;
+        use crate::Blob;
 
+        // blob op= int
+        if types_pair == (TypeId::of::<Blob>(), TypeId::of::<INT>()) {
             return match op {
                 "+=" => Some(|_, args| {
-                    let x = (args[1].as_int().expect("`INT`") & 0x000000ff) as u8;
-                    let mut blob = args[0].write_lock::<Blob>().expect(BUILTIN);
-                    Ok(blob.push(x).into())
+                    let x = args[1].as_int().expect("`INT`");
+                    let blob = &mut *args[0].write_lock::<Blob>().expect(BUILTIN);
+                    Ok(crate::packages::blob_basic::blob_functions::push(blob, x).into())
                 }),
                 _ => None,
             };
         }
 
         // blob op= char
-        if types_pair == (TypeId::of::<crate::Blob>(), TypeId::of::<char>()) {
-            use crate::Blob;
-
+        if types_pair == (TypeId::of::<Blob>(), TypeId::of::<char>()) {
             return match op {
                 "+=" => Some(|_, args| {
-                    let mut buf = [0_u8; 4];
-                    let x = args[1].as_char().expect("`char`").encode_utf8(&mut buf);
-                    let mut blob = args[0].write_lock::<Blob>().expect(BUILTIN);
-                    Ok(blob.extend(x.as_bytes()).into())
+                    let x = args[1].as_char().expect("`char`");
+                    let blob = &mut *args[0].write_lock::<Blob>().expect(BUILTIN);
+                    Ok(crate::packages::blob_basic::blob_functions::append_char(blob, x).into())
                 }),
                 _ => None,
             };
         }
 
         // blob op= string
-        if types_pair == (TypeId::of::<crate::Blob>(), TypeId::of::<ImmutableString>()) {
-            use crate::Blob;
-
+        if types_pair == (TypeId::of::<Blob>(), TypeId::of::<ImmutableString>()) {
             return match op {
                 "+=" => Some(|_, args| {
-                    let s: crate::Blob = {
-                        let s = args[1].read_lock::<ImmutableString>().expect(BUILTIN);
-                        if s.is_empty() {
-                            return Ok(Dynamic::UNIT);
-                        }
-                        s.as_bytes().into()
-                    };
-                    let mut blob = args[0].write_lock::<Blob>().expect(BUILTIN);
-                    Ok(blob.extend(s).into())
+                    let s = std::mem::take(args[1]).cast::<ImmutableString>();
+                    let blob = &mut *args[0].write_lock::<Blob>().expect(BUILTIN);
+                    Ok(crate::packages::blob_basic::blob_functions::append_str(blob, &s).into())
                 }),
                 _ => None,
             };
@@ -838,14 +838,13 @@ pub fn get_builtin_op_assignment_fn(op: &str, x: &Dynamic, y: &Dynamic) -> Optio
 
     #[cfg(not(feature = "no_index"))]
     if type1 == TypeId::of::<crate::Blob>() {
-        use crate::packages::blob_basic::blob_functions::*;
         use crate::Blob;
 
         return match op {
             "+=" => Some(|_, args| {
                 let blob2 = std::mem::take(args[1]).cast::<Blob>();
                 let blob1 = &mut *args[0].write_lock::<Blob>().expect(BUILTIN);
-                Ok(append(blob1, blob2).into())
+                Ok(crate::packages::blob_basic::blob_functions::append(blob1, blob2).into())
             }),
             _ => None,
         };

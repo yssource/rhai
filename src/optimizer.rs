@@ -213,9 +213,9 @@ fn optimize_stmt_block(
 
     // Flatten blocks
     loop {
-        if let Some(n) = statements.iter().enumerate().find_map(|(i, s)| match s {
-            Stmt::Block(block, ..) if !block.iter().any(Stmt::is_block_dependent) => Some(i),
-            _ => None,
+        if let Some(n) = statements.iter().position(|s| match s {
+            Stmt::Block(block, ..) if !block.iter().any(Stmt::is_block_dependent) => true,
+            _ => false,
         }) {
             let (first, second) = statements.split_at_mut(n);
             let stmt = mem::take(&mut second[0]);

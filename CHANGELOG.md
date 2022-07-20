@@ -10,6 +10,7 @@ Bug fixes
 ---------
 
 * `switch` cases with conditions that evaluate to constant `()` no longer optimize to `false` (should raise a type error during runtime).
+* Fixes concatenation of BLOB's and strings, where the BLOB's should be interpreted as UTF-8 encoded strings.
 
 New features
 ------------
@@ -30,6 +31,7 @@ Enhancements
 
 * `EvalContext::eval_expression_tree_raw` and `Expression::eval_with_context_raw` are added to allow for not rewinding the `Scope` at the end of a statements block.
 * A new `range` function variant that takes an exclusive range with a step.
+* `as_string` is added to BLOB's to convert it into a string by interpreting it as a UTF-8 byte stream.
 
 
 Version 1.8.0

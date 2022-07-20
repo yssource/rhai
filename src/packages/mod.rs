@@ -4,20 +4,20 @@ use crate::{Module, Shared};
 
 pub(crate) mod arithmetic;
 pub(crate) mod array_basic;
-mod bit_field;
+pub(crate) mod bit_field;
 pub(crate) mod blob_basic;
-mod debugging;
-mod fn_basic;
+pub(crate) mod debugging;
+pub(crate) mod fn_basic;
 pub(crate) mod iter_basic;
-mod lang_core;
-mod logic;
-mod map_basic;
-mod math_basic;
-mod pkg_core;
-mod pkg_std;
-mod string_basic;
-mod string_more;
-mod time_basic;
+pub(crate) mod lang_core;
+pub(crate) mod logic;
+pub(crate) mod map_basic;
+pub(crate) mod math_basic;
+pub(crate) mod pkg_core;
+pub(crate) mod pkg_std;
+pub(crate) mod string_basic;
+pub(crate) mod string_more;
+pub(crate) mod time_basic;
 
 pub use arithmetic::ArithmeticPackage;
 #[cfg(not(feature = "no_index"))]
