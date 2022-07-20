@@ -156,13 +156,11 @@ impl GlobalRuntimeState<'_> {
     pub fn find_import(&self, name: &str) -> Option<usize> {
         let len = self.keys.len();
 
-        self.keys.iter().rev().enumerate().find_map(|(i, key)| {
-            if key == name {
-                Some(len - 1 - i)
-            } else {
-                None
-            }
-        })
+        self.keys
+            .iter()
+            .rev()
+            .position(|key| key == name)
+            .map(|i| len - 1 - i)
     }
     /// Push an imported [module][crate::Module] onto the stack.
     ///

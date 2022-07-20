@@ -720,7 +720,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                 // Remove all entries after a `true` condition
                 if let Some(n) = list
                     .iter()
-                    .find(|&&index| expressions[index].is_always_true())
+                    .position(|&index| expressions[index].is_always_true())
                 {
                     if n + 1 < list.len() {
                         state.set_dirty();
