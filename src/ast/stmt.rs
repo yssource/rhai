@@ -486,8 +486,7 @@ impl<'a> IntoIterator for &'a StmtBlock {
 
     #[inline(always)]
     fn into_iter(self) -> Self::IntoIter {
-        let x = self.block.iter();
-        x
+        self.block.iter()
     }
 }
 

@@ -793,11 +793,8 @@ impl AST {
                     || !options.contains(ASTFlags::CONSTANT) && include_variables =>
             {
                 let (name, expr, ..) = &**x;
-                if let Some(value) = expr.get_literal_value() {
-                    Some((name.as_str(), options.contains(ASTFlags::CONSTANT), value))
-                } else {
-                    None
-                }
+                expr.get_literal_value()
+                    .map(|value| (name.as_str(), options.contains(ASTFlags::CONSTANT), value))
             }
             _ => None,
         })

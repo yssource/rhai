@@ -1045,6 +1045,6 @@ impl Engine {
         #[cfg(feature = "debugging")]
         global.debugger.reset_status(reset_debugger);
 
-        return result;
+        result
     }
 }

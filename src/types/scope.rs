@@ -81,9 +81,9 @@ impl fmt::Display for Scope<'_> {
             #[cfg(feature = "no_closure")]
             let value_is_shared = "";
 
-            write!(
+            writeln!(
                 f,
-                "[{}] {}{}{} = {:?}\n",
+                "[{}] {}{}{} = {:?}",
                 i + 1,
                 if constant { "const " } else { "" },
                 name,
