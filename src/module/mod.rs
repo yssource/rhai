@@ -90,7 +90,7 @@ pub struct FuncInfo {
 impl FuncInfo {
     /// Format a return type to be display-friendly.
     ///
-    /// `()` is cleared.  
+    /// `()` is cleared.
     /// [`RhaiResult`][crate::RhaiResult] and [`RhaiResultOf<T>`] are expanded.
     #[cfg(feature = "metadata")]
     pub fn format_type(typ: &str, is_return_type: bool) -> std::borrow::Cow<str> {
@@ -693,7 +693,7 @@ impl Module {
                     #[cfg(feature = "metadata")]
                     comments: Box::default(),
                 },
-                func: Into::<CallableFunction>::into(fn_def).into(),
+                func: fn_def.into(),
                 param_types: StaticVec::new_const(),
             }
             .into(),
@@ -1029,7 +1029,7 @@ impl Module {
                     #[cfg(feature = "metadata")]
                     comments: Box::default(),
                 },
-                func: func.into(),
+                func,
                 param_types,
             }
             .into(),
@@ -1860,7 +1860,7 @@ impl Module {
         let orig_constants = std::mem::take(&mut global.constants);
 
         // Run the script
-        let result = engine.eval_ast_with_scope_raw(&mut scope, global, &ast, 0);
+        let result = engine.eval_ast_with_scope_raw(&mut scope, global, ast, 0);
 
         // Create new module
         let mut module = Module::new();

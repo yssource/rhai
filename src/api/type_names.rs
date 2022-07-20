@@ -102,8 +102,8 @@ fn map_std_type_name(name: &str, shorthands: bool) -> &str {
         };
     }
 
-    if name.starts_with("rhai::") {
-        map_std_type_name(&name[6..], shorthands)
+    if let Some(stripped) = name.strip_prefix("rhai::") {
+        map_std_type_name(stripped, shorthands)
     } else {
         name
     }

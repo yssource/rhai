@@ -150,7 +150,7 @@ impl Parse for Module {
                         name: ident.to_string(),
                         typ: ty.clone(),
                         expr: expr.as_ref().clone(),
-                        cfg_attrs: crate::attrs::collect_cfg_attr(&attrs),
+                        cfg_attrs: crate::attrs::collect_cfg_attr(attrs),
                     }),
                     _ => {}
                 }
@@ -167,7 +167,7 @@ impl Parse for Module {
                     }) => custom_types.push(ExportedType {
                         name: ident.to_string(),
                         typ: ty.clone(),
-                        cfg_attrs: crate::attrs::collect_cfg_attr(&attrs),
+                        cfg_attrs: crate::attrs::collect_cfg_attr(attrs),
                     }),
                     _ => {}
                 }

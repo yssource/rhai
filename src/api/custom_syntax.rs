@@ -149,7 +149,7 @@ impl Expression<'_> {
 impl AsRef<Expr> for Expression<'_> {
     #[inline(always)]
     fn as_ref(&self) -> &Expr {
-        &self.0
+        self.0
     }
 }
 
@@ -158,7 +158,7 @@ impl Deref for Expression<'_> {
 
     #[inline(always)]
     fn deref(&self) -> &Self::Target {
-        &self.0
+        self.0
     }
 }
 
@@ -178,7 +178,7 @@ impl Engine {
     ///
     /// Not available under `no_custom_syntax`.
     ///
-    /// * `symbols` holds a slice of strings that define the custom syntax.  
+    /// * `symbols` holds a slice of strings that define the custom syntax.
     /// * `scope_may_be_changed` specifies variables _may_ be added/removed by this custom syntax.
     /// * `func` is the implementation function.
     ///
@@ -365,8 +365,7 @@ impl Engine {
                 parse: Box::new(parse),
                 func: Box::new(func),
                 scope_may_be_changed,
-            }
-            .into(),
+            },
         );
         self
     }

@@ -335,7 +335,7 @@ impl Engine {
                 }
 
                 #[cfg(not(feature = "unchecked"))]
-                self.check_data_size(&r, _pos)?;
+                self.check_data_size(r, _pos)?;
             }
             _ => (),
         }

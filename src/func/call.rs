@@ -281,7 +281,7 @@ impl Engine {
 
                         return args.and_then(|args| {
                             if !is_op_assignment {
-                                get_builtin_binary_op_fn(fn_name, &args[0], &args[1]).map(|f| {
+                                get_builtin_binary_op_fn(fn_name, args[0], args[1]).map(|f| {
                                     FnResolutionCacheEntry {
                                         func: CallableFunction::from_method(
                                             Box::new(f) as Box<FnAny>
@@ -454,7 +454,7 @@ impl Engine {
             // Check the data size of any `&mut` object, which may be changed.
             #[cfg(not(feature = "unchecked"))]
             if is_ref_mut && args.len() > 0 {
-                self.check_data_size(&args[0], pos)?;
+                self.check_data_size(args[0], pos)?;
             }
 
             // See if the function match print/debug (which requires special processing)
@@ -464,7 +464,7 @@ impl Engine {
                         let t = self.map_type_name(type_name::<ImmutableString>()).into();
                         ERR::ErrorMismatchOutputType(t, typ.into(), pos)
                     })?;
-                    ((&*self.print)(&text).into(), false)
+                    ((*self.print)(&text).into(), false)
                 }
                 KEYWORD_DEBUG => {
                     let text = result.into_immutable_string().map_err(|typ| {
@@ -476,7 +476,7 @@ impl Engine {
                     } else {
                         Some(global.source.as_str())
                     };
-                    ((&*self.debug)(&text, source, pos).into(), false)
+                    ((*self.debug)(&text, source, pos).into(), false)
                 }
                 _ => (result, is_method),
             });
