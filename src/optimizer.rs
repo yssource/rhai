@@ -745,7 +745,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                 // Remove all entries after a `true` condition
                 if let Some(n) = list
                     .iter()
-                    .find(|&&index| match case_blocks[index].condition {
+                    .position(|&index| match case_blocks[index].condition {
                         Expr::BoolConstant(true, ..) => true,
                         _ => false,
                     })
