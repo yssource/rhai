@@ -32,6 +32,27 @@ pub enum FnNamespace {
     Global,
 }
 
+impl FnNamespace {
+    /// Is this a module namespace?
+    #[inline(always)]
+    #[must_use]
+    pub fn is_module_namespace(self) -> bool {
+        match self {
+            Self::Internal => true,
+            Self::Global => false,
+        }
+    }
+    /// Is this a global namespace?
+    #[inline(always)]
+    #[must_use]
+    pub fn is_global_namespace(self) -> bool {
+        match self {
+            Self::Internal => false,
+            Self::Global => true,
+        }
+    }
+}
+
 /// A type containing all metadata for a registered function.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 #[non_exhaustive]
