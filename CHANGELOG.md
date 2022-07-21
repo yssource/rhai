@@ -32,6 +32,7 @@ Enhancements
 * `EvalContext::eval_expression_tree_raw` and `Expression::eval_with_context_raw` are added to allow for not rewinding the `Scope` at the end of a statements block.
 * A new `range` function variant that takes an exclusive range with a step.
 * `as_string` is added to BLOB's to convert it into a string by interpreting it as a UTF-8 byte stream.
+* `FnAccess::is_private` and `FnAccess::is_public` are added for convenience.
 
 
 Version 1.8.0
