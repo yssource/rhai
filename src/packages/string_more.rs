@@ -6,9 +6,6 @@ use std::{any::TypeId, mem};
 
 use super::string_basic::{print_with_func, FUNC_TO_STRING};
 
-#[cfg(not(feature = "no_index"))]
-use crate::Blob;
-
 def_package! {
     /// Package of additional string utilities over [`BasicStringPackage`][super::BasicStringPackage]
     pub MoreStringPackage(lib) {
@@ -86,6 +83,8 @@ mod string_functions {
 
     #[cfg(not(feature = "no_index"))]
     pub mod blob_functions {
+        use crate::Blob;
+
         #[rhai_fn(name = "+", pure)]
         pub fn add_append(string: &mut ImmutableString, utf8: Blob) -> ImmutableString {
             if utf8.is_empty() {
@@ -115,13 +114,18 @@ mod string_functions {
             }
         }
         #[rhai_fn(name = "+")]
-        pub fn add_prepend(utf8: Blob, string: ImmutableString) -> Blob {
-            let mut blob = utf8;
+        pub fn add_prepend(utf8: Blob, string: ImmutableString) -> ImmutableString {
+            let s = String::from_utf8_lossy(&utf8);
+            let mut s = match s {
+                std::borrow::Cow::Borrowed(_) => String::from_utf8(utf8).unwrap(),
+                std::borrow::Cow::Owned(_) => s.into_owned(),
+            };
 
             if !string.is_empty() {
-                blob.extend(string.as_bytes());
+                s.push_str(&string);
             }
-            blob
+
+            s.into()
         }
     }
 
