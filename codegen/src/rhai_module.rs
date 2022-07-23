@@ -200,7 +200,7 @@ pub fn generate_body(
 
             let ns_str = syn::Ident::new(
                 match namespace {
-                    FnNamespaceAccess::Unset => unreachable!(),
+                    FnNamespaceAccess::Unset => unreachable!("`namespace` should be set"),
                     FnNamespaceAccess::Global => "Global",
                     FnNamespaceAccess::Internal => "Internal",
                 },

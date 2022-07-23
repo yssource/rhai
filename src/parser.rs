@@ -798,7 +798,7 @@ impl Engine {
                             match token {
                                 Token::LeftBracket => ASTFlags::NONE,
                                 Token::QuestionBracket => ASTFlags::NEGATED,
-                                _ => unreachable!(),
+                                _ => unreachable!("`[` or `?[`"),
                             },
                             false,
                             settings.level_up(),
@@ -1693,7 +1693,7 @@ impl Engine {
                     let opt = match token {
                         Token::LeftBracket => ASTFlags::NONE,
                         Token::QuestionBracket => ASTFlags::NEGATED,
-                        _ => unreachable!(),
+                        _ => unreachable!("`[` or `?[`"),
                     };
                     self.parse_index_chain(input, state, lib, expr, opt, true, settings.level_up())?
                 }
@@ -1717,7 +1717,7 @@ impl Engine {
                     let op_flags = match op {
                         Token::Period => ASTFlags::NONE,
                         Token::Elvis => ASTFlags::NEGATED,
-                        _ => unreachable!(),
+                        _ => unreachable!("`.` or `?.`"),
                     };
                     Self::make_dot_expr(state, expr, rhs, ASTFlags::NONE, op_flags, tail_pos)?
                 }

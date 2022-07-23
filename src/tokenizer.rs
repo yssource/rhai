@@ -248,7 +248,7 @@ impl fmt::Debug for Position {
             }
 
             #[cfg(feature = "no_position")]
-            unreachable!();
+            unreachable!("no position");
         }
     }
 }

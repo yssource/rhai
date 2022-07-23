@@ -895,7 +895,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                     *stmt = stmt_block.into();
                 }
                 Expr::Stmt(..) => *stmt = Stmt::Noop(expr.position()),
-                _ => unreachable!(),
+                _ => unreachable!("`Expr::Stmt`"),
             }
         }
 
@@ -950,7 +950,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
                     optimize_expr(&mut e, state, false);
                     *expr = *e;
                 }
-                _ => unreachable!()
+                _ => unreachable!("`Expr::Stmt`")
             }
         }
         // { stmt; ... } - do not count promotion as dirty because it gets turned back into an array
