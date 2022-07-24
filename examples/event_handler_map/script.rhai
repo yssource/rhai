@@ -1,4 +1,4 @@
-// Implementation of the Event Handler With State Pattern - Map Style
+//! Implementation of the Event Handler With State Pattern - Map Style
 
 /// Initialize user-provided state.
 /// State is stored inside an object map bound to 'state'.

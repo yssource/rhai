@@ -1,4 +1,4 @@
-// Implementation of the Event Handler With State Pattern - Main Style
+//! Implementation of the Event Handler With State Pattern - Main Style
 
 /// Initialize user-provided state (shadows system-provided state, if any).
 fn init() {

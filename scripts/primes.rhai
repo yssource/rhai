@@ -1,4 +1,4 @@
-// This script uses the Sieve of Eratosthenes to calculate prime numbers.
+//! This script uses the Sieve of Eratosthenes to calculate prime numbers.
 
 let now = timestamp();
 
