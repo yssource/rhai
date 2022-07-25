@@ -75,6 +75,8 @@ impl AST {
     ) -> Self {
         Self {
             source: Identifier::new_const(),
+            #[cfg(feature = "metadata")]
+            doc: Vec::new(),
             body: StmtBlock::new(statements, Position::NONE, Position::NONE),
             #[cfg(not(feature = "no_function"))]
             lib: functions.into(),
