@@ -1,4 +1,4 @@
-// Implementation of the Event Handler With State Pattern - JS Style
+//! Implementation of the Event Handler With State Pattern - JS Style
 
 /// Initialize user-provided state.
 fn init() {

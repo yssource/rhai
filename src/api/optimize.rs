@@ -2,6 +2,7 @@
 #![cfg(not(feature = "no_optimize"))]
 
 use crate::{Engine, OptimizationLevel, Scope, AST};
+use std::mem;
 
 impl Engine {
     /// Control whether and how the [`Engine`] will optimize an [`AST`] after compilation.
@@ -59,13 +60,18 @@ impl Engine {
             .map(|f| f.func.get_script_fn_def().unwrap().clone())
             .collect();
 
-        crate::optimizer::optimize_into_ast(
+        let mut new_ast = crate::optimizer::optimize_into_ast(
             self,
             scope,
             ast.take_statements(),
             #[cfg(not(feature = "no_function"))]
             lib,
             optimization_level,
-        )
+        );
+
+        #[cfg(feature = "metadata")]
+        new_ast.set_doc(mem::take(ast.doc_mut()));
+
+        new_ast
     }
 }

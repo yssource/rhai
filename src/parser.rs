@@ -3,9 +3,9 @@
 use crate::api::events::VarDefInfo;
 use crate::api::options::LangOptions;
 use crate::ast::{
-    ASTFlags, BinaryExpr, CaseBlocksList, ConditionalStmtBlock, Expr, FnCallExpr, FnCallHashes,
-    Ident, OpAssignment, RangeCase, ScriptFnDef, Stmt, StmtBlockContainer, SwitchCasesCollection,
-    TryCatchBlock,
+    ASTFlags, BinaryExpr, CaseBlocksList, ConditionalExpr, Expr, FnCallExpr, FnCallHashes, Ident,
+    OpAssignment, RangeCase, ScriptFnDef, Stmt, StmtBlock, StmtBlockContainer,
+    SwitchCasesCollection, TryCatchBlock,
 };
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::eval::GlobalRuntimeState;
@@ -798,7 +798,7 @@ impl Engine {
                             match token {
                                 Token::LeftBracket => ASTFlags::NONE,
                                 Token::QuestionBracket => ASTFlags::NEGATED,
-                                _ => unreachable!(),
+                                _ => unreachable!("`[` or `?[`"),
                             },
                             false,
                             settings.level_up(),
@@ -1055,11 +1055,11 @@ impl Engine {
             }
         }
 
-        let mut case_blocks = StaticVec::<ConditionalStmtBlock>::new();
+        let mut expressions = StaticVec::<ConditionalExpr>::new();
         let mut cases = BTreeMap::<u64, CaseBlocksList>::new();
         let mut ranges = StaticVec::<RangeCase>::new();
-        let mut def_stmt_pos = Position::NONE;
-        let mut def_stmt_index = None;
+        let mut def_case = None;
+        let mut def_case_pos = Position::NONE;
 
         loop {
             const MISSING_RBRACE: &str = "to end this switch block";
@@ -1075,8 +1075,8 @@ impl Engine {
                             .into_err(*pos),
                     )
                 }
-                (Token::Underscore, pos) if def_stmt_index.is_none() => {
-                    def_stmt_pos = *pos;
+                (Token::Underscore, pos) if def_case.is_none() => {
+                    def_case_pos = *pos;
                     eat_token(input, Token::Underscore);
 
                     let (if_clause, if_pos) = match_token(input, Token::If);
@@ -1087,8 +1087,8 @@ impl Engine {
 
                     (Default::default(), Expr::BoolConstant(true, Position::NONE))
                 }
-                _ if def_stmt_index.is_some() => {
-                    return Err(PERR::WrongSwitchDefaultCase.into_err(def_stmt_pos))
+                _ if def_case.is_some() => {
+                    return Err(PERR::WrongSwitchDefaultCase.into_err(def_case_pos))
                 }
 
                 _ => {
@@ -1142,8 +1142,9 @@ impl Engine {
             let need_comma = !stmt.is_self_terminated();
             let has_condition = !matches!(condition, Expr::BoolConstant(true, ..));
 
-            case_blocks.push((condition, stmt).into());
-            let index = case_blocks.len() - 1;
+            let stmt_block: StmtBlock = stmt.into();
+            expressions.push((condition, Expr::Stmt(stmt_block.into())).into());
+            let index = expressions.len() - 1;
 
             if !case_expr_list.is_empty() {
                 for expr in case_expr_list {
@@ -1197,7 +1198,7 @@ impl Engine {
                         .or_insert_with(|| [index].into());
                 }
             } else {
-                def_stmt_index = Some(index);
+                def_case = Some(index);
             }
 
             match input.peek().expect(NEVER_ENDS) {
@@ -1223,13 +1224,8 @@ impl Engine {
             }
         }
 
-        let def_case = def_stmt_index.unwrap_or_else(|| {
-            case_blocks.push(Default::default());
-            case_blocks.len() - 1
-        });
-
         let cases = SwitchCasesCollection {
-            case_blocks,
+            expressions,
             cases,
             def_case,
             ranges,
@@ -1408,9 +1404,7 @@ impl Engine {
                     }
 
                     // Make sure to parse the following as text
-                    let mut control = state.tokenizer_control.get();
-                    control.is_within_text = true;
-                    state.tokenizer_control.set(control);
+                    state.tokenizer_control.borrow_mut().is_within_text = true;
 
                     match input.next().expect(NEVER_ENDS) {
                         (Token::StringConstant(s), pos) => {
@@ -1697,7 +1691,7 @@ impl Engine {
                     let opt = match token {
                         Token::LeftBracket => ASTFlags::NONE,
                         Token::QuestionBracket => ASTFlags::NEGATED,
-                        _ => unreachable!(),
+                        _ => unreachable!("`[` or `?[`"),
                     };
                     self.parse_index_chain(input, state, lib, expr, opt, true, settings.level_up())?
                 }
@@ -1721,7 +1715,7 @@ impl Engine {
                     let op_flags = match op {
                         Token::Period => ASTFlags::NONE,
                         Token::Elvis => ASTFlags::NEGATED,
-                        _ => unreachable!(),
+                        _ => unreachable!("`.` or `?.`"),
                     };
                     Self::make_dot_expr(state, expr, rhs, ASTFlags::NONE, op_flags, tail_pos)?
                 }

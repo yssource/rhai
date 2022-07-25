@@ -45,6 +45,16 @@ pub struct ScriptFnDef {
     pub params: StaticVec<Identifier>,
     /// _(metadata)_ Function doc-comments (if any).
     /// Exported under the `metadata` feature only.
+    ///
+    /// Doc-comments are comment lines beginning with `///` or comment blocks beginning with `/**`,
+    /// placed immediately before a function definition.
+    ///
+    /// Block doc-comments are kept in a single string slice with line-breaks within.
+    ///
+    /// Line doc-comments are kept in one string slice per line without the termination line-break.
+    ///
+    /// Leading white-spaces are stripped, and each string slice always starts with the
+    /// corresponding doc-comment leader: `///` or `/**`.
     #[cfg(feature = "metadata")]
     pub comments: Box<[Box<str>]>,
 }
@@ -85,13 +95,15 @@ pub struct ScriptFnMetadata<'a> {
     /// _(metadata)_ Function doc-comments (if any).
     /// Exported under the `metadata` feature only.
     ///
+    /// Doc-comments are comment lines beginning with `///` or comment blocks beginning with `/**`,
+    /// placed immediately before a function definition.
+    ///
     /// Block doc-comments are kept in a single string slice with line-breaks within.
     ///
     /// Line doc-comments are kept in one string slice per line without the termination line-break.
     ///
     /// Leading white-spaces are stripped, and each string slice always starts with the
     /// corresponding doc-comment leader: `///` or `/**`.
-    /// Function access mode.
     #[cfg(feature = "metadata")]
     pub comments: Vec<&'a str>,
 }

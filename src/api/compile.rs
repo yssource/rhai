@@ -222,7 +222,10 @@ impl Engine {
             self.token_mapper.as_ref().map(<_>::as_ref),
         );
         let mut state = ParseState::new(self, scope, tokenizer_control);
-        self.parse(&mut stream.peekable(), &mut state, optimization_level)
+        let mut ast = self.parse(&mut stream.peekable(), &mut state, optimization_level)?;
+        #[cfg(feature = "metadata")]
+        ast.set_doc(state.tokenizer_control.borrow().global_comments.join("\n"));
+        Ok(ast)
     }
     /// Compile a string containing an expression into an [`AST`],
     /// which can be used later for evaluation.

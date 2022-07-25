@@ -6,9 +6,6 @@ use std::{any::TypeId, mem};
 
 use super::string_basic::{print_with_func, FUNC_TO_STRING};
 
-#[cfg(not(feature = "no_index"))]
-use crate::Blob;
-
 def_package! {
     /// Package of additional string utilities over [`BasicStringPackage`][super::BasicStringPackage]
     pub MoreStringPackage(lib) {
@@ -86,25 +83,49 @@ mod string_functions {
 
     #[cfg(not(feature = "no_index"))]
     pub mod blob_functions {
+        use crate::Blob;
+
         #[rhai_fn(name = "+", pure)]
-        pub fn add_append_blob(string: &mut ImmutableString, utf8: Blob) -> ImmutableString {
+        pub fn add_append(string: &mut ImmutableString, utf8: Blob) -> ImmutableString {
             if utf8.is_empty() {
-                string.clone()
-            } else if string.is_empty() {
-                String::from_utf8_lossy(&utf8).into_owned().into()
+                return string.clone();
+            }
+
+            let s = String::from_utf8_lossy(&utf8);
+
+            if string.is_empty() {
+                match s {
+                    std::borrow::Cow::Borrowed(_) => String::from_utf8(utf8).unwrap(),
+                    std::borrow::Cow::Owned(_) => s.into_owned(),
+                }
+                .into()
             } else {
-                let mut s = crate::SmartString::from(string.as_str());
-                s.push_str(&String::from_utf8_lossy(&utf8));
-                s.into()
+                let mut x = SmartString::from(string.as_str());
+                x.push_str(s.as_ref());
+                x.into()
             }
         }
-        #[rhai_fn(name = "append")]
-        pub fn add_blob(string: &mut ImmutableString, utf8: Blob) {
+        #[rhai_fn(name = "+=", name = "append")]
+        pub fn add(string: &mut ImmutableString, utf8: Blob) {
             let mut s = crate::SmartString::from(string.as_str());
             if !utf8.is_empty() {
                 s.push_str(&String::from_utf8_lossy(&utf8));
                 *string = s.into();
             }
+        }
+        #[rhai_fn(name = "+")]
+        pub fn add_prepend(utf8: Blob, string: ImmutableString) -> ImmutableString {
+            let s = String::from_utf8_lossy(&utf8);
+            let mut s = match s {
+                std::borrow::Cow::Borrowed(_) => String::from_utf8(utf8).unwrap(),
+                std::borrow::Cow::Owned(_) => s.into_owned(),
+            };
+
+            if !string.is_empty() {
+                s.push_str(&string);
+            }
+
+            s.into()
         }
     }
 

@@ -10,7 +10,7 @@ use crate::{Engine, Identifier, LexError, SmartString, StaticVec, INT, UNSIGNED_
 use std::prelude::v1::*;
 use std::{
     borrow::Cow,
-    cell::Cell,
+    cell::RefCell,
     char, fmt,
     iter::{FusedIterator, Peekable},
     num::NonZeroUsize,
@@ -20,11 +20,14 @@ use std::{
 };
 
 /// _(internals)_ A type containing commands to control the tokenizer.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Copy)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct TokenizerControlBlock {
     /// Is the current tokenizer position within an interpolated text string?
     /// This flag allows switching the tokenizer back to _text_ parsing after an interpolation stream.
     pub is_within_text: bool,
+    /// Collection of global comments.
+    #[cfg(feature = "metadata")]
+    pub global_comments: Vec<SmartString>,
 }
 
 impl TokenizerControlBlock {
@@ -34,12 +37,14 @@ impl TokenizerControlBlock {
     pub const fn new() -> Self {
         Self {
             is_within_text: false,
+            #[cfg(feature = "metadata")]
+            global_comments: Vec::new(),
         }
     }
 }
 
 /// _(internals)_ A shared object that allows control of the tokenizer from outside.
-pub type TokenizerControl = Rc<Cell<TokenizerControlBlock>>;
+pub type TokenizerControl = Rc<RefCell<TokenizerControlBlock>>;
 
 type LERR = LexError;
 
@@ -248,7 +253,7 @@ impl fmt::Debug for Position {
             }
 
             #[cfg(feature = "no_position")]
-            unreachable!();
+            unreachable!("no position");
         }
     }
 }
@@ -1098,12 +1103,14 @@ impl From<Token> for String {
 
 /// _(internals)_ State of the tokenizer.
 /// Exported under the `internals` feature only.
-#[derive(Debug, Clone, Eq, PartialEq, Default)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TokenizeState {
     /// Maximum length of a string.
     pub max_string_size: Option<NonZeroUsize>,
     /// Can the next token be a unary operator?
     pub next_token_cannot_be_unary: bool,
+    /// Shared object to allow controlling the tokenizer externally.
+    pub tokenizer_control: TokenizerControl,
     /// Is the tokenizer currently inside a block comment?
     pub comment_level: usize,
     /// Include comments?
@@ -1866,6 +1873,11 @@ fn get_next_token_inner(
                             _ => Some("///".into()),
                         }
                     }
+                    #[cfg(feature = "metadata")]
+                    Some('!') => {
+                        eat_next(stream, pos);
+                        Some("//!".into())
+                    }
                     _ if state.include_comments => Some("//".into()),
                     _ => None,
                 };
@@ -1890,7 +1902,15 @@ fn get_next_token_inner(
                 }
 
                 if let Some(comment) = comment {
-                    return Some((Token::Comment(comment), start_pos));
+                    match comment {
+                        #[cfg(feature = "metadata")]
+                        _ if comment.starts_with("//!") => state
+                            .tokenizer_control
+                            .borrow_mut()
+                            .global_comments
+                            .push(comment),
+                        _ => return Some((Token::Comment(comment), start_pos)),
+                    }
                 }
             }
             ('/', '*') => {
@@ -2300,8 +2320,6 @@ pub struct TokenIterator<'a> {
     pub state: TokenizeState,
     /// Current position.
     pub pos: Position,
-    /// Shared object to allow controlling the tokenizer externally.
-    pub tokenizer_control: TokenizerControl,
     /// Input character stream.
     pub stream: MultiInputsStream<'a>,
     /// A processor function that maps a token to another.
@@ -2312,14 +2330,15 @@ impl<'a> Iterator for TokenIterator<'a> {
     type Item = (Token, Position);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut control = self.tokenizer_control.get();
+        {
+            let control = &mut *self.state.tokenizer_control.borrow_mut();
 
-        if control.is_within_text {
-            // Switch to text mode terminated by back-tick
-            self.state.is_within_text_terminated_by = Some('`');
-            // Reset it
-            control.is_within_text = false;
-            self.tokenizer_control.set(control);
+            if control.is_within_text {
+                // Switch to text mode terminated by back-tick
+                self.state.is_within_text_terminated_by = Some('`');
+                // Reset it
+                control.is_within_text = false;
+            }
         }
 
         let (token, pos) = match get_next_token(&mut self.stream, &mut self.state, &mut self.pos) {
@@ -2450,7 +2469,7 @@ impl Engine {
         input: impl IntoIterator<Item = &'a (impl AsRef<str> + 'a)>,
         token_mapper: Option<&'a OnParseTokenCallback>,
     ) -> (TokenIterator<'a>, TokenizerControl) {
-        let buffer: TokenizerControl = Cell::new(TokenizerControlBlock::new()).into();
+        let buffer: TokenizerControl = RefCell::new(TokenizerControlBlock::new()).into();
         let buffer2 = buffer.clone();
 
         (
@@ -2462,12 +2481,12 @@ impl Engine {
                     #[cfg(feature = "unchecked")]
                     max_string_size: None,
                     next_token_cannot_be_unary: false,
+                    tokenizer_control: buffer,
                     comment_level: 0,
                     include_comments: false,
                     is_within_text_terminated_by: None,
                 },
                 pos: Position::new(1, 0),
-                tokenizer_control: buffer,
                 stream: MultiInputsStream {
                     buf: None,
                     streams: input

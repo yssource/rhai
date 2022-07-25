@@ -8,7 +8,7 @@ use crate::{
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-use std::{any::TypeId, mem};
+use std::{any::TypeId, borrow::Cow, mem};
 
 #[cfg(not(feature = "no_float"))]
 use crate::{FLOAT, FLOAT_BYTES};
@@ -103,6 +103,27 @@ pub mod blob_functions {
     #[rhai_fn(pure)]
     pub fn to_array(blob: &mut Blob) -> Array {
         blob.iter().map(|&ch| (ch as INT).into()).collect()
+    }
+    /// Convert the BLOB into a string.
+    ///
+    /// The byte stream must be valid UTF-8, otherwise an error is raised.
+    ///
+    /// # Example
+    ///
+    /// ```rhai
+    /// let b = blob(5, 0x42);
+    ///
+    /// let x = b.as_string();
+    ///
+    /// print(x);       // prints "FFFFF"
+    /// ```
+    pub fn as_string(blob: Blob) -> String {
+        let s = String::from_utf8_lossy(&blob);
+
+        match s {
+            Cow::Borrowed(_) => String::from_utf8(blob).unwrap(),
+            Cow::Owned(_) => s.into_owned(),
+        }
     }
     /// Return the length of the BLOB.
     ///
@@ -200,6 +221,7 @@ pub mod blob_functions {
     ///
     /// print(b);       // prints "[42]"
     /// ```
+    #[rhai_fn(name = "push", name = "append")]
     pub fn push(blob: &mut Blob, value: INT) {
         blob.push((value & 0x000000ff) as u8);
     }
@@ -235,13 +257,13 @@ pub mod blob_functions {
     ///
     /// print(b);       // prints "[424242424268656c 6c6f]"
     /// ```
-    #[rhai_fn(name = "+=", name = "append")]
+    #[rhai_fn(name = "append")]
     pub fn append_str(blob: &mut Blob, string: &str) {
         if !string.is_empty() {
             blob.extend(string.as_bytes());
         }
     }
-    /// Add a string (as UTF-8 encoded byte-stream) to the end of the BLOB
+    /// Add a character (as UTF-8 encoded byte-stream) to the end of the BLOB
     ///
     /// # Example
     ///
@@ -252,37 +274,11 @@ pub mod blob_functions {
     ///
     /// print(b);       // prints "[424242424221]"
     /// ```
-    #[rhai_fn(name = "+=", name = "append")]
+    #[rhai_fn(name = "append")]
     pub fn append_char(blob: &mut Blob, character: char) {
         let mut buf = [0_u8; 4];
         let x = character.encode_utf8(&mut buf);
         blob.extend(x.as_bytes());
-    }
-    /// Add another BLOB to the end of the BLOB, returning it as a new BLOB.
-    ///
-    /// # Example
-    ///
-    /// ```rhai
-    /// let b1 = blob(5, 0x42);
-    /// let b2 = blob(3, 0x11);
-    ///
-    /// print(b1 + b2);     // prints "[4242424242111111]"
-    ///
-    /// print(b1);          // prints "[4242424242]"
-    /// ```
-    #[rhai_fn(name = "+")]
-    pub fn concat(blob1: Blob, blob2: Blob) -> Blob {
-        if !blob2.is_empty() {
-            if blob1.is_empty() {
-                blob2
-            } else {
-                let mut blob = blob1;
-                blob.extend(blob2);
-                blob
-            }
-        } else {
-            blob1
-        }
     }
     /// Add a byte `value` to the BLOB at a particular `index` position.
     ///

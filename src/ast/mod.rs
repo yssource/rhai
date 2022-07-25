@@ -22,8 +22,8 @@ pub use script_fn::EncapsulatedEnviron;
 #[cfg(not(feature = "no_function"))]
 pub use script_fn::{ScriptFnDef, ScriptFnMetadata};
 pub use stmt::{
-    CaseBlocksList, ConditionalStmtBlock, OpAssignment, RangeCase, Stmt, StmtBlock,
-    StmtBlockContainer, SwitchCasesCollection, TryCatchBlock,
+    CaseBlocksList, ConditionalExpr, OpAssignment, RangeCase, Stmt, StmtBlock, StmtBlockContainer,
+    SwitchCasesCollection, TryCatchBlock,
 };
 
 #[cfg(not(feature = "no_float"))]

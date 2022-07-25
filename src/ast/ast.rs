@@ -1,7 +1,7 @@
 //! Module defining the AST (abstract syntax tree).
 
 use super::{ASTFlags, Expr, FnAccess, Stmt, StmtBlock, StmtBlockContainer};
-use crate::{Dynamic, FnNamespace, Identifier, Position};
+use crate::{Dynamic, FnNamespace, Identifier, Position, SmartString};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -21,6 +21,9 @@ pub struct AST {
     /// Source of the [`AST`].
     /// No source if string is empty.
     source: Identifier,
+    /// [`AST`] documentation.
+    #[cfg(feature = "metadata")]
+    doc: SmartString,
     /// Global statements.
     body: StmtBlock,
     /// Script-defined functions.
@@ -42,13 +45,11 @@ impl fmt::Debug for AST {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut fp = f.debug_struct("AST");
 
-        if !self.source.is_empty() {
-            fp.field("source: ", &self.source);
-        }
+        fp.field("source", &self.source);
+        #[cfg(feature = "metadata")]
+        fp.field("doc", &self.doc);
         #[cfg(not(feature = "no_module"))]
-        if let Some(ref resolver) = self.resolver {
-            fp.field("resolver: ", resolver);
-        }
+        fp.field("resolver", &self.resolver);
 
         fp.field("body", &self.body.as_slice());
 
@@ -74,6 +75,8 @@ impl AST {
     ) -> Self {
         Self {
             source: Identifier::new_const(),
+            #[cfg(feature = "metadata")]
+            doc: SmartString::new_const(),
             body: StmtBlock::new(statements, Position::NONE, Position::NONE),
             #[cfg(not(feature = "no_function"))]
             lib: functions.into(),
@@ -92,6 +95,8 @@ impl AST {
     ) -> Self {
         Self {
             source: Identifier::new_const(),
+            #[cfg(feature = "metadata")]
+            doc: SmartString::new_const(),
             body: StmtBlock::new(statements, Position::NONE, Position::NONE),
             #[cfg(not(feature = "no_function"))]
             lib: functions.into(),
@@ -140,6 +145,8 @@ impl AST {
     pub fn empty() -> Self {
         Self {
             source: Identifier::new_const(),
+            #[cfg(feature = "metadata")]
+            doc: SmartString::new_const(),
             body: StmtBlock::NONE,
             #[cfg(not(feature = "no_function"))]
             lib: crate::Module::new().into(),
@@ -179,6 +186,41 @@ impl AST {
     pub fn clear_source(&mut self) -> &mut Self {
         self.source.clear();
         self
+    }
+    /// Get the documentation (if any).
+    /// Exported under the `metadata` feature only.
+    ///
+    /// Documentation is a collection of all comment lines beginning with `//!`.
+    ///
+    /// Leading white-spaces are stripped, and each line always starts with `//!`.
+    #[cfg(feature = "metadata")]
+    #[inline(always)]
+    pub fn doc(&self) -> &str {
+        &self.doc
+    }
+    /// Clear the documentation.
+    /// Exported under the `metadata` feature only.
+    #[cfg(feature = "metadata")]
+    #[inline(always)]
+    pub fn clear_doc(&mut self) -> &mut Self {
+        self.doc.clear();
+        self
+    }
+    /// Get a mutable reference to the documentation.
+    ///
+    /// Only available under `metadata`.
+    #[cfg(feature = "metadata")]
+    #[inline(always)]
+    pub(crate) fn doc_mut(&mut self) -> &mut SmartString {
+        &mut self.doc
+    }
+    /// Set the documentation.
+    ///
+    /// Only available under `metadata`.
+    #[cfg(feature = "metadata")]
+    #[inline(always)]
+    pub(crate) fn set_doc(&mut self, doc: impl Into<SmartString>) {
+        self.doc = doc.into();
     }
     /// Get the statements.
     #[cfg(not(feature = "internals"))]
@@ -292,6 +334,8 @@ impl AST {
         lib.merge_filtered(&self.lib, &filter);
         Self {
             source: self.source.clone(),
+            #[cfg(feature = "metadata")]
+            doc: self.doc.clone(),
             body: StmtBlock::NONE,
             lib: lib.into(),
             #[cfg(not(feature = "no_module"))]
@@ -305,6 +349,8 @@ impl AST {
     pub fn clone_statements_only(&self) -> Self {
         Self {
             source: self.source.clone(),
+            #[cfg(feature = "metadata")]
+            doc: self.doc.clone(),
             body: self.body.clone(),
             #[cfg(not(feature = "no_function"))]
             lib: crate::Module::new().into(),
@@ -543,6 +589,14 @@ impl AST {
             }
         }
 
+        #[cfg(feature = "metadata")]
+        if !other.doc.is_empty() {
+            if !_ast.doc.is_empty() {
+                _ast.doc.push('\n');
+            }
+            _ast.doc.push_str(other.doc());
+        }
+
         _ast
     }
     /// Combine one [`AST`] with another.  The second [`AST`] is consumed.
@@ -634,6 +688,14 @@ impl AST {
         #[cfg(not(feature = "no_function"))]
         if !other.lib.is_empty() {
             crate::func::shared_make_mut(&mut self.lib).merge_filtered(&other.lib, &_filter);
+        }
+
+        #[cfg(feature = "metadata")]
+        if !other.doc.is_empty() {
+            if !self.doc.is_empty() {
+                self.doc.push('\n');
+            }
+            self.doc.push_str(&other.doc);
         }
 
         self

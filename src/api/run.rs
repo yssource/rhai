@@ -25,9 +25,7 @@ impl Engine {
         let (stream, tokenizer_control) =
             self.lex_raw(&scripts, self.token_mapper.as_ref().map(<_>::as_ref));
         let mut state = ParseState::new(self, scope, tokenizer_control);
-
         let ast = self.parse(&mut stream.peekable(), &mut state, self.optimization_level)?;
-
         self.run_ast_with_scope(scope, &ast)
     }
     /// Evaluate an [`AST`], returning any error (if any).

@@ -318,7 +318,7 @@ impl crate::Expression<'_> {
     ///
     /// # Deprecated
     ///
-    /// This method is deprecated. Use [`get_string_value`][Expression::get_string_value] instead.
+    /// This method is deprecated. Use [`get_string_value`][crate::Expression::get_string_value] instead.
     ///
     /// This method will be removed in the next major version.
     #[deprecated(since = "1.4.0", note = "use `get_string_value` instead")]

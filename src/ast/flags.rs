@@ -14,6 +14,27 @@ pub enum FnAccess {
     Public,
 }
 
+impl FnAccess {
+    /// Is this function private?
+    #[inline(always)]
+    #[must_use]
+    pub fn is_private(self) -> bool {
+        match self {
+            Self::Private => true,
+            Self::Public => false,
+        }
+    }
+    /// Is this function public?
+    #[inline(always)]
+    #[must_use]
+    pub fn is_public(self) -> bool {
+        match self {
+            Self::Private => false,
+            Self::Public => true,
+        }
+    }
+}
+
 bitflags! {
     /// _(internals)_ Bit-flags containing [`AST`][crate::AST] node configuration options.
     /// Exported under the `internals` feature only.

@@ -105,7 +105,7 @@ impl<T: Debug + Copy + PartialOrd> Iterator for StepRange<T> {
                 self.dir = 0;
             }
         } else {
-            unreachable!();
+            unreachable!("`dir` != 0");
         }
 
         Some(v)

@@ -6,10 +6,17 @@ Version 1.9.0
 
 The minimum Rust version is now `1.60.0` in order to use the `dep:` syntax for dependencies.
 
+Bug fixes
+---------
+
+* `switch` cases with conditions that evaluate to constant `()` no longer optimize to `false` (should raise a type error during runtime).
+* Fixes concatenation of BLOB's and strings, where the BLOB's should be interpreted as UTF-8 encoded strings.
+
 New features
 ------------
 
 * A new feature, `no_custom_syntax`, is added to remove custom syntax support from Rhai for applications that do not require it (which should be most).
+* Comment lines beginning with `//!` (requires the `metadata` feature) are now collected as the script file's _module documentation_.
 
 Enhancements
 ------------
@@ -25,6 +32,8 @@ Enhancements
 
 * `EvalContext::eval_expression_tree_raw` and `Expression::eval_with_context_raw` are added to allow for not rewinding the `Scope` at the end of a statements block.
 * A new `range` function variant that takes an exclusive range with a step.
+* `as_string` is added to BLOB's to convert it into a string by interpreting it as a UTF-8 byte stream.
+* `FnAccess::is_private`, `FnAccess::is_public`, `FnNamespace::is_module_namespace` and `FnNameSpace::is_global_namespace` are added for convenience.
 
 
 Version 1.8.0
