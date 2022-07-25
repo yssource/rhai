@@ -195,6 +195,7 @@ impl AST {
     /// Leading white-spaces are stripped, and each line always starts with `//!`.
     #[cfg(feature = "metadata")]
     #[inline(always)]
+    #[must_use]
     pub fn doc(&self) -> &str {
         &self.doc
     }
@@ -211,6 +212,7 @@ impl AST {
     /// Only available under `metadata`.
     #[cfg(feature = "metadata")]
     #[inline(always)]
+    #[must_use]
     pub(crate) fn doc_mut(&mut self) -> &mut SmartString {
         &mut self.doc
     }
