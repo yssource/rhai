@@ -23,7 +23,7 @@ pub struct AST {
     source: Identifier,
     /// [`AST`] documentation.
     #[cfg(feature = "metadata")]
-    doc: Vec<SmartString>,
+    doc: SmartString,
     /// Global statements.
     body: StmtBlock,
     /// Script-defined functions.
@@ -47,7 +47,7 @@ impl fmt::Debug for AST {
 
         fp.field("source", &self.source);
         #[cfg(feature = "metadata")]
-        fp.field("doc", &self.doc());
+        fp.field("doc", &self.doc);
         #[cfg(not(feature = "no_module"))]
         fp.field("resolver", &self.resolver);
 
@@ -76,7 +76,7 @@ impl AST {
         Self {
             source: Identifier::new_const(),
             #[cfg(feature = "metadata")]
-            doc: Vec::new(),
+            doc: SmartString::new_const(),
             body: StmtBlock::new(statements, Position::NONE, Position::NONE),
             #[cfg(not(feature = "no_function"))]
             lib: functions.into(),
@@ -96,7 +96,7 @@ impl AST {
         Self {
             source: Identifier::new_const(),
             #[cfg(feature = "metadata")]
-            doc: Vec::new(),
+            doc: SmartString::new_const(),
             body: StmtBlock::new(statements, Position::NONE, Position::NONE),
             #[cfg(not(feature = "no_function"))]
             lib: functions.into(),
@@ -146,7 +146,7 @@ impl AST {
         Self {
             source: Identifier::new_const(),
             #[cfg(feature = "metadata")]
-            doc: Vec::new(),
+            doc: SmartString::new_const(),
             body: StmtBlock::NONE,
             #[cfg(not(feature = "no_function"))]
             lib: crate::Module::new().into(),
@@ -187,17 +187,19 @@ impl AST {
         self.source.clear();
         self
     }
-    /// Get the documentation.
+    /// Get the documentation (if any).
+    /// Exported under the `metadata` feature only.
     ///
-    /// Only available under `metadata`.
+    /// Documentation is a collection of all comment lines beginning with `//!`.
+    ///
+    /// Leading white-spaces are stripped, and each line always starts with `//!`.
     #[cfg(feature = "metadata")]
     #[inline(always)]
-    pub fn doc(&self) -> String {
-        self.doc.join("\n")
+    pub fn doc(&self) -> &str {
+        &self.doc
     }
     /// Clear the documentation.
-    ///
-    /// Only available under `metadata`.
+    /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
     #[inline(always)]
     pub fn clear_doc(&mut self) -> &mut Self {
@@ -209,7 +211,7 @@ impl AST {
     /// Only available under `metadata`.
     #[cfg(feature = "metadata")]
     #[inline(always)]
-    pub(crate) fn doc_mut(&mut self) -> &mut Vec<SmartString> {
+    pub(crate) fn doc_mut(&mut self) -> &mut SmartString {
         &mut self.doc
     }
     /// Set the documentation.
@@ -217,8 +219,8 @@ impl AST {
     /// Only available under `metadata`.
     #[cfg(feature = "metadata")]
     #[inline(always)]
-    pub(crate) fn set_doc(&mut self, doc: Vec<SmartString>) {
-        self.doc = doc;
+    pub(crate) fn set_doc(&mut self, doc: impl Into<SmartString>) {
+        self.doc = doc.into();
     }
     /// Get the statements.
     #[cfg(not(feature = "internals"))]
@@ -588,7 +590,12 @@ impl AST {
         }
 
         #[cfg(feature = "metadata")]
-        _ast.doc.extend(other.doc.iter().cloned());
+        if !other.doc.is_empty() {
+            if !_ast.doc.is_empty() {
+                _ast.doc.push('\n');
+            }
+            _ast.doc.push_str(other.doc());
+        }
 
         _ast
     }
@@ -684,7 +691,12 @@ impl AST {
         }
 
         #[cfg(feature = "metadata")]
-        self.doc.extend(other.doc.into_iter());
+        if !other.doc.is_empty() {
+            if !self.doc.is_empty() {
+                self.doc.push('\n');
+            }
+            self.doc.push_str(&other.doc);
+        }
 
         self
     }
