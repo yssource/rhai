@@ -174,6 +174,17 @@ fn collect_fn_metadata(
                 .collect::<Array>()
                 .into(),
         );
+        #[cfg(feature = "metadata")]
+        if !func.comments.is_empty() {
+            map.insert(
+                dict.get("comments").expect(DICT).clone(),
+                func.comments
+                    .iter()
+                    .map(|s| Into::into(&**s))
+                    .collect::<Array>()
+                    .into(),
+            );
+        }
 
         map
     }
@@ -188,6 +199,8 @@ fn collect_fn_metadata(
         "private",
         "is_anonymous",
         "params",
+        #[cfg(feature = "metadata")]
+        "comments",
     ]
     .iter()
     .map(|&s| s.into())
