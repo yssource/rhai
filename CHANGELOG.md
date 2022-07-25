@@ -16,6 +16,7 @@ New features
 ------------
 
 * A new feature, `no_custom_syntax`, is added to remove custom syntax support from Rhai for applications that do not require it (which should be most).
+* Comment lines beginning with `//!` (requires the `metadata` feature) are now collected as the script file's _module documentation_.
 
 Enhancements
 ------------

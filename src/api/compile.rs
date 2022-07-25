@@ -2,6 +2,7 @@
 
 use crate::parser::{ParseResult, ParseState};
 use crate::{Engine, OptimizationLevel, Scope, AST};
+use std::mem;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -222,7 +223,12 @@ impl Engine {
             self.token_mapper.as_ref().map(<_>::as_ref),
         );
         let mut state = ParseState::new(self, scope, tokenizer_control);
-        self.parse(&mut stream.peekable(), &mut state, optimization_level)
+        let mut ast = self.parse(&mut stream.peekable(), &mut state, optimization_level)?;
+        #[cfg(feature = "metadata")]
+        ast.set_doc(mem::take(
+            &mut state.tokenizer_control.borrow_mut().global_comments,
+        ));
+        Ok(ast)
     }
     /// Compile a string containing an expression into an [`AST`],
     /// which can be used later for evaluation.

@@ -1,7 +1,7 @@
 //! Module defining the AST (abstract syntax tree).
 
 use super::{ASTFlags, Expr, FnAccess, Stmt, StmtBlock, StmtBlockContainer};
-use crate::{Dynamic, FnNamespace, Identifier, Position};
+use crate::{Dynamic, FnNamespace, Identifier, Position, SmartString};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -21,6 +21,9 @@ pub struct AST {
     /// Source of the [`AST`].
     /// No source if string is empty.
     source: Identifier,
+    /// [`AST`] documentation.
+    #[cfg(feature = "metadata")]
+    doc: Vec<SmartString>,
     /// Global statements.
     body: StmtBlock,
     /// Script-defined functions.
@@ -42,13 +45,11 @@ impl fmt::Debug for AST {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut fp = f.debug_struct("AST");
 
-        if !self.source.is_empty() {
-            fp.field("source: ", &self.source);
-        }
+        fp.field("source", &self.source);
+        #[cfg(feature = "metadata")]
+        fp.field("doc", &self.doc());
         #[cfg(not(feature = "no_module"))]
-        if let Some(ref resolver) = self.resolver {
-            fp.field("resolver: ", resolver);
-        }
+        fp.field("resolver", &self.resolver);
 
         fp.field("body", &self.body.as_slice());
 
@@ -92,6 +93,8 @@ impl AST {
     ) -> Self {
         Self {
             source: Identifier::new_const(),
+            #[cfg(feature = "metadata")]
+            doc: Vec::new(),
             body: StmtBlock::new(statements, Position::NONE, Position::NONE),
             #[cfg(not(feature = "no_function"))]
             lib: functions.into(),
@@ -140,6 +143,8 @@ impl AST {
     pub fn empty() -> Self {
         Self {
             source: Identifier::new_const(),
+            #[cfg(feature = "metadata")]
+            doc: Vec::new(),
             body: StmtBlock::NONE,
             #[cfg(not(feature = "no_function"))]
             lib: crate::Module::new().into(),
@@ -179,6 +184,39 @@ impl AST {
     pub fn clear_source(&mut self) -> &mut Self {
         self.source.clear();
         self
+    }
+    /// Get the documentation.
+    ///
+    /// Only available under `metadata`.
+    #[cfg(feature = "metadata")]
+    #[inline(always)]
+    pub fn doc(&self) -> String {
+        self.doc.join("\n")
+    }
+    /// Clear the documentation.
+    ///
+    /// Only available under `metadata`.
+    #[cfg(feature = "metadata")]
+    #[inline(always)]
+    pub fn clear_doc(&mut self) -> &mut Self {
+        self.doc.clear();
+        self
+    }
+    /// Get a mutable reference to the documentation.
+    ///
+    /// Only available under `metadata`.
+    #[cfg(feature = "metadata")]
+    #[inline(always)]
+    pub(crate) fn doc_mut(&mut self) -> &mut Vec<SmartString> {
+        &mut self.doc
+    }
+    /// Set the documentation.
+    ///
+    /// Only available under `metadata`.
+    #[cfg(feature = "metadata")]
+    #[inline(always)]
+    pub(crate) fn set_doc(&mut self, doc: Vec<SmartString>) {
+        self.doc = doc;
     }
     /// Get the statements.
     #[cfg(not(feature = "internals"))]
@@ -292,6 +330,8 @@ impl AST {
         lib.merge_filtered(&self.lib, &filter);
         Self {
             source: self.source.clone(),
+            #[cfg(feature = "metadata")]
+            doc: self.doc.clone(),
             body: StmtBlock::NONE,
             lib: lib.into(),
             #[cfg(not(feature = "no_module"))]
@@ -305,6 +345,8 @@ impl AST {
     pub fn clone_statements_only(&self) -> Self {
         Self {
             source: self.source.clone(),
+            #[cfg(feature = "metadata")]
+            doc: self.doc.clone(),
             body: self.body.clone(),
             #[cfg(not(feature = "no_function"))]
             lib: crate::Module::new().into(),
@@ -543,6 +585,9 @@ impl AST {
             }
         }
 
+        #[cfg(feature = "metadata")]
+        _ast.doc.extend(other.doc.iter().cloned());
+
         _ast
     }
     /// Combine one [`AST`] with another.  The second [`AST`] is consumed.
@@ -635,6 +680,9 @@ impl AST {
         if !other.lib.is_empty() {
             crate::func::shared_make_mut(&mut self.lib).merge_filtered(&other.lib, &_filter);
         }
+
+        #[cfg(feature = "metadata")]
+        self.doc.extend(other.doc.into_iter());
 
         self
     }

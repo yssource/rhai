@@ -1404,9 +1404,7 @@ impl Engine {
                     }
 
                     // Make sure to parse the following as text
-                    let mut control = state.tokenizer_control.get();
-                    control.is_within_text = true;
-                    state.tokenizer_control.set(control);
+                    state.tokenizer_control.borrow_mut().is_within_text = true;
 
                     match input.next().expect(NEVER_ENDS) {
                         (Token::StringConstant(s), pos) => {
