@@ -181,7 +181,6 @@ pub use types::{
 #[cfg(not(feature = "no_custom_syntax"))]
 pub use api::custom_syntax::Expression;
 
-
 #[cfg(feature = "metadata")]
 pub use api::definitions::Definitions;
 
