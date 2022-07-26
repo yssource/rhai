@@ -1,21 +1,18 @@
-use crate::{
-    module::FuncInfo, plugin::*, tokenizer::is_valid_function_name, Engine, Module, Scope,
-};
-use core::{cmp::Ordering, fmt, iter};
+//! Module that defines functions to output definition files for [`Engine`].
+#![cfg(feature = "metadata")]
+
+use crate::module::FuncInfo;
+use crate::plugin::*;
+use crate::tokenizer::is_valid_function_name;
+use crate::{Engine, Module, Scope, INT};
 
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-
-#[cfg(feature = "no_std")]
-use alloc::borrow::Cow;
-
-#[cfg(not(feature = "no_std"))]
-use std::borrow::Cow;
+use std::{any::type_name, borrow::Cow, cmp::Ordering, fmt};
 
 impl Engine {
-    /// Return [`Definitions`] that can be used to
-    /// generate definition files that contain all
-    /// the visible items in the engine.
+    /// Return [`Definitions`] that can be used to generate definition files for the [`Engine`].
+    /// Exported under the `metadata` feature only.
     ///
     /// # Example
     ///
@@ -23,12 +20,15 @@ impl Engine {
     /// # use rhai::Engine;
     /// # fn main() -> std::io::Result<()> {
     /// let engine = Engine::new();
+    ///
     /// engine
     ///     .definitions()
     ///     .write_to_dir(".rhai/definitions")?;
     /// # Ok(())
     /// # }
     /// ```
+    #[inline(always)]
+    #[must_use]
     pub fn definitions(&self) -> Definitions {
         Definitions {
             engine: self,
@@ -36,10 +36,9 @@ impl Engine {
         }
     }
 
-    /// Return [`Definitions`] that can be used to
-    /// generate definition files that contain all
-    /// the visible items in the engine and the
-    /// given scope.
+    /// Return [`Definitions`] that can be used to generate definition files for the [`Engine`] and
+    /// the given [`Scope`].
+    /// Exported under the `metadata` feature only.
     ///
     /// # Example
     ///
@@ -54,6 +53,8 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline(always)]
+    #[must_use]
     pub fn definitions_with_scope<'e>(&'e self, scope: &'e Scope<'e>) -> Definitions<'e> {
         Definitions {
             engine: self,
@@ -62,19 +63,20 @@ impl Engine {
     }
 }
 
-/// Definitions helper that is used to generate
-/// definition files based on the contents of an [`Engine`].
+/// Definitions helper type to generate definition files based on the contents of an [`Engine`].
 #[must_use]
 pub struct Definitions<'e> {
+    /// The [`Engine`].
     engine: &'e Engine,
+    /// Optional [`Scope`] to include.
     scope: Option<&'e Scope<'e>>,
 }
 
 impl<'e> Definitions<'e> {
-    /// Write all the definition files returned from [`iter_files`] to a directory.
+    /// Output all definition files returned from [`iter_files`][Definitions::iter_files] to a
+    /// specified directory.
     ///
-    /// This function will create the directory path if it does not yet exist,
-    /// it will also override any existing files as needed.
+    /// This function creates the directory if it does not exist, and overrides any existing files.
     #[cfg(all(not(feature = "no_std"), not(target_family = "wasm")))]
     pub fn write_to_dir(&self, path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
         use std::fs;
@@ -98,6 +100,7 @@ impl<'e> Definitions<'e> {
             fs::write(path.join("__scope__.d.rhai"), self.scope())?;
         }
 
+        #[cfg(not(feature = "no_module"))]
         for (name, decl) in self.modules() {
             fs::write(path.join(format!("{name}.d.rhai")), decl)?;
         }
@@ -105,9 +108,11 @@ impl<'e> Definitions<'e> {
         Ok(())
     }
 
-    /// Iterate over the generated definition files.
+    /// Iterate over generated definition files.
     ///
-    /// The returned iterator yields all the definition files as (filename, content) pairs.
+    /// The returned iterator yields all definition files as (filename, content) pairs.
+    #[inline]
+    #[must_use]
     pub fn iter_files(&self) -> impl Iterator<Item = (String, String)> + '_ {
         IntoIterator::into_iter([
             (
@@ -120,23 +125,27 @@ impl<'e> Definitions<'e> {
             ),
             ("__static__.d.rhai".to_string(), self.static_module()),
         ])
-        .chain(iter::from_fn(move || {
-            if self.scope.is_some() {
-                Some(("__scope__.d.rhai".to_string(), self.scope()))
-            } else {
-                None
-            }
-        }))
         .chain(
-            self.modules()
-                .map(|(name, def)| (format!("{name}.d.rhai"), def)),
+            self.scope
+                .iter()
+                .map(move |_| ("__scope__.d.rhai".to_string(), self.scope())),
+        )
+        .chain(
+            #[cfg(not(feature = "no_module"))]
+            {
+                self.modules()
+                    .map(|(name, def)| (format!("{name}.d.rhai"), def))
+            },
+            #[cfg(feature = "no_module")]
+            {
+                std::iter::empty()
+            },
         )
     }
 
-    /// Return the definitions for the globally available
-    /// items of the engine.
+    /// Return definitions for all globally available functions.
     ///
-    /// The definitions will always start with `module static;`.
+    /// Always starts with `module static;`.
     #[must_use]
     pub fn static_module(&self) -> String {
         let mut s = String::from("module static;\n\n");
@@ -153,11 +162,9 @@ impl<'e> Definitions<'e> {
         s
     }
 
-    /// Return the definitions for the available
-    /// items of the scope.
+    /// Return definitions for all items inside the [`Scope`], if any.
     ///
-    /// The definitions will always start with `module static;`,
-    /// even if the scope is empty or none was provided.
+    /// Always starts with `module static;` even if the [`Scope`] is empty or none was provided.
     #[must_use]
     pub fn scope(&self) -> String {
         let mut s = String::from("module static;\n\n");
@@ -169,44 +176,41 @@ impl<'e> Definitions<'e> {
         s
     }
 
-    /// Return module name and definition pairs for each registered module.
+    /// Return a (module name, definitions) pair for each registered static [module][Module].
     ///
-    /// The definitions will always start with `module <module name>;`.
+    /// Not available under `no_module`.
     ///
-    /// If the feature `no_module` is enabled, this will yield no elements.
+    /// Always starts with `module <module name>;`.
+    #[cfg(not(feature = "no_module"))]
+    #[must_use]
     pub fn modules(&self) -> impl Iterator<Item = (String, String)> + '_ {
-        #[cfg(not(feature = "no_module"))]
-        let m = {
-            let mut m = self
-                .engine
-                .global_sub_modules
-                .iter()
-                .map(move |(name, module)| {
-                    (
-                        name.to_string(),
-                        format!("module {name};\n\n{}", module.definition(self)),
-                    )
-                })
-                .collect::<Vec<_>>();
+        let mut m = self
+            .engine
+            .global_sub_modules
+            .iter()
+            .map(move |(name, module)| {
+                (
+                    name.to_string(),
+                    format!("module {name};\n\n{}", module.definition(self)),
+                )
+            })
+            .collect::<Vec<_>>();
 
-            m.sort_by(|(name1, _), (name2, _)| name1.cmp(name2));
-            m
-        };
-
-        #[cfg(feature = "no_module")]
-        let m = Vec::new();
+        m.sort_by(|(name1, _), (name2, _)| name1.cmp(name2));
 
         m.into_iter()
     }
 }
 
 impl Module {
+    /// Return definitions for all items inside the [`Module`].
     fn definition(&self, def: &Definitions) -> String {
         let mut s = String::new();
         self.write_definition(&mut s, def).unwrap();
         s
     }
 
+    /// Output definitions for all items inside the [`Module`].
     fn write_definition(&self, writer: &mut dyn fmt::Write, def: &Definitions) -> fmt::Result {
         let mut first = true;
 
@@ -259,6 +263,7 @@ impl Module {
 }
 
 impl FuncInfo {
+    /// Output definitions for a function.
     fn write_definition(
         &self,
         writer: &mut dyn fmt::Write,
@@ -324,14 +329,11 @@ impl FuncInfo {
 
 /// We have to transform some of the types.
 ///
-/// This is highly inefficient and is currently based on
-/// trial and error with the core packages.
+/// This is highly inefficient and is currently based on trial and error with the core packages.
 ///
-/// It tries to flatten types, removing `&` and `&mut`,
-/// and paths, while keeping generics.
+/// It tries to flatten types, removing `&` and `&mut`, and paths, while keeping generics.
 ///
-/// Associated generic types are also rewritten into regular
-/// generic type parameters.
+/// Associated generic types are also rewritten into regular generic type parameters.
 fn def_type_name<'a>(ty: &'a str, engine: &'a Engine) -> Cow<'a, str> {
     let ty = engine.format_type_name(ty).replace("crate::", "");
     let ty = ty.strip_prefix("&mut").unwrap_or(&*ty).trim();
@@ -343,16 +345,23 @@ fn def_type_name<'a>(ty: &'a str, engine: &'a Engine) -> Cow<'a, str> {
         .map(str::trim)
         .unwrap_or(ty);
 
-    ty.replace("Iterator<Item=", "Iterator<")
+    let ty = ty
+        .replace("Iterator<Item=", "Iterator<")
         .replace("Dynamic", "?")
         .replace("INT", "int")
+        .replace(type_name::<INT>(), "int")
         .replace("FLOAT", "float")
         .replace("&str", "String")
-        .replace("ImmutableString", "String")
-        .into()
+        .replace("ImmutableString", "String");
+
+    #[cfg(not(feature = "no_float"))]
+    let ty = ty.replace(type_name::<crate::FLOAT>(), "float");
+
+    ty.into()
 }
 
 impl Scope<'_> {
+    /// Return definitions for all items inside the [`Scope`].
     fn write_definition(&self, writer: &mut dyn fmt::Write) -> fmt::Result {
         let mut first = true;
         for (name, constant, _) in self.iter_raw() {

@@ -1,21 +1,20 @@
-use rhai::{plugin::*, Engine, Scope};
+use rhai::plugin::*;
+use rhai::{Engine, EvalAltResult, Scope};
 
 #[export_module]
 pub mod general_kenobi {
-    /// Returns a string where `hello there `
-    /// is repeated `n` times.
+    /// Returns a string where "hello there" is repeated `n` times.
     pub fn hello_there(n: i64) -> String {
         use std::convert::TryInto;
         "hello there ".repeat(n.try_into().unwrap())
     }
 }
 
-fn main() {
+fn main() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let mut scope = Scope::new();
 
-    // This variable will also show up in the definitions,
-    // since it will be part of the scope.
+    // This variable will also show up in the definitions, since it will be part of the scope.
     scope.push("hello_there", "hello there");
 
     #[cfg(not(feature = "no_module"))]
@@ -28,17 +27,15 @@ fn main() {
         engine.register_fn("minus", |a: i64, b: i64| a - b);
     }
 
-    engine
-        .eval_with_scope::<()>(
-            &mut scope,
-            r#"
-hello_there = general_kenobi::hello_there(4 minus 2);
-"#,
-        )
-        .unwrap();
+    engine.run_with_scope(
+        &mut scope,
+        "hello_there = general_kenobi::hello_there(4 minus 2);",
+    )?;
 
     engine
         .definitions_with_scope(&scope)
         .write_to_dir("examples/definitions/.rhai/definitions")
         .unwrap();
+
+    Ok(())
 }

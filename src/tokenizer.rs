@@ -568,7 +568,7 @@ pub enum Token {
     Reserved(SmartString),
     /// A custom keyword.
     ///
-    /// Not available under the `no_custom_syntax` feature.
+    /// Not available under `no_custom_syntax`.
     #[cfg(not(feature = "no_custom_syntax"))]
     Custom(SmartString),
     /// End of the input stream.

@@ -1,6 +1,6 @@
 module static;
 
-op minus(i64, i64) -> i64;
+op minus(int, int) -> int;
 
 op !(bool) -> bool;
 
@@ -45,13 +45,13 @@ op !=(Instant, Instant) -> bool;
 
 op !=(int, f32) -> bool;
 
-op !=(int, f64) -> bool;
+op !=(int, float) -> bool;
 
 op !=(f32, int) -> bool;
 
 op !=(f32, f32) -> bool;
 
-op !=(f64, int) -> bool;
+op !=(float, int) -> bool;
 
 op !=(i128, i128) -> bool;
 
@@ -159,11 +159,11 @@ op **(u64, int) -> u64;
 
 op **(u8, int) -> u8;
 
-op +(int) -> i64;
+op +(int) -> int;
 
 op +(f32) -> f32;
 
-op +(f64) -> f64;
+op +(float) -> float;
 
 op +(i128) -> i128;
 
@@ -279,7 +279,7 @@ op -(int) -> int;
 
 op -(f32) -> f32;
 
-op -(f64) -> f64;
+op -(float) -> float;
 
 op -(i128) -> i128;
 
@@ -357,13 +357,13 @@ op <(Instant, Instant) -> bool;
 
 op <(int, f32) -> bool;
 
-op <(int, f64) -> bool;
+op <(int, float) -> bool;
 
 op <(f32, int) -> bool;
 
 op <(f32, f32) -> bool;
 
-op <(f64, int) -> bool;
+op <(float, int) -> bool;
 
 op <(i128, i128) -> bool;
 
@@ -406,13 +406,13 @@ op <=(Instant, Instant) -> bool;
 
 op <=(int, f32) -> bool;
 
-op <=(int, f64) -> bool;
+op <=(int, float) -> bool;
 
 op <=(f32, int) -> bool;
 
 op <=(f32, f32) -> bool;
 
-op <=(f64, int) -> bool;
+op <=(float, int) -> bool;
 
 op <=(i128, i128) -> bool;
 
@@ -473,13 +473,13 @@ op ==(Instant, Instant) -> bool;
 
 op ==(int, f32) -> bool;
 
-op ==(int, f64) -> bool;
+op ==(int, float) -> bool;
 
 op ==(f32, int) -> bool;
 
 op ==(f32, f32) -> bool;
 
-op ==(f64, int) -> bool;
+op ==(float, int) -> bool;
 
 op ==(i128, i128) -> bool;
 
@@ -504,13 +504,13 @@ op >(Instant, Instant) -> bool;
 
 op >(int, f32) -> bool;
 
-op >(int, f64) -> bool;
+op >(int, float) -> bool;
 
 op >(f32, int) -> bool;
 
 op >(f32, f32) -> bool;
 
-op >(f64, int) -> bool;
+op >(float, int) -> bool;
 
 op >(i128, i128) -> bool;
 
@@ -535,13 +535,13 @@ op >=(Instant, Instant) -> bool;
 
 op >=(int, f32) -> bool;
 
-op >=(int, f64) -> bool;
+op >=(int, float) -> bool;
 
 op >=(f32, int) -> bool;
 
 op >=(f32, f32) -> bool;
 
-op >=(f64, int) -> bool;
+op >=(float, int) -> bool;
 
 op >=(i128, i128) -> bool;
 
@@ -580,10 +580,10 @@ op >>(u64, int) -> u64;
 op >>(u8, int) -> u8;
 
 /// Return the natural number _e_.
-fn E() -> f64;
+fn E() -> float;
 
 /// Return the number π.
-fn PI() -> f64;
+fn PI() -> float;
 
 op ^(i128, i128) -> i128;
 
@@ -610,7 +610,7 @@ fn abs(x: int) -> int;
 fn abs(x: f32) -> f32;
 
 /// Return the absolute value of the floating-point number.
-fn abs(x: f64) -> f64;
+fn abs(x: float) -> float;
 
 /// Return the absolute value of the number.
 fn abs(x: i128) -> i128;
@@ -625,10 +625,10 @@ fn abs(x: i32) -> i32;
 fn abs(x: i8) -> i8;
 
 /// Return the arc-cosine of the floating-point number, in radians.
-fn acos(x: float) -> f64;
+fn acos(x: float) -> float;
 
 /// Return the arc-hyperbolic-cosine of the floating-point number, in radians.
-fn acosh(x: float) -> f64;
+fn acosh(x: float) -> float;
 
 /// Return `true` if all elements in the array return `true` when applied a function named by `filter`.
 ///
@@ -761,19 +761,19 @@ fn append(string: String, utf8: Blob) -> ();
 fn as_string(blob: Blob) -> String;
 
 /// Return the arc-sine of the floating-point number, in radians.
-fn asin(x: float) -> f64;
+fn asin(x: float) -> float;
 
 /// Return the arc-hyperbolic-sine of the floating-point number, in radians.
-fn asinh(x: float) -> f64;
+fn asinh(x: float) -> float;
 
 /// Return the arc-tangent of the floating-point number, in radians.
-fn atan(x: float) -> f64;
+fn atan(x: float) -> float;
 
 /// Return the arc-tangent of the floating-point numbers `x` and `y`, in radians.
-fn atan(x: float, y: float) -> f64;
+fn atan(x: float, y: float) -> float;
 
 /// Return the arc-hyperbolic-tangent of the floating-point number, in radians.
-fn atanh(x: float) -> f64;
+fn atanh(x: float) -> float;
 
 /// Return an iterator over all the bits in the number.
 ///
@@ -814,7 +814,7 @@ fn bits(value: int, from: int) -> Iterator<bool>;
 ///     print(bit);
 /// }
 /// ```
-fn bits(value: int, range: Range<i64>) -> Iterator<bool>;
+fn bits(value: int, range: Range<int>) -> Iterator<bool>;
 
 /// Return an iterator over an inclusive range of bits in the number.
 ///
@@ -827,7 +827,7 @@ fn bits(value: int, range: Range<i64>) -> Iterator<bool>;
 ///     print(bit);
 /// }
 /// ```
-fn bits(value: int, range: RangeInclusive<i64>) -> Iterator<bool>;
+fn bits(value: int, range: RangeInclusive<int>) -> Iterator<bool>;
 
 /// Return an iterator over a portion of bits in the number.
 ///
@@ -886,10 +886,10 @@ fn blob(len: int, value: int) -> Blob;
 ///
 /// print(text.bytes);      // prints 51
 /// ```
-fn bytes(string: String) -> i64;
+fn bytes(string: String) -> int;
 
 /// Return the smallest whole number larger than or equals to the floating-point number.
-fn ceiling(x: float) -> f64;
+fn ceiling(x: float) -> float;
 
 /// Return an iterator over the characters in the string.
 ///
@@ -926,7 +926,7 @@ fn chars(string: String, from: int) -> Iterator<char>;
 ///     print(ch);
 /// }
 /// ```
-fn chars(string: String, range: Range<i64>) -> Iterator<char>;
+fn chars(string: String, range: Range<int>) -> Iterator<char>;
 
 /// Return an iterator over an inclusive range of characters in the string.
 ///
@@ -937,7 +937,7 @@ fn chars(string: String, range: Range<i64>) -> Iterator<char>;
 ///     print(ch);
 /// }
 /// ```
-fn chars(string: String, range: RangeInclusive<i64>) -> Iterator<char>;
+fn chars(string: String, range: RangeInclusive<int>) -> Iterator<char>;
 
 /// Return an iterator over a portion of characters in the string.
 ///
@@ -1030,10 +1030,10 @@ fn clear(string: String) -> ();
 fn contains(array: Array, value: ?) -> bool;
 
 /// Return the cosine of the floating-point number in radians.
-fn cos(x: float) -> f64;
+fn cos(x: float) -> float;
 
 /// Return the hyperbolic cosine of the floating-point number in radians.
-fn cosh(x: float) -> f64;
+fn cosh(x: float) -> float;
 
 /// Remove all characters from the string except those within an exclusive `range`.
 ///
@@ -1046,7 +1046,7 @@ fn cosh(x: float) -> f64;
 ///
 /// print(text);        // prints "llo, w"
 /// ```
-fn crop(string: String, range: Range<i64>) -> ();
+fn crop(string: String, range: Range<int>) -> ();
 
 /// Remove all characters from the string except those within an inclusive `range`.
 ///
@@ -1059,7 +1059,7 @@ fn crop(string: String, range: Range<i64>) -> ();
 ///
 /// print(text);        // prints "llo, wo"
 /// ```
-fn crop(string: String, range: RangeInclusive<i64>) -> ();
+fn crop(string: String, range: RangeInclusive<int>) -> ();
 
 /// Remove all characters from the string except until the `start` position.
 ///
@@ -1127,7 +1127,7 @@ fn debug(map: Map) -> String;
 fn debug(number: f32) -> String;
 
 /// Convert the value of `number` into a string.
-fn debug(number: f64) -> String;
+fn debug(number: float) -> String;
 
 /// Convert the string into debug format.
 fn debug(string: String) -> String;
@@ -1285,7 +1285,7 @@ fn drain(array: Array, filter: FnPtr) -> Array;
 ///
 /// print(z);       // prints "[5]"
 /// ```
-fn drain(array: Array, range: Range<i64>) -> Array;
+fn drain(array: Array, range: Range<int>) -> Array;
 
 /// Remove all elements in the array within an inclusive `range` and return them as a new array.
 ///
@@ -1306,7 +1306,7 @@ fn drain(array: Array, range: Range<i64>) -> Array;
 ///
 /// print(z);       // prints "[5]"
 /// ```
-fn drain(array: Array, range: RangeInclusive<i64>) -> Array;
+fn drain(array: Array, range: RangeInclusive<int>) -> Array;
 
 /// Remove all bytes in the BLOB within an exclusive `range` and return them as a new BLOB.
 ///
@@ -1329,7 +1329,7 @@ fn drain(array: Array, range: RangeInclusive<i64>) -> Array;
 ///
 /// print(b3);      // prints "[05]"
 /// ```
-fn drain(blob: Blob, range: Range<i64>) -> Blob;
+fn drain(blob: Blob, range: Range<int>) -> Blob;
 
 /// Remove all bytes in the BLOB within an inclusive `range` and return them as a new BLOB.
 ///
@@ -1352,7 +1352,7 @@ fn drain(blob: Blob, range: Range<i64>) -> Blob;
 ///
 /// print(b3);      // prints "[05]"
 /// ```
-fn drain(blob: Blob, range: RangeInclusive<i64>) -> Blob;
+fn drain(blob: Blob, range: RangeInclusive<int>) -> Blob;
 
 /// Remove all elements within a portion of the array and return them as a new array.
 ///
@@ -1424,10 +1424,10 @@ fn drain(blob: Blob, start: int, len: int) -> Blob;
 fn elapsed(timestamp: Instant) -> RhaiResult;
 
 /// Return the end of the exclusive range.
-fn end(range: ExclusiveRange) -> i64;
+fn end(range: ExclusiveRange) -> int;
 
 /// Return the end of the inclusive range.
-fn end(range: InclusiveRange) -> i64;
+fn end(range: InclusiveRange) -> int;
 
 /// Return `true` if the string ends with a specified string.
 ///
@@ -1443,7 +1443,7 @@ fn end(range: InclusiveRange) -> i64;
 fn ends_with(string: String, match_string: String) -> bool;
 
 /// Return the exponential of the floating-point number.
-fn exp(x: float) -> f64;
+fn exp(x: float) -> float;
 
 /// Copy an exclusive range of the array and return it as a new array.
 ///
@@ -1456,7 +1456,7 @@ fn exp(x: float) -> f64;
 ///
 /// print(x);                   // prints "[1, 2, 3, 4, 5]"
 /// ```
-fn extract(array: Array, range: Range<i64>) -> Array;
+fn extract(array: Array, range: Range<int>) -> Array;
 
 /// Copy an inclusive range of the array and return it as a new array.
 ///
@@ -1469,7 +1469,7 @@ fn extract(array: Array, range: Range<i64>) -> Array;
 ///
 /// print(x);                   // prints "[1, 2, 3, 4, 5]"
 /// ```
-fn extract(array: Array, range: RangeInclusive<i64>) -> Array;
+fn extract(array: Array, range: RangeInclusive<int>) -> Array;
 
 /// Copy a portion of the array beginning at the `start` position till the end and return it as
 /// a new array.
@@ -1504,7 +1504,7 @@ fn extract(array: Array, start: int) -> Array;
 ///
 /// print(b);                   // prints "[0102030405]"
 /// ```
-fn extract(blob: Blob, range: Range<i64>) -> Blob;
+fn extract(blob: Blob, range: Range<int>) -> Blob;
 
 /// Copy an inclusive `range` of the BLOB and return it as a new BLOB.
 ///
@@ -1519,7 +1519,7 @@ fn extract(blob: Blob, range: Range<i64>) -> Blob;
 ///
 /// print(b);                   // prints "[0102030405]"
 /// ```
-fn extract(blob: Blob, range: RangeInclusive<i64>) -> Blob;
+fn extract(blob: Blob, range: RangeInclusive<int>) -> Blob;
 
 /// Copy a portion of the BLOB beginning at the `start` position till the end and return it as
 /// a new BLOB.
@@ -1653,10 +1653,10 @@ fn filter(array: Array, filter: FnPtr) -> Array;
 fn filter(array: Array, filter_func: String) -> Array;
 
 /// Return the largest whole number less than or equals to the floating-point number.
-fn floor(x: float) -> f64;
+fn floor(x: float) -> float;
 
 /// Return the fractional part of the floating-point number.
-fn fraction(x: float) -> f64;
+fn fraction(x: float) -> float;
 
 /// Get a copy of the element at the `index` position in the array.
 ///
@@ -1696,7 +1696,7 @@ fn get(array: Array, index: int) -> ?;
 ///
 /// print(b.get(99));       // prints 0
 /// ```
-fn get(blob: Blob, index: int) -> i64;
+fn get(blob: Blob, index: int) -> int;
 
 /// Get the value of the `property` in the object map and return a copy.
 ///
@@ -1754,10 +1754,10 @@ fn get bits(value: int) -> Iterator<bool>;
 ///
 /// print(text.bytes);      // prints 51
 /// ```
-fn get bytes(string: String) -> i64;
+fn get bytes(string: String) -> int;
 
 /// Return the smallest whole number larger than or equals to the floating-point number.
-fn get ceiling(x: float) -> f64;
+fn get ceiling(x: float) -> float;
 
 /// Return an iterator over all the characters in the string.
 ///
@@ -1784,19 +1784,19 @@ fn get chars(string: String) -> Iterator<char>;
 fn get elapsed(timestamp: Instant) -> RhaiResult;
 
 /// Return the end of the exclusive range.
-fn get end(range: ExclusiveRange) -> i64;
+fn get end(range: ExclusiveRange) -> int;
 
 /// Return the end of the inclusive range.
-fn get end(range: InclusiveRange) -> i64;
+fn get end(range: InclusiveRange) -> int;
 
 /// Return the largest whole number less than or equals to the floating-point number.
-fn get floor(x: float) -> f64;
+fn get floor(x: float) -> float;
 
 /// Return the fractional part of the floating-point number.
-fn get fraction(x: float) -> f64;
+fn get fraction(x: float) -> float;
 
 /// Return the integral part of the floating-point number.
-fn get int(x: float) -> f64;
+fn get int(x: float) -> float;
 
 /// Return `true` if the function is an anonymous function.
 ///
@@ -1897,7 +1897,7 @@ fn get is_zero(x: int) -> bool;
 fn get is_zero(x: f32) -> bool;
 
 /// Return true if the floating-point number is zero.
-fn get is_zero(x: f64) -> bool;
+fn get is_zero(x: float) -> bool;
 
 /// Return true if the number is zero.
 fn get is_zero(x: i128) -> bool;
@@ -1927,7 +1927,7 @@ fn get is_zero(x: u64) -> bool;
 fn get is_zero(x: u8) -> bool;
 
 /// Number of elements in the array.
-fn get len(array: Array) -> i64;
+fn get len(array: Array) -> int;
 
 /// Return the length of the BLOB.
 ///
@@ -1940,7 +1940,7 @@ fn get len(array: Array) -> i64;
 ///
 /// print(b.len());     // prints 10
 /// ```
-fn get len(blob: Blob) -> i64;
+fn get len(blob: Blob) -> int;
 
 /// Return the length of the string, in number of characters.
 ///
@@ -1951,7 +1951,7 @@ fn get len(blob: Blob) -> i64;
 ///
 /// print(text.len);        // prints 17
 /// ```
-fn get len(string: String) -> i64;
+fn get len(string: String) -> int;
 
 /// Return the name of the function.
 ///
@@ -1968,13 +1968,13 @@ fn get name(fn_ptr: FnPtr) -> String;
 
 /// Return the nearest whole number closest to the floating-point number.
 /// Rounds away from zero.
-fn get round(x: float) -> f64;
+fn get round(x: float) -> float;
 
 /// Return the start of the exclusive range.
-fn get start(range: ExclusiveRange) -> i64;
+fn get start(range: ExclusiveRange) -> int;
 
 /// Return the start of the inclusive range.
-fn get start(range: InclusiveRange) -> i64;
+fn get start(range: InclusiveRange) -> int;
 
 /// Return the _tag_ of a `Dynamic` value.
 ///
@@ -1987,7 +1987,7 @@ fn get start(range: InclusiveRange) -> i64;
 ///
 /// print(x.tag);           // prints 42
 /// ```
-fn get tag(value: ?) -> i64;
+fn get tag(value: ?) -> int;
 
 /// Return `true` if the specified `bit` in the number is set.
 ///
@@ -2015,7 +2015,7 @@ fn get_bit(value: int, bit: int) -> bool;
 ///
 /// print(x.get_bits(5..10));       // print 18
 /// ```
-fn get_bits(value: int, range: Range<i64>) -> int;
+fn get_bits(value: int, range: Range<int>) -> int;
 
 /// Return an inclusive range of bits in the number as a new number.
 ///
@@ -2026,7 +2026,7 @@ fn get_bits(value: int, range: Range<i64>) -> int;
 ///
 /// print(x.get_bits(5..=9));       // print 18
 /// ```
-fn get_bits(value: int, range: RangeInclusive<i64>) -> int;
+fn get_bits(value: int, range: RangeInclusive<int>) -> int;
 
 /// Return a portion of bits in the number as a new number.
 ///
@@ -2050,7 +2050,7 @@ fn get_fn_metadata_list(name: String) -> Array;
 fn get_fn_metadata_list(name: String, params: int) -> Array;
 
 /// Return the hypotenuse of a triangle with sides `x` and `y`.
-fn hypot(x: float, y: float) -> f64;
+fn hypot(x: float, y: float) -> float;
 
 /// Iterate through all the elements in the array, applying a function named by `filter` to each
 /// element in turn, and return the index of the first element that returns `true`.
@@ -2131,7 +2131,7 @@ fn index_of(array: Array, value: ?) -> int;
 ///
 /// print(text.index_of('x'));      // prints -1
 /// ```
-fn index_of(string: String, character: char) -> i64;
+fn index_of(string: String, character: char) -> int;
 
 /// Find the specified `character` in the string and return the first index where it is found.
 /// If the `character` is not found, `-1` is returned.
@@ -2145,7 +2145,7 @@ fn index_of(string: String, character: char) -> i64;
 ///
 /// print(text.index_of("xx:));     // prints -1
 /// ```
-fn index_of(string: String, find_string: String) -> i64;
+fn index_of(string: String, find_string: String) -> int;
 
 /// Iterate through all the elements in the array, starting from a particular `start` position,
 /// applying a function named by `filter` to each element in turn, and return the index of the
@@ -2267,7 +2267,7 @@ fn index_of(array: Array, value: ?, start: int) -> int;
 ///
 /// print(text.index_of('x', 0));       // prints -1
 /// ```
-fn index_of(string: String, character: char, start: int) -> i64;
+fn index_of(string: String, character: char, start: int) -> int;
 
 /// Find the specified sub-string in the string, starting from the specified `start` position,
 /// and return the first index where it is found.
@@ -2288,7 +2288,7 @@ fn index_of(string: String, character: char, start: int) -> i64;
 ///
 /// print(text.index_of("xx", 0));      // prints -1
 /// ```
-fn index_of(string: String, find_string: String, start: int) -> i64;
+fn index_of(string: String, find_string: String, start: int) -> int;
 
 /// Add a new element into the array at a particular `index` position.
 ///
@@ -2331,7 +2331,7 @@ fn insert(array: Array, index: int, item: ?) -> ();
 fn insert(blob: Blob, index: int, value: int) -> ();
 
 /// Return the integral part of the floating-point number.
-fn int(x: float) -> f64;
+fn int(x: float) -> float;
 
 /// Return `true` if the function is an anonymous function.
 ///
@@ -2432,7 +2432,7 @@ fn is_zero(x: int) -> bool;
 fn is_zero(x: f32) -> bool;
 
 /// Return true if the floating-point number is zero.
-fn is_zero(x: f64) -> bool;
+fn is_zero(x: float) -> bool;
 
 /// Return true if the number is zero.
 fn is_zero(x: i128) -> bool;
@@ -2473,7 +2473,7 @@ fn is_zero(x: u8) -> bool;
 fn keys(map: Map) -> Array;
 
 /// Number of elements in the array.
-fn len(array: Array) -> i64;
+fn len(array: Array) -> int;
 
 /// Return the length of the BLOB.
 ///
@@ -2486,10 +2486,10 @@ fn len(array: Array) -> i64;
 ///
 /// print(b.len());     // prints 10
 /// ```
-fn len(blob: Blob) -> i64;
+fn len(blob: Blob) -> int;
 
 /// Return the number of properties in the object map.
-fn len(map: Map) -> i64;
+fn len(map: Map) -> int;
 
 /// Return the length of the string, in number of characters.
 ///
@@ -2500,16 +2500,16 @@ fn len(map: Map) -> i64;
 ///
 /// print(text.len);        // prints 17
 /// ```
-fn len(string: String) -> i64;
+fn len(string: String) -> int;
 
 /// Return the natural log of the floating-point number.
-fn ln(x: float) -> f64;
+fn ln(x: float) -> float;
 
 /// Return the log of the floating-point number with base 10.
-fn log(x: float) -> f64;
+fn log(x: float) -> float;
 
 /// Return the log of the floating-point number with `base`.
-fn log(x: float, base: float) -> f64;
+fn log(x: float, base: float) -> float;
 
 /// Convert the character to lower-case.
 ///
@@ -2726,14 +2726,14 @@ fn pad(string: String, len: int, padding: String) -> ();
 ///
 /// * If number of bytes in `range` < number of bytes for `FLOAT`, zeros are padded.
 /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes are ignored.
-fn parse_be_float(blob: Blob, range: Range<i64>) -> f64;
+fn parse_be_float(blob: Blob, range: Range<int>) -> float;
 
 /// Parse the bytes within an inclusive `range` in the BLOB as a `FLOAT`
 /// in big-endian byte order.
 ///
 /// * If number of bytes in `range` < number of bytes for `FLOAT`, zeros are padded.
 /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes are ignored.
-fn parse_be_float(blob: Blob, range: RangeInclusive<i64>) -> f64;
+fn parse_be_float(blob: Blob, range: RangeInclusive<int>) -> float;
 
 /// Parse the bytes beginning at the `start` position in the BLOB as a `FLOAT`
 /// in big-endian byte order.
@@ -2746,7 +2746,7 @@ fn parse_be_float(blob: Blob, range: RangeInclusive<i64>) -> f64;
 ///
 /// * If number of bytes in range < number of bytes for `FLOAT`, zeros are padded.
 /// * If number of bytes in range > number of bytes for `FLOAT`, extra bytes are ignored.
-fn parse_be_float(blob: Blob, start: int, len: int) -> f64;
+fn parse_be_float(blob: Blob, start: int, len: int) -> float;
 
 /// Parse the bytes within an exclusive `range` in the BLOB as an `INT`
 /// in big-endian byte order.
@@ -2763,7 +2763,7 @@ fn parse_be_float(blob: Blob, start: int, len: int) -> f64;
 ///
 /// print(x.to_hex());              // prints "02030000...00"
 /// ```
-fn parse_be_int(blob: Blob, range: Range<i64>) -> i64;
+fn parse_be_int(blob: Blob, range: Range<int>) -> int;
 
 /// Parse the bytes within an inclusive `range` in the BLOB as an `INT`
 /// in big-endian byte order.
@@ -2780,7 +2780,7 @@ fn parse_be_int(blob: Blob, range: Range<i64>) -> i64;
 ///
 /// print(x.to_hex());              // prints "0203040000...00"
 /// ```
-fn parse_be_int(blob: Blob, range: RangeInclusive<i64>) -> i64;
+fn parse_be_int(blob: Blob, range: RangeInclusive<int>) -> int;
 
 /// Parse the bytes beginning at the `start` position in the BLOB as an `INT`
 /// in big-endian byte order.
@@ -2803,7 +2803,7 @@ fn parse_be_int(blob: Blob, range: RangeInclusive<i64>) -> i64;
 ///
 /// print(x.to_hex());      // prints "02030000...00"
 /// ```
-fn parse_be_int(blob: Blob, start: int, len: int) -> i64;
+fn parse_be_int(blob: Blob, start: int, len: int) -> int;
 
 /// Parse a string into a floating-point number.
 ///
@@ -2849,14 +2849,14 @@ fn parse_int(string: String, radix: int) -> int;
 ///
 /// * If number of bytes in `range` < number of bytes for `FLOAT`, zeros are padded.
 /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes are ignored.
-fn parse_le_float(blob: Blob, range: Range<i64>) -> f64;
+fn parse_le_float(blob: Blob, range: Range<int>) -> float;
 
 /// Parse the bytes within an inclusive `range` in the BLOB as a `FLOAT`
 /// in little-endian byte order.
 ///
 /// * If number of bytes in `range` < number of bytes for `FLOAT`, zeros are padded.
 /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes are ignored.
-fn parse_le_float(blob: Blob, range: RangeInclusive<i64>) -> f64;
+fn parse_le_float(blob: Blob, range: RangeInclusive<int>) -> float;
 
 /// Parse the bytes beginning at the `start` position in the BLOB as a `FLOAT`
 /// in little-endian byte order.
@@ -2869,7 +2869,7 @@ fn parse_le_float(blob: Blob, range: RangeInclusive<i64>) -> f64;
 ///
 /// * If number of bytes in range < number of bytes for `FLOAT`, zeros are padded.
 /// * If number of bytes in range > number of bytes for `FLOAT`, extra bytes are ignored.
-fn parse_le_float(blob: Blob, start: int, len: int) -> f64;
+fn parse_le_float(blob: Blob, start: int, len: int) -> float;
 
 /// Parse the bytes within an exclusive `range` in the BLOB as an `INT`
 /// in little-endian byte order.
@@ -2886,7 +2886,7 @@ fn parse_le_float(blob: Blob, start: int, len: int) -> f64;
 ///
 /// print(x.to_hex());              // prints "0302"
 /// ```
-fn parse_le_int(blob: Blob, range: Range<i64>) -> i64;
+fn parse_le_int(blob: Blob, range: Range<int>) -> int;
 
 /// Parse the bytes within an inclusive `range` in the BLOB as an `INT`
 /// in little-endian byte order.
@@ -2903,7 +2903,7 @@ fn parse_le_int(blob: Blob, range: Range<i64>) -> i64;
 ///
 /// print(x.to_hex());              // prints "040302"
 /// ```
-fn parse_le_int(blob: Blob, range: RangeInclusive<i64>) -> i64;
+fn parse_le_int(blob: Blob, range: RangeInclusive<int>) -> int;
 
 /// Parse the bytes beginning at the `start` position in the BLOB as an `INT`
 /// in little-endian byte order.
@@ -2926,7 +2926,7 @@ fn parse_le_int(blob: Blob, range: RangeInclusive<i64>) -> i64;
 ///
 /// print(x.to_hex());      // prints "0302"
 /// ```
-fn parse_le_int(blob: Blob, start: int, len: int) -> i64;
+fn parse_le_int(blob: Blob, start: int, len: int) -> int;
 
 /// Remove the last element from the array and return it.
 ///
@@ -2958,7 +2958,7 @@ fn pop(array: Array) -> ?;
 ///
 /// print(b);               // prints "[01020304]"
 /// ```
-fn pop(blob: Blob) -> i64;
+fn pop(blob: Blob) -> int;
 
 /// Remove the last character from the string and return it.
 ///
@@ -3011,7 +3011,7 @@ fn print(map: Map) -> String;
 fn print(number: f32) -> String;
 
 /// Convert the value of `number` into a string.
-fn print(number: f64) -> String;
+fn print(number: float) -> String;
 
 /// Return the `string`.
 fn print(string: String) -> String;
@@ -3102,7 +3102,7 @@ fn range(from: i32, to: i32) -> Iterator<i32>;
 ///     print(n);
 /// }
 /// ```
-fn range(from: i64, to: i64) -> Iterator<i64>;
+fn range(from: int, to: int) -> Iterator<int>;
 
 /// Return an iterator over the exclusive range of `from..to`.
 /// The value `to` is never included.
@@ -3285,7 +3285,7 @@ fn range(range: Range<i32>, step: i32) -> Iterator<i32>;
 ///     print(n);
 /// }
 /// ```
-fn range(range: Range<i64>, step: i64) -> Iterator<i64>;
+fn range(range: Range<int>, step: int) -> Iterator<int>;
 
 /// Return an iterator over an exclusive range, each iteration increasing by `step`.
 ///
@@ -3521,7 +3521,7 @@ fn range(from: i32, to: i32, step: i32) -> Iterator<i32>;
 ///     print(n);
 /// }
 /// ```
-fn range(from: i64, to: i64, step: i64) -> Iterator<i64>;
+fn range(from: int, to: int, step: int) -> Iterator<int>;
 
 /// Return an iterator over the exclusive range of `from..to`, each iteration increasing by `step`.
 /// The value `to` is never included.
@@ -3915,7 +3915,7 @@ fn remove(array: Array, index: int) -> ?;
 ///
 /// print(x);               // prints "[010305]"
 /// ```
-fn remove(blob: Blob, index: int) -> i64;
+fn remove(blob: Blob, index: int) -> int;
 
 /// Remove any property of the specified `name` from the object map, returning its value.
 ///
@@ -4091,7 +4091,7 @@ fn retain(array: Array, filter: FnPtr) -> Array;
 ///
 /// print(z);       // prints "[1]"
 /// ```
-fn retain(array: Array, range: Range<i64>) -> Array;
+fn retain(array: Array, range: Range<int>) -> Array;
 
 /// Remove all elements in the array not within an inclusive `range` and return them as a new array.
 ///
@@ -4112,7 +4112,7 @@ fn retain(array: Array, range: Range<i64>) -> Array;
 ///
 /// print(z);       // prints "[1]"
 /// ```
-fn retain(array: Array, range: RangeInclusive<i64>) -> Array;
+fn retain(array: Array, range: RangeInclusive<int>) -> Array;
 
 /// Remove all bytes in the BLOB not within an exclusive `range` and return them as a new BLOB.
 ///
@@ -4135,7 +4135,7 @@ fn retain(array: Array, range: RangeInclusive<i64>) -> Array;
 ///
 /// print(b2);      // prints "[01]"
 /// ```
-fn retain(blob: Blob, range: Range<i64>) -> Blob;
+fn retain(blob: Blob, range: Range<int>) -> Blob;
 
 /// Remove all bytes in the BLOB not within an inclusive `range` and return them as a new BLOB.
 ///
@@ -4158,7 +4158,7 @@ fn retain(blob: Blob, range: Range<i64>) -> Blob;
 ///
 /// print(b2);      // prints "[01]"
 /// ```
-fn retain(blob: Blob, range: RangeInclusive<i64>) -> Blob;
+fn retain(blob: Blob, range: RangeInclusive<int>) -> Blob;
 
 /// Remove all elements not within a portion of the array and return them as a new array.
 ///
@@ -4248,7 +4248,7 @@ fn reverse(blob: Blob) -> ();
 
 /// Return the nearest whole number closest to the floating-point number.
 /// Rounds away from zero.
-fn round(x: float) -> f64;
+fn round(x: float) -> float;
 
 /// Set the element at the `index` position in the array to a new `value`.
 ///
@@ -4394,7 +4394,7 @@ fn set_bit(value: int, bit: int, new_value: bool) -> ();
 ///
 /// print(x);           // print 123200
 /// ```
-fn set_bits(value: int, range: Range<i64>, new_value: int) -> ();
+fn set_bits(value: int, range: Range<int>, new_value: int) -> ();
 
 /// Replace an inclusive range of bits in the number with a new value.
 ///
@@ -4407,7 +4407,7 @@ fn set_bits(value: int, range: Range<i64>, new_value: int) -> ();
 ///
 /// print(x);           // print 123200
 /// ```
-fn set_bits(value: int, range: RangeInclusive<i64>, new_value: int) -> ();
+fn set_bits(value: int, range: RangeInclusive<int>, new_value: int) -> ();
 
 /// Replace a portion of bits in the number with a new value.
 ///
@@ -4473,14 +4473,14 @@ fn shift(array: Array) -> ?;
 ///
 /// print(b);               // prints "[02030405]"
 /// ```
-fn shift(blob: Blob) -> i64;
+fn shift(blob: Blob) -> int;
 
 /// Return the sign (as an integer) of the number according to the following:
 ///
 /// * `0` if the number is zero
 /// * `1` if the number is positive
 /// * `-1` if the number is negative
-fn sign(x: int) -> i64;
+fn sign(x: int) -> int;
 
 /// Return the sign (as an integer) of the floating-point number according to the following:
 ///
@@ -4494,41 +4494,41 @@ fn sign(x: f32) -> int;
 /// * `0` if the number is zero
 /// * `1` if the number is positive
 /// * `-1` if the number is negative
-fn sign(x: f64) -> int;
+fn sign(x: float) -> int;
 
 /// Return the sign (as an integer) of the number according to the following:
 ///
 /// * `0` if the number is zero
 /// * `1` if the number is positive
 /// * `-1` if the number is negative
-fn sign(x: i128) -> i64;
+fn sign(x: i128) -> int;
 
 /// Return the sign (as an integer) of the number according to the following:
 ///
 /// * `0` if the number is zero
 /// * `1` if the number is positive
 /// * `-1` if the number is negative
-fn sign(x: i16) -> i64;
+fn sign(x: i16) -> int;
 
 /// Return the sign (as an integer) of the number according to the following:
 ///
 /// * `0` if the number is zero
 /// * `1` if the number is positive
 /// * `-1` if the number is negative
-fn sign(x: i32) -> i64;
+fn sign(x: i32) -> int;
 
 /// Return the sign (as an integer) of the number according to the following:
 ///
 /// * `0` if the number is zero
 /// * `1` if the number is positive
 /// * `-1` if the number is negative
-fn sign(x: i8) -> i64;
+fn sign(x: i8) -> int;
 
 /// Return the sine of the floating-point number in radians.
-fn sin(x: float) -> f64;
+fn sin(x: float) -> float;
 
 /// Return the hyperbolic sine of the floating-point number in radians.
-fn sinh(x: float) -> f64;
+fn sinh(x: float) -> float;
 
 /// Block the current thread for a particular number of `seconds`.
 fn sleep(seconds: int) -> ();
@@ -4682,7 +4682,7 @@ fn sort(array: Array, comparer: FnPtr) -> ();
 ///
 /// print(x);       // prints "[1, 7, 8, 9, 10, 4, 5]"
 /// ```
-fn splice(array: Array, range: Range<i64>, replace: Array) -> ();
+fn splice(array: Array, range: Range<int>, replace: Array) -> ();
 
 /// Replace an inclusive range of the array with another array.
 ///
@@ -4696,7 +4696,7 @@ fn splice(array: Array, range: Range<i64>, replace: Array) -> ();
 ///
 /// print(x);       // prints "[1, 7, 8, 9, 10, 5]"
 /// ```
-fn splice(array: Array, range: RangeInclusive<i64>, replace: Array) -> ();
+fn splice(array: Array, range: RangeInclusive<int>, replace: Array) -> ();
 
 /// Replace an exclusive `range` of the BLOB with another BLOB.
 ///
@@ -4710,7 +4710,7 @@ fn splice(array: Array, range: RangeInclusive<i64>, replace: Array) -> ();
 ///
 /// print(b1);      // prints "[4218181818184242 42424242]"
 /// ```
-fn splice(blob: Blob, range: Range<i64>, replace: Blob) -> ();
+fn splice(blob: Blob, range: Range<int>, replace: Blob) -> ();
 
 /// Replace an inclusive `range` of the BLOB with another BLOB.
 ///
@@ -4724,7 +4724,7 @@ fn splice(blob: Blob, range: Range<i64>, replace: Blob) -> ();
 ///
 /// print(b1);      // prints "[4218181818184242 424242]"
 /// ```
-fn splice(blob: Blob, range: RangeInclusive<i64>, replace: Blob) -> ();
+fn splice(blob: Blob, range: RangeInclusive<int>, replace: Blob) -> ();
 
 /// Replace a portion of the array with another array.
 ///
@@ -4954,13 +4954,13 @@ fn split_rev(string: String, delimiter: String, segments: int) -> Array;
 fn split_rev(string: String, delimiter: char, segments: int) -> Array;
 
 /// Return the square root of the floating-point number.
-fn sqrt(x: float) -> f64;
+fn sqrt(x: float) -> float;
 
 /// Return the start of the exclusive range.
-fn start(range: ExclusiveRange) -> i64;
+fn start(range: ExclusiveRange) -> int;
 
 /// Return the start of the inclusive range.
-fn start(range: InclusiveRange) -> i64;
+fn start(range: InclusiveRange) -> int;
 
 /// Return `true` if the string starts with a specified string.
 ///
@@ -4984,7 +4984,7 @@ fn starts_with(string: String, match_string: String) -> bool;
 ///
 /// print(text.sub_string(3..7));   // prints "lo, "
 /// ```
-fn sub_string(string: String, range: Range<i64>) -> String;
+fn sub_string(string: String, range: Range<int>) -> String;
 
 /// Copy an inclusive range of characters from the string and return it as a new string.
 ///
@@ -4995,7 +4995,7 @@ fn sub_string(string: String, range: Range<i64>) -> String;
 ///
 /// print(text.sub_string(3..=7));  // prints "lo, w"
 /// ```
-fn sub_string(string: String, range: RangeInclusive<i64>) -> String;
+fn sub_string(string: String, range: RangeInclusive<int>) -> String;
 
 /// Copy a portion of the string beginning at the `start` position till the end and return it as
 /// a new string.
@@ -5045,13 +5045,13 @@ fn sub_string(string: String, start: int, len: int) -> String;
 ///
 /// print(x.tag);           // prints 42
 /// ```
-fn tag(value: ?) -> i64;
+fn tag(value: ?) -> int;
 
 /// Return the tangent of the floating-point number in radians.
-fn tan(x: float) -> f64;
+fn tan(x: float) -> float;
 
 /// Return the hyperbolic tangent of the floating-point number in radians.
-fn tanh(x: float) -> f64;
+fn tanh(x: float) -> float;
 
 /// Create a timestamp containing the current system time.
 fn timestamp() -> Instant;
@@ -5079,7 +5079,7 @@ fn to_binary(value: i16) -> String;
 fn to_binary(value: i32) -> String;
 
 /// Convert the `value` into a string in binary format.
-fn to_binary(value: i64) -> String;
+fn to_binary(value: int) -> String;
 
 /// Convert the `value` into a string in binary format.
 fn to_binary(value: i8) -> String;
@@ -5142,7 +5142,7 @@ fn to_debug(map: Map) -> String;
 fn to_debug(number: f32) -> String;
 
 /// Convert the value of `number` into a string.
-fn to_debug(number: f64) -> String;
+fn to_debug(number: float) -> String;
 
 /// Convert the string into debug format.
 fn to_debug(string: String) -> String;
@@ -5154,28 +5154,28 @@ fn to_debug(unit: ()) -> String;
 fn to_debug(value: bool) -> String;
 
 /// Convert radians to degrees.
-fn to_degrees(x: float) -> f64;
+fn to_degrees(x: float) -> float;
 
 /// Convert the 32-bit floating-point number to 64-bit.
-fn to_float(x: f32) -> f64;
+fn to_float(x: f32) -> float;
 
-fn to_float(x: i128) -> f64;
+fn to_float(x: i128) -> float;
 
-fn to_float(x: i16) -> f64;
+fn to_float(x: i16) -> float;
 
-fn to_float(x: i32) -> f64;
+fn to_float(x: i32) -> float;
 
-fn to_float(x: i64) -> f64;
+fn to_float(x: int) -> float;
 
-fn to_float(x: i8) -> f64;
+fn to_float(x: i8) -> float;
 
-fn to_float(x: u128) -> f64;
+fn to_float(x: u128) -> float;
 
-fn to_float(x: u16) -> f64;
+fn to_float(x: u16) -> float;
 
-fn to_float(x: u32) -> f64;
+fn to_float(x: u32) -> float;
 
-fn to_float(x: u8) -> f64;
+fn to_float(x: u8) -> float;
 
 /// Convert the `value` into a string in hex format.
 fn to_hex(value: i128) -> String;
@@ -5187,7 +5187,7 @@ fn to_hex(value: i16) -> String;
 fn to_hex(value: i32) -> String;
 
 /// Convert the `value` into a string in hex format.
-fn to_hex(value: i64) -> String;
+fn to_hex(value: int) -> String;
 
 /// Convert the `value` into a string in hex format.
 fn to_hex(value: i8) -> String;
@@ -5207,33 +5207,33 @@ fn to_hex(value: u64) -> String;
 /// Convert the `value` into a string in hex format.
 fn to_hex(value: u8) -> String;
 
-fn to_int(x: char) -> i64;
+fn to_int(x: char) -> int;
 
 /// Convert the floating-point number into an integer.
 fn to_int(x: f32) -> int;
 
 /// Convert the floating-point number into an integer.
-fn to_int(x: f64) -> int;
+fn to_int(x: float) -> int;
 
-fn to_int(x: i128) -> i64;
+fn to_int(x: i128) -> int;
 
-fn to_int(x: i16) -> i64;
+fn to_int(x: i16) -> int;
 
-fn to_int(x: i32) -> i64;
+fn to_int(x: i32) -> int;
 
-fn to_int(x: i64) -> i64;
+fn to_int(x: int) -> int;
 
-fn to_int(x: i8) -> i64;
+fn to_int(x: i8) -> int;
 
-fn to_int(x: u128) -> i64;
+fn to_int(x: u128) -> int;
 
-fn to_int(x: u16) -> i64;
+fn to_int(x: u16) -> int;
 
-fn to_int(x: u32) -> i64;
+fn to_int(x: u32) -> int;
 
-fn to_int(x: u64) -> i64;
+fn to_int(x: u64) -> int;
 
-fn to_int(x: u8) -> i64;
+fn to_int(x: u8) -> int;
 
 /// Return the JSON representation of the object map.
 ///
@@ -5292,7 +5292,7 @@ fn to_octal(value: i16) -> String;
 fn to_octal(value: i32) -> String;
 
 /// Convert the `value` into a string in octal format.
-fn to_octal(value: i64) -> String;
+fn to_octal(value: int) -> String;
 
 /// Convert the `value` into a string in octal format.
 fn to_octal(value: i8) -> String;
@@ -5313,7 +5313,7 @@ fn to_octal(value: u64) -> String;
 fn to_octal(value: u8) -> String;
 
 /// Convert degrees to radians.
-fn to_radians(x: float) -> f64;
+fn to_radians(x: float) -> float;
 
 /// Convert the array into a string.
 fn to_string(array: Array) -> String;
@@ -5331,7 +5331,7 @@ fn to_string(map: Map) -> String;
 fn to_string(number: f32) -> String;
 
 /// Convert the value of `number` into a string.
-fn to_string(number: f64) -> String;
+fn to_string(number: float) -> String;
 
 /// Return the `string`.
 fn to_string(string: String) -> String;
@@ -5469,7 +5469,7 @@ fn values(map: Map) -> Array;
 ///
 /// print(b);       // prints "[0068656c6c000000]"
 /// ```
-fn write_ascii(blob: Blob, range: Range<i64>, string: String) -> ();
+fn write_ascii(blob: Blob, range: Range<int>, string: String) -> ();
 
 /// Write an ASCII string to the bytes within an inclusive `range` in the BLOB.
 ///
@@ -5486,7 +5486,7 @@ fn write_ascii(blob: Blob, range: Range<i64>, string: String) -> ();
 ///
 /// print(b);       // prints "[0068656c6c6f0000]"
 /// ```
-fn write_ascii(blob: Blob, range: RangeInclusive<i64>, string: String) -> ();
+fn write_ascii(blob: Blob, range: RangeInclusive<int>, string: String) -> ();
 
 /// Write an ASCII string to the bytes within an exclusive `range` in the BLOB.
 ///
@@ -5513,7 +5513,7 @@ fn write_ascii(blob: Blob, start: int, len: int, string: String) -> ();
 ///
 /// * If number of bytes in `range` < number of bytes for `FLOAT`, extra bytes in `FLOAT` are not written.
 /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes in `range` are not modified.
-fn write_be(blob: Blob, range: Range<i64>, value: float) -> ();
+fn write_be(blob: Blob, range: Range<int>, value: float) -> ();
 
 /// Write an `INT` value to the bytes within an exclusive `range` in the BLOB
 /// in big-endian byte order.
@@ -5528,14 +5528,14 @@ fn write_be(blob: Blob, range: Range<i64>, value: float) -> ();
 ///
 /// print(b);       // prints "[4200004242424242]"
 /// ```
-fn write_be(blob: Blob, range: Range<i64>, value: int) -> ();
+fn write_be(blob: Blob, range: Range<int>, value: int) -> ();
 
 /// Write a `FLOAT` value to the bytes within an inclusive `range` in the BLOB
 /// in big-endian byte order.
 ///
 /// * If number of bytes in `range` < number of bytes for `FLOAT`, extra bytes in `FLOAT` are not written.
 /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes in `range` are not modified.
-fn write_be(blob: Blob, range: RangeInclusive<i64>, value: float) -> ();
+fn write_be(blob: Blob, range: RangeInclusive<int>, value: float) -> ();
 
 /// Write an `INT` value to the bytes within an inclusive `range` in the BLOB
 /// in big-endian byte order.
@@ -5550,7 +5550,7 @@ fn write_be(blob: Blob, range: RangeInclusive<i64>, value: float) -> ();
 ///
 /// print(b);       // prints "[4200000042424242]"
 /// ```
-fn write_be(blob: Blob, range: RangeInclusive<i64>, value: int) -> ();
+fn write_be(blob: Blob, range: RangeInclusive<int>, value: int) -> ();
 
 /// Write a `FLOAT` value to the bytes beginning at the `start` position in the BLOB
 /// in big-endian byte order.
@@ -5591,7 +5591,7 @@ fn write_be(blob: Blob, start: int, len: int, value: int) -> ();
 ///
 /// * If number of bytes in `range` < number of bytes for `FLOAT`, extra bytes in `FLOAT` are not written.
 /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes in `range` are not modified.
-fn write_le(blob: Blob, range: Range<i64>, value: float) -> ();
+fn write_le(blob: Blob, range: Range<int>, value: float) -> ();
 
 /// Write an `INT` value to the bytes within an exclusive `range` in the BLOB
 /// in little-endian byte order.
@@ -5606,14 +5606,14 @@ fn write_le(blob: Blob, range: Range<i64>, value: float) -> ();
 ///
 /// print(b);       // prints "[0078560000000000]"
 /// ```
-fn write_le(blob: Blob, range: Range<i64>, value: int) -> ();
+fn write_le(blob: Blob, range: Range<int>, value: int) -> ();
 
 /// Write a `FLOAT` value to the bytes within an inclusive `range` in the BLOB
 /// in little-endian byte order.
 ///
 /// * If number of bytes in `range` < number of bytes for `FLOAT`, extra bytes in `FLOAT` are not written.
 /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes in `range` are not modified.
-fn write_le(blob: Blob, range: RangeInclusive<i64>, value: float) -> ();
+fn write_le(blob: Blob, range: RangeInclusive<int>, value: float) -> ();
 
 /// Write an `INT` value to the bytes within an inclusive `range` in the BLOB
 /// in little-endian byte order.
@@ -5628,7 +5628,7 @@ fn write_le(blob: Blob, range: RangeInclusive<i64>, value: float) -> ();
 ///
 /// print(b);       // prints "[0078563400000000]"
 /// ```
-fn write_le(blob: Blob, range: RangeInclusive<i64>, value: int) -> ();
+fn write_le(blob: Blob, range: RangeInclusive<int>, value: int) -> ();
 
 /// Write a `FLOAT` value to the bytes beginning at the `start` position in the BLOB
 /// in little-endian byte order.
@@ -5676,7 +5676,7 @@ fn write_le(blob: Blob, start: int, len: int, value: int) -> ();
 ///
 /// print(b);       // prints "[00e69c9de3000000]"
 /// ```
-fn write_utf8(blob: Blob, range: Range<i64>, string: String) -> ();
+fn write_utf8(blob: Blob, range: Range<int>, string: String) -> ();
 
 /// Write a string to the bytes within an inclusive `range` in the BLOB in UTF-8 encoding.
 ///
@@ -5690,7 +5690,7 @@ fn write_utf8(blob: Blob, range: Range<i64>, string: String) -> ();
 ///
 /// print(b);       // prints "[00e69c9de3810000]"
 /// ```
-fn write_utf8(blob: Blob, range: RangeInclusive<i64>, string: String) -> ();
+fn write_utf8(blob: Blob, range: RangeInclusive<int>, string: String) -> ();
 
 /// Write a string to the bytes within an inclusive `range` in the BLOB in UTF-8 encoding.
 ///

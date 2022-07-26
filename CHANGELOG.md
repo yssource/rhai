@@ -15,9 +15,18 @@ Bug fixes
 New features
 ------------
 
-* A new feature, `no_custom_syntax`, is added to remove custom syntax support from Rhai for applications that do not require it (which should be most).
+### New feature flag
+
+* A new feature flag, `no_custom_syntax`, is added to remove custom syntax support from Rhai for applications that do not require it (which should be most).
+
+### Module documentation
+
 * Comment lines beginning with `//!` (requires the `metadata` feature) are now collected as the script file's _module documentation_.
 * `AST` and `Module` have methods to access and manipulate documentation.
+
+### Output definition files
+
+* An API is added to automatically generate definition files from a fully-configured `Engine`, for use with the Rhai Language Server.
 
 Enhancements
 ------------

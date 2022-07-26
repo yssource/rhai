@@ -112,7 +112,7 @@ fn curry(fn_ptr: FnPtr, ...args: ?) -> FnPtr;
 /// print(is_def_fn("foo", 0));     // prints false
 /// print(is_def_fn("bar", 1));     // prints false
 /// ```
-fn is_def_fn(fn_name: String, num_params: i64) -> bool;
+fn is_def_fn(fn_name: String, num_params: int) -> bool;
 
 /// Return `true` if a variable matching a specified name is defined.
 /// 
@@ -162,9 +162,100 @@ fn is_shared(variable: ?) -> bool;
 /// ```
 fn eval(script: String) -> ?;
 
+/// Return `true` if the string contains another string.
+///
+/// This function also drives the `in` operator.
+///
+/// # Example
+///
+/// ```rhai
+/// let x = "hello world!";
+///
+/// // The 'in' operator calls 'contains' in the background
+/// if "world" in x {
+///     print("found!");
+/// }
+/// ```
 fn contains(string: String, find: String) -> bool;
-fn contains(range: Range<i64>, value: i64) -> bool;
-fn contains(range: RangeInclusive<i64>, value: i64) -> bool;
-fn contains(map: Map, string: String) -> bool;
-fn contains(blob: Blob, value: i64) -> bool;
+
+/// Return `true` if the string contains a character.
+///
+/// This function also drives the `in` operator.
+///
+/// # Example
+///
+/// ```rhai
+/// let x = "hello world!";
+///
+/// // The 'in' operator calls 'contains' in the background
+/// if 'w' in x {
+///     print("found!");
+/// }
+/// ```
 fn contains(string: String, ch: char) -> bool;
+
+/// Return `true` if a value falls within the exclusive range.
+///
+/// This function also drives the `in` operator.
+///
+/// # Example
+///
+/// ```rhai
+/// let r = 1..100;
+///
+/// // The 'in' operator calls 'contains' in the background
+/// if 42 in r {
+///     print("found!");
+/// }
+/// ```
+fn contains(range: Range<int>, value: int) -> bool;
+
+/// Return `true` if a value falls within the inclusive range.
+///
+/// This function also drives the `in` operator.
+///
+/// # Example
+///
+/// ```rhai
+/// let r = 1..=100;
+///
+/// // The 'in' operator calls 'contains' in the background
+/// if 42 in r {
+///     print("found!");
+/// }
+/// ```
+fn contains(range: RangeInclusive<int>, value: int) -> bool;
+
+/// Return `true` if a key exists within the object map.
+///
+/// This function also drives the `in` operator.
+///
+/// # Example
+///
+/// ```rhai
+/// let m = #{a:1, b:2, c:3};
+///
+/// // The 'in' operator calls 'contains' in the background
+/// if "c" in m {
+///     print("found!");
+/// }
+/// ```
+fn contains(map: Map, string: String) -> bool;
+
+/// Return `true` if a value is found within the BLOB.
+///
+/// This function also drives the `in` operator.
+///
+/// # Example
+///
+/// ```rhai
+/// let b = blob();
+///
+/// b += 1; b += 2; b += 3; b += 4; b += 5;
+///
+/// // The 'in' operator calls 'contains' in the background
+/// if 3 in b {
+///     print("found!");
+/// }
+/// ```
+fn contains(blob: Blob, value: int) -> bool;
