@@ -504,6 +504,7 @@ impl Module {
     #[inline(always)]
     pub fn clear(&mut self) {
         self.id.clear();
+        #[cfg(feature = "metadata")]
         self.doc.clear();
         self.internal = false;
         self.standard = false;
