@@ -75,7 +75,7 @@ impl<'e> Definitions<'e> {
     ///
     /// This function will create the directory path if it does not yet exist,
     /// it will also override any existing files as needed.
-    #[cfg(not(feature = "no_std"))]
+    #[cfg(all(not(feature = "no_std"), not(target_family = "wasm")))]
     pub fn write_to_dir(&self, path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
         use std::fs;
 
