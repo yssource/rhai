@@ -4,17 +4,18 @@ Sample Applications
 Standard Examples
 -----------------
 
-| Example                                                   | Description                                                                                                                   |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| [`arrays_and_structs`](arrays_and_structs.rs)             | shows how to register a Rust type and using it with arrays                                                                    |
-| [`callback`](callback.rs)                                 | shows how to store a Rhai closure and call it later within Rust                                                               |
-| [`custom_types_and_methods`](custom_types_and_methods.rs) | shows how to register a Rust type and methods/getters/setters for it                                                          |
-| [`hello`](hello.rs)                                       | simple example that evaluates an expression and prints the result                                                             |
-| [`reuse_scope`](reuse_scope.rs)                           | evaluates two pieces of code in separate runs, but using a common `Scope`                                                     |
-| [`serde`](serde.rs)                                       | example to serialize and deserialize Rust types with [`serde`](https://crates.io/crates/serde) (requires the `serde` feature) |
-| [`simple_fn`](simple_fn.rs)                               | shows how to register a simple Rust function                                                                                  |
-| [`strings`](strings.rs)                                   | shows different ways to register Rust functions taking string arguments                                                       |
-| [`threading`](threading.rs)                               | shows how to communicate with an `Engine` running in a separate thread via an MPSC channel                                    |
+| Example                                                   | Description                                                                                                                                                 |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`arrays_and_structs`](arrays_and_structs.rs)             | shows how to register a Rust type and using it with arrays                                                                                                  |
+| [`callback`](callback.rs)                                 | shows how to store a Rhai closure and call it later within Rust                                                                                             |
+| [`custom_types_and_methods`](custom_types_and_methods.rs) | shows how to register a Rust type and methods/getters/setters for it                                                                                        |
+| [`hello`](hello.rs)                                       | simple example that evaluates an expression and prints the result                                                                                           |
+| [`reuse_scope`](reuse_scope.rs)                           | evaluates two pieces of code in separate runs, but using a common `Scope`                                                                                   |
+| [`serde`](serde.rs)                                       | example to serialize and deserialize Rust types with [`serde`](https://crates.io/crates/serde) (requires the `serde` feature)                               |
+| [`simple_fn`](simple_fn.rs)                               | shows how to register a simple Rust function                                                                                                                |
+| [`strings`](strings.rs)                                   | shows different ways to register Rust functions taking string arguments                                                                                     |
+| [`threading`](threading.rs)                               | shows how to communicate with an `Engine` running in a separate thread via an MPSC channel                                                                  |
+| [`definitions`](./definitions)                            | shows how to generate definition files for manual inspection or for use with [Rhai LSP](https://github.com/rhaiscript/lsp), requires the `metadata` feature |
 
 
 Scriptable Event Handler With State Examples

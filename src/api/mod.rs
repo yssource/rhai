@@ -28,6 +28,9 @@ pub mod custom_syntax;
 
 pub mod deprecated;
 
+#[cfg(feature = "metadata")]
+pub mod definitions;
+
 use crate::{Dynamic, Engine, Identifier};
 
 #[cfg(not(feature = "no_custom_syntax"))]

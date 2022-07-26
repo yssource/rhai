@@ -13,7 +13,7 @@ homepage = "https://rhai.rs"
 repository = "https://github.com/rhaiscript"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
-include = ["/src/**/*.rs", "/Cargo.toml", "/README.md"]
+include = ["/src/**/*", "/Cargo.toml", "/README.md", "LICENSE*"]
 keywords = ["scripting", "scripting-engine", "scripting-language", "embedded"]
 categories = ["no-std", "embedded", "wasm", "parser-implementations"]
 
@@ -85,6 +85,10 @@ required-features = ["debugging"]
 [[example]]
 name = "serde"
 required-features = ["serde"]
+
+[[example]]
+name = "definitions"
+required-features = ["metadata"]
 
 [profile.release]
 lto = "fat"
