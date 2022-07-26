@@ -4,7 +4,23 @@ op minus(i64, i64) -> i64;
 
 op !(bool) -> bool;
 
-op !=(i16, i16) -> bool;
+/// Return `true` if two arrays are not-equal (i.e. any element not equal or not in the same order).
+///
+/// The operator `==` is used to compare elements and must be defined,
+/// otherwise `false` is assumed.
+///
+/// # Example
+///
+/// ```rhai
+/// let x = [1, 2, 3, 4, 5];
+/// let y = [1, 2, 3, 4, 5];
+/// let z = [1, 2, 3, 4];
+///
+/// print(x != y);      // prints false
+///
+/// print(x != z);      // prints true
+/// ```
+op !=(Array, Array) -> bool;
 
 /// Return `true` if two object maps are not equal (i.e. at least one property value is not equal).
 ///
@@ -27,168 +43,155 @@ op !=(Map, Map) -> bool;
 /// Return `true` if two timestamps are not equal.
 op !=(Instant, Instant) -> bool;
 
-op !=(u8, u8) -> bool;
+op !=(int, f32) -> bool;
 
-op !=(u32, u32) -> bool;
+op !=(int, f64) -> bool;
 
-/// Return `true` if two arrays are not-equal (i.e. any element not equal or not in the same order).
-///
-/// The operator `==` is used to compare elements and must be defined,
-/// otherwise `false` is assumed.
-///
-/// # Example
-///
-/// ```rhai
-/// let x = [1, 2, 3, 4, 5];
-/// let y = [1, 2, 3, 4, 5];
-/// let z = [1, 2, 3, 4];
-///
-/// print(x != y);      // prints false
-///
-/// print(x != z);      // prints true
-/// ```
-op !=(Array, Array) -> bool;
+op !=(f32, int) -> bool;
 
 op !=(f32, f32) -> bool;
 
 op !=(f64, int) -> bool;
 
-op !=(u16, u16) -> bool;
+op !=(i128, i128) -> bool;
 
-op !=(int, f64) -> bool;
+op !=(i16, i16) -> bool;
 
 op !=(i32, i32) -> bool;
 
-op !=(u64, u64) -> bool;
-
-op !=(f32, int) -> bool;
-
-op !=(i128, i128) -> bool;
-
 op !=(i8, i8) -> bool;
-
-op !=(int, f32) -> bool;
 
 op !=(u128, u128) -> bool;
 
-op %(f32, f32) -> f32;
+op !=(u16, u16) -> bool;
 
-op %(u16, u16) -> u16;
+op !=(u32, u32) -> bool;
 
-op %(i32, i32) -> i32;
+op !=(u64, u64) -> bool;
 
-op %(u64, u64) -> u64;
-
-op %(f32, int) -> f32;
-
-op %(i128, i128) -> i128;
-
-op %(i8, i8) -> i8;
+op !=(u8, u8) -> bool;
 
 op %(int, f32) -> f32;
 
-op %(u128, u128) -> u128;
+op %(f32, int) -> f32;
+
+op %(f32, f32) -> f32;
+
+op %(i128, i128) -> i128;
 
 op %(i16, i16) -> i16;
 
-op %(u8, u8) -> u8;
+op %(i32, i32) -> i32;
+
+op %(i8, i8) -> i8;
+
+op %(u128, u128) -> u128;
+
+op %(u16, u16) -> u16;
 
 op %(u32, u32) -> u32;
 
-op &(u16, u16) -> u16;
+op %(u64, u64) -> u64;
 
-op &(i32, i32) -> i32;
-
-op &(u64, u64) -> u64;
+op %(u8, u8) -> u8;
 
 op &(i128, i128) -> i128;
+
+op &(i16, i16) -> i16;
+
+op &(i32, i32) -> i32;
 
 op &(i8, i8) -> i8;
 
 op &(u128, u128) -> u128;
 
-op &(i16, i16) -> i16;
-
-op &(u8, u8) -> u8;
+op &(u16, u16) -> u16;
 
 op &(u32, u32) -> u32;
 
-op *(i8, i8) -> i8;
+op &(u64, u64) -> u64;
 
-op *(i128, i128) -> i128;
+op &(u8, u8) -> u8;
 
 op *(int, f32) -> f32;
 
-op *(u128, u128) -> u128;
+op *(f32, int) -> f32;
 
 op *(f32, f32) -> f32;
 
-op *(u64, u64) -> u64;
+op *(i128, i128) -> i128;
 
-op *(f32, int) -> f32;
+op *(i16, i16) -> i16;
 
 op *(i32, i32) -> i32;
+
+op *(i8, i8) -> i8;
+
+op *(u128, u128) -> u128;
 
 op *(u16, u16) -> u16;
 
 op *(u32, u32) -> u32;
 
-op *(i16, i16) -> i16;
+op *(u64, u64) -> u64;
 
 op *(u8, u8) -> u8;
 
-op **(i8, int) -> i8;
+op **(f32, int) -> f32;
 
 op **(f32, f32) -> f32;
 
-op **(f32, int) -> f32;
-
-op **(u16, int) -> u16;
+op **(i128, int) -> i128;
 
 op **(i16, int) -> i16;
 
-op **(u8, int) -> u8;
+op **(i32, int) -> i32;
 
-op **(u64, int) -> u64;
+op **(i8, int) -> i8;
 
 op **(u128, int) -> u128;
 
-op **(i32, int) -> i32;
+op **(u16, int) -> u16;
 
 op **(u32, int) -> u32;
 
-op **(i128, int) -> i128;
+op **(u64, int) -> u64;
+
+op **(u8, int) -> u8;
 
 op +(int) -> i64;
-
-op +(i128) -> i128;
-
-op +(i16) -> i16;
-
-op +(i8) -> i8;
 
 op +(f32) -> f32;
 
 op +(f64) -> f64;
 
+op +(i128) -> i128;
+
+op +(i16) -> i16;
+
 op +(i32) -> i32;
 
-op +(u32, u32) -> u32;
-
-op +(char, String) -> String;
+op +(i8) -> i8;
 
 op +((), String) -> String;
 
-/// Add the specified number of `seconds` to the timestamp and return it as a new timestamp.
-op +(Instant, float) -> Instant;
+/// Combine two arrays into a new array and return it.
+///
+/// # Example
+///
+/// ```rhai
+/// let x = [1, 2, 3];
+/// let y = [true, 'x'];
+///
+/// print(x + y);   // prints "[1, 2, 3, true, 'x']"
+///
+/// print(x);       // prints "[1, 2, 3"
+/// ```
+op +(Array, Array) -> Array;
 
-op +(u8, u8) -> u8;
+op +(char, String) -> String;
 
 op +(?, String) -> String;
-
-op +(String, ?) -> String;
-
-op +(i16, i16) -> i16;
 
 /// Make a copy of the object map, add all property values of another object map
 /// (existing property values of the same names are replaced), then returning it.
@@ -205,55 +208,47 @@ op +(i16, i16) -> i16;
 /// ```
 op +(Map, Map) -> Map;
 
+op +(String, String) -> String;
+
 op +(String, char) -> String;
 
-op +(int, f32) -> f32;
+op +(String, ?) -> String;
+
+op +(String, Blob) -> String;
+
+op +(String, ()) -> String;
+
+/// Add the specified number of `seconds` to the timestamp and return it as a new timestamp.
+op +(Instant, float) -> Instant;
 
 /// Add the specified number of `seconds` to the timestamp and return it as a new timestamp.
 op +(Instant, int) -> Instant;
 
-op +(u128, u128) -> u128;
-
-op +(String, ()) -> String;
-
-op +(i128, i128) -> i128;
-
-op +(String, String) -> String;
-
-op +(i8, i8) -> i8;
-
 op +(Blob, String) -> String;
 
-op +(String, Blob) -> String;
-
-op +(u16, u16) -> u16;
-
-op +(i32, i32) -> i32;
+op +(int, f32) -> f32;
 
 op +(f32, int) -> f32;
 
-op +(u64, u64) -> u64;
-
-/// Combine two arrays into a new array and return it.
-///
-/// # Example
-///
-/// ```rhai
-/// let x = [1, 2, 3];
-/// let y = [true, 'x'];
-///
-/// print(x + y);   // prints "[1, 2, 3, true, 'x']"
-///
-/// print(x);       // prints "[1, 2, 3"
-/// ```
-op +(Array, Array) -> Array;
-
 op +(f32, f32) -> f32;
 
-/// Add the specified number of `seconds` to the timestamp.
-op +=(Instant, float) -> ();
+op +(i128, i128) -> i128;
 
-op +=(String, ?) -> ();
+op +(i16, i16) -> i16;
+
+op +(i32, i32) -> i32;
+
+op +(i8, i8) -> i8;
+
+op +(u128, u128) -> u128;
+
+op +(u16, u16) -> u16;
+
+op +(u32, u32) -> u32;
+
+op +(u64, u64) -> u64;
+
+op +(u8, u8) -> u8;
 
 /// Add all property values of another object map into the object map.
 /// Existing property values of the same names are replaced.
@@ -270,57 +265,62 @@ op +=(String, ?) -> ();
 /// ```
 op +=(Map, Map) -> ();
 
-/// Add the specified number of `seconds` to the timestamp.
-op +=(Instant, int) -> ();
+op +=(String, ?) -> ();
 
 op +=(String, Blob) -> ();
 
+/// Add the specified number of `seconds` to the timestamp.
+op +=(Instant, float) -> ();
+
+/// Add the specified number of `seconds` to the timestamp.
+op +=(Instant, int) -> ();
+
 op -(int) -> int;
+
+op -(f32) -> f32;
+
+op -(f64) -> f64;
 
 op -(i128) -> i128;
 
 op -(i16) -> i16;
 
-op -(f32) -> f32;
-
-op -(i8) -> i8;
-
 op -(i32) -> i32;
 
-op -(f64) -> f64;
-
-op -(u32, u32) -> u32;
-
-/// Subtract the specified number of `seconds` from the timestamp and return it as a new timestamp.
-op -(Instant, float) -> Instant;
-
-op -(i16, i16) -> i16;
+op -(i8) -> i8;
 
 /// Return the number of seconds between two timestamps.
 op -(Instant, Instant) -> RhaiResult;
 
-op -(u8, u8) -> u8;
-
-op -(i8, i8) -> i8;
-
-op -(i128, i128) -> i128;
-
-op -(int, f32) -> f32;
-
-op -(u128, u128) -> u128;
+/// Subtract the specified number of `seconds` from the timestamp and return it as a new timestamp.
+op -(Instant, float) -> Instant;
 
 /// Subtract the specified number of `seconds` from the timestamp and return it as a new timestamp.
 op -(Instant, int) -> Instant;
 
-op -(f32, f32) -> f32;
-
-op -(u64, u64) -> u64;
+op -(int, f32) -> f32;
 
 op -(f32, int) -> f32;
 
+op -(f32, f32) -> f32;
+
+op -(i128, i128) -> i128;
+
+op -(i16, i16) -> i16;
+
 op -(i32, i32) -> i32;
 
+op -(i8, i8) -> i8;
+
+op -(u128, u128) -> u128;
+
 op -(u16, u16) -> u16;
+
+op -(u32, u32) -> u32;
+
+op -(u64, u64) -> u64;
+
+op -(u8, u8) -> u8;
 
 /// Subtract the specified number of `seconds` from the timestamp.
 op -=(Instant, float) -> ();
@@ -328,119 +328,109 @@ op -=(Instant, float) -> ();
 /// Subtract the specified number of `seconds` from the timestamp.
 op -=(Instant, int) -> ();
 
-op /(u8, u8) -> u8;
-
-op /(i16, i16) -> i16;
-
-op /(u32, u32) -> u32;
-
-op /(i32, i32) -> i32;
-
-op /(u16, u16) -> u16;
+op /(int, f32) -> f32;
 
 op /(f32, int) -> f32;
 
-op /(u64, u64) -> u64;
-
 op /(f32, f32) -> f32;
-
-op /(u128, u128) -> u128;
-
-op /(int, f32) -> f32;
 
 op /(i128, i128) -> i128;
 
+op /(i16, i16) -> i16;
+
+op /(i32, i32) -> i32;
+
 op /(i8, i8) -> i8;
 
-op <(f32, f32) -> bool;
+op /(u128, u128) -> u128;
 
-op <(u16, u16) -> bool;
+op /(u16, u16) -> u16;
+
+op /(u32, u32) -> u32;
+
+op /(u64, u64) -> u64;
+
+op /(u8, u8) -> u8;
+
+/// Return `true` if the first timestamp is earlier than the second.
+op <(Instant, Instant) -> bool;
+
+op <(int, f32) -> bool;
 
 op <(int, f64) -> bool;
 
-op <(i32, i32) -> bool;
-
-op <(u64, u64) -> bool;
-
 op <(f32, int) -> bool;
+
+op <(f32, f32) -> bool;
 
 op <(f64, int) -> bool;
 
 op <(i128, i128) -> bool;
 
+op <(i16, i16) -> bool;
+
+op <(i32, i32) -> bool;
+
 op <(i8, i8) -> bool;
 
 op <(u128, u128) -> bool;
 
-op <(int, f32) -> bool;
-
-/// Return `true` if the first timestamp is earlier than the second.
-op <(Instant, Instant) -> bool;
-
-op <(i16, i16) -> bool;
-
-op <(u8, u8) -> bool;
+op <(u16, u16) -> bool;
 
 op <(u32, u32) -> bool;
 
+op <(u64, u64) -> bool;
+
+op <(u8, u8) -> bool;
+
 op <<(i128, int) -> i128;
-
-op <<(u32, int) -> u32;
-
-op <<(i32, int) -> i32;
-
-op <<(u128, int) -> u128;
-
-op <<(u64, int) -> u64;
 
 op <<(i16, int) -> i16;
 
-op <<(u16, int) -> u16;
-
-op <<(u8, int) -> u8;
+op <<(i32, int) -> i32;
 
 op <<(i8, int) -> i8;
 
-op <=(u128, u128) -> bool;
+op <<(u128, int) -> u128;
 
-op <=(int, f32) -> bool;
+op <<(u16, int) -> u16;
 
-op <=(i8, i8) -> bool;
+op <<(u32, int) -> u32;
 
-op <=(i128, i128) -> bool;
+op <<(u64, int) -> u64;
 
-op <=(u64, u64) -> bool;
-
-op <=(f32, int) -> bool;
-
-op <=(u16, u16) -> bool;
-
-op <=(int, f64) -> bool;
-
-op <=(i32, i32) -> bool;
-
-op <=(f64, int) -> bool;
-
-op <=(f32, f32) -> bool;
-
-op <=(u32, u32) -> bool;
-
-op <=(u8, u8) -> bool;
+op <<(u8, int) -> u8;
 
 /// Return `true` if the first timestamp is earlier than or equals to the second.
 op <=(Instant, Instant) -> bool;
 
+op <=(int, f32) -> bool;
+
+op <=(int, f64) -> bool;
+
+op <=(f32, int) -> bool;
+
+op <=(f32, f32) -> bool;
+
+op <=(f64, int) -> bool;
+
+op <=(i128, i128) -> bool;
+
 op <=(i16, i16) -> bool;
 
-op ==(i128, i128) -> bool;
+op <=(i32, i32) -> bool;
 
-op ==(i8, i8) -> bool;
+op <=(i8, i8) -> bool;
 
-op ==(u128, u128) -> bool;
+op <=(u128, u128) -> bool;
 
-op ==(int, f32) -> bool;
+op <=(u16, u16) -> bool;
 
-op ==(f32, f32) -> bool;
+op <=(u32, u32) -> bool;
+
+op <=(u64, u64) -> bool;
+
+op <=(u8, u8) -> bool;
 
 /// Return `true` if two arrays are equal (i.e. all elements are equal and in the same order).
 ///
@@ -460,23 +450,6 @@ op ==(f32, f32) -> bool;
 /// ```
 op ==(Array, Array) -> bool;
 
-op ==(i32, i32) -> bool;
-
-op ==(u16, u16) -> bool;
-
-op ==(int, f64) -> bool;
-
-op ==(u64, u64) -> bool;
-
-op ==(f32, int) -> bool;
-
-op ==(f64, int) -> bool;
-
-op ==(u32, u32) -> bool;
-
-/// Return `true` if two timestamps are equal.
-op ==(Instant, Instant) -> bool;
-
 /// Return `true` if two object maps are equal (i.e. all property values are equal).
 ///
 /// The operator `==` is used to compare property values and must be defined,
@@ -495,89 +468,116 @@ op ==(Instant, Instant) -> bool;
 /// ```
 op ==(Map, Map) -> bool;
 
+/// Return `true` if two timestamps are equal.
+op ==(Instant, Instant) -> bool;
+
+op ==(int, f32) -> bool;
+
+op ==(int, f64) -> bool;
+
+op ==(f32, int) -> bool;
+
+op ==(f32, f32) -> bool;
+
+op ==(f64, int) -> bool;
+
+op ==(i128, i128) -> bool;
+
 op ==(i16, i16) -> bool;
 
+op ==(i32, i32) -> bool;
+
+op ==(i8, i8) -> bool;
+
+op ==(u128, u128) -> bool;
+
+op ==(u16, u16) -> bool;
+
+op ==(u32, u32) -> bool;
+
+op ==(u64, u64) -> bool;
+
 op ==(u8, u8) -> bool;
-
-op >(int, f32) -> bool;
-
-op >(u128, u128) -> bool;
-
-op >(i128, i128) -> bool;
-
-op >(i8, i8) -> bool;
-
-op >(f64, int) -> bool;
-
-op >(i32, i32) -> bool;
-
-op >(int, f64) -> bool;
-
-op >(u16, u16) -> bool;
-
-op >(f32, int) -> bool;
-
-op >(u64, u64) -> bool;
-
-op >(f32, f32) -> bool;
-
-op >(u32, u32) -> bool;
-
-op >(u8, u8) -> bool;
-
-op >(i16, i16) -> bool;
 
 /// Return `true` if the first timestamp is later than the second.
 op >(Instant, Instant) -> bool;
 
-op >=(u8, u8) -> bool;
+op >(int, f32) -> bool;
 
-op >=(i16, i16) -> bool;
+op >(int, f64) -> bool;
+
+op >(f32, int) -> bool;
+
+op >(f32, f32) -> bool;
+
+op >(f64, int) -> bool;
+
+op >(i128, i128) -> bool;
+
+op >(i16, i16) -> bool;
+
+op >(i32, i32) -> bool;
+
+op >(i8, i8) -> bool;
+
+op >(u128, u128) -> bool;
+
+op >(u16, u16) -> bool;
+
+op >(u32, u32) -> bool;
+
+op >(u64, u64) -> bool;
+
+op >(u8, u8) -> bool;
 
 /// Return `true` if the first timestamp is later than or equals to the second.
 op >=(Instant, Instant) -> bool;
 
-op >=(u32, u32) -> bool;
-
-op >=(f64, int) -> bool;
-
-op >=(f32, int) -> bool;
-
-op >=(u64, u64) -> bool;
+op >=(int, f32) -> bool;
 
 op >=(int, f64) -> bool;
 
-op >=(u16, u16) -> bool;
-
-op >=(i32, i32) -> bool;
+op >=(f32, int) -> bool;
 
 op >=(f32, f32) -> bool;
 
-op >=(int, f32) -> bool;
-
-op >=(u128, u128) -> bool;
-
-op >=(i8, i8) -> bool;
+op >=(f64, int) -> bool;
 
 op >=(i128, i128) -> bool;
 
-op >>(u128, int) -> u128;
+op >=(i16, i16) -> bool;
 
-op >>(i32, int) -> i32;
+op >=(i32, i32) -> bool;
 
-op >>(u32, int) -> u32;
+op >=(i8, i8) -> bool;
+
+op >=(u128, u128) -> bool;
+
+op >=(u16, u16) -> bool;
+
+op >=(u32, u32) -> bool;
+
+op >=(u64, u64) -> bool;
+
+op >=(u8, u8) -> bool;
 
 op >>(i128, int) -> i128;
 
+op >>(i16, int) -> i16;
+
+op >>(i32, int) -> i32;
+
 op >>(i8, int) -> i8;
 
-op >>(i16, int) -> i16;
+op >>(u128, int) -> u128;
 
 op >>(u16, int) -> u16;
 
-op >>(u8, int) -> u8;
+op >>(u32, int) -> u32;
 
 op >>(u64, int) -> u64;
+
+op >>(u8, int) -> u8;
 
 /// Return the natural number _e_.
 fn E() -> f64;
@@ -585,26 +585,32 @@ fn E() -> f64;
 /// Return the number π.
 fn PI() -> f64;
 
-op ^(u128, u128) -> u128;
-
 op ^(i128, i128) -> i128;
-
-op ^(i8, i8) -> i8;
-
-op ^(i32, i32) -> i32;
-
-op ^(u16, u16) -> u16;
-
-op ^(u64, u64) -> u64;
-
-op ^(u32, u32) -> u32;
-
-op ^(u8, u8) -> u8;
 
 op ^(i16, i16) -> i16;
 
+op ^(i32, i32) -> i32;
+
+op ^(i8, i8) -> i8;
+
+op ^(u128, u128) -> u128;
+
+op ^(u16, u16) -> u16;
+
+op ^(u32, u32) -> u32;
+
+op ^(u64, u64) -> u64;
+
+op ^(u8, u8) -> u8;
+
 /// Return the absolute value of the number.
 fn abs(x: int) -> int;
+
+/// Return the absolute value of the floating-point number.
+fn abs(x: f32) -> f32;
+
+/// Return the absolute value of the floating-point number.
+fn abs(x: f64) -> f64;
 
 /// Return the absolute value of the number.
 fn abs(x: i128) -> i128;
@@ -612,17 +618,11 @@ fn abs(x: i128) -> i128;
 /// Return the absolute value of the number.
 fn abs(x: i16) -> i16;
 
-/// Return the absolute value of the floating-point number.
-fn abs(x: f32) -> f32;
+/// Return the absolute value of the number.
+fn abs(x: i32) -> i32;
 
 /// Return the absolute value of the number.
 fn abs(x: i8) -> i8;
-
-/// Return the absolute value of the floating-point number.
-fn abs(x: f64) -> f64;
-
-/// Return the absolute value of the number.
-fn abs(x: i32) -> i32;
 
 /// Return the arc-cosine of the floating-point number, in radians.
 fn acos(x: float) -> f64;
@@ -672,37 +672,6 @@ fn all(array: Array, filter: String) -> bool;
 /// ```
 fn all(array: Array, filter: FnPtr) -> bool;
 
-/// Add another BLOB to the end of the BLOB.
-///
-/// # Example
-///
-/// ```rhai
-/// let b1 = blob(5, 0x42);
-/// let b2 = blob(3, 0x11);
-///
-/// b1.push(b2);
-///
-/// print(b1);      // prints "[4242424242111111]"
-/// ```
-fn append(blob1: Blob, blob2: Blob) -> ();
-
-fn append(string: String, item: ?) -> ();
-
-/// Add a new byte `value` to the end of the BLOB.
-///
-/// Only the lower 8 bits of the `value` are used; all other bits are ignored.
-///
-/// # Example
-///
-/// ```rhai
-/// let b = blob();
-///
-/// b.push(0x42);
-///
-/// print(b);       // prints "[42]"
-/// ```
-fn append(blob: Blob, value: int) -> ();
-
 /// Add all the elements of another array to the end of the array.
 ///
 /// # Example
@@ -716,6 +685,20 @@ fn append(blob: Blob, value: int) -> ();
 /// print(x);       // prints "[1, 2, 3, true, 'x']"
 /// ```
 fn append(array: Array, new_array: Array) -> ();
+
+/// Add another BLOB to the end of the BLOB.
+///
+/// # Example
+///
+/// ```rhai
+/// let b1 = blob(5, 0x42);
+/// let b2 = blob(3, 0x11);
+///
+/// b1.push(b2);
+///
+/// print(b1);      // prints "[4242424242111111]"
+/// ```
+fn append(blob1: Blob, blob2: Blob) -> ();
 
 /// Add a character (as UTF-8 encoded byte-stream) to the end of the BLOB
 ///
@@ -742,6 +725,23 @@ fn append(blob: Blob, character: char) -> ();
 /// print(b);       // prints "[424242424268656c 6c6f]"
 /// ```
 fn append(blob: Blob, string: String) -> ();
+
+/// Add a new byte `value` to the end of the BLOB.
+///
+/// Only the lower 8 bits of the `value` are used; all other bits are ignored.
+///
+/// # Example
+///
+/// ```rhai
+/// let b = blob();
+///
+/// b.push(0x42);
+///
+/// print(b);       // prints "[42]"
+/// ```
+fn append(blob: Blob, value: int) -> ();
+
+fn append(string: String, item: ?) -> ();
 
 fn append(string: String, utf8: Blob) -> ();
 
@@ -788,32 +788,6 @@ fn atanh(x: float) -> f64;
 /// ```
 fn bits(value: int) -> Iterator<bool>;
 
-/// Return an iterator over an inclusive range of bits in the number.
-///
-/// # Example
-///
-/// ```rhai
-/// let x = 123456;
-///
-/// for bit in x.bits(10..=23) {
-///     print(bit);
-/// }
-/// ```
-fn bits(value: int, range: RangeInclusive<i64>) -> Iterator<bool>;
-
-/// Return an iterator over an exclusive range of bits in the number.
-///
-/// # Example
-///
-/// ```rhai
-/// let x = 123456;
-///
-/// for bit in x.bits(10..24) {
-///     print(bit);
-/// }
-/// ```
-fn bits(value: int, range: Range<i64>) -> Iterator<bool>;
-
 /// Return an iterator over the bits in the number starting from the specified `start` position.
 ///
 /// If `start` < 0, position counts from the MSB (Most Significant Bit)>.
@@ -828,6 +802,32 @@ fn bits(value: int, range: Range<i64>) -> Iterator<bool>;
 /// }
 /// ```
 fn bits(value: int, from: int) -> Iterator<bool>;
+
+/// Return an iterator over an exclusive range of bits in the number.
+///
+/// # Example
+///
+/// ```rhai
+/// let x = 123456;
+///
+/// for bit in x.bits(10..24) {
+///     print(bit);
+/// }
+/// ```
+fn bits(value: int, range: Range<i64>) -> Iterator<bool>;
+
+/// Return an iterator over an inclusive range of bits in the number.
+///
+/// # Example
+///
+/// ```rhai
+/// let x = 123456;
+///
+/// for bit in x.bits(10..=23) {
+///     print(bit);
+/// }
+/// ```
+fn bits(value: int, range: RangeInclusive<i64>) -> Iterator<bool>;
 
 /// Return an iterator over a portion of bits in the number.
 ///
@@ -917,17 +917,6 @@ fn chars(string: String) -> Iterator<char>;
 /// ```
 fn chars(string: String, from: int) -> Iterator<char>;
 
-/// Return an iterator over an inclusive range of characters in the string.
-///
-/// # Example
-///
-/// ```rhai
-/// for ch in "hello, world!".chars(2..=6) {
-///     print(ch);
-/// }
-/// ```
-fn chars(string: String, range: RangeInclusive<i64>) -> Iterator<char>;
-
 /// Return an iterator over an exclusive range of characters in the string.
 ///
 /// # Example
@@ -938,6 +927,17 @@ fn chars(string: String, range: RangeInclusive<i64>) -> Iterator<char>;
 /// }
 /// ```
 fn chars(string: String, range: Range<i64>) -> Iterator<char>;
+
+/// Return an iterator over an inclusive range of characters in the string.
+///
+/// # Example
+///
+/// ```rhai
+/// for ch in "hello, world!".chars(2..=6) {
+///     print(ch);
+/// }
+/// ```
+fn chars(string: String, range: RangeInclusive<i64>) -> Iterator<char>;
 
 /// Return an iterator over a portion of characters in the string.
 ///
@@ -998,17 +998,17 @@ fn chop(array: Array, len: int) -> ();
 /// ```
 fn chop(blob: Blob, len: int) -> ();
 
-/// Clear the string, making it empty.
-fn clear(string: String) -> ();
+/// Clear the array.
+fn clear(array: Array) -> ();
 
 /// Clear the BLOB.
 fn clear(blob: Blob) -> ();
 
-/// Clear the array.
-fn clear(array: Array) -> ();
-
 /// Clear the object map.
 fn clear(map: Map) -> ();
+
+/// Clear the string, making it empty.
+fn clear(string: String) -> ();
 
 /// Return `true` if the array contains an element that equals `value`.
 ///
@@ -1035,6 +1035,32 @@ fn cos(x: float) -> f64;
 /// Return the hyperbolic cosine of the floating-point number in radians.
 fn cosh(x: float) -> f64;
 
+/// Remove all characters from the string except those within an exclusive `range`.
+///
+/// # Example
+///
+/// ```rhai
+/// let text = "hello, world!";
+///
+/// text.crop(2..8);
+///
+/// print(text);        // prints "llo, w"
+/// ```
+fn crop(string: String, range: Range<i64>) -> ();
+
+/// Remove all characters from the string except those within an inclusive `range`.
+///
+/// # Example
+///
+/// ```rhai
+/// let text = "hello, world!";
+///
+/// text.crop(2..=8);
+///
+/// print(text);        // prints "llo, wo"
+/// ```
+fn crop(string: String, range: RangeInclusive<i64>) -> ();
+
 /// Remove all characters from the string except until the `start` position.
 ///
 /// * If `start` < 0, position counts from the end of the string (`-1` is the last character).
@@ -1055,32 +1081,6 @@ fn cosh(x: float) -> f64;
 /// print(text);            // prints "ld!"
 /// ```
 fn crop(string: String, start: int) -> ();
-
-/// Remove all characters from the string except those within an inclusive `range`.
-///
-/// # Example
-///
-/// ```rhai
-/// let text = "hello, world!";
-///
-/// text.crop(2..=8);
-///
-/// print(text);        // prints "llo, wo"
-/// ```
-fn crop(string: String, range: RangeInclusive<i64>) -> ();
-
-/// Remove all characters from the string except those within an exclusive `range`.
-///
-/// # Example
-///
-/// ```rhai
-/// let text = "hello, world!";
-///
-/// text.crop(2..8);
-///
-/// print(text);        // prints "llo, w"
-/// ```
-fn crop(string: String, range: Range<i64>) -> ();
 
 /// Remove all characters from the string except those within a range.
 ///
@@ -1108,23 +1108,20 @@ fn crop(string: String, start: int, len: int) -> ();
 /// Return the empty string.
 fn debug() -> String;
 
-/// Convert the object map into a string.
-fn debug(map: Map) -> String;
+/// Convert the array into a string.
+fn debug(array: Array) -> String;
 
-/// Convert the unit into a string in debug format.
-fn debug(unit: ()) -> String;
+/// Convert the string into debug format.
+fn debug(character: char) -> String;
 
 /// Convert the function pointer into a string in debug format.
 fn debug(f: FnPtr) -> String;
 
-/// Convert the array into a string.
-fn debug(array: Array) -> String;
+/// Convert the value of the `item` into a string in debug format.
+fn debug(item: ?) -> String;
 
-/// Convert the boolean value into a string in debug format.
-fn debug(value: bool) -> String;
-
-/// Convert the string into debug format.
-fn debug(character: char) -> String;
+/// Convert the object map into a string.
+fn debug(map: Map) -> String;
 
 /// Convert the value of `number` into a string.
 fn debug(number: f32) -> String;
@@ -1135,8 +1132,11 @@ fn debug(number: f64) -> String;
 /// Convert the string into debug format.
 fn debug(string: String) -> String;
 
-/// Convert the value of the `item` into a string in debug format.
-fn debug(item: ?) -> String;
+/// Convert the unit into a string in debug format.
+fn debug(unit: ()) -> String;
+
+/// Convert the boolean value into a string in debug format.
+fn debug(value: bool) -> String;
 
 /// Remove duplicated _consecutive_ elements from the array.
 ///
@@ -1206,28 +1206,38 @@ fn dedup(array: Array, comparer: String) -> ();
 /// ```
 fn dedup(array: Array, comparer: FnPtr) -> ();
 
-/// Remove all bytes in the BLOB within an inclusive `range` and return them as a new BLOB.
+/// Remove all elements in the array that returns `true` when applied a function named by `filter`
+/// and return them as a new array.
+///
+/// # Function Parameters
+///
+/// A function with the same name as the value of `filter` must exist taking these parameters:
+///
+/// * `element`: copy of array element
+/// * `index` _(optional)_: current index in the array
 ///
 /// # Example
 ///
 /// ```rhai
-/// let b1 = blob();
+/// fn small(x) { x < 3 }
 ///
-/// b1 += 1; b1 += 2; b1 += 3; b1 += 4; b1 += 5;
+/// fn screen(x, i) { x + i > 5 }
 ///
-/// let b2 = b1.drain(1..=2);
+/// let x = [1, 2, 3, 4, 5];
 ///
-/// print(b1);      // prints "[010405]"
+/// let y = x.drain("small");
 ///
-/// print(b2);      // prints "[0203]"
+/// print(x);       // prints "[3, 4, 5]"
 ///
-/// let b3 = b1.drain(2..=2);
+/// print(y);       // prints "[1, 2]"
 ///
-/// print(b1);      // prints "[0104]"
+/// let z = x.drain("screen");
 ///
-/// print(b3);      // prints "[05]"
+/// print(x);       // prints "[3, 4]"
+///
+/// print(z);       // prints "[5]"
 /// ```
-fn drain(blob: Blob, range: RangeInclusive<i64>) -> Blob;
+fn drain(array: Array, filter: String) -> Array;
 
 /// Remove all elements in the array that returns `true` when applied the `filter` function and
 /// return them as a new array.
@@ -1277,6 +1287,27 @@ fn drain(array: Array, filter: FnPtr) -> Array;
 /// ```
 fn drain(array: Array, range: Range<i64>) -> Array;
 
+/// Remove all elements in the array within an inclusive `range` and return them as a new array.
+///
+/// # Example
+///
+/// ```rhai
+/// let x = [1, 2, 3, 4, 5];
+///
+/// let y = x.drain(1..=2);
+///
+/// print(x);       // prints "[1, 4, 5]"
+///
+/// print(y);       // prints "[2, 3]"
+///
+/// let z = x.drain(2..=2);
+///
+/// print(x);       // prints "[1, 4]"
+///
+/// print(z);       // prints "[5]"
+/// ```
+fn drain(array: Array, range: RangeInclusive<i64>) -> Array;
+
 /// Remove all bytes in the BLOB within an exclusive `range` and return them as a new BLOB.
 ///
 /// # Example
@@ -1300,59 +1331,55 @@ fn drain(array: Array, range: Range<i64>) -> Array;
 /// ```
 fn drain(blob: Blob, range: Range<i64>) -> Blob;
 
-/// Remove all elements in the array that returns `true` when applied a function named by `filter`
-/// and return them as a new array.
-///
-/// # Function Parameters
-///
-/// A function with the same name as the value of `filter` must exist taking these parameters:
-///
-/// * `element`: copy of array element
-/// * `index` _(optional)_: current index in the array
+/// Remove all bytes in the BLOB within an inclusive `range` and return them as a new BLOB.
 ///
 /// # Example
 ///
 /// ```rhai
-/// fn small(x) { x < 3 }
+/// let b1 = blob();
 ///
-/// fn screen(x, i) { x + i > 5 }
+/// b1 += 1; b1 += 2; b1 += 3; b1 += 4; b1 += 5;
 ///
-/// let x = [1, 2, 3, 4, 5];
+/// let b2 = b1.drain(1..=2);
 ///
-/// let y = x.drain("small");
+/// print(b1);      // prints "[010405]"
 ///
-/// print(x);       // prints "[3, 4, 5]"
+/// print(b2);      // prints "[0203]"
 ///
-/// print(y);       // prints "[1, 2]"
+/// let b3 = b1.drain(2..=2);
 ///
-/// let z = x.drain("screen");
+/// print(b1);      // prints "[0104]"
 ///
-/// print(x);       // prints "[3, 4]"
-///
-/// print(z);       // prints "[5]"
+/// print(b3);      // prints "[05]"
 /// ```
-fn drain(array: Array, filter: String) -> Array;
+fn drain(blob: Blob, range: RangeInclusive<i64>) -> Blob;
 
-/// Remove all elements in the array within an inclusive `range` and return them as a new array.
+/// Remove all elements within a portion of the array and return them as a new array.
+///
+/// * If `start` < 0, position counts from the end of the array (`-1` is the last element).
+/// * If `start` < -length of array, position counts from the beginning of the array.
+/// * If `start` ≥ length of array, no element is removed and an empty array is returned.
+/// * If `len` ≤ 0, no element is removed and an empty array is returned.
+/// * If `start` position + `len` ≥ length of array, entire portion of the array after the `start` position is removed and returned.
 ///
 /// # Example
 ///
 /// ```rhai
 /// let x = [1, 2, 3, 4, 5];
 ///
-/// let y = x.drain(1..=2);
+/// let y = x.drain(1, 2);
 ///
 /// print(x);       // prints "[1, 4, 5]"
 ///
 /// print(y);       // prints "[2, 3]"
 ///
-/// let z = x.drain(2..=2);
+/// let z = x.drain(-1, 1);
 ///
 /// print(x);       // prints "[1, 4]"
 ///
 /// print(z);       // prints "[5]"
 /// ```
-fn drain(array: Array, range: RangeInclusive<i64>) -> Array;
+fn drain(array: Array, start: int, len: int) -> Array;
 
 /// Remove all bytes within a portion of the BLOB and return them as a new BLOB.
 ///
@@ -1383,33 +1410,6 @@ fn drain(array: Array, range: RangeInclusive<i64>) -> Array;
 /// ```
 fn drain(blob: Blob, start: int, len: int) -> Blob;
 
-/// Remove all elements within a portion of the array and return them as a new array.
-///
-/// * If `start` < 0, position counts from the end of the array (`-1` is the last element).
-/// * If `start` < -length of array, position counts from the beginning of the array.
-/// * If `start` ≥ length of array, no element is removed and an empty array is returned.
-/// * If `len` ≤ 0, no element is removed and an empty array is returned.
-/// * If `start` position + `len` ≥ length of array, entire portion of the array after the `start` position is removed and returned.
-///
-/// # Example
-///
-/// ```rhai
-/// let x = [1, 2, 3, 4, 5];
-///
-/// let y = x.drain(1, 2);
-///
-/// print(x);       // prints "[1, 4, 5]"
-///
-/// print(y);       // prints "[2, 3]"
-///
-/// let z = x.drain(-1, 1);
-///
-/// print(x);       // prints "[1, 4]"
-///
-/// print(z);       // prints "[5]"
-/// ```
-fn drain(array: Array, start: int, len: int) -> Array;
-
 /// Return the number of seconds between the current system time and the timestamp.
 ///
 /// # Example
@@ -1423,11 +1423,11 @@ fn drain(array: Array, start: int, len: int) -> Array;
 /// ```
 fn elapsed(timestamp: Instant) -> RhaiResult;
 
-/// Return the end of the inclusive range.
-fn end(range: InclusiveRange) -> i64;
-
 /// Return the end of the exclusive range.
 fn end(range: ExclusiveRange) -> i64;
+
+/// Return the end of the inclusive range.
+fn end(range: InclusiveRange) -> i64;
 
 /// Return `true` if the string ends with a specified string.
 ///
@@ -1444,6 +1444,32 @@ fn ends_with(string: String, match_string: String) -> bool;
 
 /// Return the exponential of the floating-point number.
 fn exp(x: float) -> f64;
+
+/// Copy an exclusive range of the array and return it as a new array.
+///
+/// # Example
+///
+/// ```rhai
+/// let x = [1, 2, 3, 4, 5];
+///
+/// print(x.extract(1..3));     // prints "[2, 3]"
+///
+/// print(x);                   // prints "[1, 2, 3, 4, 5]"
+/// ```
+fn extract(array: Array, range: Range<i64>) -> Array;
+
+/// Copy an inclusive range of the array and return it as a new array.
+///
+/// # Example
+///
+/// ```rhai
+/// let x = [1, 2, 3, 4, 5];
+///
+/// print(x.extract(1..=3));    // prints "[2, 3, 4]"
+///
+/// print(x);                   // prints "[1, 2, 3, 4, 5]"
+/// ```
+fn extract(array: Array, range: RangeInclusive<i64>) -> Array;
 
 /// Copy a portion of the array beginning at the `start` position till the end and return it as
 /// a new array.
@@ -1464,6 +1490,36 @@ fn exp(x: float) -> f64;
 /// print(x);                   // prints "[1, 2, 3, 4, 5]"
 /// ```
 fn extract(array: Array, start: int) -> Array;
+
+/// Copy an exclusive `range` of the BLOB and return it as a new BLOB.
+///
+/// # Example
+///
+/// ```rhai
+/// let b = blob();
+///
+/// b += 1; b += 2; b += 3; b += 4; b += 5;
+///
+/// print(b.extract(1..3));     // prints "[0203]"
+///
+/// print(b);                   // prints "[0102030405]"
+/// ```
+fn extract(blob: Blob, range: Range<i64>) -> Blob;
+
+/// Copy an inclusive `range` of the BLOB and return it as a new BLOB.
+///
+/// # Example
+///
+/// ```rhai
+/// let b = blob();
+///
+/// b += 1; b += 2; b += 3; b += 4; b += 5;
+///
+/// print(b.extract(1..=3));    // prints "[020304]"
+///
+/// print(b);                   // prints "[0102030405]"
+/// ```
+fn extract(blob: Blob, range: RangeInclusive<i64>) -> Blob;
 
 /// Copy a portion of the BLOB beginning at the `start` position till the end and return it as
 /// a new BLOB.
@@ -1486,62 +1542,6 @@ fn extract(array: Array, start: int) -> Array;
 /// print(b);                   // prints "[0102030405]"
 /// ```
 fn extract(blob: Blob, start: int) -> Blob;
-
-/// Copy an inclusive range of the array and return it as a new array.
-///
-/// # Example
-///
-/// ```rhai
-/// let x = [1, 2, 3, 4, 5];
-///
-/// print(x.extract(1..=3));    // prints "[2, 3, 4]"
-///
-/// print(x);                   // prints "[1, 2, 3, 4, 5]"
-/// ```
-fn extract(array: Array, range: RangeInclusive<i64>) -> Array;
-
-/// Copy an inclusive `range` of the BLOB and return it as a new BLOB.
-///
-/// # Example
-///
-/// ```rhai
-/// let b = blob();
-///
-/// b += 1; b += 2; b += 3; b += 4; b += 5;
-///
-/// print(b.extract(1..=3));    // prints "[020304]"
-///
-/// print(b);                   // prints "[0102030405]"
-/// ```
-fn extract(blob: Blob, range: RangeInclusive<i64>) -> Blob;
-
-/// Copy an exclusive `range` of the BLOB and return it as a new BLOB.
-///
-/// # Example
-///
-/// ```rhai
-/// let b = blob();
-///
-/// b += 1; b += 2; b += 3; b += 4; b += 5;
-///
-/// print(b.extract(1..3));     // prints "[0203]"
-///
-/// print(b);                   // prints "[0102030405]"
-/// ```
-fn extract(blob: Blob, range: Range<i64>) -> Blob;
-
-/// Copy an exclusive range of the array and return it as a new array.
-///
-/// # Example
-///
-/// ```rhai
-/// let x = [1, 2, 3, 4, 5];
-///
-/// print(x.extract(1..3));     // prints "[2, 3]"
-///
-/// print(x);                   // prints "[1, 2, 3, 4, 5]"
-/// ```
-fn extract(array: Array, range: Range<i64>) -> Array;
 
 /// Copy a portion of the array and return it as a new array.
 ///
@@ -1602,6 +1602,29 @@ fn extract(blob: Blob, start: int, len: int) -> Blob;
 /// ```
 fn fill_with(map: Map, map2: Map) -> ();
 
+/// Iterate through all the elements in the array, applying a `filter` function to each element
+/// in turn, and return a copy of all elements (in order) that return `true` as a new array.
+///
+/// # Function Parameters
+///
+/// * `element`: copy of array element
+/// * `index` _(optional)_: current index in the array
+///
+/// # Example
+///
+/// ```rhai
+/// let x = [1, 2, 3, 4, 5];
+///
+/// let y = x.filter(|v| v >= 3);
+///
+/// print(y);       // prints "[3, 4, 5]"
+///
+/// let y = x.filter(|v, i| v * i >= 10);
+///
+/// print(y);       // prints "[12, 20]"
+/// ```
+fn filter(array: Array, filter: FnPtr) -> Array;
+
 /// Iterate through all the elements in the array, applying a function named by `filter` to each
 /// element in turn, and return a copy of all elements (in order) that return `true` as a new array.
 ///
@@ -1629,34 +1652,30 @@ fn fill_with(map: Map, map2: Map) -> ();
 /// ```
 fn filter(array: Array, filter_func: String) -> Array;
 
-/// Iterate through all the elements in the array, applying a `filter` function to each element
-/// in turn, and return a copy of all elements (in order) that return `true` as a new array.
-///
-/// # Function Parameters
-///
-/// * `element`: copy of array element
-/// * `index` _(optional)_: current index in the array
-///
-/// # Example
-///
-/// ```rhai
-/// let x = [1, 2, 3, 4, 5];
-///
-/// let y = x.filter(|v| v >= 3);
-///
-/// print(y);       // prints "[3, 4, 5]"
-///
-/// let y = x.filter(|v, i| v * i >= 10);
-///
-/// print(y);       // prints "[12, 20]"
-/// ```
-fn filter(array: Array, filter: FnPtr) -> Array;
-
 /// Return the largest whole number less than or equals to the floating-point number.
 fn floor(x: float) -> f64;
 
 /// Return the fractional part of the floating-point number.
 fn fraction(x: float) -> f64;
+
+/// Get a copy of the element at the `index` position in the array.
+///
+/// * If `index` < 0, position counts from the end of the array (`-1` is the last element).
+/// * If `index` < -length of array, `()` is returned.
+/// * If `index` ≥ length of array, `()` is returned.
+///
+/// # Example
+///
+/// ```rhai
+/// let x = [1, 2, 3];
+///
+/// print(x.get(0));        // prints 1
+///
+/// print(x.get(-1));       // prints 3
+///
+/// print(x.get(99));       // prints empty (for '()')
+/// ```
+fn get(array: Array, index: int) -> ?;
 
 /// Get the byte value at the `index` position in the BLOB.
 ///
@@ -1679,6 +1698,21 @@ fn fraction(x: float) -> f64;
 /// ```
 fn get(blob: Blob, index: int) -> i64;
 
+/// Get the value of the `property` in the object map and return a copy.
+///
+/// If `property` does not exist in the object map, `()` is returned.
+///
+/// # Example
+///
+/// ```rhai
+/// let m = #{a: 1, b: 2, c: 3};
+///
+/// print(m.get("b"));      // prints 2
+///
+/// print(m.get("x"));      // prints empty (for '()')
+/// ```
+fn get(map: Map, property: String) -> ?;
+
 /// Get the character at the `index` position in the string.
 ///
 /// * If `index` < 0, position counts from the end of the string (`-1` is the last character).
@@ -1697,40 +1731,6 @@ fn get(blob: Blob, index: int) -> i64;
 /// print(text.get(99));    // prints empty (for '()')'
 /// ```
 fn get(string: String, index: int) -> ?;
-
-/// Get the value of the `property` in the object map and return a copy.
-///
-/// If `property` does not exist in the object map, `()` is returned.
-///
-/// # Example
-///
-/// ```rhai
-/// let m = #{a: 1, b: 2, c: 3};
-///
-/// print(m.get("b"));      // prints 2
-///
-/// print(m.get("x"));      // prints empty (for '()')
-/// ```
-fn get(map: Map, property: String) -> ?;
-
-/// Get a copy of the element at the `index` position in the array.
-///
-/// * If `index` < 0, position counts from the end of the array (`-1` is the last element).
-/// * If `index` < -length of array, `()` is returned.
-/// * If `index` ≥ length of array, `()` is returned.
-///
-/// # Example
-///
-/// ```rhai
-/// let x = [1, 2, 3];
-///
-/// print(x.get(0));        // prints 1
-///
-/// print(x.get(-1));       // prints 3
-///
-/// print(x.get(99));       // prints empty (for '()')
-/// ```
-fn get(array: Array, index: int) -> ?;
 
 /// Return an iterator over all the bits in the number.
 ///
@@ -1810,40 +1810,40 @@ fn get int(x: float) -> f64;
 fn get is_anonymous(fn_ptr: FnPtr) -> bool;
 
 /// Return true if the number is even.
-fn get is_even(x: i32) -> bool;
-
-/// Return true if the number is even.
-fn get is_even(x: u32) -> bool;
-
-/// Return true if the number is even.
-fn get is_even(x: i8) -> bool;
-
-/// Return true if the number is even.
-fn get is_even(x: u16) -> bool;
-
-/// Return true if the number is even.
-fn get is_even(x: u128) -> bool;
-
-/// Return true if the number is even.
-fn get is_even(x: u64) -> bool;
+fn get is_even(x: int) -> bool;
 
 /// Return true if the number is even.
 fn get is_even(x: i128) -> bool;
 
 /// Return true if the number is even.
-fn get is_even(x: u8) -> bool;
-
-/// Return true if the number is even.
 fn get is_even(x: i16) -> bool;
 
 /// Return true if the number is even.
-fn get is_even(x: int) -> bool;
+fn get is_even(x: i32) -> bool;
 
-/// Return `true` if the range is exclusive.
-fn get is_exclusive(range: InclusiveRange) -> bool;
+/// Return true if the number is even.
+fn get is_even(x: i8) -> bool;
+
+/// Return true if the number is even.
+fn get is_even(x: u128) -> bool;
+
+/// Return true if the number is even.
+fn get is_even(x: u16) -> bool;
+
+/// Return true if the number is even.
+fn get is_even(x: u32) -> bool;
+
+/// Return true if the number is even.
+fn get is_even(x: u64) -> bool;
+
+/// Return true if the number is even.
+fn get is_even(x: u8) -> bool;
 
 /// Return `true` if the range is exclusive.
 fn get is_exclusive(range: ExclusiveRange) -> bool;
+
+/// Return `true` if the range is exclusive.
+fn get is_exclusive(range: InclusiveRange) -> bool;
 
 /// Return `true` if the floating-point number is finite.
 fn get is_finite(x: float) -> bool;
@@ -1861,46 +1861,55 @@ fn get is_infinite(x: float) -> bool;
 fn get is_nan(x: float) -> bool;
 
 /// Return true if the number is odd.
-fn get is_odd(x: u128) -> bool;
-
-/// Return true if the number is odd.
-fn get is_odd(x: u64) -> bool;
-
-/// Return true if the number is odd.
-fn get is_odd(x: i8) -> bool;
-
-/// Return true if the number is odd.
-fn get is_odd(x: u16) -> bool;
-
-/// Return true if the number is odd.
-fn get is_odd(x: i32) -> bool;
-
-/// Return true if the number is odd.
-fn get is_odd(x: u32) -> bool;
-
-/// Return true if the number is odd.
 fn get is_odd(x: int) -> bool;
 
 /// Return true if the number is odd.
-fn get is_odd(x: u8) -> bool;
+fn get is_odd(x: i128) -> bool;
 
 /// Return true if the number is odd.
 fn get is_odd(x: i16) -> bool;
 
 /// Return true if the number is odd.
-fn get is_odd(x: i128) -> bool;
+fn get is_odd(x: i32) -> bool;
+
+/// Return true if the number is odd.
+fn get is_odd(x: i8) -> bool;
+
+/// Return true if the number is odd.
+fn get is_odd(x: u128) -> bool;
+
+/// Return true if the number is odd.
+fn get is_odd(x: u16) -> bool;
+
+/// Return true if the number is odd.
+fn get is_odd(x: u32) -> bool;
+
+/// Return true if the number is odd.
+fn get is_odd(x: u64) -> bool;
+
+/// Return true if the number is odd.
+fn get is_odd(x: u8) -> bool;
+
+/// Return true if the number is zero.
+fn get is_zero(x: int) -> bool;
+
+/// Return true if the floating-point number is zero.
+fn get is_zero(x: f32) -> bool;
 
 /// Return true if the floating-point number is zero.
 fn get is_zero(x: f64) -> bool;
 
 /// Return true if the number is zero.
+fn get is_zero(x: i128) -> bool;
+
+/// Return true if the number is zero.
+fn get is_zero(x: i16) -> bool;
+
+/// Return true if the number is zero.
 fn get is_zero(x: i32) -> bool;
 
 /// Return true if the number is zero.
-fn get is_zero(x: u32) -> bool;
-
-/// Return true if the number is zero.
-fn get is_zero(x: u64) -> bool;
+fn get is_zero(x: i8) -> bool;
 
 /// Return true if the number is zero.
 fn get is_zero(x: u128) -> bool;
@@ -1909,33 +1918,13 @@ fn get is_zero(x: u128) -> bool;
 fn get is_zero(x: u16) -> bool;
 
 /// Return true if the number is zero.
-fn get is_zero(x: i8) -> bool;
-
-/// Return true if the floating-point number is zero.
-fn get is_zero(x: f32) -> bool;
+fn get is_zero(x: u32) -> bool;
 
 /// Return true if the number is zero.
-fn get is_zero(x: i16) -> bool;
+fn get is_zero(x: u64) -> bool;
 
 /// Return true if the number is zero.
 fn get is_zero(x: u8) -> bool;
-
-/// Return true if the number is zero.
-fn get is_zero(x: i128) -> bool;
-
-/// Return true if the number is zero.
-fn get is_zero(x: int) -> bool;
-
-/// Return the length of the string, in number of characters.
-///
-/// # Example
-///
-/// ```rhai
-/// let text = "朝には紅顔ありて夕べには白骨となる";
-///
-/// print(text.len);        // prints 17
-/// ```
-fn get len(string: String) -> i64;
 
 /// Number of elements in the array.
 fn get len(array: Array) -> i64;
@@ -1952,6 +1941,17 @@ fn get len(array: Array) -> i64;
 /// print(b.len());     // prints 10
 /// ```
 fn get len(blob: Blob) -> i64;
+
+/// Return the length of the string, in number of characters.
+///
+/// # Example
+///
+/// ```rhai
+/// let text = "朝には紅顔ありて夕べには白骨となる";
+///
+/// print(text.len);        // prints 17
+/// ```
+fn get len(string: String) -> i64;
 
 /// Return the name of the function.
 ///
@@ -2078,20 +2078,6 @@ fn hypot(x: float, y: float) -> f64;
 /// ```
 fn index_of(array: Array, filter: String) -> int;
 
-/// Find the specified `character` in the string and return the first index where it is found.
-/// If the `character` is not found, `-1` is returned.
-///
-/// # Example
-///
-/// ```rhai
-/// let text = "hello, world!";
-///
-/// print(text.index_of('l'));      // prints 2 (first index)
-///
-/// print(text.index_of('x'));      // prints -1
-/// ```
-fn index_of(string: String, character: char) -> i64;
-
 /// Iterate through all the elements in the array, applying a `filter` function to each element
 /// in turn, and return the index of the first element that returns `true`.
 /// If no element returns `true`, `-1` is returned.
@@ -2114,20 +2100,6 @@ fn index_of(string: String, character: char) -> i64;
 /// ```
 fn index_of(array: Array, filter: FnPtr) -> int;
 
-/// Find the specified `character` in the string and return the first index where it is found.
-/// If the `character` is not found, `-1` is returned.
-///
-/// # Example
-///
-/// ```rhai
-/// let text = "hello, world! hello, foobar!";
-///
-/// print(text.index_of("ll"));     // prints 2 (first index)
-///
-/// print(text.index_of("xx:));     // prints -1
-/// ```
-fn index_of(string: String, find_string: String) -> i64;
-
 /// Find the first element in the array that equals a particular `value` and return its index.
 /// If no element equals `value`, `-1` is returned.
 ///
@@ -2147,37 +2119,33 @@ fn index_of(string: String, find_string: String) -> i64;
 /// ```
 fn index_of(array: Array, value: ?) -> int;
 
-/// Iterate through all the elements in the array, starting from a particular `start` position,
-/// applying a `filter` function to each element in turn, and return the index of the first
-/// element that returns `true`. If no element returns `true`, `-1` is returned.
-///
-/// * If `start` < 0, position counts from the end of the array (`-1` is the last element).
-/// * If `start` < -length of array, position counts from the beginning of the array.
-/// * If `start` ≥ length of array, `-1` is returned.
-///
-/// # Function Parameters
-///
-/// * `element`: copy of array element
-/// * `index` _(optional)_: current index in the array
+/// Find the specified `character` in the string and return the first index where it is found.
+/// If the `character` is not found, `-1` is returned.
 ///
 /// # Example
 ///
 /// ```rhai
-/// let x = [1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4, 5];
+/// let text = "hello, world!";
 ///
-/// print(x.index_of(|v| v > 1, 3));    // prints 5: 2 > 1
+/// print(text.index_of('l'));      // prints 2 (first index)
 ///
-/// print(x.index_of(|v| v < 2, 9));    // prints -1: nothing < 2 past index 9
-///
-/// print(x.index_of(|v| v > 1, 15));   // prints -1: nothing found past end of array
-///
-/// print(x.index_of(|v| v > 1, -5));   // prints 9: -5 = start from index 8
-///
-/// print(x.index_of(|v| v > 1, -99));  // prints 1: -99 = start from beginning
-///
-/// print(x.index_of(|v, i| v * i > 20, 8));    // prints 10: 3 * 10 > 20
+/// print(text.index_of('x'));      // prints -1
 /// ```
-fn index_of(array: Array, filter: FnPtr, start: int) -> int;
+fn index_of(string: String, character: char) -> i64;
+
+/// Find the specified `character` in the string and return the first index where it is found.
+/// If the `character` is not found, `-1` is returned.
+///
+/// # Example
+///
+/// ```rhai
+/// let text = "hello, world! hello, foobar!";
+///
+/// print(text.index_of("ll"));     // prints 2 (first index)
+///
+/// print(text.index_of("xx:));     // prints -1
+/// ```
+fn index_of(string: String, find_string: String) -> i64;
 
 /// Iterate through all the elements in the array, starting from a particular `start` position,
 /// applying a function named by `filter` to each element in turn, and return the index of the
@@ -2219,26 +2187,37 @@ fn index_of(array: Array, filter: FnPtr, start: int) -> int;
 /// ```
 fn index_of(array: Array, filter: String, start: int) -> int;
 
-/// Find the specified sub-string in the string, starting from the specified `start` position,
-/// and return the first index where it is found.
-/// If the sub-string is not found, `-1` is returned.
+/// Iterate through all the elements in the array, starting from a particular `start` position,
+/// applying a `filter` function to each element in turn, and return the index of the first
+/// element that returns `true`. If no element returns `true`, `-1` is returned.
 ///
-/// * If `start` < 0, position counts from the end of the string (`-1` is the last character).
-/// * If `start` < -length of string, position counts from the beginning of the string.
-/// * If `start` ≥ length of string, `-1` is returned.
+/// * If `start` < 0, position counts from the end of the array (`-1` is the last element).
+/// * If `start` < -length of array, position counts from the beginning of the array.
+/// * If `start` ≥ length of array, `-1` is returned.
+///
+/// # Function Parameters
+///
+/// * `element`: copy of array element
+/// * `index` _(optional)_: current index in the array
 ///
 /// # Example
 ///
 /// ```rhai
-/// let text = "hello, world! hello, foobar!";
+/// let x = [1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4, 5];
 ///
-/// print(text.index_of("ll", 5));      // prints 16 (first index after 5)
+/// print(x.index_of(|v| v > 1, 3));    // prints 5: 2 > 1
 ///
-/// print(text.index_of("ll", -15));    // prints 16
+/// print(x.index_of(|v| v < 2, 9));    // prints -1: nothing < 2 past index 9
 ///
-/// print(text.index_of("xx", 0));      // prints -1
+/// print(x.index_of(|v| v > 1, 15));   // prints -1: nothing found past end of array
+///
+/// print(x.index_of(|v| v > 1, -5));   // prints 9: -5 = start from index 8
+///
+/// print(x.index_of(|v| v > 1, -99));  // prints 1: -99 = start from beginning
+///
+/// print(x.index_of(|v, i| v * i > 20, 8));    // prints 10: 3 * 10 > 20
 /// ```
-fn index_of(string: String, find_string: String, start: int) -> i64;
+fn index_of(array: Array, filter: FnPtr, start: int) -> int;
 
 /// Find the first element in the array, starting from a particular `start` position, that
 /// equals a particular `value` and return its index. If no element equals `value`, `-1` is returned.
@@ -2290,24 +2269,26 @@ fn index_of(array: Array, value: ?, start: int) -> int;
 /// ```
 fn index_of(string: String, character: char, start: int) -> i64;
 
-/// Add a byte `value` to the BLOB at a particular `index` position.
+/// Find the specified sub-string in the string, starting from the specified `start` position,
+/// and return the first index where it is found.
+/// If the sub-string is not found, `-1` is returned.
 ///
-/// * If `index` < 0, position counts from the end of the BLOB (`-1` is the last byte).
-/// * If `index` < -length of BLOB, the byte value is added to the beginning of the BLOB.
-/// * If `index` ≥ length of BLOB, the byte value is appended to the end of the BLOB.
-///
-/// Only the lower 8 bits of the `value` are used; all other bits are ignored.
+/// * If `start` < 0, position counts from the end of the string (`-1` is the last character).
+/// * If `start` < -length of string, position counts from the beginning of the string.
+/// * If `start` ≥ length of string, `-1` is returned.
 ///
 /// # Example
 ///
 /// ```rhai
-/// let b = blob(5, 0x42);
+/// let text = "hello, world! hello, foobar!";
 ///
-/// b.insert(2, 0x18);
+/// print(text.index_of("ll", 5));      // prints 16 (first index after 5)
 ///
-/// print(b);       // prints "[4242184242]"
+/// print(text.index_of("ll", -15));    // prints 16
+///
+/// print(text.index_of("xx", 0));      // prints -1
 /// ```
-fn insert(blob: Blob, index: int, value: int) -> ();
+fn index_of(string: String, find_string: String, start: int) -> i64;
 
 /// Add a new element into the array at a particular `index` position.
 ///
@@ -2330,6 +2311,25 @@ fn insert(blob: Blob, index: int, value: int) -> ();
 /// ```
 fn insert(array: Array, index: int, item: ?) -> ();
 
+/// Add a byte `value` to the BLOB at a particular `index` position.
+///
+/// * If `index` < 0, position counts from the end of the BLOB (`-1` is the last byte).
+/// * If `index` < -length of BLOB, the byte value is added to the beginning of the BLOB.
+/// * If `index` ≥ length of BLOB, the byte value is appended to the end of the BLOB.
+///
+/// Only the lower 8 bits of the `value` are used; all other bits are ignored.
+///
+/// # Example
+///
+/// ```rhai
+/// let b = blob(5, 0x42);
+///
+/// b.insert(2, 0x18);
+///
+/// print(b);       // prints "[4242184242]"
+/// ```
+fn insert(blob: Blob, index: int, value: int) -> ();
+
 /// Return the integral part of the floating-point number.
 fn int(x: float) -> f64;
 
@@ -2345,7 +2345,19 @@ fn int(x: float) -> f64;
 fn is_anonymous(fn_ptr: FnPtr) -> bool;
 
 /// Return true if the number is even.
-fn is_even(x: u64) -> bool;
+fn is_even(x: int) -> bool;
+
+/// Return true if the number is even.
+fn is_even(x: i128) -> bool;
+
+/// Return true if the number is even.
+fn is_even(x: i16) -> bool;
+
+/// Return true if the number is even.
+fn is_even(x: i32) -> bool;
+
+/// Return true if the number is even.
+fn is_even(x: i8) -> bool;
 
 /// Return true if the number is even.
 fn is_even(x: u128) -> bool;
@@ -2354,25 +2366,13 @@ fn is_even(x: u128) -> bool;
 fn is_even(x: u16) -> bool;
 
 /// Return true if the number is even.
-fn is_even(x: i8) -> bool;
-
-/// Return true if the number is even.
-fn is_even(x: i32) -> bool;
-
-/// Return true if the number is even.
 fn is_even(x: u32) -> bool;
 
 /// Return true if the number is even.
-fn is_even(x: int) -> bool;
-
-/// Return true if the number is even.
-fn is_even(x: i16) -> bool;
+fn is_even(x: u64) -> bool;
 
 /// Return true if the number is even.
 fn is_even(x: u8) -> bool;
-
-/// Return true if the number is even.
-fn is_even(x: i128) -> bool;
 
 /// Return `true` if the range is exclusive.
 fn is_exclusive(range: ExclusiveRange) -> bool;
@@ -2396,19 +2396,25 @@ fn is_infinite(x: float) -> bool;
 fn is_nan(x: float) -> bool;
 
 /// Return true if the number is odd.
-fn is_odd(x: i16) -> bool;
-
-/// Return true if the number is odd.
-fn is_odd(x: u8) -> bool;
+fn is_odd(x: int) -> bool;
 
 /// Return true if the number is odd.
 fn is_odd(x: i128) -> bool;
 
 /// Return true if the number is odd.
-fn is_odd(x: int) -> bool;
+fn is_odd(x: i16) -> bool;
 
 /// Return true if the number is odd.
 fn is_odd(x: i32) -> bool;
+
+/// Return true if the number is odd.
+fn is_odd(x: i8) -> bool;
+
+/// Return true if the number is odd.
+fn is_odd(x: u128) -> bool;
+
+/// Return true if the number is odd.
+fn is_odd(x: u16) -> bool;
 
 /// Return true if the number is odd.
 fn is_odd(x: u32) -> bool;
@@ -2417,37 +2423,16 @@ fn is_odd(x: u32) -> bool;
 fn is_odd(x: u64) -> bool;
 
 /// Return true if the number is odd.
-fn is_odd(x: u128) -> bool;
-
-/// Return true if the number is odd.
-fn is_odd(x: i8) -> bool;
-
-/// Return true if the number is odd.
-fn is_odd(x: u16) -> bool;
+fn is_odd(x: u8) -> bool;
 
 /// Return true if the number is zero.
-fn is_zero(x: u32) -> bool;
-
-/// Return true if the number is zero.
-fn is_zero(x: i32) -> bool;
-
-/// Return true if the floating-point number is zero.
-fn is_zero(x: f64) -> bool;
-
-/// Return true if the number is zero.
-fn is_zero(x: i8) -> bool;
-
-/// Return true if the number is zero.
-fn is_zero(x: u16) -> bool;
+fn is_zero(x: int) -> bool;
 
 /// Return true if the floating-point number is zero.
 fn is_zero(x: f32) -> bool;
 
-/// Return true if the number is zero.
-fn is_zero(x: u64) -> bool;
-
-/// Return true if the number is zero.
-fn is_zero(x: u128) -> bool;
+/// Return true if the floating-point number is zero.
+fn is_zero(x: f64) -> bool;
 
 /// Return true if the number is zero.
 fn is_zero(x: i128) -> bool;
@@ -2456,10 +2441,25 @@ fn is_zero(x: i128) -> bool;
 fn is_zero(x: i16) -> bool;
 
 /// Return true if the number is zero.
-fn is_zero(x: u8) -> bool;
+fn is_zero(x: i32) -> bool;
 
 /// Return true if the number is zero.
-fn is_zero(x: int) -> bool;
+fn is_zero(x: i8) -> bool;
+
+/// Return true if the number is zero.
+fn is_zero(x: u128) -> bool;
+
+/// Return true if the number is zero.
+fn is_zero(x: u16) -> bool;
+
+/// Return true if the number is zero.
+fn is_zero(x: u32) -> bool;
+
+/// Return true if the number is zero.
+fn is_zero(x: u64) -> bool;
+
+/// Return true if the number is zero.
+fn is_zero(x: u8) -> bool;
 
 /// Return an array with all the property names in the object map.
 ///
@@ -2471,9 +2471,6 @@ fn is_zero(x: int) -> bool;
 /// print(m.keys());        // prints ["a", "b", "c"]
 /// ```
 fn keys(map: Map) -> Array;
-
-/// Return the number of properties in the object map.
-fn len(map: Map) -> i64;
 
 /// Number of elements in the array.
 fn len(array: Array) -> i64;
@@ -2490,6 +2487,9 @@ fn len(array: Array) -> i64;
 /// print(b.len());     // prints 10
 /// ```
 fn len(blob: Blob) -> i64;
+
+/// Return the number of properties in the object map.
+fn len(map: Map) -> i64;
 
 /// Return the length of the string, in number of characters.
 ///
@@ -2511,19 +2511,6 @@ fn log(x: float) -> f64;
 /// Return the log of the floating-point number with `base`.
 fn log(x: float, base: float) -> f64;
 
-/// Convert the string to all lower-case.
-///
-/// # Example
-///
-/// ```rhai
-/// let text = "HELLO, WORLD!"
-///
-/// text.make_lower();
-///
-/// print(text);        // prints "hello, world!";
-/// ```
-fn make_lower(string: String) -> ();
-
 /// Convert the character to lower-case.
 ///
 /// # Example
@@ -2536,6 +2523,19 @@ fn make_lower(string: String) -> ();
 /// print(ch);          // prints 'a'
 /// ```
 fn make_lower(character: char) -> ();
+
+/// Convert the string to all lower-case.
+///
+/// # Example
+///
+/// ```rhai
+/// let text = "HELLO, WORLD!"
+///
+/// text.make_lower();
+///
+/// print(text);        // prints "hello, world!";
+/// ```
+fn make_lower(string: String) -> ();
 
 /// Convert the character to upper-case.
 ///
@@ -2562,29 +2562,6 @@ fn make_upper(character: char) -> ();
 /// print(text);        // prints "HELLO, WORLD!";
 /// ```
 fn make_upper(string: String) -> ();
-
-/// Iterate through all the elements in the array, applying a `mapper` function to each element
-/// in turn, and return the results as a new array.
-///
-/// # Function Parameters
-///
-/// * `element`: copy of array element
-/// * `index` _(optional)_: current index in the array
-///
-/// # Example
-///
-/// ```rhai
-/// let x = [1, 2, 3, 4, 5];
-///
-/// let y = x.map(|v| v * v);
-///
-/// print(y);       // prints "[1, 4, 9, 16, 25]"
-///
-/// let y = x.map(|v, i| v * i);
-///
-/// print(y);       // prints "[0, 2, 6, 12, 20]"
-/// ```
-fn map(array: Array, mapper: FnPtr) -> Array;
 
 /// Iterate through all the elements in the array, applying a function named by `mapper` to each
 /// element in turn, and return the results as a new array.
@@ -2614,6 +2591,29 @@ fn map(array: Array, mapper: FnPtr) -> Array;
 /// print(y);       // prints "[0, 2, 6, 12, 20]"
 /// ```
 fn map(array: Array, mapper: String) -> Array;
+
+/// Iterate through all the elements in the array, applying a `mapper` function to each element
+/// in turn, and return the results as a new array.
+///
+/// # Function Parameters
+///
+/// * `element`: copy of array element
+/// * `index` _(optional)_: current index in the array
+///
+/// # Example
+///
+/// ```rhai
+/// let x = [1, 2, 3, 4, 5];
+///
+/// let y = x.map(|v| v * v);
+///
+/// print(y);       // prints "[1, 4, 9, 16, 25]"
+///
+/// let y = x.map(|v, i| v * i);
+///
+/// print(y);       // prints "[0, 2, 6, 12, 20]"
+/// ```
+fn map(array: Array, mapper: FnPtr) -> Array;
 
 /// Add all property values of another object map into the object map.
 /// Existing property values of the same names are replaced.
@@ -2662,25 +2662,6 @@ fn name(fn_ptr: FnPtr) -> String;
 /// ```
 fn pad(array: Array, len: int, item: ?) -> ();
 
-/// Pad the string to at least the specified number of characters with the specified `character`.
-///
-/// If `len` ≤ length of string, no padding is done.
-///
-/// # Example
-///
-/// ```rhai
-/// let text = "hello";
-///
-/// text.pad(8, '!');
-///
-/// print(text);        // prints "hello!!!"
-///
-/// text.pad(5, '*');
-///
-/// print(text);        // prints "hello!!!"
-/// ```
-fn pad(string: String, len: int, character: char) -> ();
-
 /// Pad the BLOB to at least the specified length with copies of a specified byte `value`.
 ///
 /// If `len` ≤ length of BLOB, no padding is done.
@@ -2701,6 +2682,25 @@ fn pad(string: String, len: int, character: char) -> ();
 /// print(b);               // prints "[4242421818]"
 /// ```
 fn pad(blob: Blob, len: int, value: int) -> ();
+
+/// Pad the string to at least the specified number of characters with the specified `character`.
+///
+/// If `len` ≤ length of string, no padding is done.
+///
+/// # Example
+///
+/// ```rhai
+/// let text = "hello";
+///
+/// text.pad(8, '!');
+///
+/// print(text);        // prints "hello!!!"
+///
+/// text.pad(5, '*');
+///
+/// print(text);        // prints "hello!!!"
+/// ```
+fn pad(string: String, len: int, character: char) -> ();
 
 /// Pad the string to at least the specified number of characters with the specified string.
 ///
@@ -2871,23 +2871,6 @@ fn parse_le_float(blob: Blob, range: RangeInclusive<i64>) -> f64;
 /// * If number of bytes in range > number of bytes for `FLOAT`, extra bytes are ignored.
 fn parse_le_float(blob: Blob, start: int, len: int) -> f64;
 
-/// Parse the bytes within an inclusive `range` in the BLOB as an `INT`
-/// in little-endian byte order.
-///
-/// * If number of bytes in `range` < number of bytes for `INT`, zeros are padded.
-/// * If number of bytes in `range` > number of bytes for `INT`, extra bytes are ignored.
-///
-/// ```rhai
-/// let b = blob();
-///
-/// b += 1; b += 2; b += 3; b += 4; b += 5;
-///
-/// let x = b.parse_le_int(1..=3);  // parse three bytes
-///
-/// print(x.to_hex());              // prints "040302"
-/// ```
-fn parse_le_int(blob: Blob, range: RangeInclusive<i64>) -> i64;
-
 /// Parse the bytes within an exclusive `range` in the BLOB as an `INT`
 /// in little-endian byte order.
 ///
@@ -2904,6 +2887,23 @@ fn parse_le_int(blob: Blob, range: RangeInclusive<i64>) -> i64;
 /// print(x.to_hex());              // prints "0302"
 /// ```
 fn parse_le_int(blob: Blob, range: Range<i64>) -> i64;
+
+/// Parse the bytes within an inclusive `range` in the BLOB as an `INT`
+/// in little-endian byte order.
+///
+/// * If number of bytes in `range` < number of bytes for `INT`, zeros are padded.
+/// * If number of bytes in `range` > number of bytes for `INT`, extra bytes are ignored.
+///
+/// ```rhai
+/// let b = blob();
+///
+/// b += 1; b += 2; b += 3; b += 4; b += 5;
+///
+/// let x = b.parse_le_int(1..=3);  // parse three bytes
+///
+/// print(x.to_hex());              // prints "040302"
+/// ```
+fn parse_le_int(blob: Blob, range: RangeInclusive<i64>) -> i64;
 
 /// Parse the bytes beginning at the `start` position in the BLOB as an `INT`
 /// in little-endian byte order.
@@ -2928,20 +2928,20 @@ fn parse_le_int(blob: Blob, range: Range<i64>) -> i64;
 /// ```
 fn parse_le_int(blob: Blob, start: int, len: int) -> i64;
 
-/// Remove the last character from the string and return it.
+/// Remove the last element from the array and return it.
 ///
-/// If the string is empty, `()` is returned.
+/// If the array is empty, `()` is returned.
 ///
 /// # Example
 ///
 /// ```rhai
-/// let text = "hello, world!";
+/// let x = [1, 2, 3];
 ///
-/// print(text.pop());      // prints '!'
+/// print(x.pop());     // prints 3
 ///
-/// print(text);            // prints "hello, world"
+/// print(x);           // prints "[1, 2]"
 /// ```
-fn pop(string: String) -> ?;
+fn pop(array: Array) -> ?;
 
 /// Remove the last byte from the BLOB and return it.
 ///
@@ -2960,20 +2960,20 @@ fn pop(string: String) -> ?;
 /// ```
 fn pop(blob: Blob) -> i64;
 
-/// Remove the last element from the array and return it.
+/// Remove the last character from the string and return it.
 ///
-/// If the array is empty, `()` is returned.
+/// If the string is empty, `()` is returned.
 ///
 /// # Example
 ///
 /// ```rhai
-/// let x = [1, 2, 3];
+/// let text = "hello, world!";
 ///
-/// print(x.pop());     // prints 3
+/// print(text.pop());      // prints '!'
 ///
-/// print(x);           // prints "[1, 2]"
+/// print(text);            // prints "hello, world"
 /// ```
-fn pop(array: Array) -> ?;
+fn pop(string: String) -> ?;
 
 /// Remove a specified number of characters from the end of the string and return it as a
 /// new string.
@@ -2995,32 +2995,32 @@ fn pop(string: String, len: int) -> String;
 /// Return the empty string.
 fn print() -> String;
 
-/// Convert the value of the `item` into a string.
-fn print(item: ?) -> String;
-
-/// Return the `string`.
-fn print(string: String) -> String;
-
-/// Convert the value of `number` into a string.
-fn print(number: f64) -> String;
-
-/// Convert the value of `number` into a string.
-fn print(number: f32) -> String;
-
-/// Return the boolean value into a string.
-fn print(value: bool) -> String;
+/// Convert the array into a string.
+fn print(array: Array) -> String;
 
 /// Return the character into a string.
 fn print(character: char) -> String;
 
-/// Convert the array into a string.
-fn print(array: Array) -> String;
+/// Convert the value of the `item` into a string.
+fn print(item: ?) -> String;
+
+/// Convert the object map into a string.
+fn print(map: Map) -> String;
+
+/// Convert the value of `number` into a string.
+fn print(number: f32) -> String;
+
+/// Convert the value of `number` into a string.
+fn print(number: f64) -> String;
+
+/// Return the `string`.
+fn print(string: String) -> String;
 
 /// Return the empty string.
 fn print(unit: ()) -> String;
 
-/// Convert the object map into a string.
-fn print(map: Map) -> String;
+/// Return the boolean value into a string.
+fn print(value: bool) -> String;
 
 /// Add a new element, which is not another array, to the end of the array.
 ///
@@ -3065,26 +3065,44 @@ fn push(blob: Blob, value: int) -> ();
 /// ```
 fn range(from: i128, to: i128) -> Iterator<i128>;
 
-/// Return an iterator over an exclusive range, each iteration increasing by `step`.
-///
-/// If `range` is reversed and `step` < 0, iteration goes backwards.
-///
-/// Otherwise, if `range` is empty, an empty iterator is returned.
+/// Return an iterator over the exclusive range of `from..to`.
+/// The value `to` is never included.
 ///
 /// # Example
 ///
 /// ```rhai
-/// // prints all values from 8 to 17 in steps of 3
-/// for n in range(8..18, 3) {
-///     print(n);
-/// }
-///
-/// // prints all values down from 18 to 9 in steps of -3
-/// for n in range(18..8, -3) {
+/// // prints all values from 8 to 17
+/// for n in range(8, 18) {
 ///     print(n);
 /// }
 /// ```
-fn range(range: Range<i128>, step: i128) -> Iterator<i128>;
+fn range(from: i16, to: i16) -> Iterator<i16>;
+
+/// Return an iterator over the exclusive range of `from..to`.
+/// The value `to` is never included.
+///
+/// # Example
+///
+/// ```rhai
+/// // prints all values from 8 to 17
+/// for n in range(8, 18) {
+///     print(n);
+/// }
+/// ```
+fn range(from: i32, to: i32) -> Iterator<i32>;
+
+/// Return an iterator over the exclusive range of `from..to`.
+/// The value `to` is never included.
+///
+/// # Example
+///
+/// ```rhai
+/// // prints all values from 8 to 17
+/// for n in range(8, 18) {
+///     print(n);
+/// }
+/// ```
+fn range(from: i64, to: i64) -> Iterator<i64>;
 
 /// Return an iterator over the exclusive range of `from..to`.
 /// The value `to` is never included.
@@ -3099,27 +3117,6 @@ fn range(range: Range<i128>, step: i128) -> Iterator<i128>;
 /// ```
 fn range(from: i8, to: i8) -> Iterator<i8>;
 
-/// Return an iterator over an exclusive range, each iteration increasing by `step`.
-///
-/// If `range` is reversed and `step` < 0, iteration goes backwards.
-///
-/// Otherwise, if `range` is empty, an empty iterator is returned.
-///
-/// # Example
-///
-/// ```rhai
-/// // prints all values from 8 to 17 in steps of 3
-/// for n in range(8..18, 3) {
-///     print(n);
-/// }
-///
-/// // prints all values down from 18 to 9 in steps of -3
-/// for n in range(18..8, -3) {
-///     print(n);
-/// }
-/// ```
-fn range(range: Range<i8>, step: i8) -> Iterator<i8>;
-
 /// Return an iterator over the exclusive range of `from..to`.
 /// The value `to` is never included.
 ///
@@ -3133,26 +3130,18 @@ fn range(range: Range<i8>, step: i8) -> Iterator<i8>;
 /// ```
 fn range(from: u128, to: u128) -> Iterator<u128>;
 
-/// Return an iterator over an exclusive range, each iteration increasing by `step`.
-///
-/// If `range` is reversed and `step` < 0, iteration goes backwards.
-///
-/// Otherwise, if `range` is empty, an empty iterator is returned.
+/// Return an iterator over the exclusive range of `from..to`.
+/// The value `to` is never included.
 ///
 /// # Example
 ///
 /// ```rhai
-/// // prints all values from 8 to 17 in steps of 3
-/// for n in range(8..18, 3) {
-///     print(n);
-/// }
-///
-/// // prints all values down from 18 to 9 in steps of -3
-/// for n in range(18..8, -3) {
+/// // prints all values from 8 to 17
+/// for n in range(8, 18) {
 ///     print(n);
 /// }
 /// ```
-fn range(range: Range<u64>, step: u64) -> Iterator<u64>;
+fn range(from: u16, to: u16) -> Iterator<u16>;
 
 /// Return an iterator over the exclusive range of `from..to`.
 /// The value `to` is never included.
@@ -3165,7 +3154,33 @@ fn range(range: Range<u64>, step: u64) -> Iterator<u64>;
 ///     print(n);
 /// }
 /// ```
-fn range(from: i64, to: i64) -> Iterator<i64>;
+fn range(from: u32, to: u32) -> Iterator<u32>;
+
+/// Return an iterator over the exclusive range of `from..to`.
+/// The value `to` is never included.
+///
+/// # Example
+///
+/// ```rhai
+/// // prints all values from 8 to 17
+/// for n in range(8, 18) {
+///     print(n);
+/// }
+/// ```
+fn range(from: u64, to: u64) -> Iterator<u64>;
+
+/// Return an iterator over the exclusive range of `from..to`.
+/// The value `to` is never included.
+///
+/// # Example
+///
+/// ```rhai
+/// // prints all values from 8 to 17
+/// for n in range(8, 18) {
+///     print(n);
+/// }
+/// ```
+fn range(from: u8, to: u8) -> Iterator<u8>;
 
 /// Return an iterator over an exclusive range, each iteration increasing by `step`.
 ///
@@ -3188,18 +3203,68 @@ fn range(from: i64, to: i64) -> Iterator<i64>;
 /// ```
 fn range(range: Range<float>, step: float) -> Iterator<float>;
 
-/// Return an iterator over the exclusive range of `from..to`.
-/// The value `to` is never included.
+/// Return an iterator over an exclusive range, each iteration increasing by `step`.
+///
+/// If `range` is reversed and `step` < 0, iteration goes backwards.
+///
+/// Otherwise, if `range` is empty, an empty iterator is returned.
 ///
 /// # Example
 ///
 /// ```rhai
-/// // prints all values from 8 to 17
-/// for n in range(8, 18) {
+/// // prints all values from 8 to 17 in steps of 3
+/// for n in range(8..18, 3) {
+///     print(n);
+/// }
+///
+/// // prints all values down from 18 to 9 in steps of -3
+/// for n in range(18..8, -3) {
 ///     print(n);
 /// }
 /// ```
-fn range(from: i32, to: i32) -> Iterator<i32>;
+fn range(range: Range<i128>, step: i128) -> Iterator<i128>;
+
+/// Return an iterator over an exclusive range, each iteration increasing by `step`.
+///
+/// If `range` is reversed and `step` < 0, iteration goes backwards.
+///
+/// Otherwise, if `range` is empty, an empty iterator is returned.
+///
+/// # Example
+///
+/// ```rhai
+/// // prints all values from 8 to 17 in steps of 3
+/// for n in range(8..18, 3) {
+///     print(n);
+/// }
+///
+/// // prints all values down from 18 to 9 in steps of -3
+/// for n in range(18..8, -3) {
+///     print(n);
+/// }
+/// ```
+fn range(range: Range<i16>, step: i16) -> Iterator<i16>;
+
+/// Return an iterator over an exclusive range, each iteration increasing by `step`.
+///
+/// If `range` is reversed and `step` < 0, iteration goes backwards.
+///
+/// Otherwise, if `range` is empty, an empty iterator is returned.
+///
+/// # Example
+///
+/// ```rhai
+/// // prints all values from 8 to 17 in steps of 3
+/// for n in range(8..18, 3) {
+///     print(n);
+/// }
+///
+/// // prints all values down from 18 to 9 in steps of -3
+/// for n in range(18..8, -3) {
+///     print(n);
+/// }
+/// ```
+fn range(range: Range<i32>, step: i32) -> Iterator<i32>;
 
 /// Return an iterator over an exclusive range, each iteration increasing by `step`.
 ///
@@ -3241,156 +3306,7 @@ fn range(range: Range<i64>, step: i64) -> Iterator<i64>;
 ///     print(n);
 /// }
 /// ```
-fn range(range: Range<i32>, step: i32) -> Iterator<i32>;
-
-/// Return an iterator over the exclusive range of `from..to`.
-/// The value `to` is never included.
-///
-/// # Example
-///
-/// ```rhai
-/// // prints all values from 8 to 17
-/// for n in range(8, 18) {
-///     print(n);
-/// }
-/// ```
-fn range(from: u16, to: u16) -> Iterator<u16>;
-
-/// Return an iterator over an exclusive range, each iteration increasing by `step`.
-///
-/// If `range` is reversed and `step` < 0, iteration goes backwards.
-///
-/// Otherwise, if `range` is empty, an empty iterator is returned.
-///
-/// # Example
-///
-/// ```rhai
-/// // prints all values from 8 to 17 in steps of 3
-/// for n in range(8..18, 3) {
-///     print(n);
-/// }
-///
-/// // prints all values down from 18 to 9 in steps of -3
-/// for n in range(18..8, -3) {
-///     print(n);
-/// }
-/// ```
-fn range(range: Range<u16>, step: u16) -> Iterator<u16>;
-
-/// Return an iterator over the exclusive range of `from..to`.
-/// The value `to` is never included.
-///
-/// # Example
-///
-/// ```rhai
-/// // prints all values from 8 to 17
-/// for n in range(8, 18) {
-///     print(n);
-/// }
-/// ```
-fn range(from: u64, to: u64) -> Iterator<u64>;
-
-/// Return an iterator over an exclusive range, each iteration increasing by `step`.
-///
-/// If `range` is reversed and `step` < 0, iteration goes backwards.
-///
-/// Otherwise, if `range` is empty, an empty iterator is returned.
-///
-/// # Example
-///
-/// ```rhai
-/// // prints all values from 8 to 17 in steps of 3
-/// for n in range(8..18, 3) {
-///     print(n);
-/// }
-///
-/// // prints all values down from 18 to 9 in steps of -3
-/// for n in range(18..8, -3) {
-///     print(n);
-/// }
-/// ```
-fn range(range: Range<i16>, step: i16) -> Iterator<i16>;
-
-/// Return an iterator over the exclusive range of `from..to`.
-/// The value `to` is never included.
-///
-/// # Example
-///
-/// ```rhai
-/// // prints all values from 8 to 17
-/// for n in range(8, 18) {
-///     print(n);
-/// }
-/// ```
-fn range(from: u32, to: u32) -> Iterator<u32>;
-
-/// Return an iterator over an exclusive range, each iteration increasing by `step`.
-///
-/// If `range` is reversed and `step` < 0, iteration goes backwards.
-///
-/// Otherwise, if `range` is empty, an empty iterator is returned.
-///
-/// # Example
-///
-/// ```rhai
-/// // prints all values from 8 to 17 in steps of 3
-/// for n in range(8..18, 3) {
-///     print(n);
-/// }
-///
-/// // prints all values down from 18 to 9 in steps of -3
-/// for n in range(18..8, -3) {
-///     print(n);
-/// }
-/// ```
-fn range(range: Range<u32>, step: u32) -> Iterator<u32>;
-
-/// Return an iterator over the exclusive range of `from..to`.
-/// The value `to` is never included.
-///
-/// # Example
-///
-/// ```rhai
-/// // prints all values from 8 to 17
-/// for n in range(8, 18) {
-///     print(n);
-/// }
-/// ```
-fn range(from: i16, to: i16) -> Iterator<i16>;
-
-/// Return an iterator over the exclusive range of `from..to`.
-/// The value `to` is never included.
-///
-/// # Example
-///
-/// ```rhai
-/// // prints all values from 8 to 17
-/// for n in range(8, 18) {
-///     print(n);
-/// }
-/// ```
-fn range(from: u8, to: u8) -> Iterator<u8>;
-
-/// Return an iterator over an exclusive range, each iteration increasing by `step`.
-///
-/// If `range` is reversed and `step` < 0, iteration goes backwards.
-///
-/// Otherwise, if `range` is empty, an empty iterator is returned.
-///
-/// # Example
-///
-/// ```rhai
-/// // prints all values from 8 to 17 in steps of 3
-/// for n in range(8..18, 3) {
-///     print(n);
-/// }
-///
-/// // prints all values down from 18 to 9 in steps of -3
-/// for n in range(18..8, -3) {
-///     print(n);
-/// }
-/// ```
-fn range(range: Range<u8>, step: u8) -> Iterator<u8>;
+fn range(range: Range<i8>, step: i8) -> Iterator<i8>;
 
 /// Return an iterator over an exclusive range, each iteration increasing by `step`.
 ///
@@ -3413,27 +3329,89 @@ fn range(range: Range<u8>, step: u8) -> Iterator<u8>;
 /// ```
 fn range(range: Range<u128>, step: u128) -> Iterator<u128>;
 
-/// Return an iterator over the exclusive range of `from..to`, each iteration increasing by `step`.
-/// The value `to` is never included.
+/// Return an iterator over an exclusive range, each iteration increasing by `step`.
 ///
-/// If `from` > `to` and `step` < 0, iteration goes backwards.
+/// If `range` is reversed and `step` < 0, iteration goes backwards.
 ///
-/// If `from` > `to` and `step` > 0 or `from` < `to` and `step` < 0, an empty iterator is returned.
+/// Otherwise, if `range` is empty, an empty iterator is returned.
 ///
 /// # Example
 ///
 /// ```rhai
 /// // prints all values from 8 to 17 in steps of 3
-/// for n in range(8, 18, 3) {
+/// for n in range(8..18, 3) {
 ///     print(n);
 /// }
 ///
 /// // prints all values down from 18 to 9 in steps of -3
-/// for n in range(18, 8, -3) {
+/// for n in range(18..8, -3) {
 ///     print(n);
 /// }
 /// ```
-fn range(from: i16, to: i16, step: i16) -> Iterator<i16>;
+fn range(range: Range<u16>, step: u16) -> Iterator<u16>;
+
+/// Return an iterator over an exclusive range, each iteration increasing by `step`.
+///
+/// If `range` is reversed and `step` < 0, iteration goes backwards.
+///
+/// Otherwise, if `range` is empty, an empty iterator is returned.
+///
+/// # Example
+///
+/// ```rhai
+/// // prints all values from 8 to 17 in steps of 3
+/// for n in range(8..18, 3) {
+///     print(n);
+/// }
+///
+/// // prints all values down from 18 to 9 in steps of -3
+/// for n in range(18..8, -3) {
+///     print(n);
+/// }
+/// ```
+fn range(range: Range<u32>, step: u32) -> Iterator<u32>;
+
+/// Return an iterator over an exclusive range, each iteration increasing by `step`.
+///
+/// If `range` is reversed and `step` < 0, iteration goes backwards.
+///
+/// Otherwise, if `range` is empty, an empty iterator is returned.
+///
+/// # Example
+///
+/// ```rhai
+/// // prints all values from 8 to 17 in steps of 3
+/// for n in range(8..18, 3) {
+///     print(n);
+/// }
+///
+/// // prints all values down from 18 to 9 in steps of -3
+/// for n in range(18..8, -3) {
+///     print(n);
+/// }
+/// ```
+fn range(range: Range<u64>, step: u64) -> Iterator<u64>;
+
+/// Return an iterator over an exclusive range, each iteration increasing by `step`.
+///
+/// If `range` is reversed and `step` < 0, iteration goes backwards.
+///
+/// Otherwise, if `range` is empty, an empty iterator is returned.
+///
+/// # Example
+///
+/// ```rhai
+/// // prints all values from 8 to 17 in steps of 3
+/// for n in range(8..18, 3) {
+///     print(n);
+/// }
+///
+/// // prints all values down from 18 to 9 in steps of -3
+/// for n in range(18..8, -3) {
+///     print(n);
+/// }
+/// ```
+fn range(range: Range<u8>, step: u8) -> Iterator<u8>;
 
 /// Return an iterator over the exclusive range of `from..to`, each iteration increasing by `step`.
 /// The value `to` is never included.
@@ -3455,7 +3433,7 @@ fn range(from: i16, to: i16, step: i16) -> Iterator<i16>;
 ///     print(n);
 /// }
 /// ```
-fn range(from: u32, to: u32, step: u32) -> Iterator<u32>;
+fn range(from: float, to: float, step: float) -> Iterator<float>;
 
 /// Return an iterator over the exclusive range of `from..to`, each iteration increasing by `step`.
 /// The value `to` is never included.
@@ -3499,29 +3477,7 @@ fn range(from: i128, to: i128, step: i128) -> Iterator<i128>;
 ///     print(n);
 /// }
 /// ```
-fn range(from: u128, to: u128, step: u128) -> Iterator<u128>;
-
-/// Return an iterator over the exclusive range of `from..to`, each iteration increasing by `step`.
-/// The value `to` is never included.
-///
-/// If `from` > `to` and `step` < 0, iteration goes backwards.
-///
-/// If `from` > `to` and `step` > 0 or `from` < `to` and `step` < 0, an empty iterator is returned.
-///
-/// # Example
-///
-/// ```rhai
-/// // prints all values from 8 to 17 in steps of 3
-/// for n in range(8, 18, 3) {
-///     print(n);
-/// }
-///
-/// // prints all values down from 18 to 9 in steps of -3
-/// for n in range(18, 8, -3) {
-///     print(n);
-/// }
-/// ```
-fn range(from: u64, to: u64, step: u64) -> Iterator<u64>;
+fn range(from: i16, to: i16, step: i16) -> Iterator<i16>;
 
 /// Return an iterator over the exclusive range of `from..to`, each iteration increasing by `step`.
 /// The value `to` is never included.
@@ -3587,50 +3543,6 @@ fn range(from: i64, to: i64, step: i64) -> Iterator<i64>;
 ///     print(n);
 /// }
 /// ```
-fn range(from: u16, to: u16, step: u16) -> Iterator<u16>;
-
-/// Return an iterator over the exclusive range of `from..to`, each iteration increasing by `step`.
-/// The value `to` is never included.
-///
-/// If `from` > `to` and `step` < 0, iteration goes backwards.
-///
-/// If `from` > `to` and `step` > 0 or `from` < `to` and `step` < 0, an empty iterator is returned.
-///
-/// # Example
-///
-/// ```rhai
-/// // prints all values from 8 to 17 in steps of 3
-/// for n in range(8, 18, 3) {
-///     print(n);
-/// }
-///
-/// // prints all values down from 18 to 9 in steps of -3
-/// for n in range(18, 8, -3) {
-///     print(n);
-/// }
-/// ```
-fn range(from: u8, to: u8, step: u8) -> Iterator<u8>;
-
-/// Return an iterator over the exclusive range of `from..to`, each iteration increasing by `step`.
-/// The value `to` is never included.
-///
-/// If `from` > `to` and `step` < 0, iteration goes backwards.
-///
-/// If `from` > `to` and `step` > 0 or `from` < `to` and `step` < 0, an empty iterator is returned.
-///
-/// # Example
-///
-/// ```rhai
-/// // prints all values from 8 to 17 in steps of 3
-/// for n in range(8, 18, 3) {
-///     print(n);
-/// }
-///
-/// // prints all values down from 18 to 9 in steps of -3
-/// for n in range(18, 8, -3) {
-///     print(n);
-/// }
-/// ```
 fn range(from: i8, to: i8, step: i8) -> Iterator<i8>;
 
 /// Return an iterator over the exclusive range of `from..to`, each iteration increasing by `step`.
@@ -3653,30 +3565,95 @@ fn range(from: i8, to: i8, step: i8) -> Iterator<i8>;
 ///     print(n);
 /// }
 /// ```
-fn range(from: float, to: float, step: float) -> Iterator<float>;
+fn range(from: u128, to: u128, step: u128) -> Iterator<u128>;
 
-/// Reduce an array by iterating through all elements while applying the `reducer` function.
+/// Return an iterator over the exclusive range of `from..to`, each iteration increasing by `step`.
+/// The value `to` is never included.
 ///
-/// # Function Parameters
+/// If `from` > `to` and `step` < 0, iteration goes backwards.
 ///
-/// * `result`: accumulated result, initially `()`
-/// * `element`: copy of array element
-/// * `index` _(optional)_: current index in the array
+/// If `from` > `to` and `step` > 0 or `from` < `to` and `step` < 0, an empty iterator is returned.
 ///
 /// # Example
 ///
 /// ```rhai
-/// let x = [1, 2, 3, 4, 5];
+/// // prints all values from 8 to 17 in steps of 3
+/// for n in range(8, 18, 3) {
+///     print(n);
+/// }
 ///
-/// let y = x.reduce(|r, v| v + (r ?? 0));
-///
-/// print(y);       // prints 15
-///
-/// let y = x.reduce(|r, v, i| v + i + (r ?? 0));
-///
-/// print(y);       // prints 25
+/// // prints all values down from 18 to 9 in steps of -3
+/// for n in range(18, 8, -3) {
+///     print(n);
+/// }
 /// ```
-fn reduce(array: Array, reducer: FnPtr) -> RhaiResult;
+fn range(from: u16, to: u16, step: u16) -> Iterator<u16>;
+
+/// Return an iterator over the exclusive range of `from..to`, each iteration increasing by `step`.
+/// The value `to` is never included.
+///
+/// If `from` > `to` and `step` < 0, iteration goes backwards.
+///
+/// If `from` > `to` and `step` > 0 or `from` < `to` and `step` < 0, an empty iterator is returned.
+///
+/// # Example
+///
+/// ```rhai
+/// // prints all values from 8 to 17 in steps of 3
+/// for n in range(8, 18, 3) {
+///     print(n);
+/// }
+///
+/// // prints all values down from 18 to 9 in steps of -3
+/// for n in range(18, 8, -3) {
+///     print(n);
+/// }
+/// ```
+fn range(from: u32, to: u32, step: u32) -> Iterator<u32>;
+
+/// Return an iterator over the exclusive range of `from..to`, each iteration increasing by `step`.
+/// The value `to` is never included.
+///
+/// If `from` > `to` and `step` < 0, iteration goes backwards.
+///
+/// If `from` > `to` and `step` > 0 or `from` < `to` and `step` < 0, an empty iterator is returned.
+///
+/// # Example
+///
+/// ```rhai
+/// // prints all values from 8 to 17 in steps of 3
+/// for n in range(8, 18, 3) {
+///     print(n);
+/// }
+///
+/// // prints all values down from 18 to 9 in steps of -3
+/// for n in range(18, 8, -3) {
+///     print(n);
+/// }
+/// ```
+fn range(from: u64, to: u64, step: u64) -> Iterator<u64>;
+
+/// Return an iterator over the exclusive range of `from..to`, each iteration increasing by `step`.
+/// The value `to` is never included.
+///
+/// If `from` > `to` and `step` < 0, iteration goes backwards.
+///
+/// If `from` > `to` and `step` > 0 or `from` < `to` and `step` < 0, an empty iterator is returned.
+///
+/// # Example
+///
+/// ```rhai
+/// // prints all values from 8 to 17 in steps of 3
+/// for n in range(8, 18, 3) {
+///     print(n);
+/// }
+///
+/// // prints all values down from 18 to 9 in steps of -3
+/// for n in range(18, 8, -3) {
+///     print(n);
+/// }
+/// ```
+fn range(from: u8, to: u8, step: u8) -> Iterator<u8>;
 
 /// Reduce an array by iterating through all elements while applying a function named by `reducer`.
 ///
@@ -3714,7 +3691,7 @@ fn reduce(array: Array, reducer: String) -> RhaiResult;
 ///
 /// # Function Parameters
 ///
-/// * `result`: accumulated result, starting with the value of `initial`
+/// * `result`: accumulated result, initially `()`
 /// * `element`: copy of array element
 /// * `index` _(optional)_: current index in the array
 ///
@@ -3723,15 +3700,15 @@ fn reduce(array: Array, reducer: String) -> RhaiResult;
 /// ```rhai
 /// let x = [1, 2, 3, 4, 5];
 ///
-/// let y = x.reduce(|r, v| v + r, 5);
+/// let y = x.reduce(|r, v| v + (r ?? 0));
 ///
-/// print(y);       // prints 20
+/// print(y);       // prints 15
 ///
-/// let y = x.reduce(|r, v, i| v + i + r, 5);
+/// let y = x.reduce(|r, v, i| v + i + (r ?? 0));
 ///
-/// print(y);       // prints 30
+/// print(y);       // prints 25
 /// ```
-fn reduce(array: Array, reducer: FnPtr, initial: ?) -> RhaiResult;
+fn reduce(array: Array, reducer: FnPtr) -> RhaiResult;
 
 /// Reduce an array by iterating through all elements while applying a function named by `reducer`.
 ///
@@ -3761,6 +3738,29 @@ fn reduce(array: Array, reducer: FnPtr, initial: ?) -> RhaiResult;
 /// print(y);       // prints 30
 /// ```
 fn reduce(array: Array, reducer: String, initial: ?) -> RhaiResult;
+
+/// Reduce an array by iterating through all elements while applying the `reducer` function.
+///
+/// # Function Parameters
+///
+/// * `result`: accumulated result, starting with the value of `initial`
+/// * `element`: copy of array element
+/// * `index` _(optional)_: current index in the array
+///
+/// # Example
+///
+/// ```rhai
+/// let x = [1, 2, 3, 4, 5];
+///
+/// let y = x.reduce(|r, v| v + r, 5);
+///
+/// print(y);       // prints 20
+///
+/// let y = x.reduce(|r, v, i| v + i + r, 5);
+///
+/// print(y);       // prints 30
+/// ```
+fn reduce(array: Array, reducer: FnPtr, initial: ?) -> RhaiResult;
 
 /// Reduce an array by iterating through all elements, in _reverse_ order,
 /// while applying a function named by `reducer`.
@@ -3820,30 +3820,6 @@ fn reduce_rev(array: Array, reducer: String) -> RhaiResult;
 fn reduce_rev(array: Array, reducer: FnPtr) -> RhaiResult;
 
 /// Reduce an array by iterating through all elements, in _reverse_ order,
-/// while applying the `reducer` function.
-///
-/// # Function Parameters
-///
-/// * `result`: accumulated result, starting with the value of `initial`
-/// * `element`: copy of array element
-/// * `index` _(optional)_: current index in the array
-///
-/// # Example
-///
-/// ```rhai
-/// let x = [1, 2, 3, 4, 5];
-///
-/// let y = x.reduce_rev(|r, v| v + r, 5);
-///
-/// print(y);       // prints 20
-///
-/// let y = x.reduce_rev(|r, v, i| v + i + r, 5);
-///
-/// print(y);       // prints 30
-/// ```
-fn reduce_rev(array: Array, reducer: FnPtr, initial: ?) -> RhaiResult;
-
-/// Reduce an array by iterating through all elements, in _reverse_ order,
 /// while applying a function named by `reducer`.
 ///
 /// # Function Parameters
@@ -3873,35 +3849,50 @@ fn reduce_rev(array: Array, reducer: FnPtr, initial: ?) -> RhaiResult;
 /// ```
 fn reduce_rev(array: Array, reducer: String, initial: ?) -> RhaiResult;
 
-/// Remove all occurrences of a sub-string from the string.
+/// Reduce an array by iterating through all elements, in _reverse_ order,
+/// while applying the `reducer` function.
+///
+/// # Function Parameters
+///
+/// * `result`: accumulated result, starting with the value of `initial`
+/// * `element`: copy of array element
+/// * `index` _(optional)_: current index in the array
 ///
 /// # Example
 ///
 /// ```rhai
-/// let text = "hello, world! hello, foobar!";
+/// let x = [1, 2, 3, 4, 5];
 ///
-/// text.remove("hello");
+/// let y = x.reduce_rev(|r, v| v + r, 5);
 ///
-/// print(text);        // prints ", world! , foobar!"
+/// print(y);       // prints 20
+///
+/// let y = x.reduce_rev(|r, v, i| v + i + r, 5);
+///
+/// print(y);       // prints 30
 /// ```
-fn remove(string: String, sub_string: String) -> ();
+fn reduce_rev(array: Array, reducer: FnPtr, initial: ?) -> RhaiResult;
 
-/// Remove any property of the specified `name` from the object map, returning its value.
+/// Remove the element at the specified `index` from the array and return it.
 ///
-/// If the property does not exist, `()` is returned.
+/// * If `index` < 0, position counts from the end of the array (`-1` is the last element).
+/// * If `index` < -length of array, `()` is returned.
+/// * If `index` ≥ length of array, `()` is returned.
 ///
 /// # Example
 ///
 /// ```rhai
-/// let m = #{a:1, b:2, c:3};
+/// let x = [1, 2, 3];
 ///
-/// let x = m.remove("b");
+/// print(x.remove(1));     // prints 2
 ///
-/// print(x);       // prints 2
+/// print(x);               // prints "[1, 3]"
 ///
-/// print(m);       // prints "#{a:1, c:3}"
+/// print(x.remove(-2));    // prints 1
+///
+/// print(x);               // prints "[3]"
 /// ```
-fn remove(map: Map, property: String) -> ?;
+fn remove(array: Array, index: int) -> ?;
 
 /// Remove the byte at the specified `index` from the BLOB and return it.
 ///
@@ -3926,26 +3917,22 @@ fn remove(map: Map, property: String) -> ?;
 /// ```
 fn remove(blob: Blob, index: int) -> i64;
 
-/// Remove the element at the specified `index` from the array and return it.
+/// Remove any property of the specified `name` from the object map, returning its value.
 ///
-/// * If `index` < 0, position counts from the end of the array (`-1` is the last element).
-/// * If `index` < -length of array, `()` is returned.
-/// * If `index` ≥ length of array, `()` is returned.
+/// If the property does not exist, `()` is returned.
 ///
 /// # Example
 ///
 /// ```rhai
-/// let x = [1, 2, 3];
+/// let m = #{a:1, b:2, c:3};
 ///
-/// print(x.remove(1));     // prints 2
+/// let x = m.remove("b");
 ///
-/// print(x);               // prints "[1, 3]"
+/// print(x);       // prints 2
 ///
-/// print(x.remove(-2));    // prints 1
-///
-/// print(x);               // prints "[3]"
+/// print(m);       // prints "#{a:1, c:3}"
 /// ```
-fn remove(array: Array, index: int) -> ?;
+fn remove(map: Map, property: String) -> ?;
 
 /// Remove all occurrences of a character from the string.
 ///
@@ -3960,6 +3947,19 @@ fn remove(array: Array, index: int) -> ?;
 /// ```
 fn remove(string: String, character: char) -> ();
 
+/// Remove all occurrences of a sub-string from the string.
+///
+/// # Example
+///
+/// ```rhai
+/// let text = "hello, world! hello, foobar!";
+///
+/// text.remove("hello");
+///
+/// print(text);        // prints ", world! , foobar!"
+/// ```
+fn remove(string: String, sub_string: String) -> ();
+
 /// Replace all occurrences of the specified character in the string with another character.
 ///
 /// # Example
@@ -3972,6 +3972,19 @@ fn remove(string: String, character: char) -> ();
 /// print(text);        // prints "he**o, wor*d! he**o, foobar!"
 /// ```
 fn replace(string: String, find_character: char, substitute_character: char) -> ();
+
+/// Replace all occurrences of the specified character in the string with another string.
+///
+/// # Example
+///
+/// ```rhai
+/// let text = "hello, world! hello, foobar!";
+///
+/// text.replace('l', "(^)");
+///
+/// print(text);        // prints "he(^)(^)o, wor(^)d! he(^)(^)o, foobar!"
+/// ```
+fn replace(string: String, find_character: char, substitute_string: String) -> ();
 
 /// Replace all occurrences of the specified sub-string in the string with the specified character.
 ///
@@ -3999,41 +4012,38 @@ fn replace(string: String, find_string: String, substitute_character: char) -> (
 /// ```
 fn replace(string: String, find_string: String, substitute_string: String) -> ();
 
-/// Replace all occurrences of the specified character in the string with another string.
+/// Remove all elements in the array that do not return `true` when applied a function named by
+/// `filter` and return them as a new array.
+///
+/// # Function Parameters
+///
+/// A function with the same name as the value of `filter` must exist taking these parameters:
+///
+/// * `element`: copy of array element
+/// * `index` _(optional)_: current index in the array
 ///
 /// # Example
 ///
 /// ```rhai
-/// let text = "hello, world! hello, foobar!";
+/// fn large(x) { x >= 3 }
 ///
-/// text.replace('l', "(^)");
+/// fn screen(x, i) { x + i <= 5 }
 ///
-/// print(text);        // prints "he(^)(^)o, wor(^)d! he(^)(^)o, foobar!"
+/// let x = [1, 2, 3, 4, 5];
+///
+/// let y = x.retain("large");
+///
+/// print(x);       // prints "[3, 4, 5]"
+///
+/// print(y);       // prints "[1, 2]"
+///
+/// let z = x.retain("screen");
+///
+/// print(x);       // prints "[3, 4]"
+///
+/// print(z);       // prints "[5]"
 /// ```
-fn replace(string: String, find_character: char, substitute_string: String) -> ();
-
-/// Remove all bytes in the BLOB not within an inclusive `range` and return them as a new BLOB.
-///
-/// # Example
-///
-/// ```rhai
-/// let b1 = blob();
-///
-/// b1 += 1; b1 += 2; b1 += 3; b1 += 4; b1 += 5;
-///
-/// let b2 = b1.retain(1..=3);
-///
-/// print(b1);      // prints "[020304]"
-///
-/// print(b2);      // prints "[0105]"
-///
-/// let b3 = b1.retain(1..=2);
-///
-/// print(b1);      // prints "[0304]"
-///
-/// print(b2);      // prints "[01]"
-/// ```
-fn retain(blob: Blob, range: RangeInclusive<i64>) -> Blob;
+fn retain(array: Array, filter: String) -> Array;
 
 /// Remove all elements in the array that do not return `true` when applied the `filter`
 /// function and return them as a new array.
@@ -4083,6 +4093,27 @@ fn retain(array: Array, filter: FnPtr) -> Array;
 /// ```
 fn retain(array: Array, range: Range<i64>) -> Array;
 
+/// Remove all elements in the array not within an inclusive `range` and return them as a new array.
+///
+/// # Example
+///
+/// ```rhai
+/// let x = [1, 2, 3, 4, 5];
+///
+/// let y = x.retain(1..=3);
+///
+/// print(x);       // prints "[2, 3, 4]"
+///
+/// print(y);       // prints "[1, 5]"
+///
+/// let z = x.retain(1..=2);
+///
+/// print(x);       // prints "[3, 4]"
+///
+/// print(z);       // prints "[1]"
+/// ```
+fn retain(array: Array, range: RangeInclusive<i64>) -> Array;
+
 /// Remove all bytes in the BLOB not within an exclusive `range` and return them as a new BLOB.
 ///
 /// # Example
@@ -4106,59 +4137,55 @@ fn retain(array: Array, range: Range<i64>) -> Array;
 /// ```
 fn retain(blob: Blob, range: Range<i64>) -> Blob;
 
-/// Remove all elements in the array that do not return `true` when applied a function named by
-/// `filter` and return them as a new array.
-///
-/// # Function Parameters
-///
-/// A function with the same name as the value of `filter` must exist taking these parameters:
-///
-/// * `element`: copy of array element
-/// * `index` _(optional)_: current index in the array
+/// Remove all bytes in the BLOB not within an inclusive `range` and return them as a new BLOB.
 ///
 /// # Example
 ///
 /// ```rhai
-/// fn large(x) { x >= 3 }
+/// let b1 = blob();
 ///
-/// fn screen(x, i) { x + i <= 5 }
+/// b1 += 1; b1 += 2; b1 += 3; b1 += 4; b1 += 5;
 ///
-/// let x = [1, 2, 3, 4, 5];
+/// let b2 = b1.retain(1..=3);
 ///
-/// let y = x.retain("large");
+/// print(b1);      // prints "[020304]"
 ///
-/// print(x);       // prints "[3, 4, 5]"
+/// print(b2);      // prints "[0105]"
 ///
-/// print(y);       // prints "[1, 2]"
+/// let b3 = b1.retain(1..=2);
 ///
-/// let z = x.retain("screen");
+/// print(b1);      // prints "[0304]"
 ///
-/// print(x);       // prints "[3, 4]"
-///
-/// print(z);       // prints "[5]"
+/// print(b2);      // prints "[01]"
 /// ```
-fn retain(array: Array, filter: String) -> Array;
+fn retain(blob: Blob, range: RangeInclusive<i64>) -> Blob;
 
-/// Remove all elements in the array not within an inclusive `range` and return them as a new array.
+/// Remove all elements not within a portion of the array and return them as a new array.
+///
+/// * If `start` < 0, position counts from the end of the array (`-1` is the last element).
+/// * If `start` < -length of array, position counts from the beginning of the array.
+/// * If `start` ≥ length of array, all elements are removed returned.
+/// * If `len` ≤ 0, all elements are removed and returned.
+/// * If `start` position + `len` ≥ length of array, entire portion of the array before the `start` position is removed and returned.
 ///
 /// # Example
 ///
 /// ```rhai
 /// let x = [1, 2, 3, 4, 5];
 ///
-/// let y = x.retain(1..=3);
+/// let y = x.retain(1, 2);
 ///
-/// print(x);       // prints "[2, 3, 4]"
+/// print(x);       // prints "[2, 3]"
 ///
-/// print(y);       // prints "[1, 5]"
+/// print(y);       // prints "[1, 4, 5]"
 ///
-/// let z = x.retain(1..=2);
+/// let z = x.retain(-1, 1);
 ///
-/// print(x);       // prints "[3, 4]"
+/// print(x);       // prints "[3]"
 ///
-/// print(z);       // prints "[1]"
+/// print(z);       // prints "[2]"
 /// ```
-fn retain(array: Array, range: RangeInclusive<i64>) -> Array;
+fn retain(array: Array, start: int, len: int) -> Array;
 
 /// Remove all bytes not within a portion of the BLOB and return them as a new BLOB.
 ///
@@ -4189,32 +4216,18 @@ fn retain(array: Array, range: RangeInclusive<i64>) -> Array;
 /// ```
 fn retain(blob: Blob, start: int, len: int) -> Blob;
 
-/// Remove all elements not within a portion of the array and return them as a new array.
-///
-/// * If `start` < 0, position counts from the end of the array (`-1` is the last element).
-/// * If `start` < -length of array, position counts from the beginning of the array.
-/// * If `start` ≥ length of array, all elements are removed returned.
-/// * If `len` ≤ 0, all elements are removed and returned.
-/// * If `start` position + `len` ≥ length of array, entire portion of the array before the `start` position is removed and returned.
+/// Reverse all the elements in the array.
 ///
 /// # Example
 ///
 /// ```rhai
 /// let x = [1, 2, 3, 4, 5];
 ///
-/// let y = x.retain(1, 2);
+/// x.reverse();
 ///
-/// print(x);       // prints "[2, 3]"
-///
-/// print(y);       // prints "[1, 4, 5]"
-///
-/// let z = x.retain(-1, 1);
-///
-/// print(x);       // prints "[3]"
-///
-/// print(z);       // prints "[2]"
+/// print(x);       // prints "[5, 4, 3, 2, 1]"
 /// ```
-fn retain(array: Array, start: int, len: int) -> Array;
+fn reverse(array: Array) -> ();
 
 /// Reverse the BLOB.
 ///
@@ -4233,66 +4246,34 @@ fn retain(array: Array, start: int, len: int) -> Array;
 /// ```
 fn reverse(blob: Blob) -> ();
 
-/// Reverse all the elements in the array.
-///
-/// # Example
-///
-/// ```rhai
-/// let x = [1, 2, 3, 4, 5];
-///
-/// x.reverse();
-///
-/// print(x);       // prints "[5, 4, 3, 2, 1]"
-/// ```
-fn reverse(array: Array) -> ();
-
 /// Return the nearest whole number closest to the floating-point number.
 /// Rounds away from zero.
 fn round(x: float) -> f64;
 
-/// Set the `index` position in the string to a new `character`.
+/// Set the element at the `index` position in the array to a new `value`.
 ///
-/// * If `index` < 0, position counts from the end of the string (`-1` is the last character).
-/// * If `index` < -length of string, the string is not modified.
-/// * If `index` ≥ length of string, the string is not modified.
-///
-/// # Example
-///
-/// ```rhai
-/// let text = "hello, world!";
-///
-/// text.set(3, 'x');
-///
-/// print(text);     // prints "helxo, world!"
-///
-/// text.set(-3, 'x');
-///
-/// print(text);    // prints "hello, worxd!"
-///
-/// text.set(99, 'x');
-///
-/// print(text);    // prints "hello, worxd!"
-/// ```
-fn set(string: String, index: int, character: char) -> ();
-
-/// Set the value of the `property` in the object map to a new `value`.
-///
-/// If `property` does not exist in the object map, it is added.
+/// * If `index` < 0, position counts from the end of the array (`-1` is the last element).
+/// * If `index` < -length of array, the array is not modified.
+/// * If `index` ≥ length of array, the array is not modified.
 ///
 /// # Example
 ///
 /// ```rhai
-/// let m = #{a: 1, b: 2, c: 3};
+/// let x = [1, 2, 3];
 ///
-/// m.set("b", 42)'
+/// x.set(0, 42);
 ///
-/// print(m);           // prints "#{a: 1, b: 42, c: 3}"
+/// print(x);           // prints "[42, 2, 3]"
 ///
-/// x.set("x", 0);
+/// x.set(-3, 0);
 ///
-/// print(m);           // prints "#{a: 1, b: 42, c: 3, x: 0}"
+/// print(x);           // prints "[0, 2, 3]"
+///
+/// x.set(99, 123);
+///
+/// print(x);           // prints "[0, 2, 3]"
 /// ```
-fn set(map: Map, property: String, value: ?) -> ();
+fn set(array: Array, index: int, value: ?) -> ();
 
 /// Set the particular `index` position in the BLOB to a new byte `value`.
 ///
@@ -4321,30 +4302,49 @@ fn set(map: Map, property: String, value: ?) -> ();
 /// ```
 fn set(blob: Blob, index: int, value: int) -> ();
 
-/// Set the element at the `index` position in the array to a new `value`.
+/// Set the value of the `property` in the object map to a new `value`.
 ///
-/// * If `index` < 0, position counts from the end of the array (`-1` is the last element).
-/// * If `index` < -length of array, the array is not modified.
-/// * If `index` ≥ length of array, the array is not modified.
+/// If `property` does not exist in the object map, it is added.
 ///
 /// # Example
 ///
 /// ```rhai
-/// let x = [1, 2, 3];
+/// let m = #{a: 1, b: 2, c: 3};
 ///
-/// x.set(0, 42);
+/// m.set("b", 42)'
 ///
-/// print(x);           // prints "[42, 2, 3]"
+/// print(m);           // prints "#{a: 1, b: 42, c: 3}"
 ///
-/// x.set(-3, 0);
+/// x.set("x", 0);
 ///
-/// print(x);           // prints "[0, 2, 3]"
-///
-/// x.set(99, 123);
-///
-/// print(x);           // prints "[0, 2, 3]"
+/// print(m);           // prints "#{a: 1, b: 42, c: 3, x: 0}"
 /// ```
-fn set(array: Array, index: int, value: ?) -> ();
+fn set(map: Map, property: String, value: ?) -> ();
+
+/// Set the `index` position in the string to a new `character`.
+///
+/// * If `index` < 0, position counts from the end of the string (`-1` is the last character).
+/// * If `index` < -length of string, the string is not modified.
+/// * If `index` ≥ length of string, the string is not modified.
+///
+/// # Example
+///
+/// ```rhai
+/// let text = "hello, world!";
+///
+/// text.set(3, 'x');
+///
+/// print(text);     // prints "helxo, world!"
+///
+/// text.set(-3, 'x');
+///
+/// print(text);    // prints "hello, worxd!"
+///
+/// text.set(99, 'x');
+///
+/// print(text);    // prints "hello, worxd!"
+/// ```
+fn set(string: String, index: int, character: char) -> ();
 
 /// Set the _tag_ of a `Dynamic` value.
 ///
@@ -4383,19 +4383,6 @@ fn set tag(value: ?, tag: int) -> ();
 /// ```
 fn set_bit(value: int, bit: int, new_value: bool) -> ();
 
-/// Replace an inclusive range of bits in the number with a new value.
-///
-/// # Example
-///
-/// ```rhai
-/// let x = 123456;
-///
-/// x.set_bits(5..=9, 42);
-///
-/// print(x);           // print 123200
-/// ```
-fn set_bits(value: int, range: RangeInclusive<i64>, new_value: int) -> ();
-
 /// Replace an exclusive range of bits in the number with a new value.
 ///
 /// # Example
@@ -4408,6 +4395,19 @@ fn set_bits(value: int, range: RangeInclusive<i64>, new_value: int) -> ();
 /// print(x);           // print 123200
 /// ```
 fn set_bits(value: int, range: Range<i64>, new_value: int) -> ();
+
+/// Replace an inclusive range of bits in the number with a new value.
+///
+/// # Example
+///
+/// ```rhai
+/// let x = 123456;
+///
+/// x.set_bits(5..=9, 42);
+///
+/// print(x);           // print 123200
+/// ```
+fn set_bits(value: int, range: RangeInclusive<i64>, new_value: int) -> ();
 
 /// Replace a portion of bits in the number with a new value.
 ///
@@ -4443,6 +4443,21 @@ fn set_bits(value: int, bit: int, bits: int, new_value: int) -> ();
 /// ```
 fn set_tag(value: ?, tag: int) -> ();
 
+/// Remove the first element from the array and return it.
+///
+/// If the array is empty, `()` is returned.
+///
+/// # Example
+///
+/// ```rhai
+/// let x = [1, 2, 3];
+///
+/// print(x.shift());   // prints 1
+///
+/// print(x);           // prints "[2, 3]"
+/// ```
+fn shift(array: Array) -> ?;
+
 /// Remove the first byte from the BLOB and return it.
 ///
 /// If the BLOB is empty, zero is returned.
@@ -4460,27 +4475,26 @@ fn set_tag(value: ?, tag: int) -> ();
 /// ```
 fn shift(blob: Blob) -> i64;
 
-/// Remove the first element from the array and return it.
-///
-/// If the array is empty, `()` is returned.
-///
-/// # Example
-///
-/// ```rhai
-/// let x = [1, 2, 3];
-///
-/// print(x.shift());   // prints 1
-///
-/// print(x);           // prints "[2, 3]"
-/// ```
-fn shift(array: Array) -> ?;
-
 /// Return the sign (as an integer) of the number according to the following:
 ///
 /// * `0` if the number is zero
 /// * `1` if the number is positive
 /// * `-1` if the number is negative
 fn sign(x: int) -> i64;
+
+/// Return the sign (as an integer) of the floating-point number according to the following:
+///
+/// * `0` if the number is zero
+/// * `1` if the number is positive
+/// * `-1` if the number is negative
+fn sign(x: f32) -> int;
+
+/// Return the sign (as an integer) of the floating-point number according to the following:
+///
+/// * `0` if the number is zero
+/// * `1` if the number is positive
+/// * `-1` if the number is negative
+fn sign(x: f64) -> int;
 
 /// Return the sign (as an integer) of the number according to the following:
 ///
@@ -4496,20 +4510,6 @@ fn sign(x: i128) -> i64;
 /// * `-1` if the number is negative
 fn sign(x: i16) -> i64;
 
-/// Return the sign (as an integer) of the floating-point number according to the following:
-///
-/// * `0` if the number is zero
-/// * `1` if the number is positive
-/// * `-1` if the number is negative
-fn sign(x: f32) -> int;
-
-/// Return the sign (as an integer) of the number according to the following:
-///
-/// * `0` if the number is zero
-/// * `1` if the number is positive
-/// * `-1` if the number is negative
-fn sign(x: i8) -> i64;
-
 /// Return the sign (as an integer) of the number according to the following:
 ///
 /// * `0` if the number is zero
@@ -4517,12 +4517,12 @@ fn sign(x: i8) -> i64;
 /// * `-1` if the number is negative
 fn sign(x: i32) -> i64;
 
-/// Return the sign (as an integer) of the floating-point number according to the following:
+/// Return the sign (as an integer) of the number according to the following:
 ///
 /// * `0` if the number is zero
 /// * `1` if the number is positive
 /// * `-1` if the number is negative
-fn sign(x: f64) -> int;
+fn sign(x: i8) -> i64;
 
 /// Return the sine of the floating-point number in radians.
 fn sin(x: float) -> f64;
@@ -4670,33 +4670,19 @@ fn sort(array: Array, comparer: String) -> ();
 /// ```
 fn sort(array: Array, comparer: FnPtr) -> ();
 
-/// Replace an inclusive `range` of the BLOB with another BLOB.
+/// Replace an exclusive range of the array with another array.
 ///
 /// # Example
 ///
 /// ```rhai
-/// let b1 = blob(10, 0x42);
-/// let b2 = blob(5, 0x18);
+/// let x = [1, 2, 3, 4, 5];
+/// let y = [7, 8, 9, 10];
 ///
-/// b1.splice(1..=4, b2);
+/// x.splice(1..3, y);
 ///
-/// print(b1);      // prints "[4218181818184242 424242]"
+/// print(x);       // prints "[1, 7, 8, 9, 10, 4, 5]"
 /// ```
-fn splice(blob: Blob, range: RangeInclusive<i64>, replace: Blob) -> ();
-
-/// Replace an exclusive `range` of the BLOB with another BLOB.
-///
-/// # Example
-///
-/// ```rhai
-/// let b1 = blob(10, 0x42);
-/// let b2 = blob(5, 0x18);
-///
-/// b1.splice(1..4, b2);
-///
-/// print(b1);      // prints "[4218181818184242 42424242]"
-/// ```
-fn splice(blob: Blob, range: Range<i64>, replace: Blob) -> ();
+fn splice(array: Array, range: Range<i64>, replace: Array) -> ();
 
 /// Replace an inclusive range of the array with another array.
 ///
@@ -4712,27 +4698,7 @@ fn splice(blob: Blob, range: Range<i64>, replace: Blob) -> ();
 /// ```
 fn splice(array: Array, range: RangeInclusive<i64>, replace: Array) -> ();
 
-/// Replace an exclusive range of the array with another array.
-///
-/// # Example
-///
-/// ```rhai
-/// let x = [1, 2, 3, 4, 5];
-/// let y = [7, 8, 9, 10];
-///
-/// x.splice(1..3, y);
-///
-/// print(x);       // prints "[1, 7, 8, 9, 10, 4, 5]"
-/// ```
-fn splice(array: Array, range: Range<i64>, replace: Array) -> ();
-
-/// Replace a portion of the BLOB with another BLOB.
-///
-/// * If `start` < 0, position counts from the end of the BLOB (`-1` is the last byte).
-/// * If `start` < -length of BLOB, position counts from the beginning of the BLOB.
-/// * If `start` ≥ length of BLOB, the other BLOB is appended to the end of the BLOB.
-/// * If `len` ≤ 0, the other BLOB is inserted into the BLOB at the `start` position without replacing anything.
-/// * If `start` position + `len` ≥ length of BLOB, entire portion of the BLOB after the `start` position is replaced.
+/// Replace an exclusive `range` of the BLOB with another BLOB.
 ///
 /// # Example
 ///
@@ -4740,15 +4706,25 @@ fn splice(array: Array, range: Range<i64>, replace: Array) -> ();
 /// let b1 = blob(10, 0x42);
 /// let b2 = blob(5, 0x18);
 ///
-/// b1.splice(1, 3, b2);
+/// b1.splice(1..4, b2);
 ///
 /// print(b1);      // prints "[4218181818184242 42424242]"
-///
-/// b1.splice(-5, 4, b2);
-///
-/// print(b1);      // prints "[4218181818184218 1818181842]"
 /// ```
-fn splice(blob: Blob, start: int, len: int, replace: Blob) -> ();
+fn splice(blob: Blob, range: Range<i64>, replace: Blob) -> ();
+
+/// Replace an inclusive `range` of the BLOB with another BLOB.
+///
+/// # Example
+///
+/// ```rhai
+/// let b1 = blob(10, 0x42);
+/// let b2 = blob(5, 0x18);
+///
+/// b1.splice(1..=4, b2);
+///
+/// print(b1);      // prints "[4218181818184242 424242]"
+/// ```
+fn splice(blob: Blob, range: RangeInclusive<i64>, replace: Blob) -> ();
 
 /// Replace a portion of the array with another array.
 ///
@@ -4774,6 +4750,30 @@ fn splice(blob: Blob, start: int, len: int, replace: Blob) -> ();
 /// ```
 fn splice(array: Array, start: int, len: int, replace: Array) -> ();
 
+/// Replace a portion of the BLOB with another BLOB.
+///
+/// * If `start` < 0, position counts from the end of the BLOB (`-1` is the last byte).
+/// * If `start` < -length of BLOB, position counts from the beginning of the BLOB.
+/// * If `start` ≥ length of BLOB, the other BLOB is appended to the end of the BLOB.
+/// * If `len` ≤ 0, the other BLOB is inserted into the BLOB at the `start` position without replacing anything.
+/// * If `start` position + `len` ≥ length of BLOB, entire portion of the BLOB after the `start` position is replaced.
+///
+/// # Example
+///
+/// ```rhai
+/// let b1 = blob(10, 0x42);
+/// let b2 = blob(5, 0x18);
+///
+/// b1.splice(1, 3, b2);
+///
+/// print(b1);      // prints "[4218181818184242 42424242]"
+///
+/// b1.splice(-5, 4, b2);
+///
+/// print(b1);      // prints "[4218181818184218 1818181842]"
+/// ```
+fn splice(blob: Blob, start: int, len: int, replace: Blob) -> ();
+
 /// Split the string into segments based on whitespaces, returning an array of the segments.
 ///
 /// # Example
@@ -4784,6 +4784,26 @@ fn splice(array: Array, start: int, len: int, replace: Array) -> ();
 /// print(text.split());        // prints ["hello,", "world!", "hello,", "foo!"]
 /// ```
 fn split(string: String) -> Array;
+
+/// Cut off the array at `index` and return it as a new array.
+///
+/// * If `index` < 0, position counts from the end of the array (`-1` is the last element).
+/// * If `index` is zero, the entire array is cut and returned.
+/// * If `index` < -length of array, the entire array is cut and returned.
+/// * If `index` ≥ length of array, nothing is cut from the array and an empty array is returned.
+///
+/// # Example
+///
+/// ```rhai
+/// let x = [1, 2, 3, 4, 5];
+///
+/// let y = x.split(2);
+///
+/// print(y);           // prints "[3, 4, 5]"
+///
+/// print(x);           // prints "[1, 2]"
+/// ```
+fn split(array: Array, index: int) -> Array;
 
 /// Cut off the BLOB at `index` and return it as a new BLOB.
 ///
@@ -4831,37 +4851,6 @@ fn split(blob: Blob, index: int) -> Blob;
 /// ```
 fn split(string: String, index: int) -> Array;
 
-/// Split the string into segments based on a `delimiter` character, returning an array of the segments.
-///
-/// # Example
-///
-/// ```rhai
-/// let text = "hello, world! hello, foo!";
-///
-/// print(text.split('l'));     // prints ["he", "", "o, wor", "d! he", "", "o, foo!"]
-/// ```
-fn split(string: String, delimiter: char) -> Array;
-
-/// Cut off the array at `index` and return it as a new array.
-///
-/// * If `index` < 0, position counts from the end of the array (`-1` is the last element).
-/// * If `index` is zero, the entire array is cut and returned.
-/// * If `index` < -length of array, the entire array is cut and returned.
-/// * If `index` ≥ length of array, nothing is cut from the array and an empty array is returned.
-///
-/// # Example
-///
-/// ```rhai
-/// let x = [1, 2, 3, 4, 5];
-///
-/// let y = x.split(2);
-///
-/// print(y);           // prints "[3, 4, 5]"
-///
-/// print(x);           // prints "[1, 2]"
-/// ```
-fn split(array: Array, index: int) -> Array;
-
 /// Split the string into segments based on a `delimiter` string, returning an array of the segments.
 ///
 /// # Example
@@ -4872,6 +4861,17 @@ fn split(array: Array, index: int) -> Array;
 /// print(text.split("ll"));    // prints ["he", "o, world! he", "o, foo!"]
 /// ```
 fn split(string: String, delimiter: String) -> Array;
+
+/// Split the string into segments based on a `delimiter` character, returning an array of the segments.
+///
+/// # Example
+///
+/// ```rhai
+/// let text = "hello, world! hello, foo!";
+///
+/// print(text.split('l'));     // prints ["he", "", "o, wor", "d! he", "", "o, foo!"]
+/// ```
+fn split(string: String, delimiter: char) -> Array;
 
 /// Split the string into at most the specified number of `segments` based on a `delimiter` string,
 /// returning an array of the segments.
@@ -4956,11 +4956,11 @@ fn split_rev(string: String, delimiter: char, segments: int) -> Array;
 /// Return the square root of the floating-point number.
 fn sqrt(x: float) -> f64;
 
-/// Return the start of the inclusive range.
-fn start(range: InclusiveRange) -> i64;
-
 /// Return the start of the exclusive range.
 fn start(range: ExclusiveRange) -> i64;
+
+/// Return the start of the inclusive range.
+fn start(range: InclusiveRange) -> i64;
 
 /// Return `true` if the string starts with a specified string.
 ///
@@ -5070,34 +5070,34 @@ fn timestamp() -> Instant;
 fn to_array(blob: Blob) -> Array;
 
 /// Convert the `value` into a string in binary format.
-fn to_binary(value: i64) -> String;
+fn to_binary(value: i128) -> String;
 
 /// Convert the `value` into a string in binary format.
 fn to_binary(value: i16) -> String;
 
 /// Convert the `value` into a string in binary format.
-fn to_binary(value: u8) -> String;
+fn to_binary(value: i32) -> String;
 
 /// Convert the `value` into a string in binary format.
-fn to_binary(value: i128) -> String;
-
-/// Convert the `value` into a string in binary format.
-fn to_binary(value: u64) -> String;
-
-/// Convert the `value` into a string in binary format.
-fn to_binary(value: u128) -> String;
+fn to_binary(value: i64) -> String;
 
 /// Convert the `value` into a string in binary format.
 fn to_binary(value: i8) -> String;
 
 /// Convert the `value` into a string in binary format.
+fn to_binary(value: u128) -> String;
+
+/// Convert the `value` into a string in binary format.
 fn to_binary(value: u16) -> String;
 
 /// Convert the `value` into a string in binary format.
-fn to_binary(value: i32) -> String;
+fn to_binary(value: u32) -> String;
 
 /// Convert the `value` into a string in binary format.
-fn to_binary(value: u32) -> String;
+fn to_binary(value: u64) -> String;
+
+/// Convert the `value` into a string in binary format.
+fn to_binary(value: u8) -> String;
 
 /// Convert the string into an UTF-8 encoded byte-stream as a BLOB.
 ///
@@ -5123,117 +5123,117 @@ fn to_blob(string: String) -> Blob;
 /// ```
 fn to_chars(string: String) -> Array;
 
-/// Convert the value of `number` into a string.
-fn to_debug(number: f64) -> String;
-
-/// Convert the string into debug format.
-fn to_debug(string: String) -> String;
-
-/// Convert the value of the `item` into a string in debug format.
-fn to_debug(item: ?) -> String;
-
-/// Convert the value of `number` into a string.
-fn to_debug(number: f32) -> String;
-
 /// Convert the array into a string.
 fn to_debug(array: Array) -> String;
 
 /// Convert the string into debug format.
 fn to_debug(character: char) -> String;
 
-/// Convert the boolean value into a string in debug format.
-fn to_debug(value: bool) -> String;
-
 /// Convert the function pointer into a string in debug format.
 fn to_debug(f: FnPtr) -> String;
+
+/// Convert the value of the `item` into a string in debug format.
+fn to_debug(item: ?) -> String;
 
 /// Convert the object map into a string.
 fn to_debug(map: Map) -> String;
 
+/// Convert the value of `number` into a string.
+fn to_debug(number: f32) -> String;
+
+/// Convert the value of `number` into a string.
+fn to_debug(number: f64) -> String;
+
+/// Convert the string into debug format.
+fn to_debug(string: String) -> String;
+
 /// Convert the unit into a string in debug format.
 fn to_debug(unit: ()) -> String;
+
+/// Convert the boolean value into a string in debug format.
+fn to_debug(value: bool) -> String;
 
 /// Convert radians to degrees.
 fn to_degrees(x: float) -> f64;
 
-fn to_float(x: i32) -> f64;
-
-fn to_float(x: u32) -> f64;
-
 /// Convert the 32-bit floating-point number to 64-bit.
 fn to_float(x: f32) -> f64;
 
-fn to_float(x: i8) -> f64;
-
-fn to_float(x: u16) -> f64;
-
-fn to_float(x: u128) -> f64;
-
 fn to_float(x: i128) -> f64;
-
-fn to_float(x: u8) -> f64;
 
 fn to_float(x: i16) -> f64;
 
+fn to_float(x: i32) -> f64;
+
 fn to_float(x: i64) -> f64;
 
-/// Convert the `value` into a string in hex format.
-fn to_hex(value: i32) -> String;
+fn to_float(x: i8) -> f64;
 
-/// Convert the `value` into a string in hex format.
-fn to_hex(value: u32) -> String;
+fn to_float(x: u128) -> f64;
 
-/// Convert the `value` into a string in hex format.
-fn to_hex(value: i8) -> String;
+fn to_float(x: u16) -> f64;
 
-/// Convert the `value` into a string in hex format.
-fn to_hex(value: u16) -> String;
+fn to_float(x: u32) -> f64;
 
-/// Convert the `value` into a string in hex format.
-fn to_hex(value: u128) -> String;
-
-/// Convert the `value` into a string in hex format.
-fn to_hex(value: u64) -> String;
+fn to_float(x: u8) -> f64;
 
 /// Convert the `value` into a string in hex format.
 fn to_hex(value: i128) -> String;
 
 /// Convert the `value` into a string in hex format.
-fn to_hex(value: u8) -> String;
+fn to_hex(value: i16) -> String;
 
 /// Convert the `value` into a string in hex format.
-fn to_hex(value: i16) -> String;
+fn to_hex(value: i32) -> String;
 
 /// Convert the `value` into a string in hex format.
 fn to_hex(value: i64) -> String;
 
-fn to_int(x: u32) -> i64;
+/// Convert the `value` into a string in hex format.
+fn to_hex(value: i8) -> String;
+
+/// Convert the `value` into a string in hex format.
+fn to_hex(value: u128) -> String;
+
+/// Convert the `value` into a string in hex format.
+fn to_hex(value: u16) -> String;
+
+/// Convert the `value` into a string in hex format.
+fn to_hex(value: u32) -> String;
+
+/// Convert the `value` into a string in hex format.
+fn to_hex(value: u64) -> String;
+
+/// Convert the `value` into a string in hex format.
+fn to_hex(value: u8) -> String;
+
+fn to_int(x: char) -> i64;
+
+/// Convert the floating-point number into an integer.
+fn to_int(x: f32) -> int;
 
 /// Convert the floating-point number into an integer.
 fn to_int(x: f64) -> int;
 
+fn to_int(x: i128) -> i64;
+
+fn to_int(x: i16) -> i64;
+
 fn to_int(x: i32) -> i64;
 
-fn to_int(x: u64) -> i64;
+fn to_int(x: i64) -> i64;
+
+fn to_int(x: i8) -> i64;
 
 fn to_int(x: u128) -> i64;
 
 fn to_int(x: u16) -> i64;
 
-fn to_int(x: i8) -> i64;
+fn to_int(x: u32) -> i64;
 
-/// Convert the floating-point number into an integer.
-fn to_int(x: f32) -> int;
-
-fn to_int(x: i16) -> i64;
+fn to_int(x: u64) -> i64;
 
 fn to_int(x: u8) -> i64;
-
-fn to_int(x: char) -> i64;
-
-fn to_int(x: i128) -> i64;
-
-fn to_int(x: i64) -> i64;
 
 /// Return the JSON representation of the object map.
 ///
@@ -5289,71 +5289,58 @@ fn to_octal(value: i128) -> String;
 fn to_octal(value: i16) -> String;
 
 /// Convert the `value` into a string in octal format.
-fn to_octal(value: u8) -> String;
+fn to_octal(value: i32) -> String;
 
 /// Convert the `value` into a string in octal format.
 fn to_octal(value: i64) -> String;
 
 /// Convert the `value` into a string in octal format.
-fn to_octal(value: u32) -> String;
+fn to_octal(value: i8) -> String;
 
 /// Convert the `value` into a string in octal format.
-fn to_octal(value: i32) -> String;
+fn to_octal(value: u128) -> String;
 
 /// Convert the `value` into a string in octal format.
 fn to_octal(value: u16) -> String;
 
 /// Convert the `value` into a string in octal format.
-fn to_octal(value: i8) -> String;
+fn to_octal(value: u32) -> String;
 
 /// Convert the `value` into a string in octal format.
 fn to_octal(value: u64) -> String;
 
 /// Convert the `value` into a string in octal format.
-fn to_octal(value: u128) -> String;
+fn to_octal(value: u8) -> String;
 
 /// Convert degrees to radians.
 fn to_radians(x: float) -> f64;
 
-/// Return the boolean value into a string.
-fn to_string(value: bool) -> String;
+/// Convert the array into a string.
+fn to_string(array: Array) -> String;
 
 /// Return the character into a string.
 fn to_string(character: char) -> String;
 
-/// Convert the array into a string.
-fn to_string(array: Array) -> String;
+/// Convert the value of the `item` into a string.
+fn to_string(item: ?) -> String;
 
 /// Convert the object map into a string.
 fn to_string(map: Map) -> String;
 
-/// Return the empty string.
-fn to_string(unit: ()) -> String;
-
-/// Return the `string`.
-fn to_string(string: String) -> String;
-
-/// Convert the value of the `item` into a string.
-fn to_string(item: ?) -> String;
+/// Convert the value of `number` into a string.
+fn to_string(number: f32) -> String;
 
 /// Convert the value of `number` into a string.
 fn to_string(number: f64) -> String;
 
-/// Convert the value of `number` into a string.
-fn to_string(number: f32) -> String;
+/// Return the `string`.
+fn to_string(string: String) -> String;
 
-/// Convert the string to all upper-case and return it as a new string.
-///
-/// # Example
-///
-/// ```rhai
-/// let text = "hello, world!"
-///
-/// print(text.to_upper());     // prints "HELLO, WORLD!"
-///
-/// print(text);                // prints "hello, world!"
-/// ```
-fn to_upper(string: String) -> String;
+/// Return the empty string.
+fn to_string(unit: ()) -> String;
+
+/// Return the boolean value into a string.
+fn to_string(value: bool) -> String;
 
 /// Convert the character to upper-case and return it as a new character.
 ///
@@ -5368,6 +5355,19 @@ fn to_upper(string: String) -> String;
 /// ```
 fn to_upper(character: char) -> char;
 
+/// Convert the string to all upper-case and return it as a new string.
+///
+/// # Example
+///
+/// ```rhai
+/// let text = "hello, world!"
+///
+/// print(text.to_upper());     // prints "HELLO, WORLD!"
+///
+/// print(text);                // prints "hello, world!"
+/// ```
+fn to_upper(string: String) -> String;
+
 /// Remove whitespace characters from both ends of the string.
 ///
 /// # Example
@@ -5380,6 +5380,26 @@ fn to_upper(character: char) -> char;
 /// print(text);    // prints "hello"
 /// ```
 fn trim(string: String) -> ();
+
+/// Cut off the array at the specified length.
+///
+/// * If `len` ≤ 0, the array is cleared.
+/// * If `len` ≥ length of array, the array is not truncated.
+///
+/// # Example
+///
+/// ```rhai
+/// let x = [1, 2, 3, 4, 5];
+///
+/// x.truncate(3);
+///
+/// print(x);       // prints "[1, 2, 3]"
+///
+/// x.truncate(10);
+///
+/// print(x);       // prints "[1, 2, 3]"
+/// ```
+fn truncate(array: Array, len: int) -> ();
 
 /// Cut off the BLOB at the specified length.
 ///
@@ -5422,26 +5442,6 @@ fn truncate(blob: Blob, len: int) -> ();
 /// print(text);    // prints "hello, world!"
 /// ```
 fn truncate(string: String, len: int) -> ();
-
-/// Cut off the array at the specified length.
-///
-/// * If `len` ≤ 0, the array is cleared.
-/// * If `len` ≥ length of array, the array is not truncated.
-///
-/// # Example
-///
-/// ```rhai
-/// let x = [1, 2, 3, 4, 5];
-///
-/// x.truncate(3);
-///
-/// print(x);       // prints "[1, 2, 3]"
-///
-/// x.truncate(10);
-///
-/// print(x);       // prints "[1, 2, 3]"
-/// ```
-fn truncate(array: Array, len: int) -> ();
 
 /// Return an array with all the property values in the object map.
 ///
@@ -5508,19 +5508,34 @@ fn write_ascii(blob: Blob, range: RangeInclusive<i64>, string: String) -> ();
 /// ```
 fn write_ascii(blob: Blob, start: int, len: int, string: String) -> ();
 
-/// Write a `FLOAT` value to the bytes within an inclusive `range` in the BLOB
-/// in big-endian byte order.
-///
-/// * If number of bytes in `range` < number of bytes for `FLOAT`, extra bytes in `FLOAT` are not written.
-/// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes in `range` are not modified.
-fn write_be(blob: Blob, range: RangeInclusive<i64>, value: float) -> ();
-
 /// Write a `FLOAT` value to the bytes within an exclusive `range` in the BLOB
 /// in big-endian byte order.
 ///
 /// * If number of bytes in `range` < number of bytes for `FLOAT`, extra bytes in `FLOAT` are not written.
 /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes in `range` are not modified.
 fn write_be(blob: Blob, range: Range<i64>, value: float) -> ();
+
+/// Write an `INT` value to the bytes within an exclusive `range` in the BLOB
+/// in big-endian byte order.
+///
+/// * If number of bytes in `range` < number of bytes for `INT`, extra bytes in `INT` are not written.
+/// * If number of bytes in `range` > number of bytes for `INT`, extra bytes in `range` are not modified.
+///
+/// ```rhai
+/// let b = blob(8, 0x42);
+///
+/// b.write_be_int(1..3, 0x99);
+///
+/// print(b);       // prints "[4200004242424242]"
+/// ```
+fn write_be(blob: Blob, range: Range<i64>, value: int) -> ();
+
+/// Write a `FLOAT` value to the bytes within an inclusive `range` in the BLOB
+/// in big-endian byte order.
+///
+/// * If number of bytes in `range` < number of bytes for `FLOAT`, extra bytes in `FLOAT` are not written.
+/// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes in `range` are not modified.
+fn write_be(blob: Blob, range: RangeInclusive<i64>, value: float) -> ();
 
 /// Write an `INT` value to the bytes within an inclusive `range` in the BLOB
 /// in big-endian byte order.
@@ -5537,20 +5552,18 @@ fn write_be(blob: Blob, range: Range<i64>, value: float) -> ();
 /// ```
 fn write_be(blob: Blob, range: RangeInclusive<i64>, value: int) -> ();
 
-/// Write an `INT` value to the bytes within an exclusive `range` in the BLOB
+/// Write a `FLOAT` value to the bytes beginning at the `start` position in the BLOB
 /// in big-endian byte order.
 ///
-/// * If number of bytes in `range` < number of bytes for `INT`, extra bytes in `INT` are not written.
-/// * If number of bytes in `range` > number of bytes for `INT`, extra bytes in `range` are not modified.
+/// * If `start` < 0, position counts from the end of the BLOB (`-1` is the last byte).
+/// * If `start` < -length of BLOB, position counts from the beginning of the BLOB.
+/// * If `start` ≥ length of BLOB, zero is returned.
+/// * If `len` ≤ 0, zero is returned.
+/// * If `start` position + `len` ≥ length of BLOB, entire portion of the BLOB after the `start` position is parsed.
 ///
-/// ```rhai
-/// let b = blob(8, 0x42);
-///
-/// b.write_be_int(1..3, 0x99);
-///
-/// print(b);       // prints "[4200004242424242]"
-/// ```
-fn write_be(blob: Blob, range: Range<i64>, value: int) -> ();
+/// * If number of bytes in `range` < number of bytes for `FLOAT`, extra bytes in `FLOAT` are not written.
+/// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes in `range` are not modified.
+fn write_be(blob: Blob, start: int, len: int, value: float) -> ();
 
 /// Write an `INT` value to the bytes beginning at the `start` position in the BLOB
 /// in big-endian byte order.
@@ -5573,18 +5586,12 @@ fn write_be(blob: Blob, range: Range<i64>, value: int) -> ();
 /// ```
 fn write_be(blob: Blob, start: int, len: int, value: int) -> ();
 
-/// Write a `FLOAT` value to the bytes beginning at the `start` position in the BLOB
-/// in big-endian byte order.
-///
-/// * If `start` < 0, position counts from the end of the BLOB (`-1` is the last byte).
-/// * If `start` < -length of BLOB, position counts from the beginning of the BLOB.
-/// * If `start` ≥ length of BLOB, zero is returned.
-/// * If `len` ≤ 0, zero is returned.
-/// * If `start` position + `len` ≥ length of BLOB, entire portion of the BLOB after the `start` position is parsed.
+/// Write a `FLOAT` value to the bytes within an exclusive `range` in the BLOB
+/// in little-endian byte order.
 ///
 /// * If number of bytes in `range` < number of bytes for `FLOAT`, extra bytes in `FLOAT` are not written.
 /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes in `range` are not modified.
-fn write_be(blob: Blob, start: int, len: int, value: float) -> ();
+fn write_le(blob: Blob, range: Range<i64>, value: float) -> ();
 
 /// Write an `INT` value to the bytes within an exclusive `range` in the BLOB
 /// in little-endian byte order.
@@ -5601,6 +5608,13 @@ fn write_be(blob: Blob, start: int, len: int, value: float) -> ();
 /// ```
 fn write_le(blob: Blob, range: Range<i64>, value: int) -> ();
 
+/// Write a `FLOAT` value to the bytes within an inclusive `range` in the BLOB
+/// in little-endian byte order.
+///
+/// * If number of bytes in `range` < number of bytes for `FLOAT`, extra bytes in `FLOAT` are not written.
+/// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes in `range` are not modified.
+fn write_le(blob: Blob, range: RangeInclusive<i64>, value: float) -> ();
+
 /// Write an `INT` value to the bytes within an inclusive `range` in the BLOB
 /// in little-endian byte order.
 ///
@@ -5615,20 +5629,6 @@ fn write_le(blob: Blob, range: Range<i64>, value: int) -> ();
 /// print(b);       // prints "[0078563400000000]"
 /// ```
 fn write_le(blob: Blob, range: RangeInclusive<i64>, value: int) -> ();
-
-/// Write a `FLOAT` value to the bytes within an exclusive `range` in the BLOB
-/// in little-endian byte order.
-///
-/// * If number of bytes in `range` < number of bytes for `FLOAT`, extra bytes in `FLOAT` are not written.
-/// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes in `range` are not modified.
-fn write_le(blob: Blob, range: Range<i64>, value: float) -> ();
-
-/// Write a `FLOAT` value to the bytes within an inclusive `range` in the BLOB
-/// in little-endian byte order.
-///
-/// * If number of bytes in `range` < number of bytes for `FLOAT`, extra bytes in `FLOAT` are not written.
-/// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes in `range` are not modified.
-fn write_le(blob: Blob, range: RangeInclusive<i64>, value: float) -> ();
 
 /// Write a `FLOAT` value to the bytes beginning at the `start` position in the BLOB
 /// in little-endian byte order.
@@ -5712,20 +5712,20 @@ fn write_utf8(blob: Blob, range: RangeInclusive<i64>, string: String) -> ();
 /// ```
 fn write_utf8(blob: Blob, start: int, len: int, string: String) -> ();
 
-op |(u8, u8) -> u8;
+op |(i128, i128) -> i128;
 
 op |(i16, i16) -> i16;
+
+op |(i32, i32) -> i32;
+
+op |(i8, i8) -> i8;
+
+op |(u128, u128) -> u128;
+
+op |(u16, u16) -> u16;
 
 op |(u32, u32) -> u32;
 
 op |(u64, u64) -> u64;
 
-op |(i32, i32) -> i32;
-
-op |(u16, u16) -> u16;
-
-op |(u128, u128) -> u128;
-
-op |(i8, i8) -> i8;
-
-op |(i128, i128) -> i128;
+op |(u8, u8) -> u8;
