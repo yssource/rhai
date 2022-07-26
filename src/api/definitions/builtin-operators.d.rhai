@@ -249,3 +249,11 @@ op +=(Blob, Blob);
 op +=(Blob, i64);
 op +=(Blob, char);
 op +=(Blob, String);
+
+op in(?, Array) -> bool;
+op in(String, String) -> bool;
+op in(char, String) -> bool;
+op in(int, Range<int>) -> bool;
+op in(int, RangeInclusive<int>) -> bool;
+op in(String, Map) -> bool;
+op in(int, Blob) -> bool;
