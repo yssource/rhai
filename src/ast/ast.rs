@@ -1,7 +1,7 @@
 //! Module defining the AST (abstract syntax tree).
 
 use super::{ASTFlags, Expr, FnAccess, Stmt, StmtBlock, StmtBlockContainer};
-use crate::{Dynamic, FnNamespace, Identifier, Position, SmartString};
+use crate::{Dynamic, FnNamespace, Identifier, Position};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -23,7 +23,7 @@ pub struct AST {
     source: Identifier,
     /// [`AST`] documentation.
     #[cfg(feature = "metadata")]
-    doc: SmartString,
+    doc: crate::SmartString,
     /// Global statements.
     body: StmtBlock,
     /// Script-defined functions.
@@ -76,7 +76,7 @@ impl AST {
         Self {
             source: Identifier::new_const(),
             #[cfg(feature = "metadata")]
-            doc: SmartString::new_const(),
+            doc: crate::SmartString::new_const(),
             body: StmtBlock::new(statements, Position::NONE, Position::NONE),
             #[cfg(not(feature = "no_function"))]
             lib: functions.into(),
@@ -96,7 +96,7 @@ impl AST {
         Self {
             source: Identifier::new_const(),
             #[cfg(feature = "metadata")]
-            doc: SmartString::new_const(),
+            doc: crate::SmartString::new_const(),
             body: StmtBlock::new(statements, Position::NONE, Position::NONE),
             #[cfg(not(feature = "no_function"))]
             lib: functions.into(),
@@ -146,7 +146,7 @@ impl AST {
         Self {
             source: Identifier::new_const(),
             #[cfg(feature = "metadata")]
-            doc: SmartString::new_const(),
+            doc: crate::SmartString::new_const(),
             body: StmtBlock::NONE,
             #[cfg(not(feature = "no_function"))]
             lib: crate::Module::new().into(),
@@ -213,7 +213,7 @@ impl AST {
     #[cfg(feature = "metadata")]
     #[inline(always)]
     #[must_use]
-    pub(crate) fn doc_mut(&mut self) -> &mut SmartString {
+    pub(crate) fn doc_mut(&mut self) -> &mut crate::SmartString {
         &mut self.doc
     }
     /// Set the documentation.
@@ -221,7 +221,7 @@ impl AST {
     /// Only available under `metadata`.
     #[cfg(feature = "metadata")]
     #[inline(always)]
-    pub(crate) fn set_doc(&mut self, doc: impl Into<SmartString>) {
+    pub(crate) fn set_doc(&mut self, doc: impl Into<crate::SmartString>) {
         self.doc = doc.into();
     }
     /// Get the statements.
