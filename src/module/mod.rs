@@ -490,7 +490,7 @@ impl Module {
     /// let mut module = Module::new();
     /// module.set_doc("//! This is my special module.");
     /// assert_eq!(module.doc(), "//! This is my special module.");
-    /// module.clear_id();
+    /// module.clear_doc();
     /// assert_eq!(module.doc(), "");
     /// ```
     #[cfg(feature = "metadata")]
