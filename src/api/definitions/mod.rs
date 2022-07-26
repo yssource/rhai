@@ -4,10 +4,10 @@ use crate::{
 use core::fmt;
 
 #[cfg(feature = "no_std")]
-use alloc::borrow::Cow;
+use std::prelude::v1::*;
 
 #[cfg(feature = "no_std")]
-use alloc::string::String;
+use alloc::borrow::Cow;
 
 #[cfg(not(feature = "no_std"))]
 use std::borrow::Cow;
@@ -86,8 +86,14 @@ impl<'e> Definitions<'e> {
 
         fs::create_dir_all(path)?;
 
-        fs::write(path.join("__builtin__.d.rhai"), include_bytes!("builtin.d.rhai"))?;
-        fs::write(path.join("__builtin-operators__.d.rhai"), include_bytes!("builtin-operators.d.rhai"))?;
+        fs::write(
+            path.join("__builtin__.d.rhai"),
+            include_bytes!("builtin.d.rhai"),
+        )?;
+        fs::write(
+            path.join("__builtin-operators__.d.rhai"),
+            include_bytes!("builtin-operators.d.rhai"),
+        )?;
 
         fs::write(path.join("__static__.d.rhai"), self.static_module())?;
 
@@ -95,6 +101,7 @@ impl<'e> Definitions<'e> {
             fs::write(path.join("__scope__.d.rhai"), self.scope())?;
         }
 
+        #[cfg(not(feature = "no_module"))]
         for (name, decl) in self.modules() {
             fs::write(path.join(format!("{name}.d.rhai")), decl)?;
         }
@@ -196,13 +203,15 @@ impl Module {
                 continue;
             }
 
-            f.write_definition(
-                writer,
-                def,
-                def.engine.custom_keywords.contains_key(&f.metadata.name)
-                    || (!f.metadata.name.contains('$')
-                        && !is_valid_function_name(&f.metadata.name)),
-            )?;
+            #[cfg(not(feature = "no_custom_syntax"))]
+            let operator = def.engine.custom_keywords.contains_key(&f.metadata.name)
+                || (!f.metadata.name.contains('$') && !is_valid_function_name(&f.metadata.name));
+
+            #[cfg(feature = "no_custom_syntax")]
+            let operator =
+                !f.metadata.name.contains('$') && !is_valid_function_name(&f.metadata.name);
+
+            f.write_definition(writer, def, operator)?;
         }
 
         Ok(())

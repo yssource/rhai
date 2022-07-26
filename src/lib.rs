@@ -82,8 +82,6 @@ mod reify;
 mod tests;
 mod tokenizer;
 mod types;
-#[cfg(feature = "metadata")]
-mod definitions;
 
 /// Error encountered when parsing a script.
 type PERR = ParseErrorType;
@@ -183,6 +181,10 @@ pub use types::{
 #[cfg(not(feature = "no_custom_syntax"))]
 pub use api::custom_syntax::Expression;
 
+
+#[cfg(feature = "metadata")]
+pub use api::definitions::Definitions;
+
 /// _(debugging)_ Module containing types for debugging.
 /// Exported under the `debugging` feature only.
 #[cfg(feature = "debugging")]
@@ -259,9 +261,6 @@ pub mod serde;
 
 #[cfg(not(feature = "no_optimize"))]
 pub use optimizer::OptimizationLevel;
-
-#[cfg(feature = "metadata")]
-pub use definitions::Definitions;
 
 /// Placeholder for the optimization level.
 #[cfg(feature = "no_optimize")]
