@@ -1,7 +1,7 @@
 use crate::{
     module::FuncInfo, plugin::*, tokenizer::is_valid_function_name, Engine, Module, Scope,
 };
-use core::fmt;
+use core::{fmt, iter};
 
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -71,13 +71,10 @@ pub struct Definitions<'e> {
 }
 
 impl<'e> Definitions<'e> {
-    /// Write all the definition files to a directory.
+    /// Write all the definition files returned from [`iter_files`] to a directory.
     ///
-    /// The following separate definition files are generated:
-    ///
-    /// - `__static__.d.rhai`: globally available items of the engine
-    /// - `__scope__.d.rhai`: items in the given scope, if any
-    /// - a separate file for each registered module
+    /// This function will create the directory path if it does not yet exist,
+    /// it will also override any existing files as needed.
     #[cfg(not(feature = "no_std"))]
     pub fn write_to_dir(&self, path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
         use std::fs;
@@ -101,12 +98,39 @@ impl<'e> Definitions<'e> {
             fs::write(path.join("__scope__.d.rhai"), self.scope())?;
         }
 
-        #[cfg(not(feature = "no_module"))]
         for (name, decl) in self.modules() {
             fs::write(path.join(format!("{name}.d.rhai")), decl)?;
         }
 
         Ok(())
+    }
+
+    /// Iterate over the generated definition files.
+    ///
+    /// The returned iterator yields all the definition files as (filename, content) pairs.
+    pub fn iter_files(&self) -> impl Iterator<Item = (String, String)> + '_ {
+        IntoIterator::into_iter([
+            (
+                "__builtin__.d.rhai".to_string(),
+                include_str!("builtin.d.rhai").to_string(),
+            ),
+            (
+                "__builtin-operators__.d.rhai".to_string(),
+                include_str!("builtin-operators.d.rhai").to_string(),
+            ),
+            ("__static__.d.rhai".to_string(), self.static_module()),
+        ])
+        .chain(iter::from_fn(move || {
+            if self.scope.is_some() {
+                Some(("__scope__.d.rhai".to_string(), self.scope()))
+            } else {
+                None
+            }
+        }))
+        .chain(
+            self.modules()
+                .map(|(name, def)| (format!("{name}.d.rhai"), def)),
+        )
     }
 
     /// Return the definitions for the globally available
@@ -148,8 +172,10 @@ impl<'e> Definitions<'e> {
     /// Return name and definition pairs for each registered module.
     ///
     /// The definitions will always start with `module <module name>;`.
-    #[cfg(not(feature = "no_module"))]
+    ///
+    /// If the feature `no_module` is enabled, this will yield no elements.
     pub fn modules(&self) -> impl Iterator<Item = (String, String)> + '_ {
+        #[cfg(not(feature = "no_module"))]
         let mut m = self
             .engine
             .global_sub_modules
@@ -161,6 +187,9 @@ impl<'e> Definitions<'e> {
                 )
             })
             .collect::<Vec<_>>();
+
+        #[cfg(feature = "no_module")]
+        let mut m = Vec::new();
 
         m.sort_by(|(name1, _), (name2, _)| name1.cmp(name2));
 
