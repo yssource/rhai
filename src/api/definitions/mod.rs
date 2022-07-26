@@ -4,11 +4,11 @@
 use crate::module::FuncInfo;
 use crate::plugin::*;
 use crate::tokenizer::is_valid_function_name;
-use crate::{Engine, Module, Scope};
+use crate::{Engine, Module, Scope, INT};
 
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-use std::{borrow::Cow, cmp::Ordering, fmt};
+use std::{any::type_name, borrow::Cow, cmp::Ordering, fmt};
 
 impl Engine {
     /// Return [`Definitions`] that can be used to generate definition files for the [`Engine`].
@@ -345,13 +345,19 @@ fn def_type_name<'a>(ty: &'a str, engine: &'a Engine) -> Cow<'a, str> {
         .map(str::trim)
         .unwrap_or(ty);
 
-    ty.replace("Iterator<Item=", "Iterator<")
+    let ty = ty
+        .replace("Iterator<Item=", "Iterator<")
         .replace("Dynamic", "?")
         .replace("INT", "int")
+        .replace(type_name::<INT>(), "int")
         .replace("FLOAT", "float")
         .replace("&str", "String")
-        .replace("ImmutableString", "String")
-        .into()
+        .replace("ImmutableString", "String");
+
+    #[cfg(not(feature = "no_float"))]
+    let ty = ty.replace(type_name::<crate::FLOAT>(), "float");
+
+    ty.into()
 }
 
 impl Scope<'_> {
