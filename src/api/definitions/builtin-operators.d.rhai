@@ -242,8 +242,8 @@ op -=(String, char);
 op +=(char, String);
 op +=(char, char);
 
-op +=(arraArray, Array);
-op +=(arraArray, ?);
+op +=(Array, Array);
+op +=(Array, ?);
 
 op +=(Blob, Blob);
 op +=(Blob, i64);
