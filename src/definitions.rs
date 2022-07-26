@@ -2,7 +2,15 @@ use crate::{
     module::FuncInfo, plugin::*, tokenizer::is_valid_function_name, Engine, Module, Scope,
 };
 use core::fmt;
-use std::{borrow::Cow, fs, io, path::Path};
+
+#[cfg(feature = "no_std")]
+use alloc::borrow::Cow;
+
+#[cfg(feature = "no_std")]
+use alloc::string::String;
+
+#[cfg(not(feature = "no_std"))]
+use std::borrow::Cow;
 
 impl Engine {
     /// Return [`Definitions`] that can be used to
@@ -13,7 +21,7 @@ impl Engine {
     ///
     /// ```no_run
     /// # use rhai::Engine;
-    /// # fn main() -> io::Result<()> {
+    /// # fn main() -> std::io::Result<()> {
     /// let engine = Engine::new();
     /// engine
     ///     .definitions()
@@ -37,7 +45,7 @@ impl Engine {
     ///
     /// ```no_run
     /// # use rhai::{Engine, Scope};
-    /// # fn main() -> io::Result<()> {
+    /// # fn main() -> std::io::Result<()> {
     /// let engine = Engine::new();
     /// let scope = Scope::new();
     /// engine
@@ -70,7 +78,10 @@ impl<'e> Definitions<'e> {
     /// - `__static__.d.rhai`: globally available items of the engine
     /// - `__scope__.d.rhai`: items in the given scope, if any
     /// - a separate file for each registered module
-    pub fn write_to_dir(&self, path: impl AsRef<Path>) -> io::Result<()> {
+    #[cfg(not(feature = "no_std"))]
+    pub fn write_to_dir(&self, path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        use std::fs;
+
         let path = path.as_ref();
 
         fs::create_dir_all(path)?;
@@ -102,7 +113,7 @@ impl<'e> Definitions<'e> {
                 s += "\n\n";
             }
             first = false;
-            m.write_declaration(&mut s, self).unwrap();
+            m.write_definition(&mut s, self).unwrap();
         }
 
         s
@@ -118,7 +129,7 @@ impl<'e> Definitions<'e> {
         let mut s = String::from("module static;\n\n");
 
         if let Some(scope) = self.scope {
-            scope.write_declaration(&mut s).unwrap();
+            scope.write_definition(&mut s).unwrap();
         }
 
         s
@@ -136,7 +147,7 @@ impl<'e> Definitions<'e> {
             .map(move |(name, module)| {
                 (
                     name.to_string(),
-                    format!("module {name};\n\n{}", module.declaration(self)),
+                    format!("module {name};\n\n{}", module.definition(self)),
                 )
             })
             .collect::<Vec<_>>();
@@ -148,13 +159,13 @@ impl<'e> Definitions<'e> {
 }
 
 impl Module {
-    fn declaration(&self, decl: &Definitions) -> String {
+    fn definition(&self, def: &Definitions) -> String {
         let mut s = String::new();
-        self.write_declaration(&mut s, decl).unwrap();
+        self.write_definition(&mut s, def).unwrap();
         s
     }
 
-    fn write_declaration(&self, writer: &mut dyn fmt::Write, decl: &Definitions) -> fmt::Result {
+    fn write_definition(&self, writer: &mut dyn fmt::Write, def: &Definitions) -> fmt::Result {
         let mut first = true;
 
         let mut vars = self.iter_var().collect::<Vec<_>>();
@@ -182,9 +193,10 @@ impl Module {
                 continue;
             }
 
-            f.write_declaration(
+            f.write_definition(
                 writer,
-                decl.engine.custom_keywords.contains_key(&f.metadata.name)
+                def,
+                def.engine.custom_keywords.contains_key(&f.metadata.name)
                     || (!f.metadata.name.contains('$')
                         && !is_valid_function_name(&f.metadata.name)),
             )?;
@@ -195,7 +207,12 @@ impl Module {
 }
 
 impl FuncInfo {
-    fn write_declaration(&self, writer: &mut dyn fmt::Write, operator: bool) -> fmt::Result {
+    fn write_definition(
+        &self,
+        writer: &mut dyn fmt::Write,
+        def: &Definitions,
+        operator: bool,
+    ) -> fmt::Result {
         for comment in &*self.metadata.comments {
             writeln!(writer, "{comment}")?;
         }
@@ -226,10 +243,12 @@ impl FuncInfo {
                 .params_info
                 .get(i)
                 .map(|s| {
-                    let mut s = s.split(':');
+                    let mut s = s.splitn(2, ':');
                     (
                         s.next().unwrap_or("_").split(' ').last().unwrap(),
-                        s.next().map(decl_type_name).unwrap_or(Cow::Borrowed("?")),
+                        s.next()
+                            .map(|ty| def_type_name(ty, def.engine))
+                            .unwrap_or(Cow::Borrowed("?")),
                     )
                 })
                 .unwrap_or(("_", "?".into()));
@@ -244,7 +263,7 @@ impl FuncInfo {
         write!(
             writer,
             ") -> {};",
-            decl_type_name(&self.metadata.return_type)
+            def_type_name(&self.metadata.return_type, def.engine)
         )?;
 
         Ok(())
@@ -261,11 +280,10 @@ impl FuncInfo {
 ///
 /// Associated generic types are also rewritten into regular
 /// generic type parameters.
-fn decl_type_name(ty: &str) -> Cow<str> {
-    let ty = ty.replace("crate::", "");
+fn def_type_name<'a>(ty: &'a str, engine: &'a Engine) -> Cow<'a, str> {
+    let ty = engine.format_type_name(ty).replace("crate::", "");
+    let ty = ty.strip_prefix("&mut").unwrap_or(&*ty).trim();
     let ty = ty.split("::").last().unwrap();
-    let ty = ty.trim();
-    let ty = ty.strip_prefix("&mut").unwrap_or(ty).trim();
 
     let ty = ty
         .strip_prefix("RhaiResultOf<")
@@ -273,12 +291,7 @@ fn decl_type_name(ty: &str) -> Cow<str> {
         .map(str::trim)
         .unwrap_or(ty);
 
-    // FIXME(tamasfe): some of the given types are unusable,
-    // e.g. "Range<crate" is the entire type this function receives,
-    // same with "crate", I have no idea where these come from.
-    ty.replace("Range<crate", "?")
-        .replace("crate", "?")
-        .replace("Iterator<Item=", "Iterator<")
+    ty.replace("Iterator<Item=", "Iterator<")
         .replace("Dynamic", "?")
         .replace("INT", "int")
         .replace("FLOAT", "float")
@@ -288,7 +301,7 @@ fn decl_type_name(ty: &str) -> Cow<str> {
 }
 
 impl Scope<'_> {
-    fn write_declaration(&self, writer: &mut dyn fmt::Write) -> fmt::Result {
+    fn write_definition(&self, writer: &mut dyn fmt::Write) -> fmt::Result {
         let mut first = true;
         for (name, constant, _) in self.iter_raw() {
             if !first {
