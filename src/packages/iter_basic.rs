@@ -248,7 +248,7 @@ macro_rules! reg_range {
             $lib.update_fn_metadata_with_comments(_hash, [
                     concat!("from: ", stringify!($y)),
                     concat!("to: ", stringify!($y)),
-                    concat!("Iterator<Item=", stringify!($y), ">"),
+                    concat!("Iterator<", stringify!($y), ">"),
             ], [
                 "/// Return an iterator over the exclusive range of `from..to`.",
                 "/// The value `to` is never included.",
@@ -282,7 +282,7 @@ macro_rules! reg_range {
                     concat!("from: ", stringify!($y)),
                     concat!("to: ", stringify!($y)),
                     concat!("step: ", stringify!($y)),
-                    concat!("Iterator<Item=", stringify!($y), ">")
+                    concat!("Iterator<", stringify!($y), ">")
             ], [
                 "/// Return an iterator over the exclusive range of `from..to`, each iteration increasing by `step`.",
                 "/// The value `to` is never included.",
@@ -312,7 +312,7 @@ macro_rules! reg_range {
             $lib.update_fn_metadata_with_comments(_hash, [
                     concat!("range: Range<", stringify!($y), ">"),
                     concat!("step: ", stringify!($y)),
-                    concat!("Iterator<Item=", stringify!($y), ">")
+                    concat!("Iterator<", stringify!($y), ">")
             ], [
                 "/// Return an iterator over an exclusive range, each iteration increasing by `step`.",
                 "///",
@@ -388,7 +388,7 @@ def_package! {
         #[cfg(feature = "metadata")]
         lib.update_fn_metadata_with_comments(
             _hash,
-            ["string: &str", &range_type, "Iterator<Item=char>"],
+            ["string: &str", &range_type, "Iterator<char>"],
             [
                 "/// Return an iterator over an exclusive range of characters in the string.",
                 "///",
@@ -410,7 +410,7 @@ def_package! {
         #[cfg(feature = "metadata")]
         lib.update_fn_metadata_with_comments(
             _hash,
-            ["string: &str", &range_inclusive_type, "Iterator<Item=char>"],
+            ["string: &str", &range_inclusive_type, "Iterator<char>"],
             [
                 "/// Return an iterator over an inclusive range of characters in the string.",
                 "///",
@@ -428,7 +428,7 @@ def_package! {
         #[cfg(feature = "metadata")]
         lib.update_fn_metadata_with_comments(
             _hash,
-            ["string: &str", "start: INT", "len: INT", "Iterator<Item=char>"],
+            ["string: &str", "start: INT", "len: INT", "Iterator<char>"],
             [
                 "/// Return an iterator over a portion of characters in the string.",
                 "///",
@@ -452,7 +452,7 @@ def_package! {
         #[cfg(feature = "metadata")]
         lib.update_fn_metadata_with_comments(
             _hash,
-            ["string: &str", "from: INT", "Iterator<Item=char>"],
+            ["string: &str", "from: INT", "Iterator<char>"],
             [
                 "/// Return an iterator over the characters in the string starting from the `start` position.",
                 "///",
@@ -474,7 +474,7 @@ def_package! {
         #[cfg(feature = "metadata")]
         lib.update_fn_metadata_with_comments(
             _hash,
-            ["string: &str", "Iterator<Item=char>"],
+            ["string: &str", "Iterator<char>"],
             [
                 "/// Return an iterator over the characters in the string.",
                 "///",
@@ -494,7 +494,7 @@ def_package! {
             #[cfg(feature = "metadata")]
             lib.update_fn_metadata_with_comments(
                 _hash,
-                ["string: &mut ImmutableString", "Iterator<Item=char>"],
+                ["string: &mut ImmutableString", "Iterator<char>"],
                 [
                     "/// Return an iterator over all the characters in the string.",
                     "///",
@@ -520,7 +520,7 @@ def_package! {
         #[cfg(feature = "metadata")]
         lib.update_fn_metadata_with_comments(
             _hash,
-            ["value: INT", &range_type, "Iterator<Item=bool>"],
+            ["value: INT", &range_type, "Iterator<bool>"],
             [
                 "/// Return an iterator over an exclusive range of bits in the number.",
                 "///",
@@ -544,7 +544,7 @@ def_package! {
         #[cfg(feature = "metadata")]
         lib.update_fn_metadata_with_comments(
             _hash,
-            ["value: INT", &range_inclusive_type, "Iterator<Item=bool>"],
+            ["value: INT", &range_inclusive_type, "Iterator<bool>"],
             [
                 "/// Return an iterator over an inclusive range of bits in the number.",
                 "///",
@@ -564,7 +564,7 @@ def_package! {
         #[cfg(feature = "metadata")]
         lib.update_fn_metadata_with_comments(
             _hash,
-            ["value: INT", "from: INT", "len: INT", "Iterator<Item=bool>"],
+            ["value: INT", "from: INT", "len: INT", "Iterator<bool>"],
             [
                 "/// Return an iterator over a portion of bits in the number.",
                 "///",
@@ -588,7 +588,7 @@ def_package! {
         #[cfg(feature = "metadata")]
         lib.update_fn_metadata_with_comments(
             _hash,
-            ["value: INT", "from: INT", "Iterator<Item=bool>"],
+            ["value: INT", "from: INT", "Iterator<bool>"],
             [
                 "/// Return an iterator over the bits in the number starting from the specified `start` position.",
                 "///",
@@ -610,7 +610,7 @@ def_package! {
         #[cfg(feature = "metadata")]
         lib.update_fn_metadata_with_comments(
             _hash,
-            ["value: INT", "Iterator<Item=bool>"],
+            ["value: INT", "Iterator<bool>"],
             [
                 "/// Return an iterator over all the bits in the number.",
                 "///",
@@ -632,7 +632,7 @@ def_package! {
             #[cfg(feature = "metadata")]
             lib.update_fn_metadata_with_comments(
                 _hash,
-                ["value: &mut INT", "Iterator<Item=bool>"],
+                ["value: &mut INT", "Iterator<bool>"],
                 [
                     "/// Return an iterator over all the bits in the number.",
                     "///",

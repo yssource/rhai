@@ -17,6 +17,7 @@ New features
 
 * A new feature, `no_custom_syntax`, is added to remove custom syntax support from Rhai for applications that do not require it (which should be most).
 * Comment lines beginning with `//!` (requires the `metadata` feature) are now collected as the script file's _module documentation_.
+* `AST` and `Module` have methods to access and manipulate documentation.
 
 Enhancements
 ------------
@@ -34,6 +35,7 @@ Enhancements
 * A new `range` function variant that takes an exclusive range with a step.
 * `as_string` is added to BLOB's to convert it into a string by interpreting it as a UTF-8 byte stream.
 * `FnAccess::is_private`, `FnAccess::is_public`, `FnNamespace::is_module_namespace` and `FnNameSpace::is_global_namespace` are added for convenience.
+* `Iterator<Item=T>` type for functions metadata is simplified to `Iterator<T>`.
 
 
 Version 1.8.0

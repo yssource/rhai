@@ -1,5 +1,10 @@
 //! An example showing how to register a Rust type and methods/getters/setters for it.
 
+#[cfg(feature = "no_object")]
+fn main() {
+    panic!("This example does not run under 'no_object'.");
+}
+
 use rhai::{Engine, EvalAltResult};
 
 #[cfg(not(feature = "no_object"))]
@@ -60,9 +65,4 @@ fn main() -> Result<(), Box<EvalAltResult>> {
     println!("result: {}", result); // prints 1085764
 
     Ok(())
-}
-
-#[cfg(feature = "no_object")]
-fn main() {
-    panic!("This example does not run under 'no_object'.");
 }

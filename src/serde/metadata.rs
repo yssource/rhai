@@ -3,7 +3,7 @@
 #![cfg(feature = "metadata")]
 
 use crate::module::{calc_native_fn_hash, FuncInfo};
-use crate::{calc_fn_hash, Engine, AST};
+use crate::{calc_fn_hash, Engine, SmartString, AST};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -158,6 +158,9 @@ impl<'a> From<&'a FuncInfo> for FnMetadata<'a> {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ModuleMetadata<'a> {
+    #[cfg(feature = "metadata")]
+    #[serde(skip_serializing_if = "SmartString::is_empty")]
+    pub doc: SmartString,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub modules: BTreeMap<&'a str, Self>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -168,6 +171,8 @@ impl ModuleMetadata<'_> {
     #[inline(always)]
     pub fn new() -> Self {
         Self {
+            #[cfg(feature = "metadata")]
+            doc: SmartString::new_const(),
             modules: BTreeMap::new(),
             functions: Vec::new(),
         }
@@ -180,6 +185,7 @@ impl<'a> From<&'a crate::Module> for ModuleMetadata<'a> {
         functions.sort();
 
         Self {
+            doc: module.doc().into(),
             modules: module
                 .iter_sub_modules()
                 .map(|(name, m)| (name, m.as_ref().into()))
@@ -239,6 +245,11 @@ impl Engine {
         }
 
         global.functions.sort();
+
+        #[cfg(feature = "metadata")]
+        {
+            global.doc = ast.doc().into();
+        }
 
         serde_json::to_string_pretty(&global)
     }

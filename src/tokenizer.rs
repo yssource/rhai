@@ -2179,7 +2179,7 @@ fn get_identifier(
     Some((Token::Identifier(identifier.into()), start_pos))
 }
 
-/// Is this keyword allowed as a function?
+/// Is a keyword allowed as a function?
 #[inline]
 #[must_use]
 pub fn is_keyword_function(name: &str) -> bool {
@@ -2194,7 +2194,8 @@ pub fn is_keyword_function(name: &str) -> bool {
     }
 }
 
-/// Is a text string a valid identifier?
+/// _(internals)_ Is a text string a valid identifier?
+/// Exported under the `internals` feature only.
 #[must_use]
 pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
     let mut first_alphabetic = false;
@@ -2212,7 +2213,8 @@ pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
     first_alphabetic
 }
 
-/// Is a text string a valid script-defined function name?
+/// _(internals)_ Is a text string a valid script-defined function name?
+/// Exported under the `internals` feature only.
 #[inline(always)]
 #[must_use]
 pub fn is_valid_function_name(name: &str) -> bool {

@@ -275,8 +275,8 @@ pub use tokenizer::{get_next_token, parse_string_literal};
 
 #[cfg(feature = "internals")]
 pub use tokenizer::{
-    InputStream, MultiInputsStream, Span, Token, TokenIterator, TokenizeState, TokenizerControl,
-    TokenizerControlBlock,
+    is_valid_function_name, is_valid_identifier, InputStream, MultiInputsStream, Span, Token,
+    TokenIterator, TokenizeState, TokenizerControl, TokenizerControlBlock,
 };
 
 #[cfg(feature = "internals")]
