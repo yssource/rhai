@@ -169,29 +169,32 @@ impl<'e> Definitions<'e> {
         s
     }
 
-    /// Return name and definition pairs for each registered module.
+    /// Return module name and definition pairs for each registered module.
     ///
     /// The definitions will always start with `module <module name>;`.
     ///
     /// If the feature `no_module` is enabled, this will yield no elements.
     pub fn modules(&self) -> impl Iterator<Item = (String, String)> + '_ {
         #[cfg(not(feature = "no_module"))]
-        let mut m = self
-            .engine
-            .global_sub_modules
-            .iter()
-            .map(move |(name, module)| {
-                (
-                    name.to_string(),
-                    format!("module {name};\n\n{}", module.definition(self)),
-                )
-            })
-            .collect::<Vec<_>>();
+        let m = {
+            let mut m = self
+                .engine
+                .global_sub_modules
+                .iter()
+                .map(move |(name, module)| {
+                    (
+                        name.to_string(),
+                        format!("module {name};\n\n{}", module.definition(self)),
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            m.sort_by(|(name1, _), (name2, _)| name1.cmp(name2));
+            m
+        };
 
         #[cfg(feature = "no_module")]
-        let mut m = Vec::new();
-
-        m.sort_by(|(name1, _), (name2, _)| name1.cmp(name2));
+        let m = Vec::new();
 
         m.into_iter()
     }

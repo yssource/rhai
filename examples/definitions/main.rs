@@ -18,11 +18,15 @@ fn main() {
     // since it will be part of the scope.
     scope.push("hello_there", "hello there");
 
+    #[cfg(not(feature = "no_module"))]
     engine.register_static_module("general_kenobi", exported_module!(general_kenobi).into());
 
     // Custom operators also show up in definitions.
-    engine.register_custom_operator("minus", 100).unwrap();
-    engine.register_fn("minus", |a: i64, b: i64| a - b);
+    #[cfg(not(feature = "no_custom_syntax"))]
+    {
+        engine.register_custom_operator("minus", 100).unwrap();
+        engine.register_fn("minus", |a: i64, b: i64| a - b);
+    }
 
     engine
         .eval_with_scope::<()>(
