@@ -260,7 +260,7 @@ impl RangeCase {
             Self::InclusiveInt(..) => true,
         }
     }
-    /// Get the index to the [`ConditionalStmtBlock`].
+    /// Get the index to the [`ConditionalExpr`].
     #[inline(always)]
     #[must_use]
     pub fn index(&self) -> usize {
@@ -268,7 +268,7 @@ impl RangeCase {
             Self::ExclusiveInt(.., n) | Self::InclusiveInt(.., n) => *n,
         }
     }
-    /// Set the index to the [`ConditionalStmtBlock`].
+    /// Set the index to the [`ConditionalExpr`].
     #[inline(always)]
     pub fn set_index(&mut self, index: usize) {
         match self {

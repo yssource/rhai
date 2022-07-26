@@ -250,6 +250,9 @@ pub struct Module {
     /// ID identifying the module.
     /// No ID if string is empty.
     id: Identifier,
+    /// Module documentation.
+    #[cfg(feature = "metadata")]
+    doc: crate::SmartString,
     /// Is this module internal?
     pub(crate) internal: bool,
     /// Is this module part of a standard library?
@@ -290,31 +293,27 @@ impl fmt::Debug for Module {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut d = f.debug_struct("Module");
 
-        if !self.id.is_empty() {
-            d.field("id", &self.id);
-        }
-        if !self.modules.is_empty() {
-            d.field(
+        d.field("id", &self.id)
+            .field(
                 "modules",
                 &self
                     .modules
                     .keys()
                     .map(|m| m.as_str())
                     .collect::<BTreeSet<_>>(),
-            );
-        }
-        if !self.variables.is_empty() {
-            d.field("vars", &self.variables);
-        }
-        if !self.functions.is_empty() {
-            d.field(
+            )
+            .field("vars", &self.variables)
+            .field(
                 "functions",
                 &self
                     .iter_fn()
                     .map(|f| f.func.to_string())
                     .collect::<BTreeSet<_>>(),
             );
-        }
+
+        #[cfg(feature = "metadata")]
+        d.field("doc", &self.doc);
+
         d.finish()
     }
 }
@@ -363,6 +362,8 @@ impl Module {
     pub fn new() -> Self {
         Self {
             id: Identifier::new_const(),
+            #[cfg(feature = "metadata")]
+            doc: crate::SmartString::new_const(),
             internal: false,
             standard: false,
             custom_types: CustomTypesCollection::new(),
@@ -423,6 +424,7 @@ impl Module {
         self.id = id.into();
         self
     }
+
     /// Clear the ID of the [`Module`].
     ///
     /// # Example
@@ -441,10 +443,69 @@ impl Module {
         self
     }
 
+    /// Get the documentation of the [`Module`], if any.
+    /// Exported under the `metadata` feature only.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use rhai::Module;
+    /// let mut module = Module::new();
+    /// module.set_doc("//! This is my special module.");
+    /// assert_eq!(module.doc(), "//! This is my special module.");
+    /// ```
+    #[cfg(feature = "metadata")]
+    #[inline]
+    #[must_use]
+    pub fn doc(&self) -> &str {
+        &self.doc
+    }
+
+    /// Set the documentation of the [`Module`].
+    /// Exported under the `metadata` feature only.
+    ///
+    /// If the string is empty, it is equivalent to clearing the documentation.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use rhai::Module;
+    /// let mut module = Module::new();
+    /// module.set_doc("//! This is my special module.");
+    /// assert_eq!(module.doc(), "//! This is my special module.");
+    /// ```
+    #[cfg(feature = "metadata")]
+    #[inline(always)]
+    pub fn set_doc(&mut self, doc: impl Into<crate::SmartString>) -> &mut Self {
+        self.doc = doc.into();
+        self
+    }
+
+    /// Clear the documentation of the [`Module`].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use rhai::Module;
+    /// let mut module = Module::new();
+    /// module.set_doc("//! This is my special module.");
+    /// assert_eq!(module.doc(), "//! This is my special module.");
+    /// module.clear_doc();
+    /// assert_eq!(module.doc(), "");
+    /// ```
+    #[cfg(feature = "metadata")]
+    #[inline(always)]
+    pub fn clear_doc(&mut self) -> &mut Self {
+        self.doc.clear();
+        self
+    }
+
     /// Clear the [`Module`].
     #[inline(always)]
     pub fn clear(&mut self) {
         self.id.clear();
+        #[cfg(feature = "metadata")]
+        self.doc.clear();
         self.internal = false;
         self.standard = false;
         self.custom_types.clear();
@@ -1563,6 +1624,15 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
+
+        #[cfg(feature = "metadata")]
+        if !other.doc.is_empty() {
+            if !self.doc.is_empty() {
+                self.doc.push('\n');
+            }
+            self.doc.push_str(&other.doc);
+        }
+
         self
     }
 
@@ -1584,6 +1654,15 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
+
+        #[cfg(feature = "metadata")]
+        if !other.doc.is_empty() {
+            if !self.doc.is_empty() {
+                self.doc.push('\n');
+            }
+            self.doc.push_str(&other.doc);
+        }
+
         self
     }
 
@@ -1614,6 +1693,15 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
+
+        #[cfg(feature = "metadata")]
+        if !other.doc.is_empty() {
+            if !self.doc.is_empty() {
+                self.doc.push('\n');
+            }
+            self.doc.push_str(&other.doc);
+        }
+
         self
     }
 
@@ -1667,6 +1755,15 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
+
+        #[cfg(feature = "metadata")]
+        if !other.doc.is_empty() {
+            if !self.doc.is_empty() {
+                self.doc.push('\n');
+            }
+            self.doc.push_str(&other.doc);
+        }
+
         self
     }
 
@@ -1977,6 +2074,9 @@ impl Module {
         }
 
         module.set_id(ast.source_raw().clone());
+
+        #[cfg(feature = "metadata")]
+        module.set_doc(ast.doc());
 
         module.build_index();
 

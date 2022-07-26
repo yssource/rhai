@@ -1,5 +1,10 @@
 //! An example showing how to register a Rust type and use it with arrays.
 
+#[cfg(any(feature = "no_index", feature = "no_object"))]
+fn main() {
+    panic!("This example does not run under 'no_index' or 'no_object'.")
+}
+
 use rhai::{Engine, EvalAltResult};
 
 #[cfg(not(feature = "no_index"))]
@@ -59,9 +64,4 @@ fn main() -> Result<(), Box<EvalAltResult>> {
     println!("{:?}", result);
 
     Ok(())
-}
-
-#[cfg(any(feature = "no_index", feature = "no_object"))]
-fn main() {
-    panic!("This example does not run under 'no_index' or 'no_object'.")
 }

@@ -1,22 +1,12 @@
 //! An example to serialize and deserialize Rust types.
 
-#[cfg(any(not(feature = "serde"), feature = "no_object"))]
+#[cfg(feature = "no_object")]
 fn main() {
-    println!("This example requires the 'serde' feature to run.");
-    println!("Try: cargo run --features serde --example serde");
+    panic!("This example does not run under 'no_object'.")
 }
 
-#[cfg(feature = "serde")]
 #[cfg(not(feature = "no_object"))]
 fn main() {
-    example::ser();
-    println!();
-    example::de();
-}
-
-#[cfg(feature = "serde")]
-#[cfg(not(feature = "no_object"))]
-mod example {
     use rhai::serde::{from_dynamic, to_dynamic};
     use rhai::{Dynamic, Engine, Map};
     use serde::{Deserialize, Serialize};
@@ -60,13 +50,13 @@ mod example {
         let result: Dynamic = engine
             .eval(
                 r#"
-                    #{
-                        a: 42,
-                        b: [ "hello", "world" ],
-                        c: true,
-                        d: #{ x: 123.456, y: 999.0 }
-                    }
-                "#,
+                        #{
+                            a: 42,
+                            b: [ "hello", "world" ],
+                            c: true,
+                            d: #{ x: 123.456, y: 999.0 }
+                        }
+                    "#,
             )
             .unwrap();
 
@@ -89,4 +79,8 @@ mod example {
         );
         println!("Deserialized to struct: {:#?}", x);
     }
+
+    ser();
+    println!();
+    de();
 }
