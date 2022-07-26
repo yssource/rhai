@@ -1,7 +1,7 @@
 use crate::{
     module::FuncInfo, plugin::*, tokenizer::is_valid_function_name, Engine, Module, Scope,
 };
-use core::{fmt, iter};
+use core::{cmp::Ordering, fmt, iter};
 
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -223,7 +223,15 @@ impl Module {
         }
 
         let mut func_infos = self.iter_fn().collect::<Vec<_>>();
-        func_infos.sort_by(|a, b| a.metadata.name.cmp(&b.metadata.name));
+        func_infos.sort_by(|a, b| match a.metadata.name.cmp(&b.metadata.name) {
+            Ordering::Equal => match a.metadata.params.cmp(&b.metadata.params) {
+                Ordering::Equal => (a.metadata.params_info.join("")
+                    + a.metadata.return_type.as_str())
+                .cmp(&(b.metadata.params_info.join("") + b.metadata.return_type.as_str())),
+                o => o,
+            },
+            o => o,
+        });
 
         for f in func_infos {
             if !first {
