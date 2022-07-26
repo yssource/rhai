@@ -1,43 +1,45 @@
 //! Implementation of the Event Handler With State Pattern - JS Style
-use rhai::{Dynamic, Engine, Scope, AST};
 
-#[cfg(not(feature = "no_object"))]
-use rhai::Map;
-
-use std::io::{stdin, stdout, Write};
-
-const SCRIPT_FILE: &str = "event_handler_js/script.rhai";
-
-#[derive(Debug)]
-struct Handler {
-    pub engine: Engine,
-    pub scope: Scope<'static>,
-    pub states: Dynamic,
-    pub ast: AST,
-}
-
-fn print_scope(scope: &Scope) {
-    for (i, (name, constant, value)) in scope.iter_raw().enumerate() {
-        #[cfg(not(feature = "no_closure"))]
-        let value_is_shared = if value.is_shared() { " (shared)" } else { "" };
-        #[cfg(feature = "no_closure")]
-        let value_is_shared = "";
-
-        println!(
-            "[{}] {}{}{} = {:?}",
-            i + 1,
-            if constant { "const " } else { "" },
-            name,
-            value_is_shared,
-            *value.read_lock::<Dynamic>().unwrap(),
-        )
-    }
-    println!();
+#[cfg(any(feature = "no_function", feature = "no_object"))]
+pub fn main() {
+    panic!("This example does not run under 'no_function' or 'no_object'.")
 }
 
 #[cfg(not(feature = "no_function"))]
 #[cfg(not(feature = "no_object"))]
 pub fn main() {
+    use rhai::{Dynamic, Engine, Map, Scope, AST};
+    use std::io::{stdin, stdout, Write};
+
+    const SCRIPT_FILE: &str = "event_handler_js/script.rhai";
+
+    #[derive(Debug)]
+    struct Handler {
+        pub engine: Engine,
+        pub scope: Scope<'static>,
+        pub states: Dynamic,
+        pub ast: AST,
+    }
+
+    fn print_scope(scope: &Scope) {
+        for (i, (name, constant, value)) in scope.iter_raw().enumerate() {
+            #[cfg(not(feature = "no_closure"))]
+            let value_is_shared = if value.is_shared() { " (shared)" } else { "" };
+            #[cfg(feature = "no_closure")]
+            let value_is_shared = "";
+
+            println!(
+                "[{}] {}{}{} = {:?}",
+                i + 1,
+                if constant { "const " } else { "" },
+                name,
+                value_is_shared,
+                *value.read_lock::<Dynamic>().unwrap(),
+            )
+        }
+        println!();
+    }
+
     println!("Events Handler Example - JS Style");
     println!("==================================");
 
@@ -157,9 +159,4 @@ pub fn main() {
     }
 
     println!("Bye!");
-}
-
-#[cfg(any(feature = "no_function", feature = "no_object"))]
-pub fn main() {
-    panic!("This example does not run under 'no_function' or 'no_object'.")
 }

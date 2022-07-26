@@ -82,6 +82,10 @@ name = "rhai-run"
 name = "rhai-dbg"
 required-features = ["debugging"]
 
+[[example]]
+name = "serde"
+required-features = ["serde"]
+
 [profile.release]
 lto = "fat"
 codegen-units = 1
