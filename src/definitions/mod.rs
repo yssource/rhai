@@ -86,6 +86,9 @@ impl<'e> Definitions<'e> {
 
         fs::create_dir_all(path)?;
 
+        fs::write(path.join("__builtin__.d.rhai"), include_bytes!("builtin.d.rhai"))?;
+        fs::write(path.join("__builtin-operators__.d.rhai"), include_bytes!("builtin-operators.d.rhai"))?;
+
         fs::write(path.join("__static__.d.rhai"), self.static_module())?;
 
         if self.scope.is_some() {
