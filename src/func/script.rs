@@ -88,7 +88,7 @@ impl Engine {
         let orig_call_stack_len = global.debugger.call_stack().len();
 
         // Put arguments into scope as variables
-        scope.extend(fn_def.params.iter().cloned().zip(args.into_iter().map(|v| {
+        scope.extend(fn_def.params.iter().cloned().zip(args.iter_mut().map(|v| {
             // Actually consume the arguments instead of cloning them
             mem::take(*v)
         })));
@@ -98,11 +98,7 @@ impl Engine {
         if self.debugger.is_some() {
             global.debugger.push_call_stack_frame(
                 fn_def.name.clone(),
-                scope
-                    .iter()
-                    .skip(orig_scope_len)
-                    .map(|(.., v)| v.clone())
-                    .collect(),
+                scope.iter().skip(orig_scope_len).map(|(.., v)| v).collect(),
                 global.source.clone(),
                 pos,
             );

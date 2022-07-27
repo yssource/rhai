@@ -28,7 +28,6 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    #[must_use]
     pub fn definitions(&self) -> Definitions {
         Definitions {
             engine: self,
@@ -54,7 +53,6 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    #[must_use]
     pub fn definitions_with_scope<'e>(&'e self, scope: &'e Scope<'e>) -> Definitions<'e> {
         Definitions {
             engine: self,
@@ -112,7 +110,6 @@ impl<'e> Definitions<'e> {
     ///
     /// The returned iterator yields all definition files as (filename, content) pairs.
     #[inline]
-    #[must_use]
     pub fn iter_files(&self) -> impl Iterator<Item = (String, String)> + '_ {
         IntoIterator::into_iter([
             (
@@ -182,7 +179,6 @@ impl<'e> Definitions<'e> {
     ///
     /// Always starts with `module <module name>;`.
     #[cfg(not(feature = "no_module"))]
-    #[must_use]
     pub fn modules(&self) -> impl Iterator<Item = (String, String)> + '_ {
         let mut m = self
             .engine

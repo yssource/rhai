@@ -265,10 +265,8 @@ impl ParseSettings {
     #[cfg(not(feature = "unchecked"))]
     #[inline]
     pub fn ensure_level_within_max_limit(&self, limit: usize) -> ParseResult<()> {
-        if limit > 0 {
-            if self.level > limit {
-                return Err(PERR::ExprTooDeep.into_err(self.pos));
-            }
+        if limit > 0 && self.level > limit {
+            return Err(PERR::ExprTooDeep.into_err(self.pos));
         }
         Ok(())
     }
@@ -531,11 +529,14 @@ impl Engine {
                     #[cfg(any(feature = "no_function", feature = "no_module"))]
                     let is_global = false;
 
-                    if settings.options.contains(LangOptions::STRICT_VAR) && index.is_none() {
-                        if !is_global && !self.global_sub_modules.contains_key(root) {
-                            return Err(PERR::ModuleUndefined(root.to_string())
-                                .into_err(namespace.position()));
-                        }
+                    if settings.options.contains(LangOptions::STRICT_VAR)
+                        && index.is_none()
+                        && !is_global
+                        && !self.global_sub_modules.contains_key(root)
+                    {
+                        return Err(
+                            PERR::ModuleUndefined(root.to_string()).into_err(namespace.position())
+                        );
                     }
 
                     namespace.set_index(index);
@@ -595,11 +596,13 @@ impl Engine {
                         #[cfg(any(feature = "no_function", feature = "no_module"))]
                         let is_global = false;
 
-                        if settings.options.contains(LangOptions::STRICT_VAR) && index.is_none() {
-                            if !is_global && !self.global_sub_modules.contains_key(root) {
-                                return Err(PERR::ModuleUndefined(root.to_string())
-                                    .into_err(namespace.position()));
-                            }
+                        if settings.options.contains(LangOptions::STRICT_VAR)
+                            && index.is_none()
+                            && !is_global
+                            && !self.global_sub_modules.contains_key(root)
+                        {
+                            return Err(PERR::ModuleUndefined(root.to_string())
+                                .into_err(namespace.position()));
                         }
 
                         namespace.set_index(index);
@@ -1755,11 +1758,14 @@ impl Engine {
                     #[cfg(any(feature = "no_function", feature = "no_module"))]
                     let is_global = false;
 
-                    if settings.options.contains(LangOptions::STRICT_VAR) && index.is_none() {
-                        if !is_global && !self.global_sub_modules.contains_key(root) {
-                            return Err(PERR::ModuleUndefined(root.to_string())
-                                .into_err(namespace.position()));
-                        }
+                    if settings.options.contains(LangOptions::STRICT_VAR)
+                        && index.is_none()
+                        && !is_global
+                        && !self.global_sub_modules.contains_key(root)
+                    {
+                        return Err(
+                            PERR::ModuleUndefined(root.to_string()).into_err(namespace.position())
+                        );
                     }
 
                     namespace.set_index(index);
@@ -2519,13 +2525,13 @@ impl Engine {
         const KEYWORD_SEMICOLON: &str = Token::SemiColon.literal_syntax();
         const KEYWORD_CLOSE_BRACE: &str = Token::RightBrace.literal_syntax();
 
-        let self_terminated = match required_token.as_str() {
+        let self_terminated = matches!(
+            required_token.as_str(),
             // It is self-terminating if the last symbol is a block
-            CUSTOM_SYNTAX_MARKER_BLOCK => true,
+            CUSTOM_SYNTAX_MARKER_BLOCK |
             // If the last symbol is `;` or `}`, it is self-terminating
-            KEYWORD_SEMICOLON | KEYWORD_CLOSE_BRACE => true,
-            _ => false,
-        };
+            KEYWORD_SEMICOLON | KEYWORD_CLOSE_BRACE
+        );
 
         Ok(Expr::Custom(
             crate::ast::CustomExpr {
@@ -2794,12 +2800,12 @@ impl Engine {
         // let name ...
         let (name, pos) = parse_var_name(input)?;
 
-        if !self.allow_shadowing() && state.stack.iter().any(|(v, ..)| v == &name) {
+        if !self.allow_shadowing() && state.stack.iter().any(|(v, ..)| v == name) {
             return Err(PERR::VariableExists(name.to_string()).into_err(pos));
         }
 
         if let Some(ref filter) = self.def_var_filter {
-            let will_shadow = state.stack.iter().any(|(v, ..)| v == &name);
+            let will_shadow = state.stack.iter().any(|(v, ..)| v == name);
             let level = settings.level;
             let is_const = access == AccessMode::ReadOnly;
             let info = VarDefInfo {
@@ -3192,7 +3198,6 @@ impl Engine {
                             level: 0,
                             options,
                             pos,
-                            ..settings
                         };
 
                         let func = self.parse_fn(

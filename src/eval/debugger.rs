@@ -441,7 +441,6 @@ impl Engine {
     ///
     /// It is up to the [`Engine`] to reactivate the debugger.
     #[inline(always)]
-    #[must_use]
     pub(crate) fn run_debugger_with_reset<'a>(
         &self,
         scope: &mut Scope,
@@ -464,7 +463,6 @@ impl Engine {
     ///
     /// It is up to the [`Engine`] to reactivate the debugger.
     #[inline]
-    #[must_use]
     pub(crate) fn run_debugger_with_reset_raw<'a>(
         &self,
         scope: &mut Scope,
@@ -514,7 +512,6 @@ impl Engine {
     ///
     /// It is up to the [`Engine`] to reactivate the debugger.
     #[inline]
-    #[must_use]
     pub(crate) fn run_debugger_raw<'a>(
         &self,
         scope: &mut Scope,

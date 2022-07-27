@@ -212,26 +212,21 @@ fn optimize_stmt_block(
     };
 
     // Flatten blocks
-    loop {
-        if let Some(n) = statements.iter().position(|s| match s {
-            Stmt::Block(block, ..) if !block.iter().any(Stmt::is_block_dependent) => true,
-            _ => false,
-        }) {
-            let (first, second) = statements.split_at_mut(n);
-            let stmt = mem::take(&mut second[0]);
-            let mut stmts = match stmt {
-                Stmt::Block(block, ..) => block,
-                stmt => unreachable!("Stmt::Block expected but gets {:?}", stmt),
-            };
-            statements = first
-                .iter_mut()
-                .map(mem::take)
-                .chain(stmts.iter_mut().map(mem::take))
-                .chain(second.iter_mut().skip(1).map(mem::take))
-                .collect();
-        } else {
-            break;
-        }
+    while let Some(n) = statements.iter().position(
+        |s| matches!(s, Stmt::Block(block, ..) if !block.iter().any(Stmt::is_block_dependent)),
+    ) {
+        let (first, second) = statements.split_at_mut(n);
+        let stmt = mem::take(&mut second[0]);
+        let mut stmts = match stmt {
+            Stmt::Block(block, ..) => block,
+            stmt => unreachable!("Stmt::Block expected but gets {:?}", stmt),
+        };
+        statements = first
+            .iter_mut()
+            .map(mem::take)
+            .chain(stmts.iter_mut().map(mem::take))
+            .chain(second.iter_mut().skip(1).map(mem::take))
+            .collect();
 
         is_dirty = true;
     }
@@ -606,7 +601,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                         .iter()
                         .all(|r| expressions[r.index()].is_always_true())
                 {
-                    for r in ranges.iter().filter(|r| r.contains(value)) {
+                    if let Some(r) = ranges.iter().find(|r| r.contains(value)) {
                         let range_block = &mut expressions[r.index()];
 
                         if range_block.is_always_true() {
@@ -698,11 +693,9 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                 optimize_expr(&mut b.condition, state, false);
                 optimize_expr(&mut b.expr, state, false);
 
-                if b.is_always_false() {
-                    if !b.expr.is_unit() {
-                        b.expr = Expr::Unit(b.expr.position());
-                        state.set_dirty();
-                    }
+                if b.is_always_false() && !b.expr.is_unit() {
+                    b.expr = Expr::Unit(b.expr.position());
+                    state.set_dirty();
                 }
             }
 
@@ -958,10 +951,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
             ***x = optimize_stmt_block(mem::take(&mut **x), state, true, true, false);
 
             // { Stmt(Expr) } - promote
-            match &mut ****x {
-                [ Stmt::Expr(e) ] => { state.set_dirty(); *expr = mem::take(e); }
-                _ => ()
-            }
+            if let [ Stmt::Expr(e) ] = &mut ****x { state.set_dirty(); *expr = mem::take(e); }
         }
         // ()?.rhs
         #[cfg(not(feature = "no_object"))]
@@ -1010,11 +1000,11 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
                 *expr = result;
             }
             // array[-int]
-            (Expr::Array(a, pos), Expr::IntegerConstant(i, ..)) if *i < 0 && i.checked_abs().map(|n| n as usize <= a.len()).unwrap_or(false) && a.iter().all(Expr::is_pure) => {
+            (Expr::Array(a, pos), Expr::IntegerConstant(i, ..)) if *i < 0 && i.unsigned_abs() as usize <= a.len() && a.iter().all(Expr::is_pure) => {
                 // Array literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                let index = a.len() - i.abs() as usize;
+                let index = a.len() - i.unsigned_abs() as usize;
                 let mut result = mem::take(&mut a[index]);
                 result.set_position(*pos);
                 *expr = result;
@@ -1035,10 +1025,10 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
                 *expr = Expr::BoolConstant((*n & (1 << (*i as usize))) != 0, *pos);
             }
             // int[-int]
-            (Expr::IntegerConstant(n, pos), Expr::IntegerConstant(i, ..)) if *i < 0 && i.checked_abs().map(|i| i as usize <= crate::INT_BITS).unwrap_or(false) => {
+            (Expr::IntegerConstant(n, pos), Expr::IntegerConstant(i, ..)) if *i < 0 && i.unsigned_abs() as usize <= crate::INT_BITS => {
                 // Bit-field literal indexing - get the bit
                 state.set_dirty();
-                *expr = Expr::BoolConstant((*n & (1 << (crate::INT_BITS - i.abs() as usize))) != 0, *pos);
+                *expr = Expr::BoolConstant((*n & (1 << (crate::INT_BITS - i.unsigned_abs() as usize))) != 0, *pos);
             }
             // string[int]
             (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, ..)) if *i >= 0 && (*i as usize) < s.chars().count() => {
@@ -1047,10 +1037,10 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
                 *expr = Expr::CharConstant(s.chars().nth(*i as usize).unwrap(), *pos);
             }
             // string[-int]
-            (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, ..)) if *i < 0 && i.checked_abs().map(|n| n as usize <= s.chars().count()).unwrap_or(false) => {
+            (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, ..)) if *i < 0 && i.unsigned_abs() as usize <= s.chars().count() => {
                 // String literal indexing - get the character
                 state.set_dirty();
-                *expr = Expr::CharConstant(s.chars().rev().nth(i.abs() as usize - 1).unwrap(), *pos);
+                *expr = Expr::CharConstant(s.chars().rev().nth(i.unsigned_abs() as usize - 1).unwrap(), *pos);
             }
             // var[rhs]
             (Expr::Variable(..), rhs) => optimize_expr(rhs, state, true),

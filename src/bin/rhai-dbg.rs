@@ -29,7 +29,7 @@ fn print_source(lines: &[String], pos: Position, offset: usize, window: (usize, 
             println!("{0:>1$}", "^", pos + offset + line_no_len + 2);
         }
     } else {
-        for n in start..=end {
+        for (n, s) in lines.iter().enumerate().take(end + 1).skip(start) {
             let marker = if n == line { "> " } else { "  " };
 
             println!(
@@ -38,7 +38,7 @@ fn print_source(lines: &[String], pos: Position, offset: usize, window: (usize, 
                 marker,
                 n + 1,
                 line_no_len,
-                lines[n],
+                s,
                 if n == line { "\x1b[39m" } else { "" },
             );
 
@@ -161,7 +161,7 @@ fn print_debug_help() {
 
 // Load script to debug.
 fn load_script(engine: &Engine) -> (rhai::AST, String) {
-    if let Some(filename) = env::args().skip(1).next() {
+    if let Some(filename) = env::args().nth(1) {
         let mut contents = String::new();
 
         let filename = match Path::new(&filename).canonicalize() {
@@ -301,12 +301,7 @@ fn debug_callback(
 
         match stdin().read_line(&mut input) {
             Ok(0) => break Ok(DebuggerCommand::Continue),
-            Ok(_) => match input
-                .trim()
-                .split_whitespace()
-                .collect::<Vec<_>>()
-                .as_slice()
-            {
+            Ok(_) => match input.split_whitespace().collect::<Vec<_>>().as_slice() {
                 ["help" | "h"] => print_debug_help(),
                 ["exit" | "quit" | "q" | "kill", ..] => {
                     println!("Script terminated. Bye!");
@@ -328,14 +323,14 @@ fn debug_callback(
                 ["source"] => {
                     println!("{}", context.global_runtime_state().source().unwrap_or(""))
                 }
-                ["list" | "l"] => print_current_source(&mut context, source, pos, &lines, (3, 6)),
+                ["list" | "l"] => print_current_source(&mut context, source, pos, lines, (3, 6)),
                 ["list" | "l", n] if n.parse::<usize>().is_ok() => {
                     let num = n.parse::<usize>().unwrap();
-                    if num <= 0 || num > lines.len() {
+                    if num == 0 || num > lines.len() {
                         eprintln!("\x1b[31mInvalid line: {}\x1b[39m", num);
                     } else {
                         let pos = Position::new(num as u16, 0);
-                        print_current_source(&mut context, source, pos, &lines, (3, 6));
+                        print_current_source(&mut context, source, pos, lines, (3, 6));
                     }
                 }
                 ["continue" | "c"] => break Ok(DebuggerCommand::Continue),
@@ -405,7 +400,7 @@ fn debug_callback(
                         rhai::debugger::BreakPoint::AtPosition { pos, .. } => {
                             let line_num = format!("[{}] line ", i + 1);
                             print!("{}", line_num);
-                            print_source(&lines, *pos, line_num.len(), (0, 0));
+                            print_source(lines, *pos, line_num.len(), (0, 0));
                         }
                         _ => println!("[{}] {}", i + 1, bp),
                     },
@@ -580,7 +575,7 @@ fn debug_callback(
                     break Err(EvalAltResult::ErrorRuntime(value, pos).into());
                 }
                 ["throw", ..] => {
-                    let msg = input.trim().splitn(2, ' ').skip(1).next().unwrap_or("");
+                    let msg = input.trim().split_once(' ').map(|(_, x)| x).unwrap_or("");
                     break Err(EvalAltResult::ErrorRuntime(msg.trim().into(), pos).into());
                 }
                 ["run" | "r"] => {

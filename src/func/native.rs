@@ -37,17 +37,14 @@ pub use std::sync::Arc as Shared;
 
 /// Synchronized shared object.
 #[cfg(not(feature = "sync"))]
-#[allow(dead_code)]
 pub use std::cell::RefCell as Locked;
 
 /// Read-only lock guard for synchronized shared object.
 #[cfg(not(feature = "sync"))]
-#[allow(dead_code)]
 pub type LockGuard<'a, T> = std::cell::Ref<'a, T>;
 
 /// Mutable lock guard for synchronized shared object.
 #[cfg(not(feature = "sync"))]
-#[allow(dead_code)]
 pub type LockGuardMut<'a, T> = std::cell::RefMut<'a, T>;
 
 /// Synchronized shared object.
@@ -397,7 +394,7 @@ pub fn shared_take<T>(value: Shared<T>) -> T {
 #[inline(always)]
 #[must_use]
 #[allow(dead_code)]
-pub fn locked_read<'a, T>(value: &'a Locked<T>) -> LockGuard<'a, T> {
+pub fn locked_read<T>(value: &Locked<T>) -> LockGuard<T> {
     #[cfg(not(feature = "sync"))]
     return value.borrow();
 
@@ -409,7 +406,7 @@ pub fn locked_read<'a, T>(value: &'a Locked<T>) -> LockGuard<'a, T> {
 #[inline(always)]
 #[must_use]
 #[allow(dead_code)]
-pub fn locked_write<'a, T>(value: &'a Locked<T>) -> LockGuardMut<'a, T> {
+pub fn locked_write<T>(value: &Locked<T>) -> LockGuardMut<T> {
     #[cfg(not(feature = "sync"))]
     return value.borrow_mut();
 

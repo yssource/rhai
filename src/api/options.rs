@@ -9,24 +9,24 @@ bitflags! {
     /// Bit-flags containing all language options for the [`Engine`].
     pub struct LangOptions: u8 {
         /// Is `if`-expression allowed?
-        const IF_EXPR = 0b_00000001;
+        const IF_EXPR = 0b_0000_0001;
         /// Is `switch` expression allowed?
-        const SWITCH_EXPR = 0b_00000010;
+        const SWITCH_EXPR = 0b_0000_0010;
         /// Is statement-expression allowed?
-        const STMT_EXPR = 0b_00000100;
+        const STMT_EXPR = 0b_0000_0100;
         /// Is anonymous function allowed?
         #[cfg(not(feature = "no_function"))]
-        const ANON_FN = 0b_00001000;
+        const ANON_FN = 0b_0000_1000;
         /// Is looping allowed?
-        const LOOPING = 0b_00010000;
+        const LOOPING = 0b_0001_0000;
         /// Is variables shadowing allowed?
-        const SHADOW = 0b_00100000;
+        const SHADOW = 0b_0010_0000;
         /// Strict variables mode?
-        const STRICT_VAR = 0b_01000000;
+        const STRICT_VAR = 0b_0100_0000;
         /// Raise error if an object map property does not exist?
         /// Returns `()` if `false`.
         #[cfg(not(feature = "no_object"))]
-        const FAIL_ON_INVALID_MAP_PROPERTY = 0b_10000000;
+        const FAIL_ON_INVALID_MAP_PROPERTY = 0b_1000_0000;
     }
 }
 

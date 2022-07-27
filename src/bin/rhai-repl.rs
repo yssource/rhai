@@ -158,7 +158,7 @@ fn load_script_files(engine: &mut Engine) {
             .map_err(|err| err.into())
             .and_then(|mut ast| {
                 ast.set_source(filename.to_string_lossy().to_string());
-                Module::eval_ast_as_new(Scope::new(), &ast, &engine)
+                Module::eval_ast_as_new(Scope::new(), &ast, engine)
             }) {
             Err(err) => {
                 let filename = filename.to_string_lossy();
@@ -166,7 +166,7 @@ fn load_script_files(engine: &mut Engine) {
                 eprintln!("{:=<1$}", "", filename.len());
                 eprintln!("{}", filename);
                 eprintln!("{:=<1$}", "", filename.len());
-                eprintln!("");
+                eprintln!();
 
                 print_error(&contents, *err);
                 exit(1);
@@ -353,7 +353,7 @@ fn main() {
 
                 match rl.readline(prompt) {
                     // Line continuation
-                    Ok(mut line) if line.ends_with("\\") => {
+                    Ok(mut line) if line.ends_with('\\') => {
                         line.pop();
                         input += &line;
                         input.push('\n');
@@ -361,10 +361,12 @@ fn main() {
                     Ok(line) => {
                         input += &line;
                         let cmd = input.trim();
-                        if !cmd.is_empty() && !cmd.starts_with('!') && cmd.trim() != "history" {
-                            if rl.add_history_entry(input.clone()) {
-                                history_offset += 1;
-                            }
+                        if !cmd.is_empty()
+                            && !cmd.starts_with('!')
+                            && cmd.trim() != "history"
+                            && rl.add_history_entry(input.clone())
+                        {
+                            history_offset += 1;
                         }
                         break;
                     }

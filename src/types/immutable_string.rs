@@ -170,14 +170,14 @@ impl<'a> FromIterator<&'a str> for ImmutableString {
     }
 }
 
-impl<'a> FromIterator<String> for ImmutableString {
+impl FromIterator<String> for ImmutableString {
     #[inline]
     fn from_iter<T: IntoIterator<Item = String>>(iter: T) -> Self {
         Self(iter.into_iter().collect::<SmartString>().into())
     }
 }
 
-impl<'a> FromIterator<SmartString> for ImmutableString {
+impl FromIterator<SmartString> for ImmutableString {
     #[inline]
     fn from_iter<T: IntoIterator<Item = SmartString>>(iter: T) -> Self {
         Self(iter.into_iter().collect::<SmartString>().into())

@@ -128,10 +128,9 @@ impl FuncInfo {
 
         let typ = typ.trim();
 
-        if typ.starts_with("rhai::") {
-            return Self::format_type(&typ[6..], is_return_type);
-        } else if typ.starts_with("&mut ") {
-            let x = &typ[5..];
+        if let Some(x) = typ.strip_prefix("rhai::") {
+            return Self::format_type(x, is_return_type);
+        } else if let Some(x) = typ.strip_prefix("&mut ") {
             let r = Self::format_type(x, false);
             return if r == x {
                 typ.into()
@@ -1896,7 +1895,6 @@ impl Module {
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "internals")]
     #[inline(always)]
-    #[must_use]
     pub fn iter_script_fn_info(
         &self,
     ) -> impl Iterator<

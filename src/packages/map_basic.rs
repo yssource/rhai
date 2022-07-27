@@ -93,7 +93,7 @@ mod map_functions {
     /// ```
     pub fn remove(map: &mut Map, property: &str) -> Dynamic {
         if !map.is_empty() {
-            map.remove(property).unwrap_or_else(|| Dynamic::UNIT)
+            map.remove(property).unwrap_or(Dynamic::UNIT)
         } else {
             Dynamic::UNIT
         }

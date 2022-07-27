@@ -96,16 +96,11 @@ impl<T: Debug + Copy + PartialOrd> Iterator for StepRange<T> {
 
         self.from = (self.add)(self.from, self.step)?;
 
-        if self.dir > 0 {
-            if self.from >= self.to {
-                self.dir = 0;
-            }
-        } else if self.dir < 0 {
-            if self.from <= self.to {
-                self.dir = 0;
-            }
-        } else {
-            unreachable!("`dir` != 0");
+        match self.dir.cmp(&0) {
+            Ordering::Greater if self.from >= self.to => self.dir = 0,
+            Ordering::Less if self.from <= self.to => self.dir = 0,
+            Ordering::Equal => unreachable!("`dir` != 0"),
+            _ => (),
         }
 
         Some(v)
@@ -184,28 +179,15 @@ impl CharsStream {
                 0,
             );
         }
-        #[cfg(not(feature = "unchecked"))]
-        return if let Some(abs_from) = from.checked_abs() {
-            let num_chars = string.chars().count();
-            let offset = if num_chars < (abs_from as usize) {
-                0
-            } else {
-                num_chars - (abs_from as usize)
-            };
-            Self(string.chars().skip(offset).take(len as usize).collect(), 0)
-        } else {
-            Self(string.chars().skip(0).take(len as usize).collect(), 0)
-        };
 
-        #[cfg(feature = "unchecked")]
-        return Self(
-            string
-                .chars()
-                .skip(from as usize)
-                .take(len as usize)
-                .collect(),
-            0,
-        );
+        let abs_from = from.unsigned_abs() as usize;
+        let num_chars = string.chars().count();
+        let offset = if num_chars < abs_from {
+            0
+        } else {
+            num_chars - abs_from
+        };
+        Self(string.chars().skip(offset).take(len as usize).collect(), 0)
     }
 }
 

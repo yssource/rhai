@@ -453,7 +453,7 @@ impl Engine {
 
             // Check the data size of any `&mut` object, which may be changed.
             #[cfg(not(feature = "unchecked"))]
-            if is_ref_mut && args.len() > 0 {
+            if is_ref_mut && !args.is_empty() {
                 self.check_data_size(args[0], pos)?;
             }
 
@@ -1180,7 +1180,7 @@ impl Engine {
         if capture_scope && !scope.is_empty() {
             first_arg
                 .iter()
-                .map(|&v| v)
+                .copied()
                 .chain(a_expr.iter())
                 .try_for_each(|expr| {
                     self.get_arg_value(scope, global, caches, lib, this_ptr, expr, level)

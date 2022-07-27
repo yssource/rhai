@@ -290,7 +290,7 @@ pub mod array_functions {
         if array.is_empty() {
             Dynamic::UNIT
         } else {
-            array.pop().unwrap_or_else(|| Dynamic::UNIT)
+            array.pop().unwrap_or(Dynamic::UNIT)
         }
     }
     /// Remove the first element from the array and return it.
@@ -1344,7 +1344,7 @@ pub mod array_functions {
         array.dedup_by(|x, y| {
             comparer
                 .call_raw(&ctx, None, [y.clone(), x.clone()])
-                .unwrap_or_else(|_| Dynamic::FALSE)
+                .unwrap_or(Dynamic::FALSE)
                 .as_bool()
                 .unwrap_or(false)
         });

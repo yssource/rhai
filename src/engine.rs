@@ -322,22 +322,19 @@ impl Engine {
 
     /// Check a result to ensure that it is valid.
     pub(crate) fn check_return_value(&self, mut result: RhaiResult, _pos: Position) -> RhaiResult {
-        match result {
-            Ok(ref mut r) => {
-                // Concentrate all empty strings into one instance to save memory
-                if let Dynamic(Union::Str(s, ..)) = r {
-                    if s.is_empty() {
-                        if !s.ptr_eq(&self.empty_string) {
-                            *s = self.const_empty_string();
-                        }
-                        return result;
+        if let Ok(ref mut r) = result {
+            // Concentrate all empty strings into one instance to save memory
+            if let Dynamic(Union::Str(s, ..)) = r {
+                if s.is_empty() {
+                    if !s.ptr_eq(&self.empty_string) {
+                        *s = self.const_empty_string();
                     }
+                    return result;
                 }
-
-                #[cfg(not(feature = "unchecked"))]
-                self.check_data_size(r, _pos)?;
             }
-            _ => (),
+
+            #[cfg(not(feature = "unchecked"))]
+            self.check_data_size(r, _pos)?;
         }
 
         result

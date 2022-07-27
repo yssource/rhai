@@ -20,6 +20,7 @@ use std::{ops::AddAssign, slice::Iter, vec::IntoIter};
 /// let mut engine = Engine::new();
 /// engine.set_module_resolver(collection);
 /// ```
+#[derive(Default)]
 pub struct ModuleResolversCollection(Vec<Box<dyn ModuleResolver>>);
 
 impl ModuleResolversCollection {
@@ -41,7 +42,7 @@ impl ModuleResolversCollection {
     /// ```
     #[inline(always)]
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self(Vec::new())
     }
     /// Append a [module resolver][ModuleResolver] to the end.

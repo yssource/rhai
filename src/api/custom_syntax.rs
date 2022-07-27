@@ -270,11 +270,10 @@ impl Engine {
                     // Make it a custom keyword/symbol if it is disabled or reserved
                     if (!self.disabled_symbols.is_empty() && self.disabled_symbols.contains(s))
                         || token.map_or(false, |v| v.is_reserved())
+                            && self.custom_keywords.is_empty()
+                        || !self.custom_keywords.contains_key(s)
                     {
-                        if self.custom_keywords.is_empty() || !self.custom_keywords.contains_key(s)
-                        {
-                            self.custom_keywords.insert(s.into(), None);
-                        }
+                        self.custom_keywords.insert(s.into(), None);
                     }
                     s.into()
                 }

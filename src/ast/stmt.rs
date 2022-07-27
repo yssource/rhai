@@ -158,19 +158,13 @@ impl ConditionalExpr {
     #[inline(always)]
     #[must_use]
     pub fn is_always_true(&self) -> bool {
-        match self.condition {
-            Expr::BoolConstant(true, ..) => true,
-            _ => false,
-        }
+        matches!(self.condition, Expr::BoolConstant(true, ..))
     }
     /// Is the condition always `false`?
     #[inline(always)]
     #[must_use]
     pub fn is_always_false(&self) -> bool {
-        match self.condition {
-            Expr::BoolConstant(false, ..) => true,
-            _ => false,
-        }
+        matches!(self.condition, Expr::BoolConstant(false, ..))
     }
 }
 
@@ -388,7 +382,6 @@ impl StmtBlock {
     }
     /// Get an iterator over the statements of this statements block.
     #[inline(always)]
-    #[must_use]
     pub fn iter(&self) -> impl Iterator<Item = &Stmt> {
         self.block.iter()
     }

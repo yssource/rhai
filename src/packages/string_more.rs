@@ -534,20 +534,17 @@ mod string_functions {
         }
 
         let start = if start < 0 {
-            if let Some(n) = start.checked_abs() {
-                let chars: Vec<_> = string.chars().collect();
-                let num_chars = chars.len();
-                if n as usize > num_chars {
-                    0
-                } else {
-                    chars
-                        .into_iter()
-                        .take(num_chars - n as usize)
-                        .collect::<String>()
-                        .len()
-                }
-            } else {
+            let abs_start = start.unsigned_abs() as usize;
+            let chars: Vec<_> = string.chars().collect();
+            let num_chars = chars.len();
+            if abs_start > num_chars {
                 0
+            } else {
+                chars
+                    .into_iter()
+                    .take(num_chars - abs_start)
+                    .collect::<String>()
+                    .len()
             }
         } else if start == 0 {
             0
@@ -615,20 +612,17 @@ mod string_functions {
         }
 
         let start = if start < 0 {
-            if let Some(n) = start.checked_abs() {
-                let chars = string.chars().collect::<Vec<_>>();
-                let num_chars = chars.len();
-                if n as usize > num_chars {
-                    0
-                } else {
-                    chars
-                        .into_iter()
-                        .take(num_chars - n as usize)
-                        .collect::<String>()
-                        .len()
-                }
-            } else {
+            let abs_start = start.unsigned_abs() as usize;
+            let chars = string.chars().collect::<Vec<_>>();
+            let num_chars = chars.len();
+            if abs_start > num_chars {
                 0
+            } else {
+                chars
+                    .into_iter()
+                    .take(num_chars - abs_start)
+                    .collect::<String>()
+                    .len()
             }
         } else if start == 0 {
             0
@@ -694,15 +688,13 @@ mod string_functions {
                 .chars()
                 .nth(index as usize)
                 .map_or_else(|| Dynamic::UNIT, Into::into)
-        } else if let Some(abs_index) = index.checked_abs() {
+        } else {
             // Count from end if negative
             string
                 .chars()
                 .rev()
-                .nth((abs_index as usize) - 1)
+                .nth((index.unsigned_abs() as usize) - 1)
                 .map_or_else(|| Dynamic::UNIT, Into::into)
-        } else {
-            Dynamic::UNIT
         }
     }
     /// Set the `index` position in the string to a new `character`.
@@ -736,11 +728,12 @@ mod string_functions {
                 .enumerate()
                 .map(|(i, ch)| if i == index { character } else { ch })
                 .collect();
-        } else if let Some(abs_index) = index.checked_abs() {
+        } else {
+            let abs_index = index.unsigned_abs() as usize;
             let string_len = string.chars().count();
 
-            if abs_index as usize <= string_len {
-                let index = string_len - (abs_index as usize);
+            if abs_index <= string_len {
+                let index = string_len - abs_index;
                 *string = string
                     .chars()
                     .enumerate()
@@ -820,15 +813,12 @@ mod string_functions {
         let offset = if string.is_empty() || len <= 0 {
             return ctx.engine().const_empty_string();
         } else if start < 0 {
-            if let Some(n) = start.checked_abs() {
-                chars.extend(string.chars());
-                if n as usize > chars.len() {
-                    0
-                } else {
-                    chars.len() - n as usize
-                }
-            } else {
+            let abs_start = start.unsigned_abs() as usize;
+            chars.extend(string.chars());
+            if abs_start > chars.len() {
                 0
+            } else {
+                chars.len() - abs_start
             }
         } else if start as usize >= string.chars().count() {
             return ctx.engine().const_empty_string();
@@ -952,15 +942,12 @@ mod string_functions {
             string.make_mut().clear();
             return;
         } else if start < 0 {
-            if let Some(n) = start.checked_abs() {
-                chars.extend(string.chars());
-                if n as usize > chars.len() {
-                    0
-                } else {
-                    chars.len() - n as usize
-                }
-            } else {
+            let abs_start = start.unsigned_abs() as usize;
+            chars.extend(string.chars());
+            if abs_start > chars.len() {
                 0
+            } else {
+                chars.len() - abs_start
             }
         } else if start as usize >= string.chars().count() {
             string.make_mut().clear();
@@ -1256,23 +1243,17 @@ mod string_functions {
         #[rhai_fn(name = "split")]
         pub fn split_at(ctx: NativeCallContext, string: &mut ImmutableString, index: INT) -> Array {
             if index <= 0 {
-                if let Some(n) = index.checked_abs() {
-                    let num_chars = string.chars().count();
-                    if n as usize > num_chars {
-                        vec![
-                            ctx.engine().const_empty_string().into(),
-                            string.as_str().into(),
-                        ]
-                    } else {
-                        let prefix: String = string.chars().take(num_chars - n as usize).collect();
-                        let prefix_len = prefix.len();
-                        vec![prefix.into(), string[prefix_len..].into()]
-                    }
-                } else {
+                let abs_index = index.unsigned_abs() as usize;
+                let num_chars = string.chars().count();
+                if abs_index > num_chars {
                     vec![
                         ctx.engine().const_empty_string().into(),
                         string.as_str().into(),
                     ]
+                } else {
+                    let prefix: String = string.chars().take(num_chars - abs_index).collect();
+                    let prefix_len = prefix.len();
+                    vec![prefix.into(), string[prefix_len..].into()]
                 }
             } else {
                 let prefix: String = string.chars().take(index as usize).collect();

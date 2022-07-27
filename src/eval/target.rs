@@ -15,9 +15,7 @@ use std::prelude::v1::*;
 #[allow(dead_code)]
 pub fn calc_offset_len(length: usize, start: crate::INT, len: crate::INT) -> (usize, usize) {
     let start = if start < 0 {
-        start.checked_abs().map_or(0, |positive_start| {
-            length - usize::min(positive_start as usize, length)
-        })
+        length - usize::min(start.unsigned_abs() as usize, length)
     } else if start as usize >= length {
         return (length, 0);
     } else {
@@ -50,20 +48,14 @@ pub fn calc_index<E>(
 ) -> Result<usize, E> {
     if start < 0 {
         if negative_count_from_end {
+            let abs_start = start.unsigned_abs() as usize;
+
             // Count from end if negative
-            #[cfg(not(feature = "unchecked"))]
-            return match start.checked_abs() {
-                Some(positive_start) => {
-                    if (positive_start as usize) > length {
-                        err()
-                    } else {
-                        Ok(length - (positive_start as usize))
-                    }
-                }
-                None => err(),
-            };
-            #[cfg(feature = "unchecked")]
-            return Ok(length - (start.abs() as usize));
+            if abs_start > length {
+                err()
+            } else {
+                Ok(length - abs_start)
+            }
         } else {
             err()
         }

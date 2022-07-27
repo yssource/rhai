@@ -374,7 +374,7 @@ impl ModuleResolver for FileModuleResolver {
         pos: Position,
     ) -> Option<RhaiResultOf<crate::AST>> {
         // Construct the script file path
-        let file_path = self.get_file_path(path, source_path.map(|s| Path::new(s)));
+        let file_path = self.get_file_path(path, source_path.map(Path::new));
 
         // Load the script file and compile it
         Some(

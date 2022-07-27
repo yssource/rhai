@@ -455,7 +455,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
                 let second = iter.next();
                 if let (Some((key, value)), None) = (first, second) {
                     visitor.visit_enum(EnumDeserializer {
-                        tag: &key,
+                        tag: key,
                         content: DynamicDeserializer::from_dynamic(value),
                     })
                 } else {

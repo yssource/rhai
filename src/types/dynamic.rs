@@ -439,7 +439,7 @@ impl Hash for Dynamic {
         mem::discriminant(&self.0).hash(state);
 
         match self.0 {
-            Union::Unit(..) => ().hash(state),
+            Union::Unit(..) => (),
             Union::Bool(ref b, ..) => b.hash(state),
             Union::Str(ref s, ..) => s.hash(state),
             Union::Char(ref c, ..) => c.hash(state),
@@ -1018,17 +1018,11 @@ impl Dynamic {
     #[must_use]
     pub fn is_read_only(&self) -> bool {
         #[cfg(not(feature = "no_closure"))]
-        match self.0 {
-            // Shared values do not consider the current access mode
-            //Union::Shared(.., ReadOnly) => return true,
-            Union::Shared(ref cell, ..) => {
-                return match locked_read(cell).access_mode() {
-                    ReadWrite => false,
-                    ReadOnly => true,
-                }
-            }
-
-            _ => (),
+        if let Union::Shared(ref cell, ..) = self.0 {
+            return match locked_read(cell).access_mode() {
+                ReadWrite => false,
+                ReadOnly => true,
+            };
         }
 
         match self.access_mode() {
@@ -1368,14 +1362,11 @@ impl Dynamic {
     #[must_use]
     pub fn is_locked(&self) -> bool {
         #[cfg(not(feature = "no_closure"))]
-        match self.0 {
-            Union::Shared(ref _cell, ..) => {
-                #[cfg(not(feature = "sync"))]
-                return _cell.try_borrow().is_err();
-                #[cfg(feature = "sync")]
-                return false;
-            }
-            _ => (),
+        if let Union::Shared(ref _cell, ..) = self.0 {
+            #[cfg(not(feature = "sync"))]
+            return _cell.try_borrow().is_err();
+            #[cfg(feature = "sync")]
+            return false;
         }
 
         false
@@ -1791,7 +1782,7 @@ impl Dynamic {
                     #[cfg(feature = "no_closure")]
                     let typ = v.type_name();
 
-                    v.try_cast::<T>().ok_or_else(|| typ)
+                    v.try_cast::<T>().ok_or(typ)
                 })
                 .collect(),
             Union::Blob(..) if TypeId::of::<T>() == TypeId::of::<u8>() => Ok(self.cast::<Vec<T>>()),
@@ -1813,7 +1804,7 @@ impl Dynamic {
                                 #[cfg(feature = "no_closure")]
                                 let typ = v.type_name();
 
-                                v.read_lock::<T>().ok_or_else(|| typ).map(|v| v.clone())
+                                v.read_lock::<T>().ok_or(typ).map(|v| v.clone())
                             })
                             .collect()
                     }

@@ -112,7 +112,7 @@ impl Clone for Scope<'_> {
                 .collect(),
             names: self.names.clone(),
             aliases: self.aliases.clone(),
-            dummy: self.dummy.clone(),
+            dummy: self.dummy,
         }
     }
 }
@@ -437,11 +437,9 @@ impl Scope<'_> {
     /// ```
     #[inline]
     pub fn is_constant(&self, name: &str) -> Option<bool> {
-        self.get_index(name).and_then(|(.., access)| {
-            Some(match access {
-                AccessMode::ReadWrite => false,
-                AccessMode::ReadOnly => true,
-            })
+        self.get_index(name).map(|(.., access)| match access {
+            AccessMode::ReadWrite => false,
+            AccessMode::ReadOnly => true,
         })
     }
     /// Update the value of the named entry in the [`Scope`] if it already exists and is not constant.
