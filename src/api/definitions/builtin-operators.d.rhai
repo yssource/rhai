@@ -1,5 +1,3 @@
-module static;
-
 op ==(int, int) -> bool;
 op !=(int, int) -> bool;
 op >(int, int) -> bool;
