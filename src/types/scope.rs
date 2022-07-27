@@ -550,6 +550,41 @@ impl Scope<'_> {
     pub fn get(&self, name: &str) -> Option<&Dynamic> {
         self.get_index(name).map(|(index, _)| &self.values[index])
     }
+    /// Remove the last entry in the [`Scope`] by the specified name and return its value.
+    ///
+    /// If the entry by the specified name is not found, [`None`] is returned.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::Scope;
+    ///
+    /// let mut my_scope = Scope::new();
+    ///
+    /// my_scope.push("x", 123_i64);        // first 'x'
+    /// my_scope.push("x", 42_i64);         // second 'x', shadows first
+    ///
+    /// assert_eq!(my_scope.len(), 2);
+    ///
+    /// let value = my_scope.remove::<i64>("x").expect("x should exist");
+    ///
+    /// assert_eq!(value, 42);
+    ///
+    /// assert_eq!(my_scope.len(), 1);
+    ///
+    /// let value = my_scope.get_value::<i64>("x").expect("x should still exist");
+    ///
+    /// assert_eq!(value, 123);
+    /// ```
+    #[inline(always)]
+    #[must_use]
+    pub fn remove<T: Variant + Clone>(&mut self, name: &str) -> Option<T> {
+        self.get_index(name).and_then(|(index, _)| {
+            self.names.remove(index);
+            self.aliases.remove(index);
+            self.values.remove(index).try_cast()
+        })
+    }
     /// Get a mutable reference to an entry in the [`Scope`].
     ///
     /// If the entry by the specified name is not found, or if it is read-only,
