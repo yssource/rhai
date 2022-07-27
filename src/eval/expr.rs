@@ -149,7 +149,7 @@ impl Engine {
             }
             _ if global.always_search_scope => (0, expr.start_position()),
             Expr::Variable(.., Some(i), pos) => (i.get() as usize, *pos),
-            Expr::Variable(v, None, pos) => (v.0.map(NonZeroUsize::get).unwrap_or(0), *pos),
+            Expr::Variable(v, None, pos) => (v.0.map_or(0, NonZeroUsize::get), *pos),
             _ => unreachable!("Expr::Variable expected but gets {:?}", expr),
         };
 
@@ -485,7 +485,7 @@ impl Engine {
                 let custom_def = self.custom_syntax.get(key_token).ok_or_else(|| {
                     Box::new(ERR::ErrorCustomSyntax(
                         format!("Invalid custom syntax prefix: {}", key_token),
-                        custom.tokens.iter().map(|s| s.to_string()).collect(),
+                        custom.tokens.iter().map(<_>::to_string).collect(),
                         *pos,
                     ))
                 })?;

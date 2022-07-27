@@ -169,7 +169,7 @@ impl fmt::Debug for Engine {
             &self
                 .custom_syntax
                 .keys()
-                .map(|s| s.as_str())
+                .map(crate::SmartString::as_str)
                 .collect::<String>(),
         );
 

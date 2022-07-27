@@ -24,15 +24,15 @@ pub struct FnPtr {
 
 impl fmt::Debug for FnPtr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if !self.is_curried() {
-            write!(f, "Fn({})", self.fn_name())
-        } else {
+        if self.is_curried() {
             self.curry
                 .iter()
                 .fold(f.debug_tuple("Fn").field(&self.name), |f, curry| {
                     f.field(curry)
                 })
                 .finish()
+        } else {
+            write!(f, "Fn({})", self.fn_name())
         }
     }
 }
@@ -149,7 +149,7 @@ impl FnPtr {
             #[cfg(not(feature = "no_function"))]
             _ast.as_ref(),
         ];
-        let lib = if lib.first().map(|m: &&Module| m.is_empty()).unwrap_or(true) {
+        let lib = if lib.first().map_or(true, |m: &&Module| m.is_empty()) {
             &lib[0..0]
         } else {
             &lib

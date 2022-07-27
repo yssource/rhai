@@ -28,7 +28,7 @@ use std::{any::TypeId, mem};
 pub struct Mut<T>(T);
 //pub struct Ref<T>(T);
 
-/// Dereference into DynamicWriteLock
+/// Dereference into [`DynamicWriteLock`]
 #[inline(always)]
 #[must_use]
 pub fn by_ref<T: Variant + Clone>(data: &mut Dynamic) -> DynamicWriteLock<T> {

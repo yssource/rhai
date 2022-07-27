@@ -114,7 +114,7 @@ mod string_functions {
             }
         }
         #[rhai_fn(name = "+")]
-        pub fn add_prepend(utf8: Blob, string: ImmutableString) -> ImmutableString {
+        pub fn add_prepend(utf8: Blob, string: &str) -> ImmutableString {
             let s = String::from_utf8_lossy(&utf8);
             let mut s = match s {
                 std::borrow::Cow::Borrowed(_) => String::from_utf8(utf8).unwrap(),
@@ -122,7 +122,7 @@ mod string_functions {
             };
 
             if !string.is_empty() {
-                s.push_str(&string);
+                s.push_str(string);
             }
 
             s.into()
@@ -440,7 +440,7 @@ mod string_functions {
     /// ```
     #[rhai_fn(name = "make_upper")]
     pub fn make_upper_char(character: &mut char) {
-        *character = to_upper_char(*character)
+        *character = to_upper_char(*character);
     }
     /// Convert the character to lower-case and return it as a new character.
     ///
@@ -476,7 +476,7 @@ mod string_functions {
     /// ```
     #[rhai_fn(name = "make_lower")]
     pub fn make_lower_char(character: &mut char) {
-        *character = to_lower_char(*character)
+        *character = to_lower_char(*character);
     }
 
     /// Return `true` if the string starts with a specified string.
@@ -558,10 +558,9 @@ mod string_functions {
                 .len()
         };
 
-        string[start..]
-            .find(character)
-            .map(|index| string[0..start + index].chars().count() as INT)
-            .unwrap_or(-1 as INT)
+        string[start..].find(character).map_or(-1 as INT, |index| {
+            string[0..start + index].chars().count() as INT
+        })
     }
     /// Find the specified `character` in the string and return the first index where it is found.
     /// If the `character` is not found, `-1` is returned.
@@ -582,8 +581,7 @@ mod string_functions {
         } else {
             string
                 .find(character)
-                .map(|index| string[0..index].chars().count() as INT)
-                .unwrap_or(-1 as INT)
+                .map_or(-1 as INT, |index| string[0..index].chars().count() as INT)
         }
     }
     /// Find the specified sub-string in the string, starting from the specified `start` position,
@@ -638,8 +636,9 @@ mod string_functions {
 
         string[start..]
             .find(find_string)
-            .map(|index| string[0..start + index].chars().count() as INT)
-            .unwrap_or(-1 as INT)
+            .map_or(-1 as INT, |index| {
+                string[0..start + index].chars().count() as INT
+            })
     }
     /// Find the specified `character` in the string and return the first index where it is found.
     /// If the `character` is not found, `-1` is returned.
@@ -660,8 +659,7 @@ mod string_functions {
         } else {
             string
                 .find(find_string)
-                .map(|index| string[0..index].chars().count() as INT)
-                .unwrap_or(-1 as INT)
+                .map_or(-1 as INT, |index| string[0..index].chars().count() as INT)
         }
     }
 
@@ -840,7 +838,7 @@ mod string_functions {
             .iter()
             .skip(offset)
             .take(len)
-            .cloned()
+            .copied()
             .collect::<String>()
             .into()
     }
@@ -889,7 +887,7 @@ mod string_functions {
     pub fn crop_range(string: &mut ImmutableString, range: ExclusiveRange) {
         let start = INT::max(range.start, 0);
         let end = INT::max(range.end, start);
-        crop(string, start, end - start)
+        crop(string, start, end - start);
     }
     /// Remove all characters from the string except those within an inclusive `range`.
     ///
@@ -906,7 +904,7 @@ mod string_functions {
     pub fn crop_inclusive_range(string: &mut ImmutableString, range: InclusiveRange) {
         let start = INT::max(*range.start(), 0);
         let end = INT::max(*range.end(), start);
-        crop(string, start, end - start + 1)
+        crop(string, start, end - start + 1);
     }
 
     /// Remove all characters from the string except those within a range.

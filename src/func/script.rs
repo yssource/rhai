@@ -128,7 +128,7 @@ impl Engine {
                 } else {
                     caches.push_fn_resolution_cache();
                     lib_merged.push(&**fn_lib);
-                    lib_merged.extend(lib.iter().cloned());
+                    lib_merged.extend(lib.iter().copied());
                     &lib_merged
                 },
                 Some(mem::replace(&mut global.constants, constants.clone())),
@@ -205,7 +205,7 @@ impl Engine {
             scope.rewind(orig_scope_len);
         } else if !args.is_empty() {
             // Remove arguments only, leaving new variables in the scope
-            scope.remove_range(orig_scope_len, args.len())
+            scope.remove_range(orig_scope_len, args.len());
         }
         #[cfg(not(feature = "no_module"))]
         global.truncate_imports(orig_imports_len);
@@ -233,7 +233,7 @@ impl Engine {
     ) -> bool {
         let cache = caches.fn_resolution_cache_mut();
 
-        if let Some(result) = cache.get(&hash_script).map(|v| v.is_some()) {
+        if let Some(result) = cache.get(&hash_script).map(Option::is_some) {
             return result;
         }
 

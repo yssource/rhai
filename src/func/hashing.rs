@@ -47,7 +47,7 @@ impl Hasher for StraightHasher {
         self.0 = u64::from_ne_bytes(key);
 
         if self.0 == 0 {
-            self.0 = ALT_ZERO_HASH
+            self.0 = ALT_ZERO_HASH;
         }
     }
 }
@@ -175,7 +175,7 @@ pub fn calc_fn_params_hash(params: impl IntoIterator<Item = TypeId>) -> u64 {
     let mut len = 0;
     params.into_iter().for_each(|t| {
         len += 1;
-        t.hash(s)
+        t.hash(s);
     });
     len.hash(s);
 

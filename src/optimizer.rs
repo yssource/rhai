@@ -103,7 +103,7 @@ impl<'a> OptimizerState<'a> {
     /// Prune the list of constants back to a specified size.
     #[inline(always)]
     pub fn restore_var(&mut self, len: usize) {
-        self.variables.truncate(len)
+        self.variables.truncate(len);
     }
     /// Add a new variable to the list.
     #[inline(always)]
@@ -113,7 +113,7 @@ impl<'a> OptimizerState<'a> {
         access: AccessMode,
         value: Option<Dynamic>,
     ) {
-        self.variables.push((name.into(), access, value))
+        self.variables.push((name.into(), access, value));
     }
     /// Look up a constant from the list.
     #[inline]
@@ -169,7 +169,7 @@ fn has_native_fn_override(
     hash_script: u64,
     arg_types: impl AsRef<[TypeId]>,
 ) -> bool {
-    let hash_params = calc_fn_params_hash(arg_types.as_ref().iter().cloned());
+    let hash_params = calc_fn_params_hash(arg_types.as_ref().iter().copied());
     let hash = combine_hashes(hash_script, hash_params);
 
     // First check the global namespace and packages, but skip modules that are standard because
@@ -433,7 +433,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
             if !x.0.is_op_assignment()
                 && x.1.lhs.is_variable_access(true)
                 && matches!(&x.1.rhs, Expr::FnCall(x2, ..)
-                        if Token::lookup_from_syntax(&x2.name).map(|t| t.has_op_assignment()).unwrap_or(false)
+                        if Token::lookup_from_syntax(&x2.name).map_or(false, |t| t.has_op_assignment())
                         && x2.args.len() == 2
                         && x2.args[0].get_variable_name(true) == x.1.lhs.get_variable_name(true)
                 ) =>
@@ -721,12 +721,11 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                     }
                 }
                 // Remove if no entry left
-                match list.is_empty() {
-                    true => {
-                        state.set_dirty();
-                        false
-                    }
-                    false => true,
+                if list.is_empty() {
+                    state.set_dirty();
+                    false
+                } else {
+                    true
                 }
             });
 
@@ -766,7 +765,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
         Stmt::While(x, ..) if matches!(x.0, Expr::BoolConstant(false, ..)) => match x.0 {
             Expr::BoolConstant(false, pos) => {
                 state.set_dirty();
-                *stmt = Stmt::Noop(pos)
+                *stmt = Stmt::Noop(pos);
             }
             _ => unreachable!("`Expr::BoolConstant"),
         },
@@ -785,14 +784,14 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                     Stmt::BreakLoop(options, pos) if options.contains(ASTFlags::BREAK) => {
                         // Only a single break statement - turn into running the guard expression once
                         state.set_dirty();
-                        if !condition.is_unit() {
+                        if condition.is_unit() {
+                            *stmt = Stmt::Noop(pos);
+                        } else {
                             let mut statements = vec![Stmt::Expr(mem::take(condition).into())];
                             if preserve_result {
-                                statements.push(Stmt::Noop(pos))
+                                statements.push(Stmt::Noop(pos));
                             }
                             *stmt = (statements, Span::new(pos, Position::NONE)).into();
-                        } else {
-                            *stmt = Stmt::Noop(pos);
                         };
                     }
                     _ => (),
@@ -835,7 +834,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
         }
         // let id = expr;
         Stmt::Var(x, options, ..) if !options.contains(ASTFlags::CONSTANT) => {
-            optimize_expr(&mut x.1, state, false)
+            optimize_expr(&mut x.1, state, false);
         }
         // import expr as var;
         #[cfg(not(feature = "no_module"))]
@@ -969,8 +968,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
                 // All other items can be thrown away.
                 state.set_dirty();
                 *expr = mem::take(&mut m.0).into_iter().find(|(x, ..)| x.as_str() == prop)
-                            .map(|(.., mut expr)| { expr.set_position(*pos); expr })
-                            .unwrap_or_else(|| Expr::Unit(*pos));
+                            .map_or_else(|| Expr::Unit(*pos), |(.., mut expr)| { expr.set_position(*pos); expr });
             }
             // var.rhs
             (Expr::Variable(..), rhs) => optimize_expr(rhs, state, true),
@@ -1015,8 +1013,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
                 // All other items can be thrown away.
                 state.set_dirty();
                 *expr = mem::take(&mut m.0).into_iter().find(|(x, ..)| x.as_str() == s.as_str())
-                            .map(|(.., mut expr)| { expr.set_position(*pos); expr })
-                            .unwrap_or_else(|| Expr::Unit(*pos));
+                            .map_or_else(|| Expr::Unit(*pos), |(.., mut expr)| { expr.set_position(*pos); expr });
             }
             // int[int]
             (Expr::IntegerConstant(n, pos), Expr::IntegerConstant(i, ..)) if *i >= 0 && (*i as usize) < crate::INT_BITS => {
@@ -1148,7 +1145,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
                 _ => Dynamic::UNIT
             };
 
-            if let Ok(fn_ptr) = fn_name.into_immutable_string().map_err(|err| err.into()).and_then(FnPtr::try_from) {
+            if let Ok(fn_ptr) = fn_name.into_immutable_string().map_err(Into::into).and_then(FnPtr::try_from) {
                 state.set_dirty();
                 *expr = Expr::DynamicConstant(Box::new(fn_ptr.into()), *pos);
             } else {
@@ -1338,10 +1335,10 @@ fn optimize_top_level(
 
     // Add constants and variables from the scope
     for (name, constant, value) in scope.iter() {
-        if !constant {
-            state.push_var(name, AccessMode::ReadWrite, None);
-        } else {
+        if constant {
             state.push_var(name, AccessMode::ReadOnly, Some(value));
+        } else {
+            state.push_var(name, AccessMode::ReadWrite, None);
         }
     }
 

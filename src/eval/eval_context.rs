@@ -113,7 +113,7 @@ impl<'a, 's, 'ps, 'g, 'pg, 'c, 'pc, 't, 'pt> EvalContext<'a, 's, 'ps, 'g, 'pg, '
     /// Get an iterator over the namespaces containing definition of all script-defined functions.
     #[inline]
     pub fn iter_namespaces(&self) -> impl Iterator<Item = &Module> {
-        self.lib.iter().cloned()
+        self.lib.iter().copied()
     }
     /// _(internals)_ The current set of namespaces containing definitions of all script-defined functions.
     /// Exported under the `internals` feature only.
@@ -133,7 +133,7 @@ impl<'a, 's, 'ps, 'g, 'pg, 'c, 'pc, 't, 'pt> EvalContext<'a, 's, 'ps, 'g, 'pg, '
     #[inline(always)]
     #[must_use]
     pub fn this_ptr_mut(&mut self) -> &mut Option<&'pt mut Dynamic> {
-        &mut self.this_ptr
+        self.this_ptr
     }
     /// The current nesting level of function calls.
     #[inline(always)]

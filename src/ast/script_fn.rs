@@ -2,7 +2,7 @@
 #![cfg(not(feature = "no_function"))]
 
 use super::{FnAccess, StmtBlock};
-use crate::{Identifier, StaticVec};
+use crate::{Identifier, SmartString, StaticVec};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{fmt, hash::Hash};
@@ -71,7 +71,7 @@ impl fmt::Display for ScriptFnDef {
             self.name,
             self.params
                 .iter()
-                .map(|s| s.as_str())
+                .map(SmartString::as_str)
                 .collect::<StaticVec<_>>()
                 .join(", ")
         )
@@ -120,7 +120,7 @@ impl fmt::Display for ScriptFnMetadata<'_> {
             self.name,
             self.params
                 .iter()
-                .cloned()
+                .copied()
                 .collect::<StaticVec<_>>()
                 .join(", ")
         )
@@ -132,7 +132,7 @@ impl<'a> From<&'a ScriptFnDef> for ScriptFnMetadata<'a> {
     fn from(value: &'a ScriptFnDef) -> Self {
         Self {
             name: &value.name,
-            params: value.params.iter().map(|s| s.as_str()).collect(),
+            params: value.params.iter().map(SmartString::as_str).collect(),
             access: value.access,
             #[cfg(feature = "metadata")]
             comments: value.comments.iter().map(<_>::as_ref).collect(),

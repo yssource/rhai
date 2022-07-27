@@ -147,10 +147,10 @@ impl Engine {
         if let Some(x) = name.strip_prefix("&mut ") {
             let r = self.format_type_name(x);
 
-            return if x != r {
-                format!("&mut {}", r).into()
-            } else {
+            return if x == r {
                 name.into()
+            } else {
+                format!("&mut {}", r).into()
             };
         }
 

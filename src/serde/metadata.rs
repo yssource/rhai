@@ -181,7 +181,7 @@ impl ModuleMetadata<'_> {
 
 impl<'a> From<&'a crate::Module> for ModuleMetadata<'a> {
     fn from(module: &'a crate::Module) -> Self {
-        let mut functions: Vec<_> = module.iter_fn().map(|f| f.into()).collect();
+        let mut functions: Vec<_> = module.iter_fn().map(Into::into).collect();
         functions.sort();
 
         Self {

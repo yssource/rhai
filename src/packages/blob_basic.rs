@@ -86,7 +86,7 @@ pub mod blob_functions {
         }
 
         let mut blob = Blob::new();
-        blob.resize(len, (value & 0x000000ff) as u8);
+        blob.resize(len, (value & 0x0000_00ff) as u8);
         Ok(blob)
     }
     /// Convert the BLOB into an array of integers.
@@ -205,7 +205,7 @@ pub mod blob_functions {
         let (index, ..) = calc_offset_len(blob.len(), index, 0);
 
         if index < blob.len() {
-            blob[index] = (value & 0x000000ff) as u8;
+            blob[index] = (value & 0x0000_00ff) as u8;
         }
     }
     /// Add a new byte `value` to the end of the BLOB.
@@ -223,7 +223,7 @@ pub mod blob_functions {
     /// ```
     #[rhai_fn(name = "push", name = "append")]
     pub fn push(blob: &mut Blob, value: INT) {
-        blob.push((value & 0x000000ff) as u8);
+        blob.push((value & 0x0000_00ff) as u8);
     }
     /// Add another BLOB to the end of the BLOB.
     ///
@@ -298,7 +298,7 @@ pub mod blob_functions {
     /// print(b);       // prints "[4242184242]"
     /// ```
     pub fn insert(blob: &mut Blob, index: INT, value: INT) {
-        let value = (value & 0x000000ff) as u8;
+        let value = (value & 0x0000_00ff) as u8;
 
         if blob.is_empty() {
             blob.push(value);
@@ -338,7 +338,7 @@ pub mod blob_functions {
             return Ok(());
         }
 
-        let value = (value & 0x000000ff) as u8;
+        let value = (value & 0x0000_00ff) as u8;
         let _ctx = ctx;
 
         // Check if blob will be over max size limit
@@ -528,7 +528,7 @@ pub mod blob_functions {
     pub fn splice_range(blob: &mut Blob, range: ExclusiveRange, replace: Blob) {
         let start = INT::max(range.start, 0);
         let end = INT::max(range.end, start);
-        splice(blob, start, end - start, replace)
+        splice(blob, start, end - start, replace);
     }
     /// Replace an inclusive `range` of the BLOB with another BLOB.
     ///
@@ -546,7 +546,7 @@ pub mod blob_functions {
     pub fn splice_range_inclusive(blob: &mut Blob, range: InclusiveRange, replace: Blob) {
         let start = INT::max(*range.start(), 0);
         let end = INT::max(*range.end(), start);
-        splice(blob, start, end - start + 1, replace)
+        splice(blob, start, end - start + 1, replace);
     }
     /// Replace a portion of the BLOB with another BLOB.
     ///
@@ -1220,7 +1220,7 @@ mod write_int_functions {
     pub fn write_le_int_range(blob: &mut Blob, range: ExclusiveRange, value: INT) {
         let start = INT::max(range.start, 0);
         let end = INT::max(range.end, start);
-        write_le_int(blob, start, end - start, value)
+        write_le_int(blob, start, end - start, value);
     }
     /// Write an `INT` value to the bytes within an inclusive `range` in the BLOB
     /// in little-endian byte order.
@@ -1239,7 +1239,7 @@ mod write_int_functions {
     pub fn write_le_int_range_inclusive(blob: &mut Blob, range: InclusiveRange, value: INT) {
         let start = INT::max(*range.start(), 0);
         let end = INT::max(*range.end(), start);
-        write_le_int(blob, start, end - start + 1, value)
+        write_le_int(blob, start, end - start + 1, value);
     }
     /// Write an `INT` value to the bytes beginning at the `start` position in the BLOB
     /// in little-endian byte order.
@@ -1262,7 +1262,7 @@ mod write_int_functions {
     /// ```
     #[rhai_fn(name = "write_le")]
     pub fn write_le_int(blob: &mut Blob, start: INT, len: INT, value: INT) {
-        write_int(blob, start, len, value, true)
+        write_int(blob, start, len, value, true);
     }
     /// Write an `INT` value to the bytes within an exclusive `range` in the BLOB
     /// in big-endian byte order.
@@ -1281,7 +1281,7 @@ mod write_int_functions {
     pub fn write_be_int_range(blob: &mut Blob, range: ExclusiveRange, value: INT) {
         let start = INT::max(range.start, 0);
         let end = INT::max(range.end, start);
-        write_be_int(blob, start, end - start, value)
+        write_be_int(blob, start, end - start, value);
     }
     /// Write an `INT` value to the bytes within an inclusive `range` in the BLOB
     /// in big-endian byte order.
@@ -1300,7 +1300,7 @@ mod write_int_functions {
     pub fn write_be_int_range_inclusive(blob: &mut Blob, range: InclusiveRange, value: INT) {
         let start = INT::max(*range.start(), 0);
         let end = INT::max(*range.end(), start);
-        write_be_int(blob, start, end - start + 1, value)
+        write_be_int(blob, start, end - start + 1, value);
     }
     /// Write an `INT` value to the bytes beginning at the `start` position in the BLOB
     /// in big-endian byte order.
@@ -1323,7 +1323,7 @@ mod write_int_functions {
     /// ```
     #[rhai_fn(name = "write_be")]
     pub fn write_be_int(blob: &mut Blob, start: INT, len: INT, value: INT) {
-        write_int(blob, start, len, value, false)
+        write_int(blob, start, len, value, false);
     }
 }
 
@@ -1360,7 +1360,7 @@ mod write_float_functions {
     pub fn write_le_float_range(blob: &mut Blob, range: ExclusiveRange, value: FLOAT) {
         let start = INT::max(range.start, 0);
         let end = INT::max(range.end, start);
-        write_le_float(blob, start, end - start, value)
+        write_le_float(blob, start, end - start, value);
     }
     /// Write a `FLOAT` value to the bytes within an inclusive `range` in the BLOB
     /// in little-endian byte order.
@@ -1371,7 +1371,7 @@ mod write_float_functions {
     pub fn write_le_float_range_inclusive(blob: &mut Blob, range: InclusiveRange, value: FLOAT) {
         let start = INT::max(*range.start(), 0);
         let end = INT::max(*range.end(), start);
-        write_le_float(blob, start, end - start + 1, value)
+        write_le_float(blob, start, end - start + 1, value);
     }
     /// Write a `FLOAT` value to the bytes beginning at the `start` position in the BLOB
     /// in little-endian byte order.
@@ -1386,7 +1386,7 @@ mod write_float_functions {
     /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes in `range` are not modified.
     #[rhai_fn(name = "write_le")]
     pub fn write_le_float(blob: &mut Blob, start: INT, len: INT, value: FLOAT) {
-        write_float(blob, start, len, value, true)
+        write_float(blob, start, len, value, true);
     }
     /// Write a `FLOAT` value to the bytes within an exclusive `range` in the BLOB
     /// in big-endian byte order.
@@ -1397,7 +1397,7 @@ mod write_float_functions {
     pub fn write_be_float_range(blob: &mut Blob, range: ExclusiveRange, value: FLOAT) {
         let start = INT::max(range.start, 0);
         let end = INT::max(range.end, start);
-        write_be_float(blob, start, end - start, value)
+        write_be_float(blob, start, end - start, value);
     }
     /// Write a `FLOAT` value to the bytes within an inclusive `range` in the BLOB
     /// in big-endian byte order.
@@ -1408,7 +1408,7 @@ mod write_float_functions {
     pub fn write_be_float_range_inclusive(blob: &mut Blob, range: InclusiveRange, value: FLOAT) {
         let start = INT::max(*range.start(), 0);
         let end = INT::max(*range.end(), start);
-        write_be_float(blob, start, end - start + 1, value)
+        write_be_float(blob, start, end - start + 1, value);
     }
     /// Write a `FLOAT` value to the bytes beginning at the `start` position in the BLOB
     /// in big-endian byte order.
@@ -1423,7 +1423,7 @@ mod write_float_functions {
     /// * If number of bytes in `range` > number of bytes for `FLOAT`, extra bytes in `range` are not modified.
     #[rhai_fn(name = "write_be")]
     pub fn write_be_float(blob: &mut Blob, start: INT, len: INT, value: FLOAT) {
-        write_float(blob, start, len, value, false)
+        write_float(blob, start, len, value, false);
     }
 }
 
@@ -1471,7 +1471,7 @@ mod write_string_functions {
     pub fn write_utf8_string_range(blob: &mut Blob, range: ExclusiveRange, string: &str) {
         let start = INT::max(range.start, 0);
         let end = INT::max(range.end, start);
-        write_string(blob, start, end - start, string, false)
+        write_string(blob, start, end - start, string, false);
     }
     /// Write a string to the bytes within an inclusive `range` in the BLOB in UTF-8 encoding.
     ///
@@ -1489,7 +1489,7 @@ mod write_string_functions {
     pub fn write_utf8_string_range_inclusive(blob: &mut Blob, range: InclusiveRange, string: &str) {
         let start = INT::max(*range.start(), 0);
         let end = INT::max(*range.end(), start);
-        write_string(blob, start, end - start + 1, string, false)
+        write_string(blob, start, end - start + 1, string, false);
     }
     /// Write a string to the bytes within an inclusive `range` in the BLOB in UTF-8 encoding.
     ///
@@ -1511,7 +1511,7 @@ mod write_string_functions {
     /// ```
     #[rhai_fn(name = "write_utf8")]
     pub fn write_utf8_string(blob: &mut Blob, start: INT, len: INT, string: &str) {
-        write_string(blob, start, len, string, false)
+        write_string(blob, start, len, string, false);
     }
     /// Write an ASCII string to the bytes within an exclusive `range` in the BLOB.
     ///
@@ -1532,7 +1532,7 @@ mod write_string_functions {
     pub fn write_ascii_string_range(blob: &mut Blob, range: ExclusiveRange, string: &str) {
         let start = INT::max(range.start, 0);
         let end = INT::max(range.end, start);
-        write_string(blob, start, end - start, string, true)
+        write_string(blob, start, end - start, string, true);
     }
     /// Write an ASCII string to the bytes within an inclusive `range` in the BLOB.
     ///
@@ -1557,7 +1557,7 @@ mod write_string_functions {
     ) {
         let start = INT::max(*range.start(), 0);
         let end = INT::max(*range.end(), start);
-        write_string(blob, start, end - start + 1, string, true)
+        write_string(blob, start, end - start + 1, string, true);
     }
     /// Write an ASCII string to the bytes within an exclusive `range` in the BLOB.
     ///
@@ -1579,6 +1579,6 @@ mod write_string_functions {
     /// ```
     #[rhai_fn(name = "write_ascii")]
     pub fn write_ascii_string(blob: &mut Blob, start: INT, len: INT, string: &str) {
-        write_string(blob, start, len, string, true)
+        write_string(blob, start, len, string, true);
     }
 }

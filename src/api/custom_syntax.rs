@@ -252,7 +252,7 @@ impl Engine {
                 }
                 // Standard keyword in first position but not disabled
                 _ if segments.is_empty()
-                    && token.as_ref().map_or(false, |v| v.is_standard_keyword())
+                    && token.as_ref().map_or(false, Token::is_standard_keyword)
                     && (self.disabled_symbols.is_empty() || !self.disabled_symbols.contains(s)) =>
                 {
                     return Err(LexError::ImproperSymbol(

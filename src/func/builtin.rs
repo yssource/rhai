@@ -287,7 +287,7 @@ pub fn get_builtin_binary_op_fn(op: &str, x: &Dynamic, y: &Dynamic) -> Option<Fn
             return match op {
                 OP_CONTAINS => Some(|_, args| {
                     let blob = &*args[0].read_lock::<Blob>().expect(BUILTIN);
-                    let x = (args[1].as_int().expect("`INT`") & 0x000000ff) as u8;
+                    let x = (args[1].as_int().expect("`INT`") & 0x0000_00ff) as u8;
                     Ok((!blob.is_empty() && blob.contains(&x)).into())
                 }),
                 _ => None,
@@ -517,16 +517,14 @@ pub fn get_builtin_binary_op_fn(op: &str, x: &Dynamic, y: &Dynamic) -> Option<Fn
                 let blob1 = &*args[0].read_lock::<Blob>().expect(BUILTIN);
                 let blob2 = &*args[1].read_lock::<Blob>().expect(BUILTIN);
 
-                Ok(Dynamic::from_blob(if !blob2.is_empty() {
-                    if blob1.is_empty() {
-                        blob2.clone()
-                    } else {
-                        let mut blob = blob1.clone();
-                        blob.extend(blob2);
-                        blob
-                    }
-                } else {
+                Ok(Dynamic::from_blob(if blob2.is_empty() {
                     blob1.clone()
+                } else if blob1.is_empty() {
+                    blob2.clone()
+                } else {
+                    let mut blob = blob1.clone();
+                    blob.extend(blob2);
+                    blob
                 }))
             }),
             "==" => Some(impl_op!(Blob == Blob)),

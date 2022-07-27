@@ -220,7 +220,7 @@ fn collect_fn_metadata(
                     f,
                 )
                 .into(),
-            )
+            );
         });
 
     ctx.engine()
@@ -237,7 +237,7 @@ fn collect_fn_metadata(
                     f,
                 )
                 .into(),
-            )
+            );
         });
 
     #[cfg(not(feature = "no_module"))]
@@ -255,7 +255,7 @@ fn collect_fn_metadata(
                     f,
                 )
                 .into(),
-            )
+            );
         });
 
     #[cfg(not(feature = "no_module"))]
@@ -264,7 +264,7 @@ fn collect_fn_metadata(
         fn scan_module(
             list: &mut Array,
             dict: &BTreeSet<Identifier>,
-            namespace: Identifier,
+            namespace: &str,
             module: &Module,
             filter: impl Fn(
                     FnNamespace,
@@ -278,7 +278,7 @@ fn collect_fn_metadata(
             module
                 .iter_script_fn()
                 .filter(|(s, a, n, p, f)| filter(*s, *a, n, *p, f))
-                .for_each(|(.., f)| list.push(make_metadata(dict, namespace.clone(), f).into()));
+                .for_each(|(.., f)| list.push(make_metadata(dict, namespace.into(), f).into()));
             for (ns, m) in module.iter_sub_modules() {
                 let ns = format!(
                     "{}{}{}",
@@ -286,12 +286,12 @@ fn collect_fn_metadata(
                     crate::tokenizer::Token::DoubleColon.literal_syntax(),
                     ns
                 );
-                scan_module(list, dict, ns.into(), &**m, filter)
+                scan_module(list, dict, &ns, &**m, filter);
             }
         }
 
         for (ns, m) in ctx.iter_imports_raw() {
-            scan_module(&mut list, &dict, ns.clone(), &**m, filter)
+            scan_module(&mut list, &dict, ns, &**m, filter);
         }
     }
 

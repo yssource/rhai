@@ -436,6 +436,7 @@ impl Scope<'_> {
     /// assert_eq!(my_scope.is_constant("y"), None);
     /// ```
     #[inline]
+    #[must_use]
     pub fn is_constant(&self, name: &str) -> Option<bool> {
         self.get_index(name).map(|(.., access)| match access {
             AccessMode::ReadWrite => false,

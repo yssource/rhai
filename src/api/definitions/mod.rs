@@ -291,20 +291,18 @@ impl FuncInfo {
             }
             first = false;
 
-            let (param_name, param_type) = self
-                .metadata
-                .params_info
-                .get(i)
-                .map(|s| {
-                    let mut s = s.splitn(2, ':');
-                    (
-                        s.next().unwrap_or("_").split(' ').last().unwrap(),
-                        s.next()
-                            .map(|ty| def_type_name(ty, def.engine))
-                            .unwrap_or(Cow::Borrowed("?")),
-                    )
-                })
-                .unwrap_or(("_", "?".into()));
+            let (param_name, param_type) =
+                self.metadata
+                    .params_info
+                    .get(i)
+                    .map_or(("_", "?".into()), |s| {
+                        let mut s = s.splitn(2, ':');
+                        (
+                            s.next().unwrap_or("_").split(' ').last().unwrap(),
+                            s.next()
+                                .map_or(Cow::Borrowed("?"), |ty| def_type_name(ty, def.engine)),
+                        )
+                    });
 
             if operator {
                 write!(writer, "{param_type}")?;
@@ -338,8 +336,7 @@ fn def_type_name<'a>(ty: &'a str, engine: &'a Engine) -> Cow<'a, str> {
     let ty = ty
         .strip_prefix("RhaiResultOf<")
         .and_then(|s| s.strip_suffix('>'))
-        .map(str::trim)
-        .unwrap_or(ty);
+        .map_or(ty, str::trim);
 
     let ty = ty
         .replace("Iterator<Item=", "Iterator<")

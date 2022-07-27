@@ -252,7 +252,7 @@ impl<'a> NativeCallContext<'a> {
     /// in reverse order.
     #[inline]
     pub fn iter_namespaces(&self) -> impl Iterator<Item = &Module> {
-        self.lib.iter().rev().cloned()
+        self.lib.iter().rev().copied()
     }
     /// _(internals)_ The current set of namespaces containing definitions of all script-defined functions.
     /// Exported under the `internals` feature only.

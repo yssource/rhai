@@ -28,7 +28,7 @@ where
 }
 
 // Range iterator with step
-#[derive(Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Clone, Hash, Eq, PartialEq)]
 pub struct StepRange<T: Debug + Copy + PartialOrd> {
     pub from: T,
     pub to: T,
@@ -110,7 +110,7 @@ impl<T: Debug + Copy + PartialOrd> Iterator for StepRange<T> {
 impl<T: Debug + Copy + PartialOrd> FusedIterator for StepRange<T> {}
 
 // Bit-field iterator with step
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct BitRange(INT, INT, usize);
 
 impl BitRange {

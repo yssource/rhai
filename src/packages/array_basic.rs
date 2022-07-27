@@ -145,16 +145,14 @@ pub mod array_functions {
     /// ```
     #[rhai_fn(name = "+")]
     pub fn concat(array1: Array, array2: Array) -> Array {
-        if !array2.is_empty() {
-            if array1.is_empty() {
-                array2
-            } else {
-                let mut array = array1;
-                array.extend(array2);
-                array
-            }
-        } else {
+        if array2.is_empty() {
             array1
+        } else if array1.is_empty() {
+            array2
+        } else {
+            let mut array = array1;
+            array.extend(array2);
+            array
         }
     }
     /// Add a new element into the array at a particular `index` position.
@@ -432,7 +430,7 @@ pub mod array_functions {
     pub fn splice_range(array: &mut Array, range: ExclusiveRange, replace: Array) {
         let start = INT::max(range.start, 0);
         let end = INT::max(range.end, start);
-        splice(array, start, end - start, replace)
+        splice(array, start, end - start, replace);
     }
     /// Replace an inclusive range of the array with another array.
     ///
@@ -450,7 +448,7 @@ pub mod array_functions {
     pub fn splice_inclusive_range(array: &mut Array, range: InclusiveRange, replace: Array) {
         let start = INT::max(*range.start(), 0);
         let end = INT::max(*range.end(), start);
-        splice(array, start, end - start + 1, replace)
+        splice(array, start, end - start + 1, replace);
     }
     /// Replace a portion of the array with another array.
     ///
@@ -1739,13 +1737,15 @@ pub mod array_functions {
                 .call_raw(&ctx, None, [x.clone(), y.clone()])
                 .ok()
                 .and_then(|v| v.as_int().ok())
-                .map(|v| match v {
-                    v if v > 0 => Ordering::Greater,
-                    v if v < 0 => Ordering::Less,
-                    0 => Ordering::Equal,
-                    _ => unreachable!("v is {}", v),
-                })
-                .unwrap_or_else(|| x.type_id().cmp(&y.type_id()))
+                .map_or_else(
+                    || x.type_id().cmp(&y.type_id()),
+                    |v| match v {
+                        v if v > 0 => Ordering::Greater,
+                        v if v < 0 => Ordering::Less,
+                        0 => Ordering::Equal,
+                        _ => unreachable!("v is {}", v),
+                    },
+                )
         });
 
         Ok(())
@@ -2119,7 +2119,7 @@ pub mod array_functions {
         let mut x = 0;
 
         while x < array.len() {
-            if !filter
+            if filter
                 .call_raw(&ctx, None, [array[x].clone()])
                 .or_else(|err| match *err {
                     ERR::ErrorFunctionNotFound(fn_sig, ..)
@@ -2140,9 +2140,9 @@ pub mod array_functions {
                 .as_bool()
                 .unwrap_or(false)
             {
-                drained.push(array.remove(x));
-            } else {
                 x += 1;
+            } else {
+                drained.push(array.remove(x));
             }
 
             i += 1;

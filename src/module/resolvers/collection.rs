@@ -42,7 +42,7 @@ impl ModuleResolversCollection {
     /// ```
     #[inline(always)]
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self(Vec::new())
     }
     /// Append a [module resolver][ModuleResolver] to the end.

@@ -130,6 +130,7 @@ impl<'e> ParseState<'e> {
     /// If the variable is not present in the scope, the first return value is zero.
     ///
     /// The second return value indicates whether the barrier has been hit before finding the variable.
+    #[must_use]
     pub fn find_var(&self, name: &str) -> (usize, bool) {
         let mut hit_barrier = false;
 
@@ -175,7 +176,7 @@ impl<'e> ParseState<'e> {
                 });
             }
         } else {
-            self.allow_capture = true
+            self.allow_capture = true;
         }
 
         if hit_barrier {
@@ -360,7 +361,10 @@ impl Expr {
 
 /// Make sure that the next expression is not a statement expression (i.e. wrapped in `{}`).
 #[inline]
-fn ensure_not_statement_expr(input: &mut TokenStream, type_name: impl ToString) -> ParseResult<()> {
+fn ensure_not_statement_expr(
+    input: &mut TokenStream,
+    type_name: &(impl ToString + ?Sized),
+) -> ParseResult<()> {
     match input.peek().expect(NEVER_ENDS) {
         (Token::LeftBrace, pos) => Err(PERR::ExprExpected(type_name.to_string()).into_err(*pos)),
         _ => Ok(()),
@@ -519,7 +523,9 @@ impl Engine {
                 }
 
                 #[cfg(not(feature = "no_module"))]
-                let hash = if !namespace.is_empty() {
+                let hash = if namespace.is_empty() {
+                    calc_fn_hash(&id, 0)
+                } else {
                     let root = namespace.root();
                     let index = state.find_module(root);
 
@@ -541,9 +547,7 @@ impl Engine {
 
                     namespace.set_index(index);
 
-                    crate::calc_qualified_fn_hash(namespace.iter().map(|m| m.as_str()), &id, 0)
-                } else {
-                    calc_fn_hash(&id, 0)
+                    crate::calc_qualified_fn_hash(namespace.iter().map(Ident::as_str), &id, 0)
                 };
                 #[cfg(feature = "no_module")]
                 let hash = calc_fn_hash(&id, 0);
@@ -586,7 +590,9 @@ impl Engine {
                     eat_token(input, Token::RightParen);
 
                     #[cfg(not(feature = "no_module"))]
-                    let hash = if !namespace.is_empty() {
+                    let hash = if namespace.is_empty() {
+                        calc_fn_hash(&id, args.len())
+                    } else {
                         let root = namespace.root();
                         let index = state.find_module(root);
 
@@ -608,12 +614,10 @@ impl Engine {
                         namespace.set_index(index);
 
                         crate::calc_qualified_fn_hash(
-                            namespace.iter().map(|m| m.as_str()),
+                            namespace.iter().map(Ident::as_str),
                             &id,
                             args.len(),
                         )
-                    } else {
-                        calc_fn_hash(&id, args.len())
                     };
                     #[cfg(feature = "no_module")]
                     let hash = calc_fn_hash(&id, args.len());
@@ -788,7 +792,7 @@ impl Engine {
                 // Any more indexing following?
                 match input.peek().expect(NEVER_ENDS) {
                     // If another indexing level, right-bind it
-                    (Token::LeftBracket, ..) | (Token::QuestionBracket, ..) => {
+                    (Token::LeftBracket | Token::QuestionBracket, ..) => {
                         let (token, pos) = input.next().expect(NEVER_ENDS);
                         let prev_pos = settings.pos;
                         settings.pos = pos;
@@ -1088,7 +1092,10 @@ impl Engine {
                         return Err(PERR::WrongSwitchCaseCondition.into_err(if_pos));
                     }
 
-                    (Default::default(), Expr::BoolConstant(true, Position::NONE))
+                    (
+                        StaticVec::default(),
+                        Expr::BoolConstant(true, Position::NONE),
+                    )
                 }
                 _ if def_case.is_some() => {
                     return Err(PERR::WrongSwitchDefaultCase.into_err(def_case_pos))
@@ -1149,7 +1156,9 @@ impl Engine {
             expressions.push((condition, Expr::Stmt(stmt_block.into())).into());
             let index = expressions.len() - 1;
 
-            if !case_expr_list.is_empty() {
+            if case_expr_list.is_empty() {
+                def_case = Some(index);
+            } else {
                 for expr in case_expr_list {
                     let value = expr.get_literal_value().ok_or_else(|| {
                         PERR::ExprExpected("a literal".to_string()).into_err(expr.start_position())
@@ -1200,8 +1209,6 @@ impl Engine {
                         .and_modify(|cases| cases.push(index))
                         .or_insert_with(|| [index].into());
                 }
-            } else {
-                def_case = Some(index);
             }
 
             match input.peek().expect(NEVER_ENDS) {
@@ -1690,7 +1697,7 @@ impl Engine {
                 }
                 // Indexing
                 #[cfg(not(feature = "no_index"))]
-                (expr, token @ Token::LeftBracket) | (expr, token @ Token::QuestionBracket) => {
+                (expr, token @ (Token::LeftBracket | Token::QuestionBracket)) => {
                     let opt = match token {
                         Token::LeftBracket => ASTFlags::NONE,
                         Token::QuestionBracket => ASTFlags::NEGATED,
@@ -1700,7 +1707,7 @@ impl Engine {
                 }
                 // Property access
                 #[cfg(not(feature = "no_object"))]
-                (expr, op @ Token::Period) | (expr, op @ Token::Elvis) => {
+                (expr, op @ (Token::Period | Token::Elvis)) => {
                     // Expression after dot must start with an identifier
                     match input.peek().expect(NEVER_ENDS) {
                         (Token::Identifier(..), ..) => {
@@ -1745,7 +1752,7 @@ impl Engine {
         #[cfg(not(feature = "no_module"))]
         if let Some((.., namespace, hash, name)) = namespaced_variable {
             if !namespace.is_empty() {
-                *hash = crate::calc_qualified_var_hash(namespace.iter().map(|v| v.as_str()), name);
+                *hash = crate::calc_qualified_var_hash(namespace.iter().map(Ident::as_str), name);
 
                 #[cfg(not(feature = "no_module"))]
                 {
@@ -2196,7 +2203,7 @@ impl Engine {
                 Token::Custom(c) => self
                     .custom_keywords
                     .get(c)
-                    .cloned()
+                    .copied()
                     .ok_or_else(|| PERR::Reserved(c.to_string()).into_err(*current_pos))?,
                 Token::Reserved(c) if !is_valid_identifier(c.chars()) => {
                     return Err(PERR::UnknownOperator(c.to_string()).into_err(*current_pos))
@@ -2221,7 +2228,7 @@ impl Engine {
                 Token::Custom(c) => self
                     .custom_keywords
                     .get(c)
-                    .cloned()
+                    .copied()
                     .ok_or_else(|| PERR::Reserved(c.to_string()).into_err(*next_pos))?,
                 Token::Reserved(c) if !is_valid_identifier(c.chars()) => {
                     return Err(PERR::UnknownOperator(c.to_string()).into_err(*next_pos))
@@ -3429,7 +3436,7 @@ impl Engine {
                         }
                         let s = state.get_identifier("", s);
                         state.stack.push(s.clone(), ());
-                        params.push((s, pos))
+                        params.push((s, pos));
                     }
                     (Token::LexError(err), pos) => return Err(err.into_err(pos)),
                     (.., pos) => {
@@ -3565,7 +3572,7 @@ impl Engine {
                         }
                         let s = state.get_identifier("", s);
                         state.stack.push(s.clone(), ());
-                        params_list.push(s)
+                        params_list.push(s);
                     }
                     (Token::LexError(err), pos) => return Err(err.into_err(pos)),
                     (.., pos) => {

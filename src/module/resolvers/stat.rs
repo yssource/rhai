@@ -66,10 +66,10 @@ impl StaticModuleResolver {
     #[inline(always)]
     #[must_use]
     pub fn contains_path(&self, path: &str) -> bool {
-        if !self.0.is_empty() {
-            self.0.contains_key(path)
-        } else {
+        if self.0.is_empty() {
             false
+        } else {
+            self.0.contains_key(path)
         }
     }
     /// Get an iterator of all the [modules][Module].
@@ -85,7 +85,7 @@ impl StaticModuleResolver {
     /// Get an iterator of all the [module][Module] paths.
     #[inline]
     pub fn paths(&self) -> impl Iterator<Item = &str> {
-        self.0.keys().map(|s| s.as_str())
+        self.0.keys().map(SmartString::as_str)
     }
     /// Get an iterator of all the [modules][Module].
     #[inline(always)]
@@ -100,6 +100,7 @@ impl StaticModuleResolver {
     }
     /// Is this [`StaticModuleResolver`] empty?
     #[inline(always)]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }

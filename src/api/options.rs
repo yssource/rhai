@@ -51,17 +51,20 @@ impl Engine {
     /// Is `if`-expression allowed?
     /// Default is `true`.
     #[inline(always)]
+    #[must_use]
     pub const fn allow_if_expression(&self) -> bool {
         self.options.contains(LangOptions::IF_EXPR)
     }
     /// Set whether `if`-expression is allowed.
     #[inline(always)]
+    #[must_use]
     pub fn set_allow_if_expression(&mut self, enable: bool) {
-        self.options.set(LangOptions::IF_EXPR, enable)
+        self.options.set(LangOptions::IF_EXPR, enable);
     }
     /// Is `switch` expression allowed?
     /// Default is `true`.
     #[inline(always)]
+    #[must_use]
     pub const fn allow_switch_expression(&self) -> bool {
         self.options.contains(LangOptions::SWITCH_EXPR)
     }
@@ -73,6 +76,7 @@ impl Engine {
     /// Is statement-expression allowed?
     /// Default is `true`.
     #[inline(always)]
+    #[must_use]
     pub const fn allow_statement_expression(&self) -> bool {
         self.options.contains(LangOptions::STMT_EXPR)
     }
@@ -87,6 +91,7 @@ impl Engine {
     /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
+    #[must_use]
     pub const fn allow_anonymous_fn(&self) -> bool {
         self.options.contains(LangOptions::ANON_FN)
     }
@@ -101,6 +106,7 @@ impl Engine {
     /// Is looping allowed?
     /// Default is `true`.
     #[inline(always)]
+    #[must_use]
     pub const fn allow_looping(&self) -> bool {
         self.options.contains(LangOptions::LOOPING)
     }
@@ -112,6 +118,7 @@ impl Engine {
     /// Is variables shadowing allowed?
     /// Default is `true`.
     #[inline(always)]
+    #[must_use]
     pub const fn allow_shadowing(&self) -> bool {
         self.options.contains(LangOptions::SHADOW)
     }
@@ -123,6 +130,7 @@ impl Engine {
     /// Is strict variables mode enabled?
     /// Default is `false`.
     #[inline(always)]
+    #[must_use]
     pub const fn strict_variables(&self) -> bool {
         self.options.contains(LangOptions::STRICT_VAR)
     }
@@ -137,6 +145,7 @@ impl Engine {
     /// Not available under `no_object`.
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
+    #[must_use]
     pub const fn fail_on_invalid_map_property(&self) -> bool {
         self.options
             .contains(LangOptions::FAIL_ON_INVALID_MAP_PROPERTY)
