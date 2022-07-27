@@ -138,38 +138,38 @@ impl Parse for Module {
                 })?;
             // Gather and parse constants definitions.
             for item in &*content {
-                match item {
-                    syn::Item::Const(syn::ItemConst {
-                        vis: syn::Visibility::Public(..),
-                        ref expr,
-                        ident,
-                        attrs,
-                        ty,
-                        ..
-                    }) => consts.push(ExportedConst {
+                if let syn::Item::Const(syn::ItemConst {
+                    vis: syn::Visibility::Public(..),
+                    ref expr,
+                    ident,
+                    attrs,
+                    ty,
+                    ..
+                }) = item
+                {
+                    consts.push(ExportedConst {
                         name: ident.to_string(),
                         typ: ty.clone(),
                         expr: expr.as_ref().clone(),
                         cfg_attrs: crate::attrs::collect_cfg_attr(attrs),
-                    }),
-                    _ => {}
+                    })
                 }
             }
             // Gather and parse type definitions.
             for item in &*content {
-                match item {
-                    syn::Item::Type(syn::ItemType {
-                        vis: syn::Visibility::Public(..),
-                        ident,
-                        attrs,
-                        ty,
-                        ..
-                    }) => custom_types.push(ExportedType {
+                if let syn::Item::Type(syn::ItemType {
+                    vis: syn::Visibility::Public(..),
+                    ident,
+                    attrs,
+                    ty,
+                    ..
+                }) = item
+                {
+                    custom_types.push(ExportedType {
                         name: ident.to_string(),
                         typ: ty.clone(),
                         cfg_attrs: crate::attrs::collect_cfg_attr(attrs),
-                    }),
-                    _ => {}
+                    })
                 }
             }
             // Gather and parse sub-module definitions.

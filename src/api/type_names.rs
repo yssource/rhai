@@ -144,13 +144,13 @@ impl Engine {
     #[inline]
     #[must_use]
     pub(crate) fn format_type_name<'a>(&'a self, name: &'a str) -> std::borrow::Cow<'a, str> {
-        if name.starts_with("&mut ") {
-            let x = &name[5..];
+        if let Some(x) = name.strip_prefix("&mut ") {
             let r = self.format_type_name(x);
-            return if x != r {
-                format!("&mut {}", r).into()
-            } else {
+
+            return if x == r {
                 name.into()
+            } else {
+                format!("&mut {}", r).into()
             };
         }
 
@@ -167,9 +167,9 @@ impl Engine {
                 return None;
             })
             .unwrap_or_else(|| match name {
-                "INT" => return type_name::<crate::INT>(),
+                "INT" => type_name::<crate::INT>(),
                 #[cfg(not(feature = "no_float"))]
-                "FLOAT" => return type_name::<crate::FLOAT>(),
+                "FLOAT" => type_name::<crate::FLOAT>(),
                 _ => map_std_type_name(name, false),
             })
             .into()

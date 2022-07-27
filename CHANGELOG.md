@@ -45,6 +45,8 @@ Enhancements
 * `as_string` is added to BLOB's to convert it into a string by interpreting it as a UTF-8 byte stream.
 * `FnAccess::is_private`, `FnAccess::is_public`, `FnNamespace::is_module_namespace` and `FnNameSpace::is_global_namespace` are added for convenience.
 * `Iterator<Item=T>` type for functions metadata is simplified to `Iterator<T>`.
+* `Scope::remove` is added to remove a variable from a `Scope`, returning its value.
+* The code base is cleaner by running it through Clippy.
 
 
 Version 1.8.0

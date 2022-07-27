@@ -210,7 +210,7 @@ impl Position {
     }
     /// Print this [`Position`] for debug purposes.
     #[inline]
-    pub(crate) fn debug_print(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    pub(crate) fn debug_print(self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if !self.is_none() {
             write!(_f, " @ {:?}", self)?;
         }
@@ -1215,7 +1215,7 @@ pub fn parse_string_literal(
         if allow_interpolation
             && next_char == '$'
             && escape.is_empty()
-            && stream.peek_next().map(|ch| ch == '{').unwrap_or(false)
+            && stream.peek_next().map_or(false, |ch| ch == '{')
         {
             interpolated = true;
             state.is_within_text_terminated_by = None;
@@ -1245,7 +1245,7 @@ pub fn parse_string_literal(
 
         match next_char {
             // \r - ignore if followed by \n
-            '\r' if stream.peek_next().map(|ch| ch == '\n').unwrap_or(false) => (),
+            '\r' if stream.peek_next().map_or(false, |ch| ch == '\n') => (),
             // \...
             '\\' if !verbatim && escape.is_empty() => {
                 escape.push('\\');
@@ -1271,7 +1271,7 @@ pub fn parse_string_literal(
                 result.push('\r');
             }
             // \x??, \u????, \U????????
-            ch @ 'x' | ch @ 'u' | ch @ 'U' if !escape.is_empty() => {
+            ch @ ('x' | 'u' | 'U') if !escape.is_empty() => {
                 let mut seq = escape.clone();
                 escape.clear();
                 seq.push(ch);
@@ -1307,7 +1307,7 @@ pub fn parse_string_literal(
             // \{termination_char} - escaped
             _ if termination_char == next_char && !escape.is_empty() => {
                 escape.clear();
-                result.push(next_char)
+                result.push(next_char);
             }
 
             // Verbatim
@@ -1598,7 +1598,7 @@ fn get_next_token_inner(
                             }
                         }
                         // 0x????, 0o????, 0b???? at beginning
-                        ch @ 'x' | ch @ 'o' | ch @ 'b' | ch @ 'X' | ch @ 'O' | ch @ 'B'
+                        ch @ ('x' | 'o' | 'b' | 'X' | 'O' | 'B')
                             if c == '0' && result.len() <= 1 =>
                         {
                             result.push(next_char);
@@ -1639,12 +1639,14 @@ fn get_next_token_inner(
 
                         UNSIGNED_INT::from_str_radix(&out, radix)
                             .map(|v| v as INT)
-                            .map(Token::IntegerConstant)
-                            .unwrap_or_else(|_| {
-                                Token::LexError(
-                                    LERR::MalformedNumber(result.into_iter().collect()).into(),
-                                )
-                            })
+                            .map_or_else(
+                                |_| {
+                                    Token::LexError(
+                                        LERR::MalformedNumber(result.into_iter().collect()).into(),
+                                    )
+                                },
+                                Token::IntegerConstant,
+                            )
                     } else {
                         let out: String =
                             result.iter().filter(|&&c| c != NUMBER_SEPARATOR).collect();
@@ -1680,7 +1682,7 @@ fn get_next_token_inner(
 
             // letter or underscore ...
             #[cfg(not(feature = "unicode-xid-ident"))]
-            ('a'..='z', ..) | ('_', ..) | ('A'..='Z', ..) => {
+            ('a'..='z' | '_' | 'A'..='Z', ..) => {
                 return get_identifier(stream, pos, start_pos, c);
             }
             #[cfg(feature = "unicode-xid-ident")]
@@ -2161,7 +2163,7 @@ fn get_identifier(
         }
     }
 
-    let is_valid_identifier = is_valid_identifier(result.iter().cloned());
+    let is_valid_identifier = is_valid_identifier(result.iter().copied());
 
     let identifier: String = result.into_iter().collect();
 
@@ -2384,7 +2386,7 @@ impl<'a> Iterator for TokenIterator<'a> {
                 ("::<", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
                     "'::<>' is not a valid symbol. This is not Rust! Should it be '::'?".to_string(),
                 ).into()),
-                ("(*", false) | ("*)", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
+                ("(*" | "*)", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
                     "'(* .. *)' is not a valid comment format. This is not Pascal! Should it be '/* .. */'?".to_string(),
                 ).into()),
                 ("# {", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),

@@ -159,7 +159,7 @@ impl FromIterator<char> for ImmutableString {
 impl<'a> FromIterator<&'a char> for ImmutableString {
     #[inline]
     fn from_iter<T: IntoIterator<Item = &'a char>>(iter: T) -> Self {
-        Self(iter.into_iter().cloned().collect::<SmartString>().into())
+        Self(iter.into_iter().copied().collect::<SmartString>().into())
     }
 }
 
@@ -170,14 +170,14 @@ impl<'a> FromIterator<&'a str> for ImmutableString {
     }
 }
 
-impl<'a> FromIterator<String> for ImmutableString {
+impl FromIterator<String> for ImmutableString {
     #[inline]
     fn from_iter<T: IntoIterator<Item = String>>(iter: T) -> Self {
         Self(iter.into_iter().collect::<SmartString>().into())
     }
 }
 
-impl<'a> FromIterator<SmartString> for ImmutableString {
+impl FromIterator<SmartString> for ImmutableString {
     #[inline]
     fn from_iter<T: IntoIterator<Item = SmartString>>(iter: T) -> Self {
         Self(iter.into_iter().collect::<SmartString>().into())
@@ -576,6 +576,7 @@ impl PartialOrd<ImmutableString> for String {
 impl ImmutableString {
     /// Create a new [`ImmutableString`].
     #[inline(always)]
+    #[must_use]
     pub fn new() -> Self {
         Self(SmartString::new_const().into())
     }
@@ -583,6 +584,7 @@ impl ImmutableString {
     ///
     /// If there are other references to the same string, a cloned copy is returned.
     #[inline]
+    #[must_use]
     pub fn into_owned(mut self) -> String {
         self.make_mut(); // Make sure it is unique reference
         shared_take(self.0).into() // Should succeed
@@ -620,6 +622,7 @@ impl ImmutableString {
     /// assert!(!s2.ptr_eq(&s3));
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn ptr_eq(&self, other: &Self) -> bool {
         Shared::ptr_eq(&self.0, &other.0)
     }

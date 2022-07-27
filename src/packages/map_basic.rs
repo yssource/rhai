@@ -92,10 +92,10 @@ mod map_functions {
     /// print(m);       // prints "#{a:1, c:3}"
     /// ```
     pub fn remove(map: &mut Map, property: &str) -> Dynamic {
-        if !map.is_empty() {
-            map.remove(property).unwrap_or_else(|| Dynamic::UNIT)
-        } else {
+        if map.is_empty() {
             Dynamic::UNIT
+        } else {
+            map.remove(property).unwrap_or(Dynamic::UNIT)
         }
     }
     /// Add all property values of another object map into the object map.
@@ -160,9 +160,9 @@ mod map_functions {
             if map.is_empty() {
                 *map = map2;
             } else {
-                map2.into_iter().for_each(|(key, value)| {
+                for (key, value) in map2 {
                     map.entry(key).or_insert(value);
-                });
+                }
             }
         }
     }

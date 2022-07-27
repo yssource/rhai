@@ -8,7 +8,7 @@ use crate::func::{
 use crate::types::{dynamic::Variant, CustomTypesCollection};
 use crate::{
     calc_fn_hash, calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes, Dynamic, Identifier,
-    ImmutableString, NativeCallContext, RhaiResultOf, Shared, StaticVec,
+    ImmutableString, NativeCallContext, RhaiResultOf, Shared, SmartString, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -128,10 +128,9 @@ impl FuncInfo {
 
         let typ = typ.trim();
 
-        if typ.starts_with("rhai::") {
-            return Self::format_type(&typ[6..], is_return_type);
-        } else if typ.starts_with("&mut ") {
-            let x = &typ[5..];
+        if let Some(x) = typ.strip_prefix("rhai::") {
+            return Self::format_type(x, is_return_type);
+        } else if let Some(x) = typ.strip_prefix("&mut ") {
             let r = Self::format_type(x, false);
             return if r == x {
                 typ.into()
@@ -182,7 +181,15 @@ impl FuncInfo {
 
         let return_type = Self::format_type(&self.metadata.return_type, true);
 
-        if !self.metadata.params_info.is_empty() {
+        if self.metadata.params_info.is_empty() {
+            for x in 0..self.metadata.params {
+                sig.push('_');
+                if x < self.metadata.params - 1 {
+                    sig.push_str(", ");
+                }
+            }
+            sig.push(')');
+        } else {
             let params: StaticVec<_> = self
                 .metadata
                 .params_info
@@ -203,14 +210,6 @@ impl FuncInfo {
                 })
                 .collect();
             sig.push_str(&params.join(", "));
-            sig.push(')');
-        } else {
-            for x in 0..self.metadata.params {
-                sig.push('_');
-                if x < self.metadata.params - 1 {
-                    sig.push_str(", ");
-                }
-            }
             sig.push(')');
         }
 
@@ -239,7 +238,7 @@ pub fn calc_native_fn_hash<'a>(
     params: &[TypeId],
 ) -> u64 {
     let hash_script = calc_qualified_fn_hash(modules, fn_name, params.len());
-    let hash_params = calc_fn_params_hash(params.iter().cloned());
+    let hash_params = calc_fn_params_hash(params.iter().copied());
     combine_hashes(hash_script, hash_params)
 }
 
@@ -299,7 +298,7 @@ impl fmt::Debug for Module {
                 &self
                     .modules
                     .keys()
-                    .map(|m| m.as_str())
+                    .map(SmartString::as_str)
                     .collect::<BTreeSet<_>>(),
             )
             .field("vars", &self.variables)
@@ -585,6 +584,7 @@ impl Module {
     /// assert_eq!(module.get_custom_type(name), Some("MyType"));
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn get_custom_type(&self, key: &str) -> Option<&str> {
         self.custom_types.get(key)
     }
@@ -648,7 +648,7 @@ impl Module {
                 FnAccess::Public => true,
                 FnAccess::Private => false,
             })
-            .map(|f| f.gen_signature())
+            .map(FuncInfo::gen_signature)
     }
 
     /// Does a variable exist in the [`Module`]?
@@ -664,10 +664,10 @@ impl Module {
     #[inline(always)]
     #[must_use]
     pub fn contains_var(&self, name: &str) -> bool {
-        if !self.variables.is_empty() {
-            self.variables.contains_key(name)
-        } else {
+        if self.variables.is_empty() {
             false
+        } else {
+            self.variables.contains_key(name)
         }
     }
 
@@ -700,10 +700,10 @@ impl Module {
     #[inline(always)]
     #[must_use]
     pub fn get_var(&self, name: &str) -> Option<Dynamic> {
-        if !self.variables.is_empty() {
-            self.variables.get(name).cloned()
-        } else {
+        if self.variables.is_empty() {
             None
+        } else {
+            self.variables.get(name).cloned()
         }
     }
 
@@ -740,10 +740,10 @@ impl Module {
     #[cfg(not(feature = "no_module"))]
     #[inline]
     pub(crate) fn get_qualified_var(&self, hash_var: u64) -> Option<Dynamic> {
-        if !self.all_variables.is_empty() {
-            self.all_variables.get(&hash_var).cloned()
-        } else {
+        if self.all_variables.is_empty() {
             None
+        } else {
+            self.all_variables.get(&hash_var).cloned()
         }
     }
 
@@ -795,14 +795,14 @@ impl Module {
         name: impl AsRef<str>,
         num_params: usize,
     ) -> Option<&Shared<crate::ast::ScriptFnDef>> {
-        if !self.functions.is_empty() {
+        if self.functions.is_empty() {
+            None
+        } else {
             let name = name.as_ref();
 
             self.iter_fn()
                 .find(|f| f.metadata.params == num_params && f.metadata.name == name)
                 .and_then(|f| f.func.get_script_fn_def())
-        } else {
-            None
         }
     }
 
@@ -841,10 +841,10 @@ impl Module {
     #[inline(always)]
     #[must_use]
     pub fn contains_sub_module(&self, name: &str) -> bool {
-        if !self.modules.is_empty() {
-            self.modules.contains_key(name)
-        } else {
+        if self.modules.is_empty() {
             false
+        } else {
+            self.modules.contains_key(name)
         }
     }
 
@@ -862,10 +862,10 @@ impl Module {
     #[inline]
     #[must_use]
     pub fn get_sub_module(&self, name: &str) -> Option<&Module> {
-        if !self.modules.is_empty() {
-            self.modules.get(name).map(|m| &**m)
-        } else {
+        if self.modules.is_empty() {
             None
+        } else {
+            self.modules.get(name).map(|m| &**m)
         }
     }
 
@@ -909,10 +909,10 @@ impl Module {
     #[inline(always)]
     #[must_use]
     pub fn contains_fn(&self, hash_fn: u64) -> bool {
-        if !self.functions.is_empty() {
-            self.functions.contains_key(&hash_fn)
-        } else {
+        if self.functions.is_empty() {
             false
+        } else {
+            self.functions.contains_key(&hash_fn)
         }
     }
 
@@ -1062,7 +1062,7 @@ impl Module {
         let mut param_types: StaticVec<_> = arg_types
             .as_ref()
             .iter()
-            .cloned()
+            .copied()
             .enumerate()
             .map(|(i, type_id)| Self::map_type(!is_method || i > 0, type_id))
             .collect();
@@ -1328,8 +1328,10 @@ impl Module {
     where
         A: Variant + Clone,
         T: Variant + Clone,
-        F: RegisterNativeFunction<ARGS, RhaiResultOf<T>>,
-        F: Fn(&mut A) -> RhaiResultOf<T> + SendSync + 'static,
+        F: RegisterNativeFunction<ARGS, RhaiResultOf<T>>
+            + Fn(&mut A) -> RhaiResultOf<T>
+            + SendSync
+            + 'static,
     {
         self.set_fn(
             crate::engine::make_getter(name.as_ref()).as_str(),
@@ -1370,8 +1372,10 @@ impl Module {
     where
         A: Variant + Clone,
         B: Variant + Clone,
-        F: RegisterNativeFunction<ARGS, RhaiResultOf<()>>,
-        F: Fn(&mut A, B) -> RhaiResultOf<()> + SendSync + 'static,
+        F: RegisterNativeFunction<ARGS, RhaiResultOf<()>>
+            + Fn(&mut A, B) -> RhaiResultOf<()>
+            + SendSync
+            + 'static,
     {
         self.set_fn(
             crate::engine::make_setter(name.as_ref()).as_str(),
@@ -1417,8 +1421,10 @@ impl Module {
         A: Variant + Clone,
         B: Variant + Clone,
         T: Variant + Clone,
-        F: RegisterNativeFunction<ARGS, RhaiResultOf<T>>,
-        F: Fn(&mut A, B) -> RhaiResultOf<T> + SendSync + 'static,
+        F: RegisterNativeFunction<ARGS, RhaiResultOf<T>>
+            + Fn(&mut A, B) -> RhaiResultOf<T>
+            + SendSync
+            + 'static,
     {
         #[cfg(not(feature = "no_index"))]
         if TypeId::of::<A>() == TypeId::of::<crate::Array>() {
@@ -1479,8 +1485,10 @@ impl Module {
         A: Variant + Clone,
         B: Variant + Clone,
         C: Variant + Clone,
-        F: RegisterNativeFunction<ARGS, RhaiResultOf<()>>,
-        F: Fn(&mut A, B, C) -> RhaiResultOf<()> + SendSync + 'static,
+        F: RegisterNativeFunction<ARGS, RhaiResultOf<()>>
+            + Fn(&mut A, B, C) -> RhaiResultOf<()>
+            + SendSync
+            + 'static,
     {
         #[cfg(not(feature = "no_index"))]
         if TypeId::of::<A>() == TypeId::of::<crate::Array>() {
@@ -1564,10 +1572,10 @@ impl Module {
     #[inline]
     #[must_use]
     pub(crate) fn get_fn(&self, hash_native: u64) -> Option<&CallableFunction> {
-        if !self.functions.is_empty() {
-            self.functions.get(&hash_native).map(|f| &f.func)
-        } else {
+        if self.functions.is_empty() {
             None
+        } else {
+            self.functions.get(&hash_native).map(|f| &f.func)
         }
     }
 
@@ -1575,10 +1583,10 @@ impl Module {
     #[inline(always)]
     #[must_use]
     pub(crate) fn contains_dynamic_fn(&self, hash_script: u64) -> bool {
-        if !self.dynamic_functions.is_empty() {
-            self.dynamic_functions.contains(&hash_script)
-        } else {
+        if self.dynamic_functions.is_empty() {
             false
+        } else {
+            self.dynamic_functions.contains(&hash_script)
         }
     }
 
@@ -1588,10 +1596,10 @@ impl Module {
     #[inline(always)]
     #[must_use]
     pub fn contains_qualified_fn(&self, hash_fn: u64) -> bool {
-        if !self.all_functions.is_empty() {
-            self.all_functions.contains_key(&hash_fn)
-        } else {
+        if self.all_functions.is_empty() {
             false
+        } else {
+            self.all_functions.contains_key(&hash_fn)
         }
     }
 
@@ -1602,10 +1610,10 @@ impl Module {
     #[inline]
     #[must_use]
     pub(crate) fn get_qualified_fn(&self, hash_qualified_fn: u64) -> Option<&CallableFunction> {
-        if !self.all_functions.is_empty() {
-            self.all_functions.get(&hash_qualified_fn)
-        } else {
+        if self.all_functions.is_empty() {
             None
+        } else {
+            self.all_functions.get(&hash_qualified_fn)
         }
     }
 
@@ -1684,7 +1692,7 @@ impl Module {
             self.functions.entry(k).or_insert_with(|| v.clone());
         }
         self.dynamic_functions
-            .extend(other.dynamic_functions.iter().cloned());
+            .extend(other.dynamic_functions.iter().copied());
         for (&k, v) in &other.type_iterators {
             self.type_iterators.entry(k).or_insert_with(|| v.clone());
         }
@@ -1746,7 +1754,7 @@ impl Module {
         );
         // This may introduce entries that are superfluous because the function has been filtered away.
         self.dynamic_functions
-            .extend(other.dynamic_functions.iter().cloned());
+            .extend(other.dynamic_functions.iter().copied());
 
         self.type_iterators
             .extend(other.type_iterators.iter().map(|(&k, v)| (k, v.clone())));
@@ -1896,7 +1904,6 @@ impl Module {
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "internals")]
     #[inline(always)]
-    #[must_use]
     pub fn iter_script_fn_info(
         &self,
     ) -> impl Iterator<
@@ -2147,14 +2154,14 @@ impl Module {
 
                 if !f.func.is_script() {
                     let hash_qualified_fn = calc_native_fn_hash(
-                        path.iter().cloned(),
+                        path.iter().copied(),
                         f.metadata.name.as_str(),
                         &f.param_types,
                     );
                     functions.insert(hash_qualified_fn, f.func.clone());
                 } else if cfg!(not(feature = "no_function")) {
                     let hash_qualified_script = crate::calc_qualified_fn_hash(
-                        path.iter().cloned(),
+                        path.iter().copied(),
                         f.metadata.name.as_str(),
                         f.metadata.params,
                     );
@@ -2194,10 +2201,10 @@ impl Module {
     #[inline(always)]
     #[must_use]
     pub fn contains_qualified_iter(&self, id: TypeId) -> bool {
-        if !self.all_type_iterators.is_empty() {
-            self.all_type_iterators.contains_key(&id)
-        } else {
+        if self.all_type_iterators.is_empty() {
             false
+        } else {
+            self.all_type_iterators.contains_key(&id)
         }
     }
 
@@ -2205,10 +2212,10 @@ impl Module {
     #[inline(always)]
     #[must_use]
     pub fn contains_iter(&self, id: TypeId) -> bool {
-        if !self.type_iterators.is_empty() {
-            self.type_iterators.contains_key(&id)
-        } else {
+        if self.type_iterators.is_empty() {
             false
+        } else {
+            self.type_iterators.contains_key(&id)
         }
     }
 
@@ -2275,10 +2282,10 @@ impl Module {
     #[inline]
     #[must_use]
     pub(crate) fn get_qualified_iter(&self, id: TypeId) -> Option<&IteratorFn> {
-        if !self.all_type_iterators.is_empty() {
-            self.all_type_iterators.get(&id).map(|f| &**f)
-        } else {
+        if self.all_type_iterators.is_empty() {
             None
+        } else {
+            self.all_type_iterators.get(&id).map(|f| &**f)
         }
     }
 
@@ -2286,10 +2293,10 @@ impl Module {
     #[inline]
     #[must_use]
     pub(crate) fn get_iter(&self, id: TypeId) -> Option<&IteratorFn> {
-        if !self.type_iterators.is_empty() {
-            self.type_iterators.get(&id).map(|f| &**f)
-        } else {
+        if self.type_iterators.is_empty() {
             None
+        } else {
+            self.type_iterators.get(&id).map(|f| &**f)
         }
     }
 }

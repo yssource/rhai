@@ -980,8 +980,8 @@ impl Engine {
                         })?,
                         offset,
                     )
-                } else if let Some(abs_index) = index.checked_abs() {
-                    let offset = abs_index as usize;
+                } else {
+                    let offset = index.unsigned_abs() as usize;
                     (
                         // Count from end if negative
                         s.chars().rev().nth(offset - 1).ok_or_else(|| {
@@ -990,9 +990,6 @@ impl Engine {
                         })?,
                         offset,
                     )
-                } else {
-                    let chars_len = s.chars().count();
-                    return Err(ERR::ErrorStringBounds(chars_len, index, idx_pos).into());
                 };
 
                 Ok(Target::StringChar {

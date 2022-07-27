@@ -42,7 +42,7 @@ impl fmt::Debug for Namespace {
             &self
                 .path
                 .iter()
-                .map(|m| m.as_str())
+                .map(Ident::as_str)
                 .collect::<StaticVec<_>>()
                 .join(Token::DoubleColon.literal_syntax()),
         )
@@ -59,7 +59,7 @@ impl fmt::Display for Namespace {
             &self
                 .path
                 .iter()
-                .map(|m| m.as_str())
+                .map(Ident::as_str)
                 .collect::<StaticVec<_>>()
                 .join(Token::DoubleColon.literal_syntax()),
         )
@@ -126,7 +126,7 @@ impl Namespace {
     /// Set the [`Scope`][crate::Scope] index offset.
     #[inline(always)]
     pub(crate) fn set_index(&mut self, index: Option<NonZeroUsize>) {
-        self.index = index
+        self.index = index;
     }
     /// Get the [position][Position] of this [`Namespace`].
     ///

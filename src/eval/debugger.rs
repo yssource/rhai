@@ -147,10 +147,10 @@ impl fmt::Display for BreakPoint {
                 pos,
                 enabled,
             } => {
-                if !source.is_empty() {
-                    write!(f, "{} @ {:?}", source, pos)?;
-                } else {
+                if source.is_empty() {
                     write!(f, "@ {:?}", pos)?;
+                } else {
+                    write!(f, "{} @ {:?}", source, pos)?;
                 }
                 if !*enabled {
                     f.write_str(" (disabled)")?;
@@ -201,6 +201,7 @@ impl fmt::Display for BreakPoint {
 impl BreakPoint {
     /// Is this [`BreakPoint`] enabled?
     #[inline(always)]
+    #[must_use]
     pub fn is_enabled(&self) -> bool {
         match self {
             #[cfg(not(feature = "no_position"))]
@@ -441,7 +442,6 @@ impl Engine {
     ///
     /// It is up to the [`Engine`] to reactivate the debugger.
     #[inline(always)]
-    #[must_use]
     pub(crate) fn run_debugger_with_reset<'a>(
         &self,
         scope: &mut Scope,
@@ -464,7 +464,6 @@ impl Engine {
     ///
     /// It is up to the [`Engine`] to reactivate the debugger.
     #[inline]
-    #[must_use]
     pub(crate) fn run_debugger_with_reset_raw<'a>(
         &self,
         scope: &mut Scope,
@@ -514,7 +513,6 @@ impl Engine {
     ///
     /// It is up to the [`Engine`] to reactivate the debugger.
     #[inline]
-    #[must_use]
     pub(crate) fn run_debugger_raw<'a>(
         &self,
         scope: &mut Scope,

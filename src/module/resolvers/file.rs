@@ -244,10 +244,10 @@ impl FileModuleResolver {
 
         let cache = locked_read(&self.cache);
 
-        if !cache.is_empty() {
-            cache.contains_key(path.as_ref())
-        } else {
+        if cache.is_empty() {
             false
+        } else {
+            cache.contains_key(path.as_ref())
         }
     }
     /// Empty the internal cache.
@@ -277,7 +277,7 @@ impl FileModuleResolver {
             file_path = self
                 .base_path
                 .clone()
-                .or_else(|| source_path.map(|p| p.into()))
+                .or_else(|| source_path.map(Into::into))
                 .unwrap_or_default();
             file_path.push(path);
         } else {
@@ -374,7 +374,7 @@ impl ModuleResolver for FileModuleResolver {
         pos: Position,
     ) -> Option<RhaiResultOf<crate::AST>> {
         // Construct the script file path
-        let file_path = self.get_file_path(path, source_path.map(|s| Path::new(s)));
+        let file_path = self.get_file_path(path, source_path.map(Path::new));
 
         // Load the script file and compile it
         Some(

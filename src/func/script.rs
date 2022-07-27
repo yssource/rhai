@@ -88,7 +88,7 @@ impl Engine {
         let orig_call_stack_len = global.debugger.call_stack().len();
 
         // Put arguments into scope as variables
-        scope.extend(fn_def.params.iter().cloned().zip(args.into_iter().map(|v| {
+        scope.extend(fn_def.params.iter().cloned().zip(args.iter_mut().map(|v| {
             // Actually consume the arguments instead of cloning them
             mem::take(*v)
         })));
@@ -98,11 +98,7 @@ impl Engine {
         if self.debugger.is_some() {
             global.debugger.push_call_stack_frame(
                 fn_def.name.clone(),
-                scope
-                    .iter()
-                    .skip(orig_scope_len)
-                    .map(|(.., v)| v.clone())
-                    .collect(),
+                scope.iter().skip(orig_scope_len).map(|(.., v)| v).collect(),
                 global.source.clone(),
                 pos,
             );
@@ -132,7 +128,7 @@ impl Engine {
                 } else {
                     caches.push_fn_resolution_cache();
                     lib_merged.push(&**fn_lib);
-                    lib_merged.extend(lib.iter().cloned());
+                    lib_merged.extend(lib.iter().copied());
                     &lib_merged
                 },
                 Some(mem::replace(&mut global.constants, constants.clone())),
@@ -209,7 +205,7 @@ impl Engine {
             scope.rewind(orig_scope_len);
         } else if !args.is_empty() {
             // Remove arguments only, leaving new variables in the scope
-            scope.remove_range(orig_scope_len, args.len())
+            scope.remove_range(orig_scope_len, args.len());
         }
         #[cfg(not(feature = "no_module"))]
         global.truncate_imports(orig_imports_len);
@@ -237,7 +233,7 @@ impl Engine {
     ) -> bool {
         let cache = caches.fn_resolution_cache_mut();
 
-        if let Some(result) = cache.get(&hash_script).map(|v| v.is_some()) {
+        if let Some(result) = cache.get(&hash_script).map(Option::is_some) {
             return result;
         }
 

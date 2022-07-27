@@ -70,7 +70,7 @@ impl Engine {
 
         #[cfg(feature = "metadata")]
         let param_type_names: crate::StaticVec<_> =
-            param_type_names.iter().map(|ty| ty.as_str()).collect();
+            param_type_names.iter().map(String::as_str).collect();
         #[cfg(feature = "metadata")]
         let param_type_names = Some(param_type_names.as_ref());
 
@@ -128,7 +128,7 @@ impl Engine {
 
         #[cfg(feature = "metadata")]
         let param_type_names: crate::StaticVec<_> =
-            param_type_names.iter().map(|ty| ty.as_str()).collect();
+            param_type_names.iter().map(String::as_str).collect();
         #[cfg(feature = "metadata")]
         let param_type_names = Some(param_type_names.as_ref());
 
@@ -989,16 +989,7 @@ impl Engine {
             let separator = crate::tokenizer::Token::DoubleColon.syntax();
             let separator = separator.as_ref();
 
-            if !name.contains(separator) {
-                if !module.is_indexed() {
-                    // Index the module (making a clone copy if necessary) if it is not indexed
-                    let mut module = crate::func::shared_take_or_clone(module);
-                    module.build_index();
-                    root.insert(name.into(), module.into());
-                } else {
-                    root.insert(name.into(), module);
-                }
-            } else {
+            if name.contains(separator) {
                 let mut iter = name.splitn(2, separator);
                 let sub_module = iter.next().expect("contains separator").trim();
                 let remainder = iter.next().expect("contains separator").trim();
@@ -1015,6 +1006,13 @@ impl Engine {
                     m.build_index();
                     root.insert(sub_module.into(), m.into());
                 }
+            } else if module.is_indexed() {
+                root.insert(name.into(), module);
+            } else {
+                // Index the module (making a clone copy if necessary) if it is not indexed
+                let mut module = crate::func::shared_take_or_clone(module);
+                module.build_index();
+                root.insert(name.into(), module.into());
             }
         }
 
@@ -1039,7 +1037,7 @@ impl Engine {
 
         #[cfg(not(feature = "no_module"))]
         for (name, m) in &self.global_sub_modules {
-            signatures.extend(m.gen_fn_signatures().map(|f| format!("{}::{}", name, f)))
+            signatures.extend(m.gen_fn_signatures().map(|f| format!("{}::{}", name, f)));
         }
 
         signatures.extend(

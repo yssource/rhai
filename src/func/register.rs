@@ -28,7 +28,7 @@ use std::{any::TypeId, mem};
 pub struct Mut<T>(T);
 //pub struct Ref<T>(T);
 
-/// Dereference into DynamicWriteLock
+/// Dereference into [`DynamicWriteLock`]
 #[inline(always)]
 #[must_use]
 pub fn by_ref<T: Variant + Clone>(data: &mut Dynamic) -> DynamicWriteLock<T> {
@@ -56,7 +56,7 @@ pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
 
     // We consume the argument and then replace it with () - the argument is not supposed to be used again.
     // This way, we avoid having to clone the argument again, because it is already a clone when passed here.
-    return mem::take(data).cast::<T>();
+    mem::take(data).cast::<T>()
 }
 
 /// Trait to register custom Rust functions.

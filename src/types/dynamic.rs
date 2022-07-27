@@ -439,7 +439,7 @@ impl Hash for Dynamic {
         mem::discriminant(&self.0).hash(state);
 
         match self.0 {
-            Union::Unit(..) => ().hash(state),
+            Union::Unit(..) => (),
             Union::Bool(ref b, ..) => b.hash(state),
             Union::Str(ref s, ..) => s.hash(state),
             Union::Char(ref c, ..) => c.hash(state),
@@ -739,7 +739,7 @@ impl Dynamic {
     /// A [`Dynamic`] containing the integer 1,000.
     pub const THOUSAND: Self = Self::from_int(1000);
     /// A [`Dynamic`] containing the integer 1,000,000.
-    pub const MILLION: Self = Self::from_int(1000000);
+    pub const MILLION: Self = Self::from_int(1_000_000);
     /// A [`Dynamic`] containing the integer -1.
     pub const NEGATIVE_ONE: Self = Self::from_int(-1);
     /// A [`Dynamic`] containing the integer -2.
@@ -778,7 +778,7 @@ impl Dynamic {
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
-    pub const FLOAT_MILLION: Self = Self::from_float(1000000.0);
+    pub const FLOAT_MILLION: Self = Self::from_float(1_000_000.0);
     /// A [`Dynamic`] containing `-1.0`.
     ///
     /// Not available under `no_float`.
@@ -823,7 +823,7 @@ impl Dynamic {
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
-    pub const FLOAT_MILLIONTH: Self = Self::from_float(0.000001);
+    pub const FLOAT_MILLIONTH: Self = Self::from_float(0.000_001);
     /// A [`Dynamic`] containing π.
     ///
     /// Not available under `no_float`.
@@ -867,16 +867,19 @@ impl Dynamic {
 
     /// Create a new [`Dynamic`] from a [`bool`].
     #[inline(always)]
+    #[must_use]
     pub const fn from_bool(value: bool) -> Self {
         Self(Union::Bool(value, DEFAULT_TAG_VALUE, ReadWrite))
     }
     /// Create a new [`Dynamic`] from an [`INT`].
     #[inline(always)]
+    #[must_use]
     pub const fn from_int(value: INT) -> Self {
         Self(Union::Int(value, DEFAULT_TAG_VALUE, ReadWrite))
     }
     /// Create a new [`Dynamic`] from a [`char`].
     #[inline(always)]
+    #[must_use]
     pub const fn from_char(value: char) -> Self {
         Self(Union::Char(value, DEFAULT_TAG_VALUE, ReadWrite))
     }
@@ -885,6 +888,7 @@ impl Dynamic {
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     #[inline(always)]
+    #[must_use]
     pub const fn from_float(value: crate::FLOAT) -> Self {
         Self(Union::Float(
             crate::ast::FloatWrapper::new_const(value),
@@ -897,24 +901,28 @@ impl Dynamic {
     /// Exported under the `decimal` feature only.
     #[cfg(feature = "decimal")]
     #[inline(always)]
+    #[must_use]
     pub fn from_decimal(value: rust_decimal::Decimal) -> Self {
         Self(Union::Decimal(value.into(), DEFAULT_TAG_VALUE, ReadWrite))
     }
     /// Create a [`Dynamic`] from an [`Array`][crate::Array].
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
+    #[must_use]
     pub fn from_array(array: crate::Array) -> Self {
         Self(Union::Array(array.into(), DEFAULT_TAG_VALUE, ReadWrite))
     }
     /// Create a [`Dynamic`] from a [`Blob`][crate::Blob].
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
+    #[must_use]
     pub fn from_blob(blob: crate::Blob) -> Self {
         Self(Union::Blob(blob.into(), DEFAULT_TAG_VALUE, ReadWrite))
     }
     /// Create a [`Dynamic`] from a [`Map`][crate::Map].
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
+    #[must_use]
     pub fn from_map(map: crate::Map) -> Self {
         Self(Union::Map(map.into(), DEFAULT_TAG_VALUE, ReadWrite))
     }
@@ -923,6 +931,7 @@ impl Dynamic {
     /// Not available under `no-std`.
     #[cfg(not(feature = "no_std"))]
     #[inline(always)]
+    #[must_use]
     pub fn from_timestamp(value: Instant) -> Self {
         Self(Union::TimeStamp(value.into(), DEFAULT_TAG_VALUE, ReadWrite))
     }
@@ -993,6 +1002,7 @@ impl Dynamic {
     }
     /// Make this [`Dynamic`] read-only (i.e. a constant).
     #[inline(always)]
+    #[must_use]
     pub fn into_read_only(self) -> Self {
         let mut value = self;
         value.set_access_mode(AccessMode::ReadOnly);
@@ -1018,17 +1028,11 @@ impl Dynamic {
     #[must_use]
     pub fn is_read_only(&self) -> bool {
         #[cfg(not(feature = "no_closure"))]
-        match self.0 {
-            // Shared values do not consider the current access mode
-            //Union::Shared(.., ReadOnly) => return true,
-            Union::Shared(ref cell, ..) => {
-                return match locked_read(cell).access_mode() {
-                    ReadWrite => false,
-                    ReadOnly => true,
-                }
-            }
-
-            _ => (),
+        if let Union::Shared(ref cell, ..) = self.0 {
+            return match locked_read(cell).access_mode() {
+                ReadWrite => false,
+                ReadOnly => true,
+            };
         }
 
         match self.access_mode() {
@@ -1368,14 +1372,11 @@ impl Dynamic {
     #[must_use]
     pub fn is_locked(&self) -> bool {
         #[cfg(not(feature = "no_closure"))]
-        match self.0 {
-            Union::Shared(ref _cell, ..) => {
-                #[cfg(not(feature = "sync"))]
-                return _cell.try_borrow().is_err();
-                #[cfg(feature = "sync")]
-                return false;
-            }
-            _ => (),
+        if let Union::Shared(ref _cell, ..) = self.0 {
+            #[cfg(not(feature = "sync"))]
+            return _cell.try_borrow().is_err();
+            #[cfg(feature = "sync")]
+            return false;
         }
 
         false
@@ -1397,13 +1398,13 @@ impl Dynamic {
             Union::Shared(ref cell, ..) => {
                 let value = locked_read(cell);
 
-                if (*value).type_id() != TypeId::of::<T>()
+                return if (*value).type_id() != TypeId::of::<T>()
                     && TypeId::of::<Dynamic>() != TypeId::of::<T>()
                 {
-                    return None;
+                    None
                 } else {
-                    return Some(DynamicReadLock(DynamicReadLockInner::Guard(value)));
-                }
+                    Some(DynamicReadLock(DynamicReadLockInner::Guard(value)))
+                };
             }
             _ => (),
         }
@@ -1429,13 +1430,13 @@ impl Dynamic {
             Union::Shared(ref cell, ..) => {
                 let guard = crate::func::locked_write(cell);
 
-                if (*guard).type_id() != TypeId::of::<T>()
+                return if (*guard).type_id() != TypeId::of::<T>()
                     && TypeId::of::<Dynamic>() != TypeId::of::<T>()
                 {
-                    return None;
+                    None
                 } else {
-                    return Some(DynamicWriteLock(DynamicWriteLockInner::Guard(guard)));
-                }
+                    Some(DynamicWriteLock(DynamicWriteLockInner::Guard(guard)))
+                };
             }
             _ => (),
         }
@@ -1791,7 +1792,7 @@ impl Dynamic {
                     #[cfg(feature = "no_closure")]
                     let typ = v.type_name();
 
-                    v.try_cast::<T>().ok_or_else(|| typ)
+                    v.try_cast::<T>().ok_or(typ)
                 })
                 .collect(),
             Union::Blob(..) if TypeId::of::<T>() == TypeId::of::<u8>() => Ok(self.cast::<Vec<T>>()),
@@ -1813,7 +1814,7 @@ impl Dynamic {
                                 #[cfg(feature = "no_closure")]
                                 let typ = v.type_name();
 
-                                v.read_lock::<T>().ok_or_else(|| typ).map(|v| v.clone())
+                                v.read_lock::<T>().ok_or(typ).map(|v| v.clone())
                             })
                             .collect()
                     }

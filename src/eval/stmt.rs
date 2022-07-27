@@ -368,21 +368,21 @@ impl Engine {
 
                 match guard_val {
                     Ok(true) => {
-                        if !if_block.is_empty() {
+                        if if_block.is_empty() {
+                            Ok(Dynamic::UNIT)
+                        } else {
                             self.eval_stmt_block(
                                 scope, global, caches, lib, this_ptr, if_block, true, level,
                             )
-                        } else {
-                            Ok(Dynamic::UNIT)
                         }
                     }
                     Ok(false) => {
-                        if !else_block.is_empty() {
+                        if else_block.is_empty() {
+                            Ok(Dynamic::UNIT)
+                        } else {
                             self.eval_stmt_block(
                                 scope, global, caches, lib, this_ptr, else_block, true, level,
                             )
-                        } else {
-                            Ok(Dynamic::UNIT)
                         }
                     }
                     err => err.map(Into::into),
@@ -510,7 +510,10 @@ impl Engine {
             Stmt::While(x, ..) if matches!(x.0, Expr::Unit(..)) => loop {
                 let (.., body) = &**x;
 
-                if !body.is_empty() {
+                if body.is_empty() {
+                    #[cfg(not(feature = "unchecked"))]
+                    self.inc_operations(&mut global.num_operations, body.position())?;
+                } else {
                     match self
                         .eval_stmt_block(scope, global, caches, lib, this_ptr, body, true, level)
                     {
@@ -521,9 +524,6 @@ impl Engine {
                             _ => break Err(err),
                         },
                     }
-                } else {
-                    #[cfg(not(feature = "unchecked"))]
-                    self.inc_operations(&mut global.num_operations, body.position())?;
                 }
             },
 
@@ -624,11 +624,11 @@ impl Engine {
                     if let Some(func) = func {
                         // Add the loop variables
                         let orig_scope_len = scope.len();
-                        let counter_index = if !counter.is_empty() {
+                        let counter_index = if counter.is_empty() {
+                            usize::MAX
+                        } else {
                             scope.push(counter.name.clone(), 0 as INT);
                             scope.len() - 1
-                        } else {
-                            usize::MAX
                         };
 
                         scope.push(var_name.name.clone(), ());
@@ -979,13 +979,13 @@ impl Engine {
 
                     if let Ok(module) = module_result {
                         if !export.is_empty() {
-                            if !module.is_indexed() {
+                            if module.is_indexed() {
+                                global.push_import(export.name.clone(), module);
+                            } else {
                                 // Index the module (making a clone copy if necessary) if it is not indexed
                                 let mut m = crate::func::shared_take_or_clone(module);
                                 m.build_index();
                                 global.push_import(export.name.clone(), m);
-                            } else {
-                                global.push_import(export.name.clone(), module);
                             }
                         }
 

@@ -14,7 +14,7 @@ fn eprint_error(input: &str, mut err: EvalAltResult) {
             line_no.len() + pos.position().unwrap(),
             err_msg
         );
-        eprintln!("");
+        eprintln!();
     }
 
     let lines: Vec<_> = input.split('\n').collect();
@@ -96,7 +96,7 @@ fn main() {
             eprintln!("{:=<1$}", "", filename.len());
             eprintln!("{}", filename);
             eprintln!("{:=<1$}", "", filename.len());
-            eprintln!("");
+            eprintln!();
 
             eprint_error(contents, *err);
         }

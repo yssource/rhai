@@ -158,19 +158,13 @@ impl ConditionalExpr {
     #[inline(always)]
     #[must_use]
     pub fn is_always_true(&self) -> bool {
-        match self.condition {
-            Expr::BoolConstant(true, ..) => true,
-            _ => false,
-        }
+        matches!(self.condition, Expr::BoolConstant(true, ..))
     }
     /// Is the condition always `false`?
     #[inline(always)]
     #[must_use]
     pub fn is_always_false(&self) -> bool {
-        match self.condition {
-            Expr::BoolConstant(false, ..) => true,
-            _ => false,
-        }
+        matches!(self.condition, Expr::BoolConstant(false, ..))
     }
 }
 
@@ -388,7 +382,6 @@ impl StmtBlock {
     }
     /// Get an iterator over the statements of this statements block.
     #[inline(always)]
-    #[must_use]
     pub fn iter(&self) -> impl Iterator<Item = &Stmt> {
         self.block.iter()
     }
@@ -514,7 +507,7 @@ impl<'a> IntoIterator for &'a StmtBlock {
 impl Extend<Stmt> for StmtBlock {
     #[inline(always)]
     fn extend<T: IntoIterator<Item = Stmt>>(&mut self, iter: T) {
-        self.block.extend(iter)
+        self.block.extend(iter);
     }
 }
 
@@ -806,7 +799,7 @@ impl Stmt {
             Self::For(x, ..) => x.2.is_pure() && x.3.iter().all(Stmt::is_pure),
 
             Self::Var(..) | Self::Assignment(..) | Self::FnCall(..) => false,
-            Self::Block(block, ..) => block.iter().all(|stmt| stmt.is_pure()),
+            Self::Block(block, ..) => block.iter().all(Stmt::is_pure),
             Self::BreakLoop(..) | Self::Return(..) => false,
             Self::TryCatch(x, ..) => {
                 x.try_block.iter().all(Stmt::is_pure) && x.catch_block.iter().all(Stmt::is_pure)

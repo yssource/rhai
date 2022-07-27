@@ -152,6 +152,7 @@ impl Engine {
 ///
 /// Data types not supported by JSON serialize into formats that may invalidate the result.
 #[inline]
+#[must_use]
 pub fn format_map_as_json(map: &Map) -> String {
     let mut result = String::from('{');
 

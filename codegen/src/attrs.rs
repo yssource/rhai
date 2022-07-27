@@ -120,14 +120,14 @@ pub fn inner_item_attributes<T: ExportedParams>(
     // Find the #[rhai_fn] attribute which will turn be read for function parameters.
     if let Some(index) = attrs
         .iter()
-        .position(|a| a.path.get_ident().map(|i| *i == attr_name).unwrap_or(false))
+        .position(|a| a.path.get_ident().map_or(false, |i| *i == attr_name))
     {
         let rhai_fn_attr = attrs.remove(index);
 
         // Cannot have more than one #[rhai_fn]
         if let Some(duplicate) = attrs
             .iter()
-            .find(|a| a.path.get_ident().map(|i| *i == attr_name).unwrap_or(false))
+            .find(|a| a.path.get_ident().map_or(false, |i| *i == attr_name))
         {
             return Err(syn::Error::new(
                 duplicate.span(),
@@ -149,25 +149,23 @@ pub fn doc_attributes(attrs: &[syn::Attribute]) -> syn::Result<Vec<String>> {
     for attr in attrs {
         if let Some(i) = attr.path.get_ident() {
             if *i == "doc" {
-                match attr.parse_meta()? {
-                    syn::Meta::NameValue(syn::MetaNameValue {
-                        lit: syn::Lit::Str(s),
-                        ..
-                    }) => {
-                        let mut line = s.value();
+                if let syn::Meta::NameValue(syn::MetaNameValue {
+                    lit: syn::Lit::Str(s),
+                    ..
+                }) = attr.parse_meta()?
+                {
+                    let mut line = s.value();
 
-                        if line.contains('\n') {
-                            // Must be a block comment `/** ... */`
-                            line.insert_str(0, "/**");
-                            line.push_str("*/");
-                        } else {
-                            // Single line - assume it is `///`
-                            line.insert_str(0, "///");
-                        }
-
-                        comments.push(line);
+                    if line.contains('\n') {
+                        // Must be a block comment `/** ... */`
+                        line.insert_str(0, "/**");
+                        line.push_str("*/");
+                    } else {
+                        // Single line - assume it is `///`
+                        line.insert_str(0, "///");
                     }
-                    _ => (),
+
+                    comments.push(line);
                 }
             }
         }
@@ -179,7 +177,7 @@ pub fn doc_attributes(attrs: &[syn::Attribute]) -> syn::Result<Vec<String>> {
 pub fn collect_cfg_attr(attrs: &[syn::Attribute]) -> Vec<syn::Attribute> {
     attrs
         .iter()
-        .filter(|&a| a.path.get_ident().map(|i| *i == "cfg").unwrap_or(false))
+        .filter(|&a| a.path.get_ident().map_or(false, |i| *i == "cfg"))
         .cloned()
         .collect()
 }

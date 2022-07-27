@@ -302,18 +302,15 @@ impl Parse for ExportedFn {
         let visibility = fn_all.vis;
 
         // Determine if the function requires a call context
-        match fn_all.sig.inputs.first() {
-            Some(syn::FnArg::Typed(syn::PatType { ref ty, .. })) => {
-                match flatten_type_groups(ty.as_ref()) {
-                    syn::Type::Path(p)
-                        if p.path == context_type_path1 || p.path == context_type_path2 =>
-                    {
-                        pass_context = true;
-                    }
-                    _ => {}
+        if let Some(syn::FnArg::Typed(syn::PatType { ref ty, .. })) = fn_all.sig.inputs.first() {
+            match flatten_type_groups(ty.as_ref()) {
+                syn::Type::Path(p)
+                    if p.path == context_type_path1 || p.path == context_type_path2 =>
+                {
+                    pass_context = true;
                 }
+                _ => {}
             }
-            _ => {}
         }
 
         let skip_slots = if pass_context { 1 } else { 0 };
@@ -378,25 +375,22 @@ impl Parse for ExportedFn {
         }
 
         // Check return type.
-        match fn_all.sig.output {
-            syn::ReturnType::Type(.., ref ret_type) => {
-                match flatten_type_groups(ret_type.as_ref()) {
-                    syn::Type::Ptr(..) => {
-                        return Err(syn::Error::new(
-                            fn_all.sig.output.span(),
-                            "Rhai functions cannot return pointers",
-                        ))
-                    }
-                    syn::Type::Reference(..) => {
-                        return Err(syn::Error::new(
-                            fn_all.sig.output.span(),
-                            "Rhai functions cannot return references",
-                        ))
-                    }
-                    _ => {}
+        if let syn::ReturnType::Type(.., ref ret_type) = fn_all.sig.output {
+            match flatten_type_groups(ret_type.as_ref()) {
+                syn::Type::Ptr(..) => {
+                    return Err(syn::Error::new(
+                        fn_all.sig.output.span(),
+                        "Rhai functions cannot return pointers",
+                    ))
                 }
+                syn::Type::Reference(..) => {
+                    return Err(syn::Error::new(
+                        fn_all.sig.output.span(),
+                        "Rhai functions cannot return references",
+                    ))
+                }
+                _ => {}
             }
-            _ => {}
         }
         Ok(ExportedFn {
             entire_span,

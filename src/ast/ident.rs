@@ -58,6 +58,7 @@ impl Ident {
 
     /// Get the name of the identifier as a string slice.
     #[inline(always)]
+    #[must_use]
     pub fn as_str(&self) -> &str {
         self.name.as_str()
     }

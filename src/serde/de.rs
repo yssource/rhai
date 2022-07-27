@@ -1,7 +1,9 @@
 //! Implement deserialization support of [`Dynamic`][crate::Dynamic] for [`serde`].
 
 use crate::types::dynamic::Union;
-use crate::{Dynamic, ImmutableString, LexError, Position, RhaiError, RhaiResultOf, ERR};
+use crate::{
+    Dynamic, ImmutableString, LexError, Position, RhaiError, RhaiResultOf, SmartString, ERR,
+};
 use serde::de::{Error, IntoDeserializer, Visitor};
 use serde::{Deserialize, Deserializer};
 #[cfg(feature = "no_std")]
@@ -420,7 +422,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             || self.type_error(),
             |map| {
                 _visitor.visit_map(IterateMap::new(
-                    map.keys().map(|key| key.as_str()),
+                    map.keys().map(SmartString::as_str),
                     map.values(),
                 ))
             },
@@ -455,7 +457,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
                 let second = iter.next();
                 if let (Some((key, value)), None) = (first, second) {
                     visitor.visit_enum(EnumDeserializer {
-                        tag: &key,
+                        tag: key,
                         content: DynamicDeserializer::from_dynamic(value),
                     })
                 } else {

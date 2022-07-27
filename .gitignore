@@ -6,3 +6,4 @@ benches/results
 before*
 after*
 .rhai-repl-history.txt
+clippy.toml

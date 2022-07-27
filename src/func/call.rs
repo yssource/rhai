@@ -140,10 +140,10 @@ impl Engine {
         #[cfg(not(feature = "no_module"))]
         let (ns, sep) = (
             namespace.to_string(),
-            if !namespace.is_empty() {
-                crate::tokenizer::Token::DoubleColon.literal_syntax()
-            } else {
+            if namespace.is_empty() {
                 ""
+            } else {
+                crate::tokenizer::Token::DoubleColon.literal_syntax()
             },
         );
         #[cfg(feature = "no_module")]
@@ -169,7 +169,7 @@ impl Engine {
     ///
     /// Search order:
     /// 1) AST - script functions in the AST
-    /// 2) Global namespace - functions registered via Engine::register_XXX
+    /// 2) Global namespace - functions registered via `Engine::register_XXX`
     /// 3) Global registered modules - packages
     /// 4) Imported modules - functions marked with global namespace
     /// 5) Static registered modules
@@ -280,16 +280,7 @@ impl Engine {
                         }
 
                         return args.and_then(|args| {
-                            if !is_op_assignment {
-                                get_builtin_binary_op_fn(fn_name, args[0], args[1]).map(|f| {
-                                    FnResolutionCacheEntry {
-                                        func: CallableFunction::from_method(
-                                            Box::new(f) as Box<FnAny>
-                                        ),
-                                        source: None,
-                                    }
-                                })
-                            } else {
+                            if is_op_assignment {
                                 let (first_arg, rest_args) = args.split_first().unwrap();
 
                                 get_builtin_op_assignment_fn(fn_name, *first_arg, rest_args[0]).map(
@@ -300,6 +291,15 @@ impl Engine {
                                         source: None,
                                     },
                                 )
+                            } else {
+                                get_builtin_binary_op_fn(fn_name, args[0], args[1]).map(|f| {
+                                    FnResolutionCacheEntry {
+                                        func: CallableFunction::from_method(
+                                            Box::new(f) as Box<FnAny>
+                                        ),
+                                        source: None,
+                                    }
+                                })
                             }
                         });
                     }
@@ -312,11 +312,11 @@ impl Engine {
                             .enumerate()
                             .map(|(i, a)| {
                                 let mask = 1usize << (num_args - i - 1);
-                                if bitmask & mask != 0 {
+                                if bitmask & mask == 0 {
+                                    a.type_id()
+                                } else {
                                     // Replace with `Dynamic`
                                     TypeId::of::<Dynamic>()
-                                } else {
-                                    a.type_id()
                                 }
                             }),
                     );
@@ -371,7 +371,7 @@ impl Engine {
         );
 
         if func.is_some() {
-            let is_method = func.map(|f| f.func.is_method()).unwrap_or(false);
+            let is_method = func.map_or(false, |f| f.func.is_method());
 
             // Push a new call stack frame
             #[cfg(feature = "debugging")]
@@ -453,7 +453,7 @@ impl Engine {
 
             // Check the data size of any `&mut` object, which may be changed.
             #[cfg(not(feature = "unchecked"))]
-            if is_ref_mut && args.len() > 0 {
+            if is_ref_mut && !args.is_empty() {
                 self.check_data_size(args[0], pos)?;
             }
 
@@ -680,8 +680,7 @@ impl Engine {
                 &mut global.source,
                 source
                     .as_ref()
-                    .map(|s| (**s).clone())
-                    .unwrap_or(crate::Identifier::new_const()),
+                    .map_or(crate::Identifier::new_const(), |s| (**s).clone()),
             );
 
             let result = if _is_method_call {
@@ -841,14 +840,12 @@ impl Engine {
                 )
             }
             KEYWORD_FN_PTR_CALL => {
-                if !call_args.is_empty() {
-                    if !call_args[0].is::<FnPtr>() {
-                        let typ = self.map_type_name(call_args[0].type_name());
-                        return Err(self.make_type_mismatch_err::<FnPtr>(typ, first_arg_pos));
-                    }
-                } else {
+                if call_args.is_empty() {
                     let typ = self.map_type_name(target.type_name());
                     return Err(self.make_type_mismatch_err::<FnPtr>(typ, fn_call_pos));
+                } else if !call_args[0].is::<FnPtr>() {
+                    let typ = self.map_type_name(call_args[0].type_name());
+                    return Err(self.make_type_mismatch_err::<FnPtr>(typ, first_arg_pos));
                 }
 
                 // FnPtr call on object
@@ -1036,10 +1033,10 @@ impl Engine {
 
                 // Recalculate hash
                 let args_len = total_args + curry.len();
-                hashes = if !hashes.is_native_only() {
-                    calc_fn_hash(name, args_len).into()
-                } else {
+                hashes = if hashes.is_native_only() {
                     FnCallHashes::from_native(calc_fn_hash(name, args_len))
+                } else {
+                    calc_fn_hash(name, args_len).into()
                 };
             }
             // Handle Fn()
@@ -1180,7 +1177,7 @@ impl Engine {
         if capture_scope && !scope.is_empty() {
             first_arg
                 .iter()
-                .map(|&v| v)
+                .copied()
                 .chain(a_expr.iter())
                 .try_for_each(|expr| {
                     self.get_arg_value(scope, global, caches, lib, this_ptr, expr, level)
@@ -1236,7 +1233,7 @@ impl Engine {
 
                 if target_is_shared || target.is_temp_value() {
                     arg_values.insert(0, target.take_or_clone().flatten());
-                    args.extend(arg_values.iter_mut())
+                    args.extend(arg_values.iter_mut());
                 } else {
                     // Turn it into a method call only if the object is not shared and not a simple value
                     is_ref_mut = true;
@@ -1370,11 +1367,11 @@ impl Engine {
             while bitmask < max_bitmask {
                 let hash_params = calc_fn_params_hash(args.iter().enumerate().map(|(i, a)| {
                     let mask = 1usize << (num_args - i - 1);
-                    if bitmask & mask != 0 {
+                    if bitmask & mask == 0 {
+                        a.type_id()
+                    } else {
                         // Replace with `Dynamic`
                         TypeId::of::<Dynamic>()
-                    } else {
-                        a.type_id()
                     }
                 }));
                 let hash_qualified_fn = combine_hashes(hash, hash_params);
@@ -1392,7 +1389,7 @@ impl Engine {
         }
 
         // Clone first argument if the function is not a method after-all
-        if !func.map(|f| f.is_method()).unwrap_or(true) {
+        if !func.map_or(true, CallableFunction::is_method) {
             if let Some(first) = first_arg_value {
                 *first = args[0].clone();
                 args[0] = first;

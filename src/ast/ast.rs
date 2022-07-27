@@ -554,18 +554,18 @@ impl AST {
             lib
         };
 
-        let mut _ast = if !other.source.is_empty() {
+        let mut _ast = if other.source.is_empty() {
+            Self::new(
+                merged,
+                #[cfg(not(feature = "no_function"))]
+                lib,
+            )
+        } else {
             Self::new_with_source(
                 merged,
                 #[cfg(not(feature = "no_function"))]
                 lib,
                 other.source.clone(),
-            )
-        } else {
-            Self::new(
-                merged,
-                #[cfg(not(feature = "no_function"))]
-                lib,
             )
         };
 
@@ -977,6 +977,7 @@ impl Eq for ASTNode<'_> {}
 
 impl ASTNode<'_> {
     /// Get the [`Position`] of this [`ASTNode`].
+    #[must_use]
     pub fn position(&self) -> Position {
         match self {
             ASTNode::Stmt(stmt) => stmt.position(),

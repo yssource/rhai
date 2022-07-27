@@ -326,10 +326,10 @@ impl<F: Float + FromStr> FromStr for FloatWrapper<F> {
 #[cfg(not(feature = "no_float"))]
 impl<F: Float> FloatWrapper<F> {
     /// Maximum floating-point number for natural display before switching to scientific notation.
-    pub const MAX_NATURAL_FLOAT_FOR_DISPLAY: f32 = 10000000000000.0;
+    pub const MAX_NATURAL_FLOAT_FOR_DISPLAY: f32 = 10_000_000_000_000.0;
 
     /// Minimum floating-point number for natural display before switching to scientific notation.
-    pub const MIN_NATURAL_FLOAT_FOR_DISPLAY: f32 = 0.0000000000001;
+    pub const MIN_NATURAL_FLOAT_FOR_DISPLAY: f32 = 0.000_000_000_000_1;
 
     /// Create a new [`FloatWrapper`].
     #[inline(always)]
@@ -728,10 +728,10 @@ impl Expr {
         match self {
             #[cfg(not(feature = "no_module"))]
             Self::Variable(x, ..) => {
-                if !x.1.is_empty() {
-                    x.1.position()
-                } else {
+                if x.1.is_empty() {
                     self.position()
+                } else {
+                    x.1.position()
                 }
             }
 

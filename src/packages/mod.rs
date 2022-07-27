@@ -98,6 +98,7 @@ macro_rules! def_package {
 
         impl $package {
             #[doc=concat!("Create a new `", stringify!($package), "`")]
+            #[must_use]
             pub fn new() -> Self {
                 let mut module = $crate::Module::new();
                 <Self as $crate::packages::Package>::init(&mut module);

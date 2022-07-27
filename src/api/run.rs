@@ -51,7 +51,7 @@ impl Engine {
                 #[cfg(not(feature = "no_function"))]
                 ast.as_ref(),
             ];
-            let lib = if lib.first().map(|m: &&Module| m.is_empty()).unwrap_or(true) {
+            let lib = if lib.first().map_or(true, |m: &&Module| m.is_empty()) {
                 &lib[0..0]
             } else {
                 &lib
