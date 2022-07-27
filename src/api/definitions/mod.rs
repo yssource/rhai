@@ -109,7 +109,7 @@ impl<'e> Definitions<'e> {
 
     /// Output all definitions merged into a single file.
     ///
-    /// The directory must exist but the file will be created or overwritten as needed.
+    /// The parent directory must exist but the file will be created or overwritten as needed.
     #[cfg(all(not(feature = "no_std"), not(target_family = "wasm")))]
     pub fn write_to_file(&self, path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
         std::fs::write(path, self.single_file())
@@ -131,14 +131,17 @@ impl<'e> Definitions<'e> {
         def_file += &self.static_module_impl(&config);
         def_file += "\n";
 
-        for (module_name, module_def) in self.modules_impl(&config) {
-            write!(
-                &mut def_file,
-                "module {module_name} {{\n\n{module_def}\n}}\n"
-            )
-            .unwrap();
+        #[cfg(not(feature = "no_module"))]
+        {
+            for (module_name, module_def) in self.modules_impl(&config) {
+                write!(
+                    &mut def_file,
+                    "module {module_name} {{\n\n{module_def}\n}}\n"
+                )
+                .unwrap();
+            }
+            def_file += "\n";
         }
-        def_file += "\n";
 
         def_file += &self.scope_impl(&config);
 
