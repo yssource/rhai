@@ -1,5 +1,3 @@
-module static;
-
 /// Display any data to the standard output.
 ///
 /// # Example

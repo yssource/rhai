@@ -5,6 +5,7 @@ use crate::module::FuncInfo;
 use crate::plugin::*;
 use crate::tokenizer::is_valid_function_name;
 use crate::{Engine, Module, Scope, INT};
+use core::fmt::Write;
 
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -32,6 +33,7 @@ impl Engine {
         Definitions {
             engine: self,
             scope: None,
+            config: DefinitionsConfig::default(),
         }
     }
 
@@ -57,24 +59,39 @@ impl Engine {
         Definitions {
             engine: self,
             scope: Some(scope),
+            config: DefinitionsConfig::default(),
         }
     }
 }
 
 /// Definitions helper type to generate definition files based on the contents of an [`Engine`].
+#[derive(Debug, Clone)]
 #[must_use]
 pub struct Definitions<'e> {
     /// The [`Engine`].
     engine: &'e Engine,
     /// Optional [`Scope`] to include.
     scope: Option<&'e Scope<'e>>,
+    config: DefinitionsConfig,
+}
+
+impl<'e> Definitions<'e> {
+    /// Whether to write `module ...` headers in separate definitions,
+    /// `false` by default.
+    ///
+    /// Headers are always present in content
+    /// that is expected to be written to a file (`write_to*` and `*_file` methods).
+    pub fn with_headers(mut self, headers: bool) -> Self {
+        self.config.write_headers = headers;
+        self
+    }
 }
 
 impl<'e> Definitions<'e> {
     /// Output all definition files returned from [`iter_files`][Definitions::iter_files] to a
     /// specified directory.
     ///
-    /// This function creates the directory if it does not exist, and overrides any existing files.
+    /// This function creates the directories and overrides any existing files if needed.
     #[cfg(all(not(feature = "no_std"), not(target_family = "wasm")))]
     pub fn write_to_dir(&self, path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
         use std::fs;
@@ -83,27 +100,52 @@ impl<'e> Definitions<'e> {
 
         fs::create_dir_all(path)?;
 
-        fs::write(
-            path.join("__builtin__.d.rhai"),
-            include_bytes!("builtin.d.rhai"),
-        )?;
-        fs::write(
-            path.join("__builtin-operators__.d.rhai"),
-            include_bytes!("builtin-operators.d.rhai"),
-        )?;
-
-        fs::write(path.join("__static__.d.rhai"), self.static_module())?;
-
-        if self.scope.is_some() {
-            fs::write(path.join("__scope__.d.rhai"), self.scope())?;
-        }
-
-        #[cfg(not(feature = "no_module"))]
-        for (name, decl) in self.modules() {
-            fs::write(path.join(format!("{name}.d.rhai")), decl)?;
+        for (file_name, content) in self.iter_files() {
+            fs::write(path.join(file_name), content)?;
         }
 
         Ok(())
+    }
+
+    /// Output all definitions merged into a single file.
+    ///
+    /// The parent directory must exist but the file will be created or overwritten as needed.
+    #[cfg(all(not(feature = "no_std"), not(target_family = "wasm")))]
+    pub fn write_to_file(&self, path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::write(path, self.single_file())
+    }
+
+    /// Return all definitions merged into a single file.
+    pub fn single_file(&self) -> String {
+        let config = DefinitionsConfig {
+            write_headers: false,
+            ..self.config
+        };
+
+        let mut def_file = String::from("module static;\n\n");
+
+        def_file += &self.builtin_functions_operators_impl(&config);
+        def_file += "\n";
+        def_file += &self.builtin_functions_impl(&config);
+        def_file += "\n";
+        def_file += &self.static_module_impl(&config);
+        def_file += "\n";
+
+        #[cfg(not(feature = "no_module"))]
+        {
+            for (module_name, module_def) in self.modules_impl(&config) {
+                write!(
+                    &mut def_file,
+                    "module {module_name} {{\n\n{module_def}\n}}\n"
+                )
+                .unwrap();
+            }
+            def_file += "\n";
+        }
+
+        def_file += &self.scope_impl(&config);
+
+        def_file
     }
 
     /// Iterate over generated definition files.
@@ -111,26 +153,34 @@ impl<'e> Definitions<'e> {
     /// The returned iterator yields all definition files as (filename, content) pairs.
     #[inline]
     pub fn iter_files(&self) -> impl Iterator<Item = (String, String)> + '_ {
+        let config = DefinitionsConfig {
+            write_headers: true,
+            ..self.config
+        };
+
         IntoIterator::into_iter([
             (
                 "__builtin__.d.rhai".to_string(),
-                include_str!("builtin.d.rhai").to_string(),
+                self.builtin_functions_impl(&config),
             ),
             (
                 "__builtin-operators__.d.rhai".to_string(),
-                include_str!("builtin-operators.d.rhai").to_string(),
+                self.builtin_functions_operators_impl(&config),
             ),
-            ("__static__.d.rhai".to_string(), self.static_module()),
+            (
+                "__static__.d.rhai".to_string(),
+                self.static_module_impl(&config),
+            ),
         ])
         .chain(
             self.scope
                 .iter()
-                .map(move |_| ("__scope__.d.rhai".to_string(), self.scope())),
+                .map(move |_| ("__scope__.d.rhai".to_string(), self.scope_impl(&config))),
         )
         .chain(
             #[cfg(not(feature = "no_module"))]
             {
-                self.modules()
+                self.modules_impl(&config)
                     .map(|(name, def)| (format!("{name}.d.rhai"), def))
             },
             #[cfg(feature = "no_module")]
@@ -140,12 +190,51 @@ impl<'e> Definitions<'e> {
         )
     }
 
-    /// Return definitions for all globally available functions.
-    ///
-    /// Always starts with `module static;`.
+    /// Return definitions for all builtin functions.
+    #[must_use]
+    pub fn builtin_functions(&self) -> String {
+        self.builtin_functions_impl(&self.config)
+    }
+
+    fn builtin_functions_impl(&self, config: &DefinitionsConfig) -> String {
+        let def = include_str!("builtin-functions.d.rhai");
+
+        if config.write_headers {
+            format!("module static;\n\n{def}")
+        } else {
+            def.to_string()
+        }
+    }
+
+    /// Return definitions for all builtin operators.
+    #[must_use]
+    pub fn builtin_functions_operators(&self) -> String {
+        self.builtin_functions_operators_impl(&self.config)
+    }
+
+    fn builtin_functions_operators_impl(&self, config: &DefinitionsConfig) -> String {
+        let def = include_str!("builtin-operators.d.rhai");
+
+        if config.write_headers {
+            format!("module static;\n\n{def}")
+        } else {
+            def.to_string()
+        }
+    }
+
+    /// Return definitions for all globally available functions
+    /// and constants.
     #[must_use]
     pub fn static_module(&self) -> String {
-        let mut s = String::from("module static;\n\n");
+        self.static_module_impl(&self.config)
+    }
+
+    fn static_module_impl(&self, config: &DefinitionsConfig) -> String {
+        let mut s = if config.write_headers {
+            String::from("module static;\n\n")
+        } else {
+            String::new()
+        };
 
         let mut first = true;
         for m in &self.engine.global_modules {
@@ -160,11 +249,17 @@ impl<'e> Definitions<'e> {
     }
 
     /// Return definitions for all items inside the [`Scope`], if any.
-    ///
-    /// Always starts with `module static;` even if the [`Scope`] is empty or none was provided.
     #[must_use]
     pub fn scope(&self) -> String {
-        let mut s = String::from("module static;\n\n");
+        self.scope_impl(&self.config)
+    }
+
+    fn scope_impl(&self, config: &DefinitionsConfig) -> String {
+        let mut s = if config.write_headers {
+            String::from("module static;\n\n")
+        } else {
+            String::new()
+        };
 
         if let Some(scope) = self.scope {
             scope.write_definition(&mut s).unwrap();
@@ -176,10 +271,16 @@ impl<'e> Definitions<'e> {
     /// Return a (module name, definitions) pair for each registered static [module][Module].
     ///
     /// Not available under `no_module`.
-    ///
-    /// Always starts with `module <module name>;`.
     #[cfg(not(feature = "no_module"))]
     pub fn modules(&self) -> impl Iterator<Item = (String, String)> + '_ {
+        self.modules_impl(&self.config)
+    }
+
+    #[cfg(not(feature = "no_module"))]
+    fn modules_impl(
+        &self,
+        config: &DefinitionsConfig,
+    ) -> impl Iterator<Item = (String, String)> + '_ {
         let mut m = self
             .engine
             .global_sub_modules
@@ -187,7 +288,11 @@ impl<'e> Definitions<'e> {
             .map(move |(name, module)| {
                 (
                     name.to_string(),
-                    format!("module {name};\n\n{}", module.definition(self)),
+                    if config.write_headers {
+                        format!("module {name};\n\n{}", module.definition(self))
+                    } else {
+                        module.definition(self)
+                    },
                 )
             })
             .collect::<Vec<_>>();
@@ -196,6 +301,14 @@ impl<'e> Definitions<'e> {
 
         m.into_iter()
     }
+}
+
+/// Internal configuration for module generation.
+#[derive(Debug, Default, Clone, Copy)]
+#[non_exhaustive]
+struct DefinitionsConfig {
+    /// Whether to write `module ...` headers.
+    write_headers: bool,
 }
 
 impl Module {
@@ -209,6 +322,20 @@ impl Module {
     /// Output definitions for all items inside the [`Module`].
     fn write_definition(&self, writer: &mut dyn fmt::Write, def: &Definitions) -> fmt::Result {
         let mut first = true;
+
+        let mut submodules = self.iter_sub_modules().collect::<Vec<_>>();
+        submodules.sort_by(|(a, _), (b, _)| a.cmp(b));
+
+        for (submodule_name, submodule) in submodules {
+            if !first {
+                writer.write_str("\n\n")?;
+            }
+            first = false;
+
+            writeln!(writer, "module {submodule_name} {{")?;
+            submodule.write_definition(writer, def)?;
+            writer.write_str("}")?;
+        }
 
         let mut vars = self.iter_var().collect::<Vec<_>>();
         vars.sort_by(|(a, _), (b, _)| a.cmp(b));

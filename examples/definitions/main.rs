@@ -32,9 +32,16 @@ fn main() -> Result<(), Box<EvalAltResult>> {
         "hello_there = general_kenobi::hello_there(4 minus 2);",
     )?;
 
+    // Generate definitions for the contents of the engine and the scope.
     engine
         .definitions_with_scope(&scope)
         .write_to_dir("examples/definitions/.rhai/definitions")
+        .unwrap();
+
+    // Alternatively we can write all of the above to a single file.
+    engine
+        .definitions_with_scope(&scope)
+        .write_to_file("examples/definitions/.rhai/all_in_one.d.rhai")
         .unwrap();
 
     Ok(())
